@@ -89,13 +89,14 @@ function createDialogueObserver(host, notifications) {
 
     function repeatPage() {
         const context = current;
-        if (!context || !pageIsCurrent(context)) return;
+        if (!context || !pageIsCurrent(context)) return false;
         const { page } = context;
         const record = {
             kind: 'dialoguePage', text: page.paint.text.slice(0, page.end), speaker: page.paint.speaker
         };
         if (context.epoch) notifications.focus(context.epoch, record);
         else context.epoch = notifications.open(record, () => pageIsCurrent(context));
+        return true;
     }
 
     function suspend() {

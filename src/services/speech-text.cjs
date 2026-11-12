@@ -2,6 +2,7 @@
 
 const { dialogueText } = require('./dialogue-icons.cjs');
 const MAX_TEXT = 256;
+const HEADINGS = Object.freeze({ 2: 'south', 4: 'west', 6: 'east', 8: 'north' });
 const fileControls = Object.freeze({ options: 'Options', moreGames: 'More games', coupons: 'Coupons' });
 
 function label(message) {
@@ -51,7 +52,37 @@ function formatSpeech(message) {
             break;
         case 'fileLabel':
         case 'controllerStatus':
+        case 'fieldStatus':
         case 'mapBanner': text = label(message); break;
+        case 'fieldTarget': {
+            const name = label(message);
+            const offsets = [];
+            if (Number.isInteger(message.dx) && message.dx && Math.abs(message.dx) < 256) {
+                offsets.push(`${Math.abs(message.dx)} ${message.dx < 0 ? 'west' : 'east'}`);
+            }
+            if (Number.isInteger(message.dy) && message.dy && Math.abs(message.dy) < 256) {
+                offsets.push(`${Math.abs(message.dy)} ${message.dy < 0 ? 'north' : 'south'}`);
+            }
+            text = name && [name, ...offsets].join(', ');
+            break;
+        }
+        case 'routeDirections': {
+            const name = label(message);
+            if (!name || !Array.isArray(message.legs) || message.legs.length > 8) return '';
+            const directions = [];
+            for (const leg of message.legs) {
+                const heading = HEADINGS[leg.direction];
+                if (!heading || !Number.isInteger(leg.tiles) || leg.tiles < 1 || leg.tiles > 16384) return '';
+                directions.push(`${heading}, ${leg.tiles} ${leg.tiles === 1 ? 'step' : 'steps'}`);
+            }
+            const facing = HEADINGS[message.facing];
+            if (message.more) directions.push('Request directions again after these steps');
+            else if (facing) directions.push(`face ${facing}`);
+            if (!directions.length) directions.push('you are here');
+            text = `${name}. ${directions.join('. ')}.`;
+            limit = 512;
+            break;
+        }
         case 'optionTab': {
             const name = label(message);
             text = name && `${name} tab`;

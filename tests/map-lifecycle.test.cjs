@@ -45,14 +45,20 @@ function fixture(data, failSave = false) {
     const renderer = new EventEmitter();
     const timers = [];
     const packets = [];
+    const routePackets = [];
     let admission;
+    let routeAdmission;
+    let routeWorker;
     const c = vm.createContext({
         a15_0x363c12() { throw Error('Unresolved map property'); },
         a18_0x52f0af() { throw Error('Unresolved platform property'); },
         _0x27781d() { throw Error('Unresolved canvas property'); },
+        _0x34cc1b() { throw Error('Unresolved tile property'); },
+        Tyruswoo: { TileControl: {} }, $gameTileChanges: {},
         Scene_Base: function () {}, Scene_Message: function () {}, Scene_Map: function () {}, Scene_Title: function () {},
         Scene_Boot: function () {},
-        Game_Player: function () {}, Game_Event: function () {}, Game_Map: function () {}, Game_Screen: function () {},
+        Game_CharacterBase: function () {}, Game_Player: function () {}, Game_Event: function () {},
+        Game_Map: function () {}, Game_Screen: function () {}, TileEditor: {},
         Game_Interpreter: function () {}, Window_MapName: function () {},
         Game_Event_prototype_onSceneStart: undefined,
         SceneManager: { _scene: null, _nextScene: null, _previousScene: null, isGameActive: () => true },
@@ -95,6 +101,7 @@ function fixture(data, failSave = false) {
         AudioManager: { playSe() {} }, BattleManager: { initMembers() {}, makeEscapeRatio() {} },
         $gameTroop: { setup() {} }, Utils: { RPGMAKER_NAME: 'MZ', RPGMAKER_VERSION: '1.8.0' },
         document: { hasFocus: () => true }, setTimeout: callback => timers.push(callback),
+        nw: { App: { dataPath: 'fixture-profile' } },
         addEventListener: (event, callback) => events.on(event, callback),
         console: { log() {}, warn() {} }
     });
@@ -111,6 +118,8 @@ function fixture(data, failSave = false) {
         }
     }
     for (const method of custom) run(method);
+    Object.setPrototypeOf(c.Game_Player.prototype, c.Game_CharacterBase.prototype);
+    Object.setPrototypeOf(c.Game_Event.prototype, c.Game_CharacterBase.prototype);
     Object.setPrototypeOf(c.Scene_Message.prototype, c.Scene_Base.prototype);
     Object.setPrototypeOf(c.Scene_Map.prototype, c.Scene_Message.prototype);
     c.Scene_Message.prototype.update = function () { this._mapNameWindow.update(); };
@@ -156,8 +165,14 @@ function fixture(data, failSave = false) {
         if (module === 'path') return path;
         assert.equal(module, 'worker_threads');
         return { Worker: class extends EventEmitter {
-            constructor(_script, options) { super(); admission = new Int32Array(options.workerData); }
-            postMessage(packet) { packets.push(packet); }
+            constructor(script, options) {
+                super();
+                if (path.basename(script) === 'route-worker.cjs') {
+                    routeWorker = this;
+                    routeAdmission = new Int32Array(options.workerData.admission);
+                } else admission = new Int32Array(options.workerData);
+            }
+            postMessage(packet) { (routeWorker === this ? routePackets : packets).push(packet); }
             unref() {}
         } };
     }
@@ -166,7 +181,9 @@ function fixture(data, failSave = false) {
         renderer.emit('postrender');
         while (timers.length) timers.shift()();
     }
-    return { c, event, name, trace, bitmapCallbacks, idleCallbacks, frame, renderer, packets, run,
+    return { c, event, name, trace, bitmapCallbacks, idleCallbacks, frame, renderer, packets, run, routePackets,
+        routeReply: packet => routeWorker.emit('message', packet),
+        routeEpoch: () => routeAdmission ? Atomics.load(routeAdmission, 0) : 0,
         dispatchWindowEvent: (...args) => events.emit(...args),
         epoch: () => admission ? Atomics.load(admission, 0) : 0,
         speech: () => packets.filter(packet => packet.kind === 'mapBanner').map(formatSpeech) };

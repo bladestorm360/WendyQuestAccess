@@ -20,6 +20,7 @@ SCENES_REL = Path('package.nw/js/rmmz_scenes.js')
 CORE_REL = Path('package.nw/js/rmmz_core.js')
 WINDOW_REL = Path('package.nw/js/plugins/MonkeyWrenchMZ.js')
 INPUT_REL = Path('package.nw/js/plugins/InputAdjustments.js')
+TILE_REL = Path('package.nw/js/plugins/Tyruswoo_TileControl.js')
 WINDOWS_REL = Path('package.nw/js/rmmz_windows.js')
 MAP_REL = Path('package.nw/js/plugins/MapScene.js')
 OBJECTS_REL = Path('package.nw/js/rmmz_objects.js')
@@ -37,6 +38,7 @@ SCENES_SHA = '0f69c04d51b9ce17410e952ceafa31527a1b6c94663a12e11ca7d0e30cf2913a'
 CORE_SHA = 'f7f807a8329b6996577771dd5b65b84dac072117b6f24e4f2fc0a6068ccd61e0'
 WINDOW_SHA = '37dfb71367496ca5f96a86156c3ea9fb4f813a3d6323280e342848d3bfd9cd42'
 INPUT_SHA = 'dac572e3107d47693277fa7565b5c49145fbed73003471e54cb7e64390092d77'
+TILE_SHA = '4656a3ac3c7bcfc8361ff9b1cd67a9b52bd3fa77d469982465b2ddf516b170c6'
 WINDOWS_SHA = '7bd37af5d4d55d2aedad4d2cb1e14d2ff3ff8eefa261f865ef805b7e8981fd59'
 MAP_SHA = 'aff25c073cffce32857bb654d0ae30938f10ddfa534cfc0cb80ebb078a4aaf64'
 OBJECTS_SHA = 'b9da176c2041866df643b7d62b36d99d67bf1b44216deb52568adbd08264848a'
@@ -51,7 +53,12 @@ DEPENDENCIES = {
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
-FIELD_WATCHED = b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue)'
+FIELD_WATCHED = b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||SceneManager._scene?._wqaRouteActive)'
+ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive)'
+               b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
+ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||this._eventId!==undefined||'
+               b'this._type==="boat"||this._type==="ship"))'
+               b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 AUTO_DISCARD = (b'SceneManager._scene?._messageWindow?._wqaAutoPaint&&'
                 b'(SceneManager._scene._messageWindow._wqaAutoPaint=null)')
 MAP_LEAVING = (AUTO_DISCARD + b';if' + FIELD_WATCHED +
@@ -151,6 +158,17 @@ def scenes_notification(original):
 
 def objects_notification(original):
     return insert(original, OBJECTS_SHA, {
+        178811: b'\n    ' + ROUTE_DIRTY,  # Tileset replacement
+        185272: b'\n    if(this._priorityType!==priorityType){' + ACTOR_DIRTY + b'}',
+        188368: b'\n    ' + ACTOR_DIRTY,  # Position and copyPosition
+        188538: b'\n    if(this._x!==character._x||this._y!==character._y){' + ACTOR_DIRTY + b'}',
+        194431: b'\n    if(this._tileId){' + ACTOR_DIRTY + b'}',
+        194681: b'\n    if(this._tileId!==tileId){' + ACTOR_DIRTY + b'}',
+        195829: ACTOR_DIRTY + b'\n        ',  # Accepted straight/diagonal steps
+        196445: ACTOR_DIRTY + b'\n        ',
+        196721: b'\n    if(xPlus||yPlus){' + ACTOR_DIRTY + b'}',
+        197969: b'\n    if(this._through!==through){' + ACTOR_DIRTY + b'}',
+        249865: ROUTE_DIRTY + b'\n        ',  # Active event page replacement
         21807: b'\n    ' + MAP_LEAVING,  # Game_Screen fade-out
         217381: b'\n    ' + MAP_LEAVING,  # Accepted transfer reservation
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING + b'}',
@@ -250,9 +268,31 @@ def map_notification(original):
         }
     }
 '''
+    field_update = b'''
+    this._wqaFieldReady = !!(this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
+        this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true && this.srcWendy &&
+        this.srcStones && $gameMap.inactiveTime < 30 && !$gameMap._needsRefresh && !$gameMap._needsTilemapRefresh &&
+        !$gamePlayer._transferring && !$gamePlayer._vehicleGettingOn && !$gamePlayer._vehicleGettingOff &&
+        $gameScreen._brightness === 255 && !$gameScreen._fadeOutDuration && !this._wqaTerrainWork &&
+        this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
+        !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
+    if (this._wqaFieldReady) {
+        if (!Graphics._wqaFrontEndObserved) globalThis.WendyQuestAccessFieldReady?.(this);
+    } else if (this._wqaRouteActive) globalThis.WendyQuestAccessFieldChanged?.(this);
+'''
     return insert(original, MAP_SHA, {
+        # Track the native generator lifetime, including yielded rings.
+        32483: b'const wqaFloodScene=SceneManager._scene?._wqaMapRestored?SceneManager._scene:null;'
+               b'let wqaFloodActive=!!wqaFloodScene;const wqaFloodDone=()=>{if(wqaFloodActive){'
+               b'wqaFloodActive=false;wqaFloodScene._wqaTerrainWork--;}};'
+               b'if(wqaFloodActive){wqaFloodScene._wqaTerrainWork=(wqaFloodScene._wqaTerrainWork||0)+1;'
+               + ROUTE_DIRTY + b'}try{',
+        32557: b'try{',
+        33719: b'}finally{wqaFloodDone();}',
+        33722: b'}catch(wqaError){wqaFloodDone();throw wqaError;}',
+        47577: ACTOR_DIRTY,  # Runtime rectangle replacement
         59596: b'this._wqaMapRestored=true;',
-        62779: banner_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
+        62779: field_update + banner_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
                                                b'this.srcStones && $gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),
         69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
         86279: b'if(SceneManager._scene?._mapNameWindow===this){' + MAP_LEAVING + b'}'
@@ -329,6 +369,13 @@ def input_notification(original):
     })
 
 
+def tile_notification(original):
+    return insert(original, TILE_SHA, {
+        31935: b',(SceneManager._scene?._wqaRouteActive&&'
+               b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene))',
+    })
+
+
 def canvas_notification(original):
     # CanvasScaler has its own resize listener and can rebuild the scene.
     return insert(original, CANVAS_SHA, {
@@ -366,7 +413,7 @@ def main():
     for relative, transform in ((TITLE_REL, title_notification), (MENU_REL, menu_notifications),
                                 (MANAGERS_REL, managers_notification), (SCENES_REL, scenes_notification),
                                 (CORE_REL, core_notification), (WINDOW_REL, window_notification),
-                                (INPUT_REL, input_notification),
+                                (INPUT_REL, input_notification), (TILE_REL, tile_notification),
                                 (OBJECTS_REL, objects_notification), (MAP_REL, map_notification),
                                 (CANVAS_REL, canvas_notification), (WINDOWS_REL, windows_notification),
                                 (BATTLE_REL, battle_notification),

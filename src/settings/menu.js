@@ -268,14 +268,13 @@ function createSettingsMenu(root, host) {
         const key = keyName(event);
         if (!key || event.repeat || event.target?.closest?.('input, textarea, select, [contenteditable]') ||
             nativeConflict(root, key, event.keyCode)) return;
-        if (key === keys.repeat) {
-            host.repeat();
-        } else if (key === keys.settings || (key === 'F8' && nativeConflict(root, keys.settings))) {
-            if (ready && open(ready)) {
+        if (key === keys.repeat && host.repeat()) return;
+        if (ready && (key === keys.settings || (key === 'F8' && nativeConflict(root, keys.settings)))) {
+            if (open(ready)) {
                 event.preventDefault();
                 event.stopPropagation();
             }
-        }
+        } else host.fieldCommand(key);
     }
 
     root.addEventListener('keydown', keydown, true);

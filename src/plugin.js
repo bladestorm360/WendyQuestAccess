@@ -4,6 +4,7 @@ const { createRenderer } = require('./runtime/renderer');
 const { createTitleObserver, presented } = require('./frontend/title');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
 const { createMapBannerObserver } = require('./world/map-banner');
+const { createField } = require('./world/field');
 const { createDialogueObserver } = require('./dialogue/observer');
 const { createSettingsMenu } = require('./settings/menu');
 const { createController, modeAnnouncement } = require('./settings/controller');
@@ -13,12 +14,14 @@ function boot(root, nodeRequire, nodeProcess) {
     let files = null;
     let mapBanner = null;
     let dialogue = null;
+    let field = null;
     let settings = null;
     let settingsScene = null;
     let frontendControl = null;
     let controller = null;
     let titleWaiting = null;
     let filesWaiting = null;
+    let fieldWaiting = null;
 
     const view = () => ({ manager: root.SceneManager, graphics: root.Graphics });
     const supported = () => root.Utils?.RPGMAKER_NAME === 'MZ' && root.Utils.RPGMAKER_VERSION === '1.8.0';
@@ -56,6 +59,14 @@ function boot(root, nodeRequire, nodeProcess) {
                 const packagePath = path.dirname(nodeProcess.mainModule.filename);
                 const script = path.join(packagePath, 'wendyquest-access', 'speech-worker.cjs');
                 return new Worker(script, { workerData: admission });
+            },
+            createRouteWorker(admission) {
+                const path = nodeRequire('path');
+                const { Worker } = nodeRequire('worker_threads');
+                const packagePath = path.dirname(nodeProcess.mainModule.filename);
+                const script = path.join(packagePath, 'wendyquest-access', 'route-worker.cjs');
+                const geometryDirectory = path.join(root.nw.App.dataPath, 'wendyquest-access-geometry');
+                return new Worker(script, { workerData: { admission, geometryDirectory } });
             }
         };
         const { notifications } = createRenderer(host);
@@ -63,6 +74,7 @@ function boot(root, nodeRequire, nodeProcess) {
         files = createFilesObserver(host, notifications);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
+        field = createField(root, host, notifications);
         function readyScene() {
             const scene = host.manager._scene;
             if (settingsScene !== scene || !scene?._wqaPresentation || !host.hasFocus() ||
@@ -101,7 +113,8 @@ function boot(root, nodeRequire, nodeProcess) {
             },
             capturePads: () => root.Input?._pollGamepads?.(),
             resume(scene) { if (host.manager._scene === scene) root.WendyQuestAccessResizeReady(); },
-            repeat() { try { dialogue.repeatPage(); } catch { /* Leave native input in charge. */ } }
+            repeat() { try { return dialogue.repeatPage(); } catch { return false; } },
+            fieldCommand(key) { try { return field.command(key); } catch { return false; } }
         });
         controller = createController({
             schedule: host.schedule, context: controlContext, bindings: settings.controllerBindings, nativeButton,
@@ -204,6 +217,24 @@ function boot(root, nodeRequire, nodeProcess) {
         } catch { dialogue?.leave(scene); }
     };
 
+    root.WendyQuestAccessFieldReady = function (scene) {
+        if (field || fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
+            !root.document.hasFocus()) return;
+        const renderer = root.Graphics.app?.renderer;
+        if (typeof renderer?.once !== 'function') return;
+        fieldWaiting = scene;
+        renderer.once('postrender', () => {
+            if (fieldWaiting !== scene) return;
+            fieldWaiting = null;
+            if (field || !scene._wqaFieldReady || root.SceneManager._scene !== scene ||
+                root.Graphics.app?.stage !== scene || root.SceneManager._nextScene || root.Graphics._wqaResize ||
+                root.SceneManager._wqaNativeAutosaves || !root.document.hasFocus()) return;
+            try { initialize(); } catch { /* Native field input remains available. */ }
+        });
+    };
+
+    root.WendyQuestAccessFieldChanged = function (scene) { field?.changed(scene); };
+
     // Direct native scene changes and developer reload can bypass the active
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
@@ -214,15 +245,19 @@ function boot(root, nodeRequire, nodeProcess) {
         settings?.retire(scene);
         if (titleWaiting === scene) titleWaiting = null;
         if (filesWaiting === scene) filesWaiting = null;
+        if (fieldWaiting === scene) fieldWaiting = null;
+        if (fieldWaiting === scene) fieldWaiting = null;
         title?.leave(scene);
         files?.leave(scene);
         mapBanner?.leave(scene);
         dialogue?.leave(scene);
+        field?.leave(scene);
     };
 
     root.WendyQuestAccessResizeStarting = function () {
         titleWaiting = null;
         filesWaiting = null;
+        fieldWaiting = null;
         const scene = root.SceneManager._scene;
         setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
@@ -231,6 +266,7 @@ function boot(root, nodeRequire, nodeProcess) {
         if (scene?._wqaPresentation) scene._wqaPresentation = false;
         mapBanner?.leave(scene);
         dialogue?.leave(scene);
+        field?.leave(scene);
         title?.suspend();
         files?.suspend();
     };

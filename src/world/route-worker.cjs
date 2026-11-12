@@ -53,7 +53,17 @@ parentPort.on('message', message => {
     const cancelled = () => Atomics.load(admission, 0) !== epoch;
     let result;
     try {
-        if (!cancelled()) result = solveRoute(geometry(map), live, request, cancelled);
+        if (!cancelled()) {
+            const base = geometry(map);
+            if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
+                live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
+            result = solveRoute(base, live, request, cancelled);
+            if (result.status === 'ready' && Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
+                result.legs.length > request.limit) {
+                result.more = true;
+                result.legs.length = request.limit;
+            }
+        }
     } catch {
         result = { status: 'unavailable' };
     }

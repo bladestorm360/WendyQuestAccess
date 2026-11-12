@@ -9,6 +9,7 @@ const BOAT = 32;
 const SHIP = 64;
 const TILE_OVERRIDE = 128;
 const MAX_CELLS = 16384;
+const CELL_BITS = 14;
 const MAX_EVENTS = 512;
 const HEADER = 16;
 const MAGIC = 'WQG1';
@@ -96,8 +97,9 @@ function clipRectangle(world, values) {
 function composeWorld(geometry, live, cancelled = () => false) {
     const { width, height, scrollType } = geometry;
     const count = dimensions(width, height, scrollType);
+    const packedTerrain = live.terrain instanceof Uint32Array;
     if (!(geometry.cells instanceof Uint8Array) || geometry.cells.length !== count ||
-        !Array.isArray(live.terrain) || live.terrain.length > count || !Array.isArray(live.events) ||
+        (!packedTerrain && !Array.isArray(live.terrain)) || live.terrain.length > count || !Array.isArray(live.events) ||
         live.events.length > MAX_EVENTS || !Array.isArray(live.vehicles) || live.vehicles.length > 2 ||
         !['walk', 'boat', 'ship', 'airship'].includes(live.mode)) throw new Error('Incomplete world state');
     const cells = geometry.cells.slice();
@@ -105,9 +107,12 @@ function composeWorld(geometry, live, cancelled = () => false) {
     const world = { width, height, scrollType, cells, blocked, events: live.events, mode: live.mode, through: live.through === true };
     for (let n = 0; n < live.terrain.length; n++) {
         if ((n & 63) === 0 && cancelled()) return null;
-        const [x, y, flags] = live.terrain[n];
-        const cell = indexOf(world, x, y);
-        if (cell < 0 || !Number.isInteger(flags) || flags < 0 || flags >= TILE_OVERRIDE) throw new Error('Invalid terrain delta');
+        const entry = live.terrain[n];
+        const cell = packedTerrain ? entry & (MAX_CELLS - 1) : indexOf(world, entry[0], entry[1]);
+        const flags = packedTerrain ? entry >>> CELL_BITS : entry[2];
+        if (cell < 0 || cell >= count || !Number.isInteger(flags) || flags < 0 || flags >= TILE_OVERRIDE) {
+            throw new Error('Invalid terrain delta');
+        }
         cells[cell] = flags;
     }
     // Rectangle collision is inclusive and independent of event priority.
@@ -164,5 +169,5 @@ function step(world, cell, heading) {
     return (world.cells[cell] & (1 << heading)) && (destination & (1 << (3 - heading))) ? next : -1;
 }
 
-module.exports = { DIRECTIONS, COUNTER, MAX_CELLS, HEADER, bakeMap, encodeMap, decodeMap, surface,
+module.exports = { DIRECTIONS, COUNTER, MAX_CELLS, CELL_BITS, HEADER, bakeMap, encodeMap, decodeMap, surface,
     composeWorld, indexOf, offset, step, clipRectangle };

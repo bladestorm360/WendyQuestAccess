@@ -77,6 +77,7 @@ var SceneManager = { _scene: new Scene_Title() };
 var Graphics = { app: { stage: SceneManager._scene, renderer: new (require('events').EventEmitter)() } };
 const nativeSelect = SceneManager._scene._commandWindow.select;
 var DataManager = { savefileInfo: () => null };
+var $gameMap, $gamePlayer, $gameScreen, $dataMap, $dataTilesets, $gameTileChanges;
 var Input = { keyMapper: { 90: 'ok' }, clear() {} };
 Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 3: 'menu', 9: 'menu', 12: 'up', 13: 'down' };
 ''', encoding='utf8')
@@ -103,6 +104,7 @@ Graphics._wqaFinishResize(transition, true, 440, 320);
 let fileShown = false;
 let mapShown = false;
 let dialogueShown = false;
+let routeRequested = false;
 let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
@@ -112,24 +114,16 @@ let nativeZ = 0;
 const restart = require('fs').existsSync(receipt + '.restart');
 if (!restart) {
     const path = require('path');
+    const fs = require('fs');
     const root = path.dirname(receipt);
-    const admission = new Int32Array(new SharedArrayBuffer(4));
-    Atomics.store(admission, 0, 1);
-    const { Worker } = require('worker_threads');
-    const route = new Worker(path.join(root, 'wendyquest-access', 'route-worker.cjs'),
-        { workerData: { geometryDirectory: path.join(root, 'geometry'), admission: admission.buffer } });
-    route.once('error', error => { write({ error: error.message }); nw.App.quit(); });
-    route.once('message', ({ sequence, result }) => {
-        if (sequence !== 17 || result.status !== 'ready' || result.distance !== 2 ||
-            result.arrival.x !== 2 || result.arrival.y !== 0 || result.legs.length !== 1 || result.legs[0].direction !== 6) {
-            write({ error: 'Synthetic route worker returned an incorrect route' });
-            nw.App.quit();
-        } else require('fs').writeFileSync(receipt + '.route', '');
-        route.terminate();
-    });
-    route.postMessage({ epoch: 1, sequence: 17, map: 1,
-        live: { terrain: [], events: [], vehicles: [], mode: 'walk' },
-        request: { x: 0, y: 0, targetX: 2, targetY: 0 } });
+    const profile = fs.realpathSync(nw.App.dataPath);
+    const relative = path.relative(path.dirname(root), profile);
+    if (path.isAbsolute(relative) || relative === '..' || relative.startsWith('..' + path.sep)) {
+        throw Error('Synthetic geometry profile escaped the fixture');
+    }
+    const geometry = path.join(profile, 'wendyquest-access-geometry');
+    fs.mkdirSync(geometry);
+    for (const name of ['1.wqg', 'manifest.json']) fs.copyFileSync(path.join(root, 'geometry', name), path.join(geometry, name));
 }
 document.addEventListener('keydown', event => { if (event.code === 'KeyZ') nativeZ++; });
 function key(type, key, code, repeat = false) {
@@ -268,14 +262,30 @@ const interval = setInterval(() => {
         mapShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         const layer = {};
-        const scene = { _active: true, _windowLayer: layer, _mapNameWindow: {
+        const scene = { _active: true, _wqaFieldReady: true, _fadeDuration: 0, _fadeOpacity: 0,
+            _windowLayer: layer, _mapNameWindow: {
             parent: layer, worldVisible: true, worldAlpha: 1, contentsOpacity: 255,
             _wqaBannerDrawnRevision: 1, _wqaBannerText: 'Synthetic map banner' } };
+        $gameMap = { _mapId: 1, _tilesetId: 1, inactiveTime: 0, _events: [null,
+            { _eventId: 1, _x: 2, _y: 0, _pageIndex: 0, _trigger: 0, _priorityType: 1 }], _tileEvents: [], _vehicles: [] };
+        $dataMap = { width: 3, height: 2, scrollType: 0, tilesetId: 1, data: new Array(36).fill(0),
+            events: [null, { name: 'Synthetic wall', pages: [{ list: [{}, {}] }] }] };
+        $dataTilesets = [null, { flags: [0] }];
+        $gameTileChanges = { 1: { 6: 0 } };
+        $gamePlayer = { _x: 0, _y: 0, _realX: 0, _realY: 0, _vehicleType: 'walk' };
+        $gameScreen = { _brightness: 255 };
         SceneManager._scene = Graphics.app.stage = scene;
         WendyQuestAccessMapBannerReady(scene, 1);
         Graphics.app.renderer.emit('postrender');
     }
-    if (!dialogueShown && require('fs').existsSync(receipt + '.map')) {
+    if (!routeRequested && require('fs').existsSync(receipt + '.map')) {
+        routeRequested = true;
+        const start = performance.now();
+        tap('p', 'KeyP');
+        Graphics.app.renderer.emit('postrender');
+        require('fs').writeFileSync(receipt + '.route-submit-ms', String(performance.now() - start));
+    }
+    if (!dialogueShown && require('fs').existsSync(receipt + '.route')) {
         dialogueShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         const layer = {};
@@ -350,6 +360,7 @@ parentPort.on('message', message => {
     }
     if (message.kind === 'saveSlot') fs.writeFileSync(receipt + '.slot', '');
     if (message.kind === 'mapBanner') fs.writeFileSync(receipt + '.map', '');
+    if (message.kind === 'routeDirections' || message.kind === 'fieldStatus') fs.writeFileSync(receipt + '.route', '');
     if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
     if (message.kind === 'dialoguePage' && fs.existsSync(receipt + '.choice')) {
         fs.writeFileSync(receipt + (fs.existsSync(receipt + '.repeat') ? '.controller-repeat' : '.repeat'), '');
@@ -397,16 +408,19 @@ def main():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 12 or not all(r.get('sameEpoch') for r in records):
+        if result.returncode or data.get('error') or len(records) != 13 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, returned_title, title_mode, controller_title, slot, banner, page, choice, repeat, dialogue_mode, pad_repeat, number = records
+        title, returned_title, title_mode, controller_title, slot, banner, route, page, choice, repeat, dialogue_mode, pad_repeat, number = records
         if any(item['name'] != title['name'] for item in (returned_title, controller_title)) or \
                 len({title['epoch'], returned_title['epoch'], controller_title['epoch']}) != 3:
             raise RuntimeError(f'NW fixture did not restore the title focus: {data}')
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
-                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:7]}) != 6:
+                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:8]}) != 7:
             raise RuntimeError(f'NW fixture did not deliver distinct presentation epochs: {data}')
+        if route['kind'] != 'routeDirections' or route['speech'] != 'Synthetic wall. east, 1 step. face east.':
+            raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
+        submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
@@ -426,6 +440,7 @@ def main():
             raise RuntimeError('NW settings did not survive restart in the isolated profile')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
+        print(f'Throttled synthetic renderer command and cold worker submission: {submit_ms:.1f} ms.')
 
 
 if __name__ == '__main__':
