@@ -99,6 +99,7 @@ nw.Window.get().resizeTo(440, 320);
 Graphics._wqaFinishResize(transition, true, 440, 320);
 let fileShown = false;
 let mapShown = false;
+let dialogueShown = false;
 const interval = setInterval(() => {
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
         fileShown = true;
@@ -121,6 +122,20 @@ const interval = setInterval(() => {
         WendyQuestAccessMapBannerReady(scene, 1);
         Graphics.app.renderer.emit('postrender');
     }
+    if (!dialogueShown && require('fs').existsSync(receipt + '.map')) {
+        dialogueShown = true;
+        WendyQuestAccessSceneLeaving(SceneManager._scene);
+        const layer = {};
+        const visible = { parent: layer, worldVisible: true, worldAlpha: 1, openness: 255, contentsOpacity: 255 };
+        const choice = { ...visible, active: true, _index: 0, _wqaChoiceShown: null,
+            _wqaChoiceRows: [{ index: 0, text: 'Synthetic choice' }] };
+        const message = { ...visible, _wqaDialoguePaint: { text: 'Synthetic prompt', end: 16, spoken: 0 },
+            _choiceListWindow: choice };
+        const scene = { _active: true, _windowLayer: layer, _messageWindow: message };
+        SceneManager._scene = Graphics.app.stage = scene;
+        WendyQuestAccessDialogueReady(scene);
+        Graphics.app.renderer.emit('postrender');
+    }
     if (require('fs').existsSync(receipt)) { clearInterval(interval); nw.App.quit(); }
 }, 40);
 setTimeout(() => {
@@ -133,16 +148,19 @@ setTimeout(() => {
     (service / 'speech-worker.cjs').write_text('''
 const { parentPort, workerData } = require('worker_threads');
 const fs = require('fs');
+const { formatSpeech } = require('./speech-text.cjs');
 const records = [];
 parentPort.on('message', message => {
     const receipt = require('path').join(__dirname, '..', 'receipt.json');
     if (message.kind === 'cancel') return;
     records.push({ sameEpoch: Atomics.load(new Int32Array(workerData), 0) === message.epoch,
-        epoch: message.epoch, name: message.name, kind: message.kind, slot: message.slot, empty: message.empty });
+        epoch: message.epoch, name: message.name, kind: message.kind, slot: message.slot, empty: message.empty,
+        text: message.text, append: message.append, speech: formatSpeech(message) });
     parentPort.postMessage('ack');
     if (message.kind === 'title') fs.writeFileSync(receipt + '.title', '');
     if (message.kind === 'saveSlot') fs.writeFileSync(receipt + '.slot', '');
-    if (message.kind === 'mapBanner') {
+    if (message.kind === 'mapBanner') fs.writeFileSync(receipt + '.map', '');
+    if (message.kind === 'dialogueChoice') {
         fs.writeFileSync(receipt + '.tmp', JSON.stringify({ versions: process.versions, records }));
         fs.renameSync(receipt + '.tmp', receipt);
     }
@@ -150,6 +168,8 @@ parentPort.on('message', message => {
 ''', encoding='utf8')
     shutil.copyfile(ROOT / '.build' / 'payload' / 'js' / 'plugins' / 'WendyQuestAccess.js', app / 'plugin.js')
     shutil.copyfile(ROOT / 'src' / 'runtime' / 'resize-markers.js', app / 'resize-markers.js')
+    for name in ('speech-text.cjs', 'dialogue-icons.cjs'):
+        shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
     return app / 'receipt.json'
 
 
@@ -174,16 +194,19 @@ def main():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 3 or not all(r.get('sameEpoch') for r in records):
+        if result.returncode or data.get('error') or len(records) != 5 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, slot, banner = records
+        title, slot, banner, page, choice = records
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
-                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records}) != 3:
-            raise RuntimeError(f'NW fixture did not deliver distinct title, slot and map banner packets: {data}')
+                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:4]}) != 4:
+            raise RuntimeError(f'NW fixture did not deliver distinct presentation epochs: {data}')
+        if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
+                choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
+            raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
         versions = data['versions']
-        print(f"Verified hidden window resize, title, save slot and map banner in NW {versions.get('nw', VERSION)}, "
-              f"Node {versions['node']}, modules ABI {versions['modules']}. Distinct shared epochs verified.")
+        print(f"Verified hidden window resize, title, save slot, map banner and dialogue in NW {versions.get('nw', VERSION)}, "
+              f"Node {versions['node']}, modules ABI {versions['modules']}.")
 
 
 if __name__ == '__main__':

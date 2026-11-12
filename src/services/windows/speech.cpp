@@ -52,9 +52,9 @@ public:
         return capabilities_ & (PRISM_BACKEND_SUPPORTS_OUTPUT | PRISM_BACKEND_SUPPORTS_SPEAK);
     }
 
-    bool output(const char* text) const {
-        if (capabilities_ & PRISM_BACKEND_SUPPORTS_OUTPUT) return output_(backend_, text, true) == PRISM_OK;
-        return speak_(backend_, text, true) == PRISM_OK;
+    bool output(const char* text, bool interrupt) const {
+        if (capabilities_ & PRISM_BACKEND_SUPPORTS_OUTPUT) return output_(backend_, text, interrupt) == PRISM_OK;
+        return speak_(backend_, text, interrupt) == PRISM_OK;
     }
 
 private:

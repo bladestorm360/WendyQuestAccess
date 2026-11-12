@@ -19,6 +19,7 @@ MANAGERS_REL = Path('package.nw/js/rmmz_managers.js')
 SCENES_REL = Path('package.nw/js/rmmz_scenes.js')
 CORE_REL = Path('package.nw/js/rmmz_core.js')
 WINDOW_REL = Path('package.nw/js/plugins/MonkeyWrenchMZ.js')
+WINDOWS_REL = Path('package.nw/js/rmmz_windows.js')
 MAP_REL = Path('package.nw/js/plugins/MapScene.js')
 OBJECTS_REL = Path('package.nw/js/rmmz_objects.js')
 CANVAS_REL = Path('package.nw/js/plugins/CanvasScaler.js')
@@ -33,6 +34,7 @@ MANAGERS_SHA = 'e87efc29229a80c903c1651a78bbeafa8b9ffb925227b31cfa7f4741875140bd
 SCENES_SHA = '0f69c04d51b9ce17410e952ceafa31527a1b6c94663a12e11ca7d0e30cf2913a'
 CORE_SHA = 'f7f807a8329b6996577771dd5b65b84dac072117b6f24e4f2fc0a6068ccd61e0'
 WINDOW_SHA = '37dfb71367496ca5f96a86156c3ea9fb4f813a3d6323280e342848d3bfd9cd42'
+WINDOWS_SHA = '7bd37af5d4d55d2aedad4d2cb1e14d2ff3ff8eefa261f865ef805b7e8981fd59'
 MAP_SHA = 'aff25c073cffce32857bb654d0ae30938f10ddfa534cfc0cb80ebb078a4aaf64'
 OBJECTS_SHA = 'b9da176c2041866df643b7d62b36d99d67bf1b44216deb52568adbd08264848a'
 CANVAS_SHA = '713457886c5589be41d137d81b327947e37b19707c2f30c5da1b1ff43a9d8ccf'
@@ -40,12 +42,15 @@ STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
 DEPENDENCIES = {
     STATS_REL: STATS_SHA,
     Path('package.nw/js/plugins/UIGeneral.js'): '9a282cc96ee2edb4777fc18228d4a5976e2ad7546d50df72a6d0429bc6af9b0e',
+    Path('package.nw/img/system/IconSet.png'): '709b556b0c2b217436172d90d7d8af4c722ce421aa19f504261ee72607f5203e',
 }
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
-MAP_LEAVING = (b'if(SceneManager._scene?._wqaMapAnnouncement){'
-               b'globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene);}')
+FIELD_WATCHED = b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue)'
+MAP_LEAVING = (b'if' + FIELD_WATCHED + b'{globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene);}')
+DIALOGUE_LEAVING = (b'if(SceneManager._scene?._wqaDialogue){'
+                    b'globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene);}')
 AUTOSAVE_DONE = (b'if(wqaAutosave){wqaAutosave=false;SceneManager._wqaNativeAutosaves--;}')
 PLUGIN = {'name': 'WendyQuestAccess', 'status': True, 'description': 'WendyQuest accessibility support',
           'parameters': {}}
@@ -145,6 +150,27 @@ def objects_notification(original):
     })
 
 
+def windows_notification(original):
+    paint = (Path(__file__).resolve().parents[1] / 'src/dialogue/paint-markers.js').read_bytes()
+    return insert(original, WINDOWS_SHA, {
+        6945: b'    if (this._wqaChoicePaint) textState._wqaPaint = this._wqaChoicePaint;\n',
+        7547: b'\n        if (text && (textState._wqaMessage || textState._wqaPaint)) this._wqaRecordPaint(textState, text);',
+        7872: b'\n' + paint + b'\n',
+        11423: b'\n        if (textState._wqaMessage || textState._wqaPaint) '
+               b'this._wqaRecordPaint(textState, "\\x01" + iconIndex + "\\x02");',
+        127397: b'    if (SceneManager._scene?._wqaMapRestored && SceneManager._scene._messageWindow === this._messageWindow) {\n'
+                b'        this._wqaChoiceRows = [];\n        this._wqaChoiceShown = null;\n    }\n',
+        131029: b'    if (this._wqaChoiceRows) this._wqaChoicePaint = { index, text: "" };\n',
+        131102: b'\n    if (this._wqaChoicePaint) {\n        this._wqaChoiceRows[index % 16] = this._wqaChoicePaint;\n'
+                b'        this._wqaChoicePaint = null;\n    }',
+        131394: b'    ' + DIALOGUE_LEAVING + b'\n',
+        131562: b'    ' + DIALOGUE_LEAVING + b'\n',
+        144815: b'    ' + DIALOGUE_LEAVING + b'\n    this._wqaDialoguePaint = null;\n',
+        145641: b'\n            ' + DIALOGUE_LEAVING +
+                b'\n            if (this._wqaDialoguePaint) this._wqaDialoguePaint.end = 0;',
+    })
+
+
 def map_notification(original):
     # Before a mod callback, rely on the native map update's completed
     # restoration, control and asset flags. While no banner can be published
@@ -170,9 +196,30 @@ def map_notification(original):
         }
     }
 '''
+    dialogue_update = b'''
+    {
+        const wqaMessage = this._messageWindow;
+        const wqaPaint = wqaMessage?._wqaDialoguePaint;
+        const wqaChoice = wqaMessage?._choiceListWindow;
+        const wqaPageWaiting = wqaPaint && wqaPaint.end > wqaPaint.spoken && wqaMessage.openness === 255;
+        const wqaChoiceWaiting = wqaChoice?._wqaChoiceRows && wqaChoice.active &&
+            wqaChoice.openness === 255 && wqaChoice._wqaChoiceShown !== wqaChoice._index &&
+            (wqaChoice._index === -1 || wqaChoice._wqaChoiceRows[wqaChoice._index % 16]?.index === wqaChoice._index);
+        if ((wqaPageWaiting || wqaChoiceWaiting) && !this._wqaDialoguePending &&
+            this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
+            this._fadeDuration === 0 && this._fadeOpacity === 0 && this.srcWendy && this.srcStones &&
+            $gameMap.inactiveTime < 30 && !$gamePlayer._transferring && !($gameScreen._fadeOutDuration > 0) &&
+            this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
+            !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this &&
+            (!wqaPageWaiting || (!wqaMessage._faceBitmap &&
+                !(wqaMessage._nameSprite?._currentString && wqaMessage._nameSprite._animationRunning) &&
+                (!wqaMessage._slicedSprite?.visible || (wqaMessage._slicedSpriteFull && wqaMessage._slicedSpriteFaded)))))
+            globalThis.WendyQuestAccessDialogueReady?.(this);
+    }
+'''
     return insert(original, MAP_SHA, {
         59596: b'this._wqaMapRestored=true;',
-        62779: banner_update,
+        62779: banner_update + dialogue_update,
         69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
         86279: b'if(SceneManager._scene?._mapNameWindow===this){' + MAP_LEAVING + b'}'
                b'const wqaRevision=(this._wqaBannerRevision||0)+1;'
@@ -182,6 +229,11 @@ def map_notification(original):
         87176: b'if(this._wqaBannerRevision===wqaRevision&&typeof wqaName==="string"&&'
                b'wqaName.length>0&&wqaName.length<=256){this._wqaBannerText=wqaName;'
                b'this._wqaBannerDrawnRevision=wqaRevision;}',
+        91226: b'this._wqaDialoguePaint&&(this.pause||(_0x56fdd1.index>=_0x56fdd1.text.length&&!this._waitCount))&&'
+               b'(this._wqaDialoguePaint.end=this._wqaDialoguePaint.text.length),',
+        96226: MAP_LEAVING + b'this._wqaDialoguePaint=null;_0x380ef0._wqaPaint=null;'
+               b'_0x380ef0._wqaMessage=SceneManager._scene?._wqaMapRestored===true&&'
+               b'SceneManager._scene._messageWindow===this;',
     })
 
 
@@ -222,7 +274,7 @@ def window_notification(original):
 def canvas_notification(original):
     # CanvasScaler has its own resize listener and can rebuild the scene.
     return insert(original, CANVAS_SHA, {
-        7221: b'SceneManager._scene?._wqaMapAnnouncement&&'
+        7221: FIELD_WATCHED + b'&&'
               b'globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene),',
     })
 
@@ -257,7 +309,7 @@ def main():
                                 (MANAGERS_REL, managers_notification), (SCENES_REL, scenes_notification),
                                 (CORE_REL, core_notification), (WINDOW_REL, window_notification),
                                 (OBJECTS_REL, objects_notification), (MAP_REL, map_notification),
-                                (CANVAS_REL, canvas_notification),
+                                (CANVAS_REL, canvas_notification), (WINDOWS_REL, windows_notification),
                                 (REGISTRY_REL, register)):
         file = args.game_root / relative
         if file.stat().st_size > 1024 * 1024:

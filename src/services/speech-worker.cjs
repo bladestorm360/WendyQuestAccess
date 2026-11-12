@@ -39,7 +39,7 @@ function pump() {
             continue;
         }
         active = { epoch: message.epoch, expected: 'P' };
-        child.stdin.write(`S${payload}\n`);
+        child.stdin.write(`${message.append === true ? 'A' : 'S'}${payload}\n`);
         return;
     }
 }

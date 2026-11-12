@@ -28,10 +28,11 @@ template <typename Speech>
 int serveSpeech(Speech& speech) {
     if (!reply('R')) return 4;
     bool opened = false;
-    std::array<char, 1100> line{};
+    // At most 512 UTF-16 units, up to three UTF-8 bytes per unit, plus framing.
+    std::array<char, 1600> line{};
     while (std::fgets(line.data(), static_cast<int>(line.size()), stdin)) {
         const auto length = std::strlen(line.data());
-        if (length < 3 || line[length - 1] != '\n' || line[0] != 'S') return 5;
+        if (length < 3 || line[length - 1] != '\n' || (line[0] != 'S' && line[0] != 'A')) return 5;
         line[length - 1] = '\0';
         auto grant = requestGrant('P');
         if (grant == Grant::accepted && !opened) {
@@ -45,7 +46,7 @@ int serveSpeech(Speech& speech) {
             if (!reply('D')) break;
             continue;
         }
-        if (!speech.output(line.data() + 1)) return 6;
+        if (!speech.output(line.data() + 1, line[0] == 'S')) return 6;
         if (!reply('S')) break;
     }
     return 0;

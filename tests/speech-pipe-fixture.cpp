@@ -10,7 +10,7 @@ bool hold(char marker) {
 
 struct Provider {
     bool open() { return hold('I'); }
-    bool output(const char*) { return hold('O'); }
+    bool output(const char*, bool interrupt) { return hold(interrupt ? 'O' : 'A'); }
 };
 
 } // namespace

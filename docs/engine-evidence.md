@@ -55,6 +55,12 @@ These are source locators and proposed gate anchors, not approved hook sites. Tr
 
 Run `tests/map-lifecycle.test.cjs` with Node and the installed root inside the bounded runner. It loads stock methods and decodes selected `MapScene`, `MonkeyWrenchMZ` and `CanvasScaler` methods into memory, with the same source-checked notification transforms used for the candidate. `tools/registration.py` pins the modified inputs. The stock `rmmz_windows.js` used for the window fixture hashes to `7bd37af5d4d55d2aedad4d2cb1e14d2ff3ff8eefa261f865ef805b7e8981fd59`. Actual map data supplies the Salt Caverns event, opening parallel event, reset room and secret cave. Assets, save writes, Steam callbacks and event command execution are stand-ins. See [the banner implementation](implementation.md#map-location-banner) for producer coverage and remaining limits.
 
+### Dialogue producer coverage
+
+The installed map and common-event lists include 127 native choice commands and four number-input commands. The scanned map, common-event and troop lists have no native scrolling-text or item-choice command rows. Direct plugin creation of those windows and browser popups still need a separate reachability check. Troop pages contain 153 Show Text commands and therefore require battle-context verification.
+
+The native message draw uses `Window_Base.flushTextState` and `processDrawIcon`. `MapScene` sets icon dimensions to 36 by 36. `Scene_Boot` preloads the pinned `IconSet` texture. The map and common-event scans found the icon indices covered by [the dialogue formatter](../src/services/dialogue-icons.cjs), including an empty cell. The labels were checked against the exact atlas cells and native item metadata. The authored opening fixture uses map 038 event 1 page 2 and its following choice command. The authored clue fixture uses map 019 event 114 page 1. Event script execution and native storage are outside both fixtures. [Dialogue implementation](implementation.md#map-dialogue-and-choices).
+
 ## Producer and input map
 
 | Player-facing surface | Evidence and next check |

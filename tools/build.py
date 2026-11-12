@@ -24,6 +24,7 @@ def bundle():
         './frontend/files': 'frontend/files.js',
         './options': 'frontend/options.js',
         './world/map-banner': 'world/map-banner.js',
+        './dialogue/observer': 'dialogue/observer.js',
     }
     target = OUT / 'js' / 'plugins' / 'WendyQuestAccess.js'
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -114,7 +115,8 @@ exit /b 0
     if verify_pipe:
         subprocess.run([sys.executable, str(ROOT / 'tests/speech-pipe.test.py'), str(fixture)], check=True, timeout=40)
     shutil.copyfile(ROOT / 'src' / 'services' / 'speech-worker.cjs', services / 'speech-worker.cjs')
-    shutil.copyfile(ROOT / 'src' / 'services' / 'speech-text.cjs', services / 'speech-text.cjs')
+    for name in ('speech-text.cjs', 'dialogue-icons.cjs'):
+        shutil.copyfile(ROOT / 'src' / 'services' / name, services / name)
 
 
 def main():

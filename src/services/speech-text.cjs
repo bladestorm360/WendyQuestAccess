@@ -1,5 +1,6 @@
 'use strict';
 
+const { dialogueText } = require('./dialogue-icons.cjs');
 const MAX_TEXT = 256;
 const fileControls = Object.freeze({ options: 'Options', moreGames: 'More games', coupons: 'Coupons' });
 
@@ -32,6 +33,7 @@ function describeSlot(message, prefix) {
 
 function formatSpeech(message) {
     let text;
+    let limit = MAX_TEXT;
     switch (message.kind) {
         case 'title': {
             const name = label(message);
@@ -69,6 +71,19 @@ function formatSpeech(message) {
                 .filter(Boolean).join(' ');
             break;
         }
+        case 'dialoguePage': {
+            const body = dialogueText(message.text);
+            const speaker = typeof message.speaker === 'string' && message.speaker.length <= 96 ? message.speaker.trim() : '';
+            text = body && (speaker ? `${speaker}. ${body}` : body);
+            limit = 512;
+            break;
+        }
+        case 'dialogueChoice': {
+            const choice = dialogueText(message.text);
+            text = message.first ? (choice ? `Choices. ${choice}` : 'Choices') : choice;
+            limit = 512;
+            break;
+        }
         case 'deletePrompt': {
             const name = label(message);
             text = name && `${name}? Choose Delete or Cancel`;
@@ -79,7 +94,7 @@ function formatSpeech(message) {
     // Framing stays local to the worker. No game string can create a new line
     // on the speech pipe, and UTF-8 conversion remains outside the renderer.
     const announcement = message.loadFailed ? `Could not load the save. ${text}` : text;
-    return announcement.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, MAX_TEXT);
+    return announcement.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, limit);
 }
 
 module.exports = { formatSpeech };

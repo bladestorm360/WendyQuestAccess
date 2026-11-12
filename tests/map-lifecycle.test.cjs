@@ -166,7 +166,7 @@ function fixture(data, failSave = false) {
         renderer.emit('postrender');
         while (timers.length) timers.shift()();
     }
-    return { c, event, name, trace, bitmapCallbacks, idleCallbacks, frame, renderer,
+    return { c, event, name, trace, bitmapCallbacks, idleCallbacks, frame, renderer, packets, run,
         epoch: () => admission ? Atomics.load(admission, 0) : 0,
         speech: () => packets.filter(packet => packet.kind === 'mapBanner').map(formatSpeech) };
 }
@@ -348,4 +348,5 @@ async function main() {
     console.log('Verified installed map lifecycle and visible banner speech through save, fade, event, idle, battle and transfer boundaries.');
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports = { fixture, mapData };

@@ -4,11 +4,13 @@ const { createRenderer } = require('./runtime/renderer');
 const { createTitleObserver, presented } = require('./frontend/title');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
 const { createMapBannerObserver } = require('./world/map-banner');
+const { createDialogueObserver } = require('./dialogue/observer');
 
 function boot(root, nodeRequire, nodeProcess) {
     let title = null;
     let files = null;
     let mapBanner = null;
+    let dialogue = null;
     let titleWaiting = null;
     let filesWaiting = null;
 
@@ -43,6 +45,7 @@ function boot(root, nodeRequire, nodeProcess) {
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
         mapBanner = createMapBannerObserver(host, notifications);
+        dialogue = createDialogueObserver(host, notifications);
         root.Graphics._wqaFrontEndObserved = true;
     }
 
@@ -109,6 +112,14 @@ function boot(root, nodeRequire, nodeProcess) {
         } catch { mapBanner?.leave(scene); }
     };
 
+    root.WendyQuestAccessDialogueReady = function (scene) {
+        try {
+            if (!supported() || root.SceneManager._scene !== scene || !root.document.hasFocus()) return;
+            if (!dialogue) initialize();
+            dialogue.observe(scene);
+        } catch { dialogue?.leave(scene); }
+    };
+
     // Direct native scene changes and developer reload can bypass the active
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
@@ -118,6 +129,7 @@ function boot(root, nodeRequire, nodeProcess) {
         title?.leave(scene);
         files?.leave(scene);
         mapBanner?.leave(scene);
+        dialogue?.leave(scene);
     };
 
     root.WendyQuestAccessResizeStarting = function () {
@@ -126,6 +138,7 @@ function boot(root, nodeRequire, nodeProcess) {
         const scene = root.SceneManager._scene;
         if (scene?._wqaPresentation) scene._wqaPresentation = false;
         mapBanner?.leave(scene);
+        dialogue?.leave(scene);
         title?.suspend();
         files?.suspend();
     };

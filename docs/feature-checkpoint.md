@@ -12,7 +12,7 @@ The visible location increment is implemented and offline-verified. It uses the 
 
 ## Initial feature inventory
 
-The launch/front-end and speech transport rows are **in progress**. Native Options and the map banner are in progress within menus and renderer parity. Other rows are **not started** for implementation. A missing producer is an investigation item before declaring a feature inapplicable.
+The launch/front-end and speech transport rows are **in progress**. Native Options, the map banner and the first dialogue and choice presentation are implemented and offline-verified within their respective rows. The dialogue row remains **in progress** while battle context, auto-closing pages, number entry, text review and native input variants are open. Other rows are **not started** for implementation. A missing producer is an investigation item before declaring a feature inapplicable.
 
 | Scope / checkpoint | Player task and known producer | Acceptance and open question |
 | --- | --- | --- |
