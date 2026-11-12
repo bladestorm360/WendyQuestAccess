@@ -1,10 +1,14 @@
 'use strict';
 
+const { optionFocus, observeOptionActions } = require('./options');
+
 // These tags are published by the checked native callbacks after the game
 // finishes its own draw or stage work. Each observer binds one live instance.
 const SLOTS = 1;
 const DETAILS = 2;
 const DELETE = 3;
+const OPTIONS = 4;
+const RETRY = 5;
 const controls = [
     ['optionsSprite', 'options'],
     ['monkeysButton', 'moreGames'],
@@ -12,7 +16,9 @@ const controls = [
 ];
 
 function fileWindow(scene) {
-    return scene._wqaFileKind === DELETE ? scene._optionsWindow : scene._listWindow;
+    if (scene._wqaFileKind === RETRY) return scene._commandWindow;
+    if (scene._wqaFileKind === DELETE || scene._wqaFileKind === OPTIONS) return scene._optionsWindow;
+    return scene._listWindow;
 }
 
 function isReady(host, scene, window) {
@@ -23,6 +29,9 @@ function isReady(host, scene, window) {
     if (scene._wqaFileKind === SLOTS) return window._wqaCards === true;
     if (scene._wqaFileKind === DETAILS) return scene._wqaDetailArt === true &&
         scene._wqaDetailText === true && !scene._destroySave;
+    if (scene._wqaFileKind === OPTIONS) return window._wqaOptionsPainted === true && !scene._wqaOptionsResizing;
+    if (scene._wqaFileKind === RETRY) return window._index >= 0 && window._index < 3 &&
+        !!(window._wqaRetryRows & (1 << window._index));
     return scene._wqaFileKind === DELETE && (scene._deleteCount === 0 || !!scene._wqaDeleteStatus);
 }
 
@@ -103,6 +112,13 @@ function readFocus(host, scene, window, summary) {
         const info = summary && scene._info ? metadata(host, scene._info, true) : {};
         return { kind: 'saveAction', name, key: index, slot: scene._saveIndex + 1, summary, ...info };
     }
+    if (scene._wqaFileKind === OPTIONS) return optionFocus(scene, window);
+    if (scene._wqaFileKind === RETRY) {
+        const command = window._list?.[index];
+        const name = shortText(command?.name, 128);
+        return name ? { kind: 'retryOption', name, key: index, summary,
+            tryAgain: command.symbol === 'continue' } : null;
+    }
     // Native initialization can leave the cursor past the two command rows.
     // Describe the visible prompt until the player moves to a real row.
     if (summary && scene._deleteCount > 0 && scene._wqaDeleteStatus) {
@@ -138,8 +154,13 @@ function createFilesObserver(host, notifications) {
     function publish(context) {
         if (!ready(context)) return;
         const focus = readFocus(host, context.scene, context.window, !context.epoch);
-        if (!focus || focus.key === context.key) return;
+        if (!focus) return;
+        // Collapse notifications for the same native focus event. A native
+        // setting acceptance remains distinct even if its spoken text matches.
+        if (focus.key === context.key && !context.settingChanged) return;
+        if (focus.kind === 'optionValue' && focus.key !== context.key) focus.tab = context.window.currentTab;
         context.key = focus.key;
+        context.settingChanged = false;
         if (context.failure) {
             focus.loadFailed = true;
             context.failure = false;
@@ -172,12 +193,14 @@ function createFilesObserver(host, notifications) {
         window.select = function () {
             const index = this._index;
             const result = select.apply(this, arguments);
-            if (index !== this._index) afterRender(context);
+            if (index !== this._index || scene._wqaFileKind === OPTIONS) afterRender(context);
             return result;
         };
         window.callHandler = function (symbol) {
+            const retry = scene._wqaFileKind === RETRY &&
+                (symbol === 'continue' || symbol === 'dave' || symbol === 'title');
             if (current === context && this === window &&
-                (symbol === 'ok' || symbol === 'cancel' || symbol === 'delete') && this.isHandled(symbol)) {
+                (symbol === 'ok' || symbol === 'cancel' || symbol === 'delete' || retry) && this.isHandled(symbol)) {
                 // Close before the accepted action can touch a file or build
                 // another scene. A command with no handler is still native.
                 leave(scene);
@@ -196,6 +219,15 @@ function createFilesObserver(host, notifications) {
                     return result;
                 };
             }
+        } else if (scene._wqaFileKind === OPTIONS) {
+            observeOptionActions(scene, window, settingChanged => {
+                if (settingChanged) context.settingChanged = true;
+                afterRender(context);
+            }, () => {
+                if (current !== context) return false;
+                close(context);
+                return true;
+            }, () => leave(scene));
         }
         return true;
     }

@@ -13,7 +13,7 @@ const { formatSpeech } = require('../src/services/speech-text.cjs');
 // render device and storage with isolated stand-ins and never opens a save.
 const game = process.argv[2];
 const native = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
-    path.join(__dirname, 'file-producers.py'), game], { encoding: 'utf8', timeout: 6000, maxBuffer: 32768 }));
+    path.join(__dirname, 'file-producers.py'), game], { encoding: 'utf8', timeout: 6000, maxBuffer: 65536 }));
 const windowSource = fs.readFileSync(path.join(game, 'package.nw', 'js', 'rmmz_windows.js'), 'utf8');
 
 function fixture() {
@@ -33,13 +33,18 @@ function fixture() {
     const coroutines = [];
     const context = vm.createContext({
         a16_0x55d438: key => { throw Error('Unexpected undecoded property ' + key); },
+        a22_0x524e38: key => { throw Error('Unexpected undecoded property ' + key); },
         Scene_Title: function () {}, Scene_File: function () {}, Scene_Load: function () {},
         Scene_FileLoad: function () {}, Scene_Base: function () {}, Scene_Options: function () {},
-        Scene_Coupons: function () {}, Scene_DeleteGame: function () {},
+        Scene_Coupons: function () {}, Scene_DeleteGame: function () {}, Scene_Gameover: function () {},
         Window_SavefileList: function () {}, Window_Selectable: function () {}, Window_Command: function () {},
+        Window_Options: function () {}, Window_HorzCommand: function () {},
+        Window_Selectable_prototype_initialize() {}, Scene_Options_prototype_create() {},
+        Rectangle: class { constructor(x, y, width, height) { Object.assign(this, { x, y, width, height }); } },
         Scene_Load_prototype_start() {}, Scene_Load_prototype_update() {},
         Scene_MenuBase: { prototype: { update() {} } },
-        Utils: { RPGMAKER_NAME: 'MZ', RPGMAKER_VERSION: '1.8.0', isMobileSafari: () => false },
+        Utils: { RPGMAKER_NAME: 'MZ', RPGMAKER_VERSION: '1.8.0', isMobileSafari: () => false,
+            isMobileDevice: () => false },
         Graphics: { app: { renderer, stage: null }, boxXOffset: 0, endLoading() {}, setStage(stage) { this.app.stage = stage; } },
         document: { hasFocus: () => true },
         addEventListener: (name, listener) => events.on(name, listener),
@@ -50,14 +55,16 @@ function fixture() {
             _scene: null, _nextScene: null,
             goto(target) { assert.equal(word ? Atomics.load(word, 0) : 0, 0);
                 this._nextScene = target ? new target() : {}; nativeClose++; },
-            push() { this.goto(); },
+            push() { this.goto(); }, pop() { this.goto(); }, exit() { this.goto(); },
             snapForBackground() { assert.equal(Atomics.load(word, 0), 0); }
         },
-        $gameTemp: {}, $gameVariables: { value: id => id === 43 ? 3 : 5 },
+        $gameTemp: { isPlaytest: () => false }, $gameVariables: { value: id => id === 43 ? 3 : 5 },
         $dataActors: [null, { name: 'Actor one', faceName: 'One' }, null, { name: 'Actor three', faceName: 'Three' }],
         TrackedStats: { CRITICAL_HITS: 43, CRIT_STREAK_RECORD: 44 },
         Input: { GetLastInputDeviceIsGamePad: () => false, isTriggered: () => false },
-        TouchInput: { isCancelled: () => false }, SoundManager: { playOk() {}, playBuzzer() {} },
+        TouchInput: { isCancelled: () => false, isPressed: () => false },
+        SoundManager: { playOk() {}, playBuzzer() {}, playCursor() {}, playCancel() {} },
+        AudioManager: { stopMe() {} }, console: { log() {}, error() {} },
         ConfigManager: { developerMode: false }, Time: { GetDeltaTime: () => 60 },
         CoroutineManager: { StartAnonymousCoroutine: factory => { const instance = factory(); coroutines.push(instance); return instance; } },
         Sprite_Text: class {
@@ -78,14 +85,22 @@ function fixture() {
     });
     function run(source) { vm.runInContext(source, context, { timeout: 100 }); }
     for (const method of Object.values(native)) run(method);
-    for (const name of ['select', 'forceSelect', 'isHandled', 'callHandler', 'processOk', 'callOkHandler']) {
-        const head = 'Window_Selectable.prototype.' + name + ' = function(';
-        const offset = windowSource.indexOf(head);
-        assert(offset >= 0, name);
-        run(windowSource.slice(offset, windowSource.indexOf('\n};', offset) + 3));
+    for (const [type, names] of Object.entries({
+        Window_Selectable: ['select', 'forceSelect', 'isHandled', 'callHandler', 'processOk', 'callOkHandler', 'setHandler'],
+        Window_Command: ['callOkHandler'],
+        Window_Options: ['statusText', 'isVolumeSymbol', 'booleanStatusText', 'changeValue', 'getConfigValue', 'setConfigValue']
+    })) {
+        for (const name of names) {
+            const head = `${type}.prototype.${name} = function(`;
+            const offset = windowSource.indexOf(head);
+            assert(offset >= 0, name);
+            run(windowSource.slice(offset, windowSource.indexOf('\n};', offset) + 3));
+        }
     }
-    const commandHead = windowSource.indexOf('Window_Command.prototype.callOkHandler = function(');
-    run(windowSource.slice(commandHead, windowSource.indexOf('\n};', commandHead) + 3));
+    for (const type of [context.Window_Options, context.Window_HorzCommand]) {
+        Object.setPrototypeOf(type.prototype, context.Window_Selectable.prototype);
+    }
+    run('Math.Clamp = (min, max, value) => Math.min(max, Math.max(min, value));');
     const nodeRequire = name => {
         if (name === 'path') return path;
         assert.equal(name, 'worker_threads');
@@ -123,6 +138,165 @@ function fixture() {
 function readyFrame(f) {
     f.renderer.emit('postrender');
     while (f.timers.length) f.timers.shift()();
+}
+
+function displayed(f) {
+    return f.messages.filter(packet => packet.kind !== 'cancel').map(formatSpeech);
+}
+
+{
+    const f = fixture();
+    const c = f.context;
+    const window = new c.Window_Options();
+    const scene = f.show(new c.Scene_Options(), window);
+    const drawn = [];
+    const pips = [];
+    const rect = () => new c.Rectangle(0, 0, 200, 30);
+    c.ConfigManager.bgmVolume = 15;
+    let fullscreen = false;
+    Object.defineProperty(c.ConfigManager, 'fullscreen', {
+        get: () => fullscreen,
+        set(value) { assert.equal(f.epoch(), 0); fullscreen = value; }
+    });
+    Object.assign(window, {
+        parent: scene,
+        refresh() {
+            this.tabs = {
+                Volume: [{ name: 'Fixture music', symbol: 'bgmVolume', enabled: true }],
+                Display: [{ name: 'Fixture full screen', symbol: 'fullscreen', enabled: true }]
+            };
+            this.paint();
+        },
+        paint() {
+            this._list = this.tabs[this.currentTab];
+            this.drawItem(0);
+        },
+        refreshCursor() { this.paint(); }, redrawItem(index) { this.drawItem(index); },
+        commandName(index) { return this._list[index].name; },
+        commandSymbol(index) { return this._list[index].symbol; },
+        findSymbol(symbol) { return this._list.findIndex(item => item.symbol === symbol); },
+        isCommandEnabled: () => true, resetTextColor() {}, changePaintOpacity() {},
+        activate() { this.active = true; }, playCursorSound() {},
+        itemLineRect: rect, titleRect: rect, statusRect: rect, rectToScreenRect: value => value,
+        volumeWidth: () => 160, isHoverEnabled: () => false,
+        drawVolumeBackgroundRectPressed() {}, drawBackgroundRectPressed() {},
+        drawText(value) { drawn.push(value); }, contents: { blt(_image, sourceX) { pips.push(sourceX); } }
+    });
+    Object.assign(scene, {
+        _optionsWindow: window, update() {}, setBackgroundOpacity() {}, onGoToTitle() {},
+        systemOptionActive: () => true, systemOptionCount() { return this.systemButtons.length; },
+        createOptionsSystemWindow() { for (const button of this.systemButtons) button.sprite = { visible: true }; }
+    });
+    window.initialize(rect());
+    scene.create();
+    c.SceneManager.onSceneStart();
+    readyFrame(f);
+    assert.deepEqual(displayed(f), []);
+    assert.equal(pips.length, 0);
+    f.images.shift()(); // The real Options loader completes after native scene start.
+    assert.equal(pips.filter(x => x === 0).length, 2);
+    assert.deepEqual(displayed(f), []);
+    readyFrame(f);
+    assert.equal(displayed(f).at(-1), 'Volume, Fixture music, 2 of 10');
+    window.cursorRight(false);
+    assert.equal(pips.slice(-10).filter(x => x === 0).length, 3);
+    readyFrame(f);
+    assert.equal(displayed(f).at(-1), 'Fixture music, 3 of 10');
+    window.setVolumeConfig('bgmVolume', 26, false);
+    window.redrawItem(0);
+    readyFrame(f);
+    assert.deepEqual(displayed(f).slice(-2), ['Fixture music, 3 of 10', 'Fixture music, 3 of 10']);
+    window.cursorPagedown();
+    assert.equal(window.index(), 0);
+    assert.equal(drawn.at(-1), 'OFF');
+    readyFrame(f);
+    assert.equal(displayed(f).at(-1), 'Display, Fixture full screen, OFF');
+    const epoch = f.epoch();
+    scene.doSystemButton(-1);
+    assert.equal(f.epoch(), epoch);
+    window.changeValue('fullscreen', false);
+    assert.equal(f.epoch(), epoch);
+    window.changeValue('fullscreen', true);
+    readyFrame(f);
+    assert.equal(f.epoch(), 0);
+    assert.equal(displayed(f).at(-1), 'Display, Fixture full screen, OFF');
+    c.Graphics._updateAllElements = () => assert.equal(f.epoch(), 0);
+    c.Graphics._onWindowResize();
+    assert.equal(f.epoch(), 0);
+    readyFrame(f);
+    assert.equal(drawn.at(-1), 'ON');
+    assert.equal(displayed(f).at(-1), 'Display, Fixture full screen, OFF');
+    scene.doSystemButton(-1);
+    assert.equal(f.nativeClose(), 0);
+    scene.doSystemButton(0);
+    assert.equal(f.epoch(), 0);
+    assert.equal(f.nativeClose(), 1);
+}
+
+for (const [withDave, selection] of [[false, 'continue'], [true, 'continue'], [true, 'dave'], [true, 'title']]) {
+    const f = fixture();
+    const c = f.context;
+    const painted = [];
+    const addedLabels = [];
+    const scene = f.show(new c.Scene_Gameover(), new c.Window_Selectable());
+    function CommandWindow(rect) {
+        f.show(scene, this);
+        this._list = [];
+        this._container = {};
+        this.initialize(rect);
+    }
+    CommandWindow.prototype = Object.assign(Object.create(c.Window_HorzCommand.prototype), {
+        addCommand(name, symbol) { this._list.push({ name, symbol }); },
+        currentSymbol() { return this._list[this._index].symbol; },
+        callOkHandler: c.Window_Command.prototype.callOkHandler,
+        drawItem(index) { painted.push(this._list[index].symbol); },
+        drawText(label) { addedLabels.push(label); },
+        itemLineRect() { return new c.Rectangle(0, 0, 200, 30); },
+        itemTextAlign: () => 'center', resetTextColor() {},
+        paint() { for (let index = 0; index < this._list.length; index++) this.drawItem(index); }
+    });
+    c.Window_HorzCommand = CommandWindow;
+    Object.assign(scene, {
+        createWindowLayer() {}, gameoverCommandItemRect() {},
+        addWindow(window) { window.parent = this; }, onLoadSuccess() {}
+    });
+    c.$gameSwitches = { _data: [] };
+    c.$gameSwitches._data[16] = withDave;
+    c.DataManager.GetLastLoadedFile = () => 2;
+    let reject;
+    c.DataManager.loadGame = slot => {
+        assert.equal(f.epoch(), 0);
+        assert.equal(slot, 2);
+        return { then: () => ({ catch: callback => { reject = callback; } }) };
+    };
+    scene.createCommandWindow();
+    c.SceneManager.onSceneStart();
+    readyFrame(f);
+    assert.deepEqual(displayed(f), []);
+    assert.deepEqual(painted, []);
+    f.images.shift()(); // Run UIGeneral's exact skin-load callback against the attached window.
+    assert.deepEqual(painted, withDave ? ['title', 'dave', 'continue'] : ['title', 'continue']);
+    assert.equal(addedLabels.length, 1);
+    assert.deepEqual(displayed(f), []);
+    readyFrame(f);
+    assert.equal(f.messages.at(-1).tryAgain, !withDave);
+    if (withDave) {
+        scene._commandWindow.select(2);
+        readyFrame(f);
+        assert.equal(f.messages.at(-1).tryAgain, true);
+    }
+    scene._commandWindow.select(scene._commandWindow._list.findIndex(item => item.symbol === selection));
+    readyFrame(f);
+    scene._commandWindow.processOk();
+    assert.equal(f.epoch(), 0);
+    if (selection !== 'title') {
+        assert.equal(scene.isDaveWarping, selection === 'dave');
+        reject();
+        assert.equal(c.SceneManager._nextScene._wqaRetryFailed, true);
+    } else {
+        assert.equal(reject, undefined);
+    }
+    assert(c.SceneManager._nextScene instanceof c.Scene_Title);
 }
 
 for (const imagesFirst of [false, true]) {
@@ -255,4 +429,4 @@ for (const imagesBeforeStage of [false, true]) {
     assert.equal(f.deleted(), 1);
     assert.equal(f.epoch(), 0);
 }
-console.log('Verified native file publication orders, slot and sprite focus, load failure, delete status, and close-before-entry.');
+console.log('Verified native file, Options and retry presentation, accepted settings, and close-before-entry.');

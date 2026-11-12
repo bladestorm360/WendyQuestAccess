@@ -44,7 +44,7 @@ const messages = [];
 let admission;
 Object.assign(window, {
     _index: 0,
-    _list: [{ name: originalLabel, enabled: true }],
+    _list: [{ name: originalLabel, enabled: true }, { name: 'Synthetic second action', enabled: true }],
     visible: false,
     active: false,
     openness: 255,
@@ -62,6 +62,7 @@ Object.assign(scene, {
     _commandWindow: window,
     _started: true,
     _active: true,
+    _wqaRetryFailed: true,
     _fadeDuration: 3,
     isStarted: sandbox.Scene_Base.prototype.isStarted,
     isBusy: () => false,
@@ -105,10 +106,14 @@ timers.shift()();
 assert.equal(messages.length, 1);
 assert.equal(messages[0].name, originalLabel);
 assert.equal(messages[0].epoch, Atomics.load(admission, 0));
+assert.equal(messages[0].loadFailed, true);
+window.select(1);
+assert.equal(messages[1].name, 'Synthetic second action');
+assert.equal(messages[1].loadFailed, undefined);
 acceptThisFrame = true;
 manager.updateScene();
 assert.equal(nativeAccepted, 1);
 assert.equal(Atomics.load(admission, 0), 0);
-assert.deepEqual(messages.map(message => message.kind), ['title', 'cancel']);
+assert.deepEqual(messages.map(message => message.kind), ['title', 'title', 'cancel']);
 assert.equal(timers.length, 0);
-console.log('Native title update and OK handler preserved. Presentation opened the epoch; accepted transition closed it before native continuation.');
+console.log('Verified native title presentation, one-time retry failure, and gate closure before native continuation.');

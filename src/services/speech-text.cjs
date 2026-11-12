@@ -48,6 +48,26 @@ function formatSpeech(message) {
             text = Object.prototype.hasOwnProperty.call(fileControls, message.label) ? fileControls[message.label] : '';
             break;
         case 'fileLabel': text = label(message); break;
+        case 'optionTab': {
+            const name = label(message);
+            text = name && `${name} tab`;
+            break;
+        }
+        case 'optionValue': {
+            const name = label(message);
+            const tab = typeof message.tab === 'string' && message.tab.length <= 96 ? message.tab : '';
+            const value = Number.isInteger(message.pips) && message.pips >= 0 && message.pips <= 10
+                ? `${message.pips} of 10${message.pips === 0 ? ', muted' : ''}`
+                : typeof message.status === 'string' && message.status.length <= 96 ? message.status : '';
+            text = name && [tab, name, value, message.enabled ? '' : 'unavailable'].filter(Boolean).join(', ');
+            break;
+        }
+        case 'retryOption': {
+            const name = label(message);
+            text = name && [message.summary ? 'Game over' : '', message.tryAgain ? 'Try again?' : '', name]
+                .filter(Boolean).join(' ');
+            break;
+        }
         case 'deletePrompt': {
             const name = label(message);
             text = name && `${name}? Choose Delete or Cancel`;

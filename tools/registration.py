@@ -27,6 +27,11 @@ MENU_SHA = 'b4426d78f76e1d799f178e31b981292d404cc60a819b767f80573c133b1cd82a'
 MANAGERS_SHA = 'e87efc29229a80c903c1651a78bbeafa8b9ffb925227b31cfa7f4741875140bd'
 SCENES_SHA = '0f69c04d51b9ce17410e952ceafa31527a1b6c94663a12e11ca7d0e30cf2913a'
 STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
+DEPENDENCIES = {
+    STATS_REL: STATS_SHA,
+    Path('package.nw/js/plugins/UIGeneral.js'): '9a282cc96ee2edb4777fc18228d4a5976e2ad7546d50df72a6d0429bc6af9b0e',
+    Path('package.nw/js/plugins/MonkeyWrenchMZ.js'): '37dfb71367496ca5f96a86156c3ea9fb4f813a3d6323280e342848d3bfd9cd42',
+}
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
 PLUGIN = {'name': 'WendyQuestAccess', 'status': True, 'description': 'WendyQuest accessibility support',
           'parameters': {}}
@@ -57,7 +62,10 @@ def files_ready(scene):
 {scene}._fadeDuration===0&&{scene}._fadeOpacity===0&&Graphics.app?.stage==={scene}&&
 (({scene}._wqaFileKind===1&&{scene}._listWindow?._wqaCards===true)||
 ({scene}._wqaFileKind===2&&{scene}._wqaDetailText===true&&{scene}._wqaDetailArt===true&&!{scene}._destroySave)||
-({scene}._wqaFileKind===3&&({scene}._deleteCount===0||{scene}._wqaDeleteStatus)))'''.replace('\n', '')
+({scene}._wqaFileKind===3&&({scene}._deleteCount===0||{scene}._wqaDeleteStatus))||
+({scene}._wqaFileKind===4&&{scene}._optionsWindow?._wqaOptionsPainted===true&&!{scene}._wqaOptionsResizing)||
+({scene}._wqaFileKind===5&&{scene}._commandWindow&&( {scene}._commandWindow._wqaRetryRows&
+(1<<{scene}._commandWindow._index))))'''.replace('\n', '')
     return f'if({ready})globalThis.WendyQuestAccessFilesReady?.({scene});'.encode('ascii')
 
 
@@ -65,6 +73,15 @@ def menu_notifications(original):
     # Build 26578620. Offsets refer to completed native draw or accepted
     # native actions. Existing event arguments and call order are preserved.
     return insert(original, MENU_SHA, {
+        91658: b'this._wqaFileKind=4;',
+        92959: FILES_LEAVING,
+        97879: b'(' + FILES_LEAVING,
+        97897: b')',
+        100934: b',this._wqaOptionsPainted=true',
+        100936: b'if(SceneManager._scene?._optionsWindow===this){' + files_ready('SceneManager._scene') + b'}',
+        113848: b'if(this._volumePips&&this._index===_0xe6cc9c){this._wqaOptionRow=_0xe6cc9c;'
+                b'this._wqaOptionTab=this.currentTab;this._wqaOptionStatus=_0x2a39aa;}',
+        115137: b'if(this._list[this._index]?.symbol===_0x409fc3)this._wqaVolumeShown=_0x20639e;',
         163333: b'this._wqaFileKind=3;',
         165098: b'this._wqaDeleteStatus=_0x4a1a5b;' + files_ready('this'),
         165586: FILES_LEAVING,
@@ -80,6 +97,10 @@ def menu_notifications(original):
         215860: b'if(SceneManager._nextScene)SceneManager._nextScene._wqaReadFailed=true;',
         219539: b'this._wqaCards=true;if(SceneManager._scene?._listWindow===this){' +
                 files_ready('SceneManager._scene') + b'}',
+        230489: b'if(_0x6b578e>=0&&_0x6b578e<3&&!(this._commandWindow._wqaRetryRows&(1<<_0x6b578e)))'
+                b'{this._commandWindow._wqaRetryRows|=1<<_0x6b578e;' + files_ready('this') + b'}',
+        231238: b'this._wqaFileKind=5;',
+        234492: b'if(SceneManager._nextScene)SceneManager._nextScene._wqaRetryFailed=true;',
     })
 
 
@@ -113,9 +134,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('game_root', type=Path)
     args = parser.parse_args()
-    stats = args.game_root / STATS_REL
-    if stats.stat().st_size > 1024 * 1024 or hashlib.sha256(stats.read_bytes()).hexdigest() != STATS_SHA:
-        raise ValueError('Visible save statistics and portrait layout do not match the supported Steam build')
+    for relative, expected in DEPENDENCIES.items():
+        dependency = args.game_root / relative
+        if dependency.stat().st_size > 1024 * 1024 or hashlib.sha256(dependency.read_bytes()).hexdigest() != expected:
+            raise ValueError(f'Front-end dependency does not match the supported Steam build: {relative}')
     for relative, transform in ((TITLE_REL, title_notification), (MENU_REL, menu_notifications),
                                 (MANAGERS_REL, managers_notification), (SCENES_REL, scenes_notification),
                                 (REGISTRY_REL, register)):

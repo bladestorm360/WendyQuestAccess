@@ -21,6 +21,7 @@ def bundle():
         './gate': 'runtime/gate.js',
         './frontend/title': 'frontend/title.js',
         './frontend/files': 'frontend/files.js',
+        './options': 'frontend/options.js',
     }
     target = OUT / 'js' / 'plugins' / 'WendyQuestAccess.js'
     target.parent.mkdir(parents=True, exist_ok=True)

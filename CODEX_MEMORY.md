@@ -1,6 +1,6 @@
 # WendyQuest project memory
 
-Reviewed November 11, 2026. Full mod implementation is active. The title and file selector now have build-matched native producer fixtures. Deployment and gameplay confirmation remain open.
+Reviewed November 11, 2026. Full mod implementation is active. The title, file selector, retry and ordinary Options have build-matched native producer fixtures. Deployment and gameplay confirmation remain open.
 
 - [Feasibility, recommendation and work estimates](docs/feasibility.md)
 - [Exact installed build, loader, lifecycle, input and offline evidence](docs/engine-evidence.md)
@@ -16,4 +16,4 @@ November 11 checkpoint: remote `refs/heads/main` was verified at feasibility com
 
 November 11 implementation checkpoint: remote `refs/heads/main` was verified at `10fe45072af7067e980494a862611cdc0e04b4a4`. The bounded Windows build, exact registration candidates, matching NW worker bridge, extracted title acceptance and silent PRISM initialization passed offline. The transport fault fixture and file-menu lifecycle notes extend this checkpoint. Continue at [implementation and verification](docs/implementation.md). The Steam install remains unmodified during this incomplete checkpoint.
 
-The private remote was also verified at `2b6396919f84c1631dc0667f0a0f32631a8f90dc` for the transport fault fixture. The following file-selector work covers both readiness orders, visible slot and detail data, load failure and native deletion with stand-in storage. Continue with the retry draw path, native Options and external speech quiescence in the same active checkpoint.
+The private remote was verified at `2b6396919f84c1631dc0667f0a0f32631a8f90dc` for the transport fault fixture and `84f6dd9e0f5fad0d8f3f6f30b4eecefcbf08b34b` for the file selector. The following front-end increment covers native retry and the Options draw path. Continue in the same active system with fullscreen terminal readiness and the delayed external speech call. The first window resize alone cannot re-admit speech. See [the current acceptance limits](docs/implementation.md#native-options).

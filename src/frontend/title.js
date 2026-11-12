@@ -29,6 +29,7 @@ function createTitleObserver(host, notifications) {
     let observedWindow = null;
     let generation = 0;
     let closing = false;
+    let loadFailed = false;
 
     function close() {
         if (!generation) return;
@@ -41,7 +42,11 @@ function createTitleObserver(host, notifications) {
         if (generation || !observedScene || closing || !host.hasFocus() ||
             !presented(host, observedScene, observedWindow)) return;
         const focused = readFocused(observedWindow);
-        if (focused) generation = notifications.open(focused);
+        if (focused) {
+            focused.loadFailed = loadFailed;
+            generation = notifications.open(focused);
+            if (generation) loadFailed = false;
+        }
     }
 
     function leave() {
@@ -94,6 +99,7 @@ function createTitleObserver(host, notifications) {
             observedScene = scene;
             observedWindow = window;
             closing = false;
+            loadFailed = scene._wqaRetryFailed === true;
         }
         openIfPresented();
         return true;

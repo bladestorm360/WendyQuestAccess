@@ -1,12 +1,14 @@
 # Scope ledger and feature checkpoint
 
-**Active scope.** Full mod implementation and deployment of the verified complete candidate to the established Steam install are authorized. The first active system is safe front-end integration, in progress (about 50%). The loader, title, file selector, save detail and delete producers have offline evidence. Native Options, retry, broader lifecycle gates and quiescence of already-started backend work remain open. No production subsystem is Closed. Gameplay confirmation is pending the complete offline pass. The Cauldron's dedicated guide is pending classification in the [audit](puzzles-and-secrets.md).
+**Active scope.** Full mod implementation and deployment of the verified complete candidate to the established Steam install are authorized. The first active system is safe front-end integration, in progress (about 60%). The loader, title, file selector, save detail, deletion, retry and ordinary Options producers have offline evidence. Fullscreen speech recovery, broader lifecycle gates and quiescence of already-started backend work remain open. No production subsystem is Closed. Gameplay confirmation is pending the complete offline pass. The Cauldron's dedicated guide is pending classification in the [audit](puzzles-and-secrets.md).
 
 The [estimate table](feasibility.md#effort-estimate) supplies the time and exit deliverable for each checkpoint. When implementation is requested, work one complete package at a time. Record elapsed effort, evidence, remaining gaps and commit/verified private remote ref as each package closes. At an overrun or a second loop without a connected outcome, identify the concrete blocked consumer and next decisive check; revise the estimate and continue independent authorized work. No estimated checkpoint is an early gameplay handoff. Revisit a Closed subsystem only for an owner-scoped follow-up or a minimal authorized integration regression fix.
 
+November 11 front-end continuation took about 20 minutes of elapsed checkpoint time. The retry and Options producer fixtures, exact registration syntax, bounded payload build and matched NW bridge passed. Reserve 1–2 engineering hours within safe integration to prototype and test fullscreen readiness across both native completion sequences, then revise from that result. External backend quiescence is a separate gate. See [implementation and verification](implementation.md#native-options) for the exact dependencies and evidence limits.
+
 ## Initial feature inventory
 
-Every row starts **not started** for implementation. Gates, known producers and planned acceptance below are the starting design, not finished code. A missing producer is an investigation item before declaring a feature inapplicable.
+The launch/front-end row and its speech transport are **in progress**. Other rows are **not started** for implementation, with the native Options portion of the menus row in progress as part of the current front-end system. A missing producer is an investigation item before declaring a feature inapplicable.
 
 | Scope / checkpoint | Player task and known producer | Acceptance and open question |
 | --- | --- | --- |
