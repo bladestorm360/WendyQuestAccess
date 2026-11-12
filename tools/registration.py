@@ -182,6 +182,7 @@ def menu_notifications(original):
         9404: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
         9431: b'this._wqaMenuSave={status:0};this._wqaLastManualSave=null;',
         12025: b',this._wqaMenuSave&&(this._wqaMenuSave.banner=_0x385754)',
+        12368: b'if(this._wqaMenuSave?.banner===_0x385754)this._wqaMenuSave.bannerDone=true;',
         12930: b'globalThis.WendyQuestAccessMenuReady?.(this,1);',
         16877: b'let wqaShopGold,wqaShopCurrency;',
         16937: b'(wqaShopGold=',
@@ -199,7 +200,12 @@ def menu_notifications(original):
                b'SceneManager._scene._equipStatusWindow===this.statusWindow){'
                b'this.statusWindow._wqaMenuCompareItem=_0x204675;this.statusWindow._wqaMenuCompareActor=_0x1d24e1;}',
         59805: b'this._wqaShop=true;',
-        61263: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
+        61263: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);this._wqaShopPurchase=null;',
+        61712: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
+        61897: b'if(this._wqaShop&&this._numberWindow._wqaShopQuantity?.item===this._item&&'
+               b'this._numberWindow._wqaShopQuantity.count===_0x4ffa75)'
+               b'this._wqaShopPurchase={name:this._item.name,count:_0x4ffa75};',
+        62144: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
         63109: b'if(SceneManager._scene?._wqaShop&&SceneManager._scene._helpWindow===this)'
                b'this._wqaShopHelp={contents:this.contents,text:this._text};',
         64664: b'if(SceneManager._scene?._wqaShop&&SceneManager._scene._statusWindow===this){'
@@ -295,7 +301,9 @@ def scenes_notification(original):
         33497: b'\n    if(this._wqaShop&&this._started&&this._active&&this._fadeDuration===0&&this._fadeOpacity===0&&'
                b'!this._wqaSettingsActive&&!SceneManager._nextScene&&!SceneManager._exiting&&'
                b'!SceneManager._wqaNativeAutosaves&&!Graphics._wqaResize&&Graphics.app?.stage===this){'
-               b'if(this._buyWindow?.active&&this._buyWindow._wqaShopRows?.has(this._buyWindow._index))'
+               b'if(this._numberWindow?.active&&this._numberWindow._wqaShopQuantity)'
+               b'globalThis.WendyQuestAccessMenuReady?.(this,5);'
+               b'else if(this._buyWindow?.active&&this._buyWindow._wqaShopRows?.has(this._buyWindow._index))'
                b'globalThis.WendyQuestAccessMenuReady?.(this,4);}\n',
     })
 
@@ -384,6 +392,11 @@ def windows_notification(original):
         98187: b'\n    if(SceneManager._scene?._wqaShop&&SceneManager._scene._buyWindow===this&&index>=0&&index<128)'
                b'(this._wqaShopRows||=new Map()).set(index,{item,price,enabled:wqaEnabled,'
                b'contents:this.contents,list:this._data});',
+        # The custom refresh has already drawn the name and quantity before
+        # this stock routine completes the total and currency on the same bitmap.
+        103731: b'\n    if(SceneManager._scene?._wqaShop&&SceneManager._scene._numberWindow===this)'
+                b'this._wqaShopQuantity={contents:this.contents,item:this._item,count:this._number,'
+                b'price:total,currency:this._currencyUnit};',
         108820: b'let wqaName;\n    ',
         108834: b'(wqaName=',
         108846: b')',
@@ -808,7 +821,7 @@ def window_notification(original):
         65767: b'(wqaAutosave&&wqaManualSave?.status===0&&(wqaManualSave.status=-1),',
         65791: b')',
         65792: AUTOSAVE_DONE,
-        66582: b',this._wqaMenuSave?.status===1&&(this._wqaMenuSave.fallback=_0x495fa1)',
+
     })
 
 

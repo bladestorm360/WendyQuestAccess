@@ -26,6 +26,9 @@ def methods(installed):
 
 def save_methods(installed):
     selected = methods(installed)[:2]
+    menu, _ = decode((installed / MENU_REL).read_text(encoding='utf-8-sig'))
+    selected.append(between(menu, "Scene_Menu['prototype']['playAutoSaveAnimation']=function(",
+                            "},Scene_Menu['prototype']['initBreadcrumb']") + '};')
     original = (installed / WINDOW_REL).read_bytes()
     text, _ = decode(window_notification(original).decode('utf-8-sig'))
     pairs = (

@@ -8,6 +8,12 @@ function shopRow(window) {
         row.item === window._data?.[window._index] ? row : null;
 }
 
+function shopQuantity(window) {
+    const row = window._wqaShopQuantity;
+    return row && row.contents === window.contents && row.item === window._item &&
+        row.count === window._number && Number.isSafeInteger(row.count) && row.count > 0 ? row : null;
+}
+
 function paint(window, key) {
     const result = window[key];
     return result?.contents === window.contents ? result : null;
@@ -39,9 +45,13 @@ function sameShopPaint(scene, previous, visible) {
         previous.change === (statusVisible ? paint(status, '_wqaShopChange') : null);
 }
 
-function shopDetails(root, row, { gold, help, possession, equip, change }) {
+function shopDetails(root, row, { gold, help, possession, equip, change }, quantity) {
     const lines = [];
     const item = row.item;
+    if (quantity && Number.isSafeInteger(row.price) && row.price >= 0) {
+        const currency = typeof row.currency === 'string' && row.currency.length <= 24 ? row.currency.trim() : '';
+        lines.push('Quantity ' + row.count + ', total ' + row.price + (currency ? ' ' + currency : ''));
+    }
     if (help?.text && help.text === item.description) lines.push(...help.text.split(/\r?\n/));
     if (possession?.item === item && Number.isSafeInteger(possession.count)) lines.push('Owned ' + possession.count);
     if (gold && Number.isSafeInteger(gold.value)) {
@@ -60,4 +70,4 @@ function shopDetails(root, row, { gold, help, possession, equip, change }) {
     return reviewLines(lines);
 }
 
-module.exports = { shopRow, shopPaint, sameShopPaint, shopDetails };
+module.exports = { shopRow, shopQuantity, shopPaint, sameShopPaint, shopDetails };

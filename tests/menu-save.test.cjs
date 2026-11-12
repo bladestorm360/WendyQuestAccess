@@ -84,7 +84,10 @@ async function check({ count = 0, late = false, failed = false, brokenAnimation 
     assert.equal(nativeBanner.parent, scene);
     for (let index = 0; index < (late ? 120 : 22); index++) frame();
     assert.equal(packets.length, 1, 'save feedback cannot precede completed storage');
-    if (late) assert.equal(nativeBanner.parent, null);
+    if (late) {
+        assert.equal(nativeBanner.parent, null);
+        assert.equal(scene._wqaMenuSave.bannerDone, true);
+    }
 
     if (failed) write.reject(Error('Synthetic save failure'));
     else write.resolve();
@@ -92,7 +95,7 @@ async function check({ count = 0, late = false, failed = false, brokenAnimation 
     assert.equal(c.SceneManager._wqaNativeAutosaves, 0);
     assert.deepEqual(callbacks, failed || brokenAnimation ? ['failed'] : []);
     assert.equal(scene._wqaMenuSave.status, failed ? -1 : 1);
-    const expected = failed ? 'Could not save the game.' : nativeBanner._currentString;
+    const expected = failed ? 'Could not save the game.' : late ? 'Save completed.' : nativeBanner._currentString;
     let observed = null;
     let receipt = 0;
     for (let index = 0; index < 420; index++) {
@@ -124,6 +127,6 @@ async function check({ count = 0, late = false, failed = false, brokenAnimation 
     await check({ failed: true });
     await check({ brokenAnimation: true });
     await check({ count: 209 });
-    console.log('Verified the native Save request, confirmed write, slow-write banner, failure, callback error and displayed multiline review.');
+    console.log('Verified the native Save request, confirmed write, expired-banner fallback, failure, callback error and displayed multiline review.');
     console.log('Throttled Save handback through synthetic render and formatted receipt', receipt.toFixed(2), 'ms.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

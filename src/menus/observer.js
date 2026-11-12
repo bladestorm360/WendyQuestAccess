@@ -2,7 +2,7 @@
 
 const { reviewLines, moveReview } = require('./review');
 const { battlePresented, drawnText } = require('../battle/presentation');
-const { shopRow, shopDetails, sameShopPaint, shopPaint } = require('./shop');
+const { shopRow, shopQuantity, shopDetails, sameShopPaint, shopPaint } = require('./shop');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
 const PARAMS = [0, 1, 2, 3];
@@ -16,6 +16,7 @@ function focusWindow(scene, screen) {
     if (screen === 1) return scene._commandWindow;
     if (screen === 3) return scene._itemWindow;
     if (screen === 4) return scene._buyWindow;
+    if (screen === 5) return scene._numberWindow;
     if (scene._actorWindow?.active) return null;
     return scene._itemWindow?.isFocused ? scene._itemWindow : scene._categoryWindow;
 }
@@ -95,9 +96,12 @@ function createMenuObserver(root, host, notifications, preferences) {
     function live(page) {
         if (!page || page.suspended || !ready(page.scene, page.screen)) return false;
         const window = focusWindow(page.scene, page.screen);
-        if (page.screen === 4) return window === page.window && window.active && visible(page.scene, window) &&
-            window._index === page.index && shopRow(window) === page.shopRow && presentedRow(window) &&
-            sameShopPaint(page.scene, page.shopPaint, visible);
+        if (page.screen >= 4) {
+            if (window !== page.window || !window.active || !visible(page.scene, window) ||
+                !sameShopPaint(page.scene, page.shopPaint, visible)) return false;
+            return page.screen === 5 ? shopQuantity(window) === page.shopRow :
+                window._index === page.index && shopRow(window) === page.shopRow && presentedRow(window);
+        }
         if (page.screen === 3) return window === page.window && window.active && visible(page.scene, window) &&
             window._index === page.index && battleBagRow(window) === page.bagRow && presentedRow(window);
         return window === page.window && window.active && visible(page.scene, window) && window._index === page.index &&
@@ -121,7 +125,8 @@ function createMenuObserver(root, host, notifications, preferences) {
 
     function announceSave(scene, page) {
         const save = scene._wqaMenuSave;
-        const text = save?.status === -1 ? 'Could not save the game.' : save?.text;
+        const text = save?.status === -1 ? 'Could not save the game.' :
+            save?.text || (save?.status === 1 && save.bannerDone ? 'Save completed.' : '');
         if (!text) return;
         scene._wqaMenuSave = null;
         scene._wqaLastManualSave = text;
@@ -135,7 +140,7 @@ function createMenuObserver(root, host, notifications, preferences) {
     function observeSave(scene) {
         const save = scene._wqaMenuSave;
         if (save?.status !== 1 || save.text || save.pending) return;
-        const banner = save.banner?.parent === scene ? save.banner : save.fallback;
+        const banner = save.banner;
         const value = banner?._currentString;
         if (banner?.parent !== scene || banner._dirty || typeof value !== 'string' || !value.length || value.length > 384)
             return;
@@ -170,12 +175,23 @@ function createMenuObserver(root, host, notifications, preferences) {
         }
         scene._wqaControllerReady = scene._wqaMenuActive = scene._wqaPresentation = true;
         const options = preferences();
-        const heading = ['Menu', 'Inventory', 'Battle Bag', 'Shop'][screen - 1];
+        const heading = ['Menu', 'Inventory', 'Battle Bag', 'Shop', 'Purchase quantity'][screen - 1];
         show(page, { kind: 'menuFocus', ...focus, indexed: options.indexing,
             screen: previous?.scene === scene && !previous.suspended &&
-                (screen !== 3 || previous.screen === 3) ? '' : heading });
-        if (page.lines.length && options.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
+                (screen <= 2 || previous.screen === screen) ? '' : heading });
+        const automatic = screen === 5 && page.quantityDetail ? lines.slice(1) : lines;
+        if (automatic.length && options.autodetail)
+            notifications.focus(page.epoch, { kind: 'menuDetails', lines: automatic, append: true });
         if (screen === 1) announceSave(scene, page);
+        if (screen === 4 && scene._wqaShopPurchase) {
+            const purchase = scene._wqaShopPurchase;
+            scene._wqaShopPurchase = null;
+            const name = label(purchase.name);
+            if (name && Number.isSafeInteger(purchase.count) && purchase.count > 0) {
+                notifications.focus(page.epoch, { kind: 'menuReview', append: true,
+                    name: 'Purchased ' + purchase.count + ', ' + name + '.' });
+            }
+        }
     }
 
     function publishBag(scene, window) {
@@ -189,24 +205,28 @@ function createMenuObserver(root, host, notifications, preferences) {
             position: window._index + 1, total: window.maxItems() });
     }
 
-    function publishShop(scene, window) {
-        const row = shopRow(window);
+    function publishShop(scene, window, screen) {
+        const quantity = screen === 5;
+        const row = quantity ? shopQuantity(window) : shopRow(window);
         const name = label(row?.item?.name);
         if (!name) return;
         const paint = shopPaint(scene, visible);
-        const lines = shopDetails(root, row, paint);
-        const page = { kind: 'menu', scene, screen: 4, window, index: window._index, item: row.item, shopRow: row,
-            shopPaint: paint, lines, position: 0, epoch: 0, hasReview: lines.length > 0 };
-        present(page, { name, price: row.price, currency: paint.gold?.currency, enabled: row.enabled,
+        const quantityDetail = quantity && Number.isSafeInteger(row.price) && row.price >= 0;
+        const lines = shopDetails(root, row, paint, quantityDetail);
+        const page = { kind: 'menu', scene, screen, window, index: window._index, item: row.item, shopRow: row,
+            shopPaint: paint, lines, quantityDetail, position: 0, epoch: 0, hasReview: lines.length > 0 };
+        if (quantity) present(page, { name: name + ', quantity ' + row.count, price: row.price,
+            currency: row.currency, totalPrice: true });
+        else present(page, { name, price: row.price, currency: paint.gold?.currency, enabled: row.enabled,
             position: window._index + 1, total: window.maxItems() });
     }
 
     function publish(scene, screen) {
         if (!ready(scene, screen)) return retire(scene);
         const window = focusWindow(scene, screen);
-        if (!window?.active || !visible(scene, window) || !presentedRow(window)) return;
+        if (!window?.active || !visible(scene, window) || (screen !== 5 && !presentedRow(window))) return;
         if (screen === 3) return publishBag(scene, window);
-        if (screen === 4) return publishShop(scene, window);
+        if (screen >= 4) return publishShop(scene, window, screen);
         const item = selectedItem(window);
         if (!item || !label(item.name)) return;
         const inventory = screen === 2 && window === scene._itemWindow;
@@ -245,8 +265,10 @@ function createMenuObserver(root, host, notifications, preferences) {
         }
         if (waiting?.scene === scene) return;
         const window = focusWindow(scene, screen);
-        if (!window?.active || (screen === 4 ? !shopRow(window) :
-            screen === 3 ? !battleBagRow(window) : !selectedItem(window))) return retire(scene);
+        if (!window?.active) return retire(scene);
+        const row = screen === 5 ? shopQuantity(window) : screen === 4 ? shopRow(window) :
+            screen === 3 ? battleBagRow(window) : selectedItem(window);
+        if (!row) return retire(scene);
         // Close stale output immediately. Keep the old cursor until the next
         // painted selection settles so a refresh of the same row can clamp it.
         if (current?.scene === scene) notifications.close(current.epoch);

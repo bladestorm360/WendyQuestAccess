@@ -1274,6 +1274,13 @@ const interval = setInterval(() => {
             tap('i', 'KeyI');
             endingStep = 50;
         } else if (endingStep === 50 && fs.existsSync(receipt + '.manual-save-details')) {
+            fs.writeFileSync(receipt + '.manual-save-late-stage', '');
+            const scene = SceneManager._scene;
+            scene._wqaMenuSave = { status: 1, bannerDone: true };
+            WendyQuestAccessMenuReady(scene, 1);
+            endingStep = 55;
+        } else if (endingStep === 55 && fs.existsSync(receipt + '.manual-save-late')) {
+            fs.unlinkSync(receipt + '.manual-save-late-stage');
             fs.unlinkSync(receipt + '.manual-save-stage');
             fs.writeFileSync(receipt + '.shop-stage', '');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
@@ -1298,6 +1305,22 @@ const interval = setInterval(() => {
             tap('i', 'KeyI');
             endingStep = 52;
         } else if (endingStep === 52 && fs.existsSync(receipt + '.shop-details')) {
+            const scene = SceneManager._scene;
+            WendyQuestAccessMenuLeaving(scene);
+            const buy = scene._buyWindow;
+            buy.active = false;
+            const item = buy._data[0];
+            const quantity = scene._numberWindow = { ...buy, active: true, _index: -1, _item: item, _number: 3 };
+            quantity._wqaShopQuantity = { contents: quantity.contents, item, count: 3, price: 57, currency: 'Gold' };
+            fs.writeFileSync(receipt + '.shop-quantity-stage', '');
+            WendyQuestAccessMenuReady(scene, 5);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 53;
+        } else if (endingStep === 53 && fs.existsSync(receipt + '.shop-quantity')) {
+            tap('i', 'KeyI');
+            endingStep = 54;
+        } else if (endingStep === 54 && fs.existsSync(receipt + '.shop-quantity-details')) {
+            fs.unlinkSync(receipt + '.shop-quantity-stage');
             fs.unlinkSync(receipt + '.shop-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
@@ -1362,13 +1385,18 @@ parentPort.on('message', message => {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
         if (fs.existsSync(receipt + '.shop-stage')) {
-            if (message.kind === 'menuFocus') fs.writeFileSync(receipt + '.shop-focus', speech);
-            if (message.kind === 'menuDetails' && !message.append) fs.writeFileSync(receipt + '.shop-details', speech);
+            const quantity = fs.existsSync(receipt + '.shop-quantity-stage');
+            if (message.kind === 'menuFocus') fs.writeFileSync(receipt + (quantity ? '.shop-quantity' : '.shop-focus'), speech);
+            if (message.kind === 'menuDetails' && !message.append)
+                fs.writeFileSync(receipt + (quantity ? '.shop-quantity-details' : '.shop-details'), speech);
             parentPort.postMessage('ack');
             return;
         }
         if (fs.existsSync(receipt + '.manual-save-stage')) {
-            if (message.kind === 'dialoguePage') fs.writeFileSync(receipt + '.manual-save', speech);
+            if (message.kind === 'dialoguePage') {
+                const suffix = fs.existsSync(receipt + '.manual-save-late-stage') ? '.manual-save-late' : '.manual-save';
+                fs.writeFileSync(receipt + suffix, speech);
+            }
             if (message.kind === 'menuDetails') fs.writeFileSync(receipt + '.manual-save-details', speech);
             parentPort.postMessage('ack');
             return;
@@ -1677,8 +1705,11 @@ def main():
             'battle-outcome': 'Synthetic victory reward.',
             'manual-save': 'Synthetic save finished.',
             'manual-save-details': 'Synthetic save finished.',
+            'manual-save-late': 'Save completed.',
             'shop-focus': 'Shop, Synthetic shop item, Price 19 Gold, unavailable, 1 of 1',
             'shop-details': 'Shown effect. Owned 2. Balance 12 Gold',
+            'shop-quantity': 'Purchase quantity, Synthetic shop item, quantity 3, Total 57 Gold',
+            'shop-quantity-details': 'Quantity 3, total 57 Gold. Shown effect. Owned 2. Balance 12 Gold',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',
