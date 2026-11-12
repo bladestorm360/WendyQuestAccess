@@ -49,6 +49,7 @@ def bundle():
         './world/cave-timing': 'world/cave-timing.js',
         './spatial-direction': 'world/spatial-direction.js',
         './snapshot': 'world/snapshot.js',
+        './transfer-bookmarks': 'world/transfer-bookmarks.js',
         './destinations': 'world/destinations.js',
         './quest-destinations': 'world/quest-destinations.js',
         './local-destinations': 'world/local-destinations.js',

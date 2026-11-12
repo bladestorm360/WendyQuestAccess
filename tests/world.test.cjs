@@ -20,6 +20,7 @@ const { verifySoundscape } = require('./soundscape.cjs');
 const { verifyQuestDestinations } = require('./quest-destinations.cjs');
 const { verifyReachability } = require('./reachability.cjs');
 const { verifyBookmarks } = require('./bookmarks.cjs');
+const { verifyTransferBookmarks } = require('./transfer-bookmarks.cjs');
 const { copyPatrol } = require('../src/world/puzzles/patrol-motion.cjs');
 const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../src/world/puzzles/motion-world.cjs');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
@@ -43,6 +44,7 @@ const c = vm.createContext({
     Game_Followers: function () {}, Game_Interpreter: function () {}, Scene_Map: function () {},
     TileEditor: {}, SceneManager: { _scene: { _spriteset: {} } }, Point: function (x, y) { this.x = x; this.y = y; },
     Time: { GetDeltaTime: () => 1 / 60 }, $dataTilesets: tilesets, $dataItems: read('Items.json'), $dataSystem: read('System.json'),
+    $dataMapInfos: read('MapInfos.json'),
     Graphics: { width: 480, height: 336 },
     $gameSwitches: { value: () => false }, $gameSelfSwitches: { value: () => false },
     $gameVariables: { value: () => 0 }, $gameActors: { actor: id => id }, $gameParty: { hasItem: () => false, members: () => [] },
@@ -925,6 +927,7 @@ async function main() {
     await verifyReachability(c, load, verifyWorker);
     await verifyQuestDestinations(c, game, read, load, verifyRoute, verifyWorker);
     await verifyBookmarks(c, load, verifyRoute, verifyWorker);
+    await verifyTransferBookmarks(c, load, verifyRoute, verifyWorker);
     console.log(`Verified ${compared} directed movement comparisons across authored maps and dynamic cases.`);
     console.log('Verified native Map 196 patrol contact, catch-page handback, checkpoint floor trigger and bounded warning sign route.');
 }

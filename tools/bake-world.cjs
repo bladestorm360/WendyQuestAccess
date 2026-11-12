@@ -47,7 +47,7 @@ function bake(installed, destination) {
         const geometry = bakeMap(map, tilesets[map.tilesetId]?.flags);
         const binary = encodeMap(id, geometry);
         fs.writeFileSync(path.join(output, `${id}.wqg`), binary, { flag: 'wx' });
-        manifest.maps[id] = { input: digest(source), geometry: digest(binary) };
+        manifest.maps[id] = { input: digest(source), geometry: digest(binary), width: geometry.width, height: geometry.height };
         cells += geometry.cells.length;
     }
     fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest), { flag: 'wx' });

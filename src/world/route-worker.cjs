@@ -4,7 +4,7 @@ const { parentPort, workerData } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
 const { createHash } = require('crypto');
-const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS } = require('./geometry.cjs');
+const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, MAX_EVENTS } = require('./geometry.cjs');
 const { solveRoute, findReachable } = require('./routes.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
 
@@ -45,6 +45,19 @@ function geometry(id) {
     return cachedGeometry;
 }
 
+function qualifiedEntrances(map, transfer) {
+    const target = transfer?.map;
+    const landing = manifest.maps[target];
+    const { candidates } = transfer || {};
+    if (!Number.isInteger(target) || target < 1 || target > 999 || target === map ||
+        !Number.isInteger(landing?.width) || !Number.isInteger(landing?.height) ||
+        landing.width < 1 || landing.height < 1 || landing.width * landing.height > MAX_CELLS ||
+        !Array.isArray(candidates) || candidates.length > MAX_EVENTS) return [];
+    return candidates.filter(({ event, x, y }) => Number.isInteger(event) && event > 0 && event <= MAX_EVENTS &&
+        Number.isInteger(x) && x >= 0 && x < landing.width && Number.isInteger(y) && y >= 0 && y < landing.height)
+        .map(candidate => candidate.event);
+}
+
 // Each request carries a copied world state. Keep one current geometry, with
 // no access to game objects or game files. The caller owns the in-flight cap.
 parentPort.on('message', message => {
@@ -59,6 +72,8 @@ parentPort.on('message', message => {
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
             if (request.candidates !== undefined) result = findReachable(base, live, request, cancelled);
+            else if (request.transfer !== undefined) result = solveRoute(base, live,
+                { ...request, entrances: qualifiedEntrances(map, request.transfer) }, cancelled);
             else result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
             const follows = result.status === 'ready' && !result.reenter && (request.beacon === true || request.autowalk === true);
             if (follows || (result.status === 'interrupted' && request.autowalk === true)) {
@@ -78,7 +93,7 @@ parentPort.on('message', message => {
             }
             if (result.status === 'ready' && request.autowalk === true && !result.land && !request.vehicle &&
                 request.waypoint !== true && result.distance > 0 && result.arrival.facing === null) {
-                const target = live.events.find(event => event.id === request.event);
+                const target = live.events.find(event => event.id === (result.entrance ?? request.event));
                 if (target && !target.normal && (target.trigger === 1 || target.trigger === 2)) {
                     const last = result.legs[result.legs.length - 1];
                     result.autowalkStop = last.direction;

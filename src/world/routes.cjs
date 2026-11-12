@@ -410,6 +410,39 @@ function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () 
     return { status: 'reachable', available };
 }
 
+function entranceRoute(world, start, events, tiles, cancelled) {
+    if (world.mode !== 'walk' || !Array.isArray(events) || !events.length || events.length > MAX_EVENTS)
+        return { status: 'unavailable' };
+    const eligible = new Set(events);
+    const goals = new Uint8Array(world.cells.length);
+    const owners = new Uint16Array(world.cells.length);
+    const stops = tiles.touch;
+    for (let cell = 0; cell < goals.length; cell++) {
+        if ((cell & 63) === 0 && cancelled()) return { status: 'cancelled' };
+        const touch = stops[cell];
+        if (eligible.has(touch) && (cell !== start || canReenter(world, start, stops))) {
+            goals[cell] = 1;
+            owners[cell] = touch;
+            continue;
+        }
+        if (touch && cell !== start) continue;
+        for (let heading = 0; heading < DIRECTIONS.length; heading++) {
+            const target = buttonEvent(world, tiles, cell, heading);
+            if (!eligible.has(target)) continue;
+            goals[cell] = DIRECTIONS[heading];
+            owners[cell] = target;
+            break;
+        }
+    }
+    const result = route(world, start, goals, cancelled, undefined, stops);
+    if (result.status === 'ready') {
+        const cell = indexOf(world, result.arrival.x, result.arrival.y);
+        result.entrance = owners[cell];
+        if (cell === start && goals[start] === 1) result.reenter = true;
+    }
+    return result;
+}
+
 function solveWorldRoute(world, request, cancelled = () => false) {
     const start = indexOf(world, request.x, request.y);
     if (start < 0) return { status: 'unavailable' };
@@ -417,6 +450,7 @@ function solveWorldRoute(world, request, cancelled = () => false) {
     if (request.area && (!area || !inside(world, start, area))) return { status: 'unavailable' };
     if (request.landing === true) return landingRoute(world, start, request, area, cancelled);
     const tiles = interactionTiles(world, cancelled);
+    if (request.entrances !== undefined) return entranceRoute(world, start, request.entrances, tiles, cancelled);
     const goals = routeGoals(world, request, cancelled, tiles);
     if (cancelled()) return { status: 'cancelled' };
     if (!goals) return { status: 'unavailable' };

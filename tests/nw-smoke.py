@@ -67,9 +67,13 @@ def fixture(runtime, installed):
 <script src="run.js"></script>
 ''', encoding='utf8')
     objects = objects_notification((installed / OBJECTS_REL).read_bytes()).decode('utf8')
-    start = objects.index('Game_Player.prototype.moveByInput = function(')
-    end = objects.index('\n};', start) + 3
-    (app / 'native-movement.js').write_text('function Game_Player() {}\n' + objects[start:end], encoding='utf8')
+    movement = ['function Game_Player() {}', 'function Game_Map() {}', 'function Game_Interpreter() {}']
+    for method in ('Game_Player.prototype.moveByInput', 'Game_Player.prototype.reserveTransfer',
+                   'Game_Map.prototype.setupStartingMapEvent', 'Game_Interpreter.prototype.command201'):
+        start = objects.index(method + ' = function(')
+        end = objects.index('\n};', start) + 3
+        movement.append(objects[start:end])
+    (app / 'native-movement.js').write_text('\n'.join(movement), encoding='utf8')
     (app / 'fixture.js').write_text('''
 const receipt = require('path').join(require('path').dirname(process.mainModule.filename), 'receipt.json');
 const write = data => require('fs').writeFileSync(receipt, JSON.stringify(data));
@@ -93,7 +97,8 @@ var Graphics = { width: 320, height: 200,
 const nativeSelect = SceneManager._scene._commandWindow.select;
 var DataManager = { savefileInfo: () => null };
 var $gameMap, $gamePlayer, $gameScreen, $gameTemp, $dataMap, $dataTilesets, $gameTileChanges;
-var $dataSystem = { tileSize: 32 };
+var $gameMessage = { isBusy: () => false };
+var $dataSystem = { tileSize: 32 }, $dataMapInfos = [null, { id: 1 }, { id: 2 }];
 var Input = { keyMapper: { 90: 'ok' }, clear() {} };
 Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 3: 'menu', 9: 'menu', 12: 'up', 13: 'down' };
 ''', encoding='utf8')
@@ -134,6 +139,7 @@ let wallPreviewStarted = 0;
 let beaconStarted = 0;
 let caveCueStarted = 0;
 let soundscapeStarted = 0;
+let crossMapStarted = 0;
 let controllerStep = 0;
 let dialoguePadStep = 0;
 let endingStep = 0;
@@ -153,7 +159,8 @@ if (!restart) {
     }
     const geometry = path.join(profile, 'wendyquest-access-geometry');
     fs.mkdirSync(geometry);
-    for (const name of ['1.wqg', '196.wqg', 'manifest.json']) fs.copyFileSync(path.join(root, 'geometry', name), path.join(geometry, name));
+    for (const name of ['1.wqg', '2.wqg', '196.wqg', 'manifest.json'])
+        fs.copyFileSync(path.join(root, 'geometry', name), path.join(geometry, name));
 }
 document.addEventListener('keydown', event => { if (event.code === 'KeyZ') nativeZ++; });
 document.addEventListener('keydown', event => { if (event.code === 'ArrowDown') nativeMenuArrows++; });
@@ -939,6 +946,82 @@ const interval = setInterval(() => {
             if (Array.from(document.querySelectorAll('dialog button')).some(item => item.textContent.startsWith('Bookmark 2,')))
                 throw Error('Removed bookmark stayed in the list');
             fs.unlinkSync(receipt + '.bookmark-stage');
+            fs.writeFileSync(receipt + '.cross-map-stage', '');
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
+            SceneManager._scene = Graphics.app.stage = { _wqaFieldReady: true, _active: true, _fadeOpacity: 0, _fadeDuration: 0 };
+            const transfer = { code: 201, indent: 0, parameters: [0, 1, 0, 0, 6, 0] };
+            const list = [transfer, { code: 0 }];
+            const event = { _eventId: 1, _x: 1, _y: 0, _pageIndex: 0, _trigger: 1, _priorityType: 0,
+                isStarting() { return this._starting; }, clearStartingFlag() { this._starting = false; },
+                eventId: () => 1, list: () => list };
+            const interpreter = Object.assign(new Game_Interpreter(), {
+                setup(rows, id) { this._list = rows; this._eventId = id; },
+                setWaitMode(mode) { this._waitMode = mode; }
+            });
+            Object.setPrototypeOf($gameMap, Game_Map.prototype);
+            Object.assign($gameMap, { _mapId: 2, _events: [null, event], _interpreter: interpreter,
+                events() { return this._events.filter(Boolean); } });
+            $dataMap.events = [null, { name: 'Synthetic transfer', pages: [
+                { trigger: 1, priorityType: 0, moveType: 0, conditions: {}, list }
+            ] }];
+            $gameParty.inBattle = () => false;
+            $gamePlayer.findEventsAt = (x, y) => x === 1 && y === 0 ? [event] : [];
+            $gamePlayer.canTriggerEvent = (target, triggers, normal) => target === event && triggers.includes(1) && !normal;
+            tap('v', 'KeyV');
+            choose('Navigation');
+            choose('Bookmarks');
+            choose('Return marker, Map 1, saved on foot');
+            choose('Select for directions');
+            crossMapStarted = performance.now();
+            tap(String.fromCharCode(92), 'Backslash');
+            Graphics.app.renderer.emit('postrender');
+            fs.writeFileSync(receipt + '.cross-map-submission-ms', String(performance.now() - crossMapStarted));
+            endingStep++;
+        } else if (endingStep === 25 && fs.existsSync(receipt + '.cross-map-entrance')) {
+            fs.writeFileSync(receipt + '.cross-map-receipt-ms', String(performance.now() - crossMapStarted));
+            const source = SceneManager._scene;
+            if (!source._wqaBookmarkEntrance || !source._wqaAutowalkActive || !source._wqaBeaconActive)
+                throw Error('The entrance did not arm native movement and handback owners');
+            $gamePlayer.moveByInput();
+            if ($gamePlayer._x !== 0 || source._wqaAutowalkActive)
+                throw Error('Autowalk crossed the transfer boundary');
+            $gamePlayer._realX = $gamePlayer._x = 1;
+            $gameMap._events[1]._starting = true;
+            if (!$gameMap.setupStartingMapEvent() || !Graphics._wqaBookmarkTransferPending)
+                throw Error('The native accepted event did not arm bookmark handback');
+            const interpreter = $gameMap._interpreter;
+            if (!interpreter.command201(interpreter._list[0].parameters) || interpreter._waitMode !== 'transfer' ||
+                !Graphics._wqaBookmarkTransferPending || source._wqaFieldReady)
+                throw Error('The native reservation did not close the source and preserve the expected landing');
+            const loading = SceneManager._scene = Graphics.app.stage = {
+                _wqaFieldReady: false, _active: true, _fadeOpacity: 1, _fadeDuration: 1
+            };
+            $gameMap._mapId = $gamePlayer._newMapId;
+            $gamePlayer._realX = $gamePlayer._x = $gamePlayer._newX;
+            $gamePlayer._realY = $gamePlayer._y = $gamePlayer._newY;
+            $gamePlayer._transferring = false;
+            $gameMap._events = $dataMap.events = [null];
+            interpreter._list = null;
+            WendyQuestAccessFieldReady(loading);
+            tap(String.fromCharCode(92), 'Backslash');
+            Graphics.app.renderer.emit('postrender');
+            if (!Graphics._wqaBookmarkTransferPending || loading._wqaRouteActive)
+                throw Error('Bookmark directions resumed before native readiness');
+            endingStep++;
+        } else if (endingStep === 26) {
+            const loading = SceneManager._scene;
+            Object.assign(loading, { _wqaFieldReady: true, _fadeOpacity: 0, _fadeDuration: 0 });
+            const handback = performance.now();
+            WendyQuestAccessFieldReady(loading);
+            Graphics.app.renderer.emit('postrender');
+            fs.writeFileSync(receipt + '.cross-map-handback-ms', String(performance.now() - handback));
+            if (Graphics._wqaBookmarkTransferPending || loading._wqaAutowalkActive || loading._wqaBeaconActive)
+                throw Error('Handback did not finish without movement or audio');
+            tap(String.fromCharCode(92), 'Backslash');
+            Graphics.app.renderer.emit('postrender');
+            endingStep++;
+        } else if (endingStep === 27 && fs.existsSync(receipt + '.cross-map-arrived')) {
+            fs.unlinkSync(receipt + '.cross-map-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
             WendyQuestAccessTitleReady(title);
@@ -947,13 +1030,13 @@ const interval = setInterval(() => {
             choose('Speech');
             choose('Speech enabled, on');
             endingStep++;
-        } else if (endingStep === 25 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
+        } else if (endingStep === 28 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
             if (document.activeElement.textContent !== 'Speech enabled, off') throw Error('The mute switch did not retain focus');
             tap('Escape');
             choose('Audio');
             choose('Preview right');
             endingStep++;
-        } else if (endingStep === 26 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        } else if (endingStep === 29 && menuStatus() === 'Preview uses stereo and rear pitch.') {
             fs.writeFileSync(receipt + '.muted-preview', '');
             clearInterval(interval);
             nw.App.quit();
@@ -998,6 +1081,14 @@ parentPort.on('message', message => {
     if (fs.existsSync(receipt + '.closing-pass')) {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
+        if (fs.existsSync(receipt + '.cross-map-stage')) {
+            if (message.kind === 'routeDirections' && message.name === 'Entrance for Return marker')
+                fs.writeFileSync(receipt + '.cross-map-entrance', speech);
+            if (message.kind === 'routeDirections' && message.name === 'Return marker')
+                fs.writeFileSync(receipt + '.cross-map-arrived', speech);
+            parentPort.postMessage('ack');
+            return;
+        }
         if (fs.existsSync(receipt + '.bookmark-stage')) {
             if (message.kind === 'routeDirections' && message.name === 'Return marker')
                 fs.writeFileSync(receipt + '.bookmark-route', speech);
@@ -1121,11 +1212,13 @@ require('./production-audio-worker.cjs');
     geometry.mkdir()
     synthetic = struct.pack('<4sHHHBBI', b'WQG1', 1, 3, 2, 0, 0, 0) + bytes([15] * 6)
     (geometry / '1.wqg').write_bytes(synthetic)
+    neighbor = struct.pack('<4sHHHBBI', b'WQG1', 2, 3, 2, 0, 0, 0) + bytes([15] * 6)
+    (geometry / '2.wqg').write_bytes(neighbor)
     cave = struct.pack('<4sHHHBBI', b'WQG1', 196, 23, 52, 0, 0, 0) + bytes([15] * 23 * 52)
     (geometry / '196.wqg').write_bytes(cave)
     (geometry / 'manifest.json').write_text(json.dumps({
-        'build': '26578620', 'maps': {key: {'geometry': hashlib.sha256(data).hexdigest()}
-                                    for key, data in [('1', synthetic), ('196', cave)]}
+        'build': '26578620', 'maps': {key: {'geometry': hashlib.sha256(data).hexdigest(), 'width': width, 'height': height}
+                                    for key, data, width, height in [('1', synthetic, 3, 2), ('2', neighbor, 3, 2), ('196', cave, 23, 52)]}
     }), encoding='utf8')
     return app / 'receipt.json'
 
@@ -1211,6 +1304,8 @@ def main():
             'bookmark-route': 'Return marker. 1 north.',
             'bookmark-arrival': 'At Return marker. you are here.',
             'bookmark-entity': 'Objects, Synthetic quest anchor, 2 east',
+            'cross-map-entrance': 'Entrance for Return marker. Move east to activate.',
+            'cross-map-arrived': 'Return marker. you are here.',
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:
@@ -1252,6 +1347,11 @@ def main():
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
         print('Verified the Quests category, packaged route and marker replacement handback.')
         print('Verified controller bookmark naming, keyboard save, native tile arrival, linked event removal and persistence.')
+        print('Verified reachable entrance speech, manual transfer, native loading gate and restored bookmark selection.')
+        cross_map = [float(receipt.with_suffix('.json.cross-map-' + name + '-ms').read_text(encoding='utf8'))
+                     for name in ('submission', 'receipt', 'handback')]
+        print(f'Throttled cross-map submission {cross_map[0]:.1f} ms, silent speech receipt {cross_map[1]:.1f} ms '
+              f'with 40 ms polling, ready handback {cross_map[2]:.1f} ms.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '

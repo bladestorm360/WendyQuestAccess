@@ -83,7 +83,7 @@ function createBookmarkMenu(root, host) {
         view(owner, 'details', entry.name, entry);
         const point = owner.bookmarkContext?.point;
         const items = {};
-        if (point?.map === entry.map && point.mode === entry.mode)
+        if (point?.mode === entry.mode && (point.map === entry.map || owner.bookmarkContext.remote))
             items.select = button(owner, 'Select for directions', () => host.select(owner, entry));
         items.rename = button(owner, 'Rename bookmark', () => editorPage(owner, { entry, value: entry.name, upper: false }));
         items.remove = button(owner, 'Remove bookmark', () => confirmRemove(owner, entry));

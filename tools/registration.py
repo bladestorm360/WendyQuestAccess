@@ -97,7 +97,7 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
                  b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaSoundscapeActive||'
-                 b'SceneManager._scene?._wqaQuestTracking)')
+                 b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                b'SceneManager._scene?._wqaWallAudio||SceneManager._scene?._wqaBeaconActive||'
                b'SceneManager._scene?._wqaCaveTimingActive||SceneManager._scene?._wqaAutowalkActive||'
@@ -260,7 +260,10 @@ def objects_notification(original):
         178811: b'\n    ' + ROUTE_DIRTY,  # Tileset replacement
         180829: b'if(this===$gameMap&&SceneManager._scene?._wqaCaveGuideActive&&SceneManager._scene._wqaFieldReady&&'
                 b'!SceneManager._nextScene&&Graphics.app?.stage===SceneManager._scene&&!$gamePlayer._transferring)'
-                b'globalThis.WendyQuestAccessCaveEventAccepted?.(SceneManager._scene,event);\n            ',
+                b'globalThis.WendyQuestAccessCaveEventAccepted?.(SceneManager._scene,event);\n            '
+                b'if(this===$gameMap&&SceneManager._scene?._wqaBookmarkEntrance&&!SceneManager._nextScene&&'
+                b'Graphics.app?.stage===SceneManager._scene&&!$gamePlayer._transferring)'
+                b'globalThis.WendyQuestAccessBookmarkEntranceAccepted?.(SceneManager._scene,event);\n            ',
         185272: b'\n    if(this._priorityType!==priorityType){' + ACTOR_DIRTY + beacon_actor() + b'}',
         188368: b'\n    ' + ACTOR_DIRTY + beacon_actor(),  # Position and copyPosition
         188538: b'\n    if(this._x!==character._x||this._y!==character._y){' + ACTOR_DIRTY + beacon_actor() + b'}',
@@ -282,7 +285,9 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);\n        ',  # Distraction wait boundary
         249865: ROUTE_DIRTY + b'\n        ',  # Active event page replacement
         21807: b'\n    ' + MAP_LEAVING,  # Game_Screen fade-out
-        217381: b'\n    ' + MAP_LEAVING,  # Accepted transfer reservation
+        217381: b'\n    if(this===$gamePlayer&&Graphics._wqaBookmarkTransferPending)'
+                b'globalThis.WendyQuestAccessBookmarkTransferReserved?.(SceneManager._scene,this,mapId,x,y);\n    '
+                + MAP_LEAVING,  # Accepted transfer reservation
         231501: MAP_LEAVING + b'\n        ',  # Native aircraft boarding
         231586: MAP_LEAVING + b'\n        ',  # Native ship boarding
         231668: MAP_LEAVING + b'\n        ',  # Native boat boarding
@@ -414,7 +419,8 @@ def map_notification(original):
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
         !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
     if (this._wqaFieldReady) {
-        if (!Graphics._wqaFrontEndObserved || (Graphics._wqaCaveProgressPending && !$gameMap._interpreter?._list &&
+        if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaBookmarkTransferPending) &&
+            !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||
             (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||
             (!wqaWasFieldReady && (Graphics._wqaWallEnabled || Graphics._wqaCaveTimingEnabled)))

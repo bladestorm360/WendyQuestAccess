@@ -62,6 +62,8 @@ Personal bookmarks are implemented and offline-verified for exact tiles, current
 
 The first cross-map investigation inspected all 239 installed maps and identified 101 directed pairs with structurally simple transfer pages. The native readiness and exact approach still need connected fixtures. This trace took about 5 minutes elapsed. The 5–9 engineering-hour estimate stays in place for the first connected slice. [Transfer evidence and acceptance cases](cross-map-routing.md)
 
+Direct walking entrance directions and native handback for bookmarks are implemented and offline-verified. This increment took about 15 minutes elapsed through installed event and transfer methods, the matching NW.js fixture, the bounded build and the staged payload scan. World routing remains **in progress**. Allow 5–9 engineering hours within the existing world estimate for the next connected slice covering reliable multi-area walking connections and the first authored conditional entrances. Preserve exact live checks at each transfer. Vehicle and special puzzle transitions and live performance remain open. [Transfer controls and verification](cross-map-routing.md#directions-to-a-bookmark-on-a-neighboring-map)
+
 ## Initial feature inventory
 
 The launch/front-end and speech transport rows are **in progress**. Native Options, the map banner, dialogue pages, choices and number entry have implemented and offline-verified slices. The dialogue row remains **in progress** while text review, actual audio confirmation and remaining input reachability are open. Troop dialogue has a fixture. The other combat producers are **not started**. A missing producer is an investigation item before declaring a feature inapplicable.

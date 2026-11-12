@@ -363,7 +363,7 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessFieldReady = function (scene) {
         if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaCaveProgressPending &&
-            !root.Graphics._wqaWallEnabled && !root.Graphics._wqaCaveTimingEnabled) ||
+            !root.Graphics._wqaBookmarkTransferPending && !root.Graphics._wqaWallEnabled && !root.Graphics._wqaCaveTimingEnabled) ||
             fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
             !root.document.hasFocus()) return;
         const renderer = root.Graphics.app?.renderer;
@@ -377,7 +377,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 root.SceneManager._wqaNativeAutosaves || !root.document.hasFocus()) return;
             try {
                 if (!field) initialize();
-                field.observeCaveReady(scene);
+                field.observeReady(scene);
                 if (root.Graphics._wqaWallEnabled) wall.arm(scene);
                 if (root.Graphics._wqaCaveTimingEnabled) caveTiming.warm(scene);
             } catch { /* Native field input remains available. */ }
@@ -386,6 +386,14 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessCaveEventAccepted = function (scene, event) {
         try { field?.caveEventAccepted(scene, event); } catch { /* Preserve native event acceptance. */ }
+    };
+
+    root.WendyQuestAccessBookmarkEntranceAccepted = function (scene, event) {
+        try { field?.bookmarkEntranceAccepted(scene, event); } catch { /* Preserve native event acceptance. */ }
+    };
+
+    root.WendyQuestAccessBookmarkTransferReserved = function (scene, player, map, x, y) {
+        try { field?.bookmarkTransferReserved(scene, player, map, x, y); } catch { /* Preserve the native transfer. */ }
     };
 
     root.WendyQuestAccessFieldChanged = function (scene) {
