@@ -1191,6 +1191,25 @@ const interval = setInterval(() => {
             WendyQuestAccessBattleCueLeaving(scene);
             if (scene._wqaBattleCueActive) throw Error('Battle timing cue did not retire');
             fs.unlinkSync(receipt + '.battle-target-stage');
+            const action = BattleManager._currentActionCommand;
+            const backing = action._backing;
+            const badge = () => ({ parent: backing, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
+            const paint = action._wqaRadialPaint = { power: battleText(backing, '81%'), accuracy: battleText(backing, '93%'),
+                powerBadge: badge(), accuracyBadge: badge(), words: battleText(backing, 'NICE'), attempts: 0 };
+            paint.accuracyBadge.worldVisible = false;
+            WendyQuestAccessBattleRadialReady(scene, action);
+            Graphics.app.renderer.emit('postrender');
+            if (scene._wqaRadialReport) throw Error('Hidden accuracy badge exposed the result');
+            paint.accuracyBadge.worldVisible = true;
+            WendyQuestAccessBattleRadialReady(scene, action);
+            Graphics.app.renderer.emit('postrender');
+            if (!scene._wqaRadialReport) throw Error('Final radial score did not follow its paint');
+            BattleManager._phase = 'action';
+            WendyQuestAccessBattleLogReady(scene, scene._actionLogWindow);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 46;
+        } else if (endingStep === 46 && fs.existsSync(receipt + '.battle-radial')) {
+            const scene = SceneManager._scene;
             fs.writeFileSync(receipt + '.battle-bag-stage', '');
             Object.assign(BattleManager, { _phase: 'input', _targets: [] });
             const item = { name: 'Unpainted item name' };
@@ -1275,7 +1294,7 @@ parentPort.on('message', message => {
             const target = fs.existsSync(receipt + '.battle-target-stage');
             const vitals = message.lines?.[0];
             const suffix = message.kind === 'menuFocus' ? 'focus' :
-                message.kind === 'battleLog' ? (message.append ? 'log-auto' : 'log-repeat') :
+                message.kind === 'battleLog' ? (vitals?.startsWith('Power ') ? 'radial' : message.append ? 'log-auto' : 'log-repeat') :
                 message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'hp') :
                     vitals === 'Synthetic companion' ? 'slot2' : message.append ? 'autodetail' : 'details') :
                 message.kind === 'menuReview' ? (target && message.append ? 'timing' : 'review') :
@@ -1568,6 +1587,7 @@ def main():
             'battle-hp': 'Synthetic hero. HP 8 of 14',
             'battle-log-auto': 'Synthetic turn result.',
             'battle-log-repeat': 'Synthetic turn result.',
+            'battle-radial': 'Power 81%. Accuracy 93%, NICE.',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',

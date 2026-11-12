@@ -75,6 +75,12 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         release(rows);
         if (!ready(scene, window) || !Array.isArray(window.items) || window.items.length > MAX_PAINTED_ROWS) return;
         const lines = [];
+        const radial = readable(scene._wqaRadialReport);
+        if (radial) {
+            scene._wqaRadialReport = null;
+            scene._wqaRadialActive = false;
+            lines.push(radial);
+        }
         for (const { row, text: paint } of rows) {
             if (row._wqaLogSeen || !window.items.includes(row) || !(row.pos > 0)) continue;
             row._wqaLogSeen = true;
@@ -85,13 +91,20 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         if (history?.scene !== scene) history = { scene, lines: [] };
         history.lines.push(...lines);
         history.lines.splice(0, Math.max(0, history.lines.length - MAX_HISTORY));
-        speak(scene, window, lines, true);
+        // A final radial score can share this render with eight native rows.
+        // Keep their order across bounded worker records.
+        if (lines.length <= MAX_PAINTED_ROWS) {
+            speak(scene, window, lines, true);
+        } else {
+            speak(scene, window, lines.slice(0, MAX_PAINTED_ROWS), true);
+            speak(scene, window, lines.slice(MAX_PAINTED_ROWS), true);
+        }
     }
 
     return {
         observe(scene, window) {
             const rows = take(window);
-            if (!rows.length) return;
+            if (!rows.length && !scene._wqaRadialReport) return;
             if (!ready(scene, window)) { release(rows); retire(scene); return; }
             const renderer = host.graphics.app?.renderer;
             if (typeof renderer?.once !== 'function') { release(rows); return; }

@@ -104,6 +104,8 @@ BATTLE_CUE_LEAVING = (b'SceneManager._scene?._wqaBattleCueActive&&'
                       b'globalThis.WendyQuestAccessBattleCueLeaving?.(SceneManager._scene)')
 BATTLE_LOG_LEAVING = (b'SceneManager._scene?._wqaBattleLogActive&&'
                       b'globalThis.WendyQuestAccessBattleLogLeaving?.(SceneManager._scene)')
+BATTLE_RADIAL_LEAVING = (b'SceneManager._scene?._wqaRadialActive&&'
+                         b'globalThis.WendyQuestAccessBattleRadialLeaving?.(SceneManager._scene)')
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
@@ -334,7 +336,7 @@ def objects_notification(original):
                 b'if(SceneManager._scene?._wqaBattleFocusActive)'
                 b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);' +
                 BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
-                BATTLE_CUE_LEAVING + b';' + BATTLE_LOG_LEAVING + b';}',
+                BATTLE_CUE_LEAVING + b';' + BATTLE_LOG_LEAVING + b';' + BATTLE_RADIAL_LEAVING + b';}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
         257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
@@ -571,6 +573,17 @@ def battle_notification(original):
         }
     }
 '''
+    radial_update = b'''
+    {
+        const wqaRadial = BattleManager._currentActionCommand;
+        if (BattleManager._phase === 'ActionCommand' && wqaRadial?._wqaRadialPaint &&
+            this._wqaBattleStarted && BattleManager._wqaBattleSpritesBusy === false &&
+            this._fadeDuration === 0 && this._fadeOpacity === 0 && !this._wqaSettingsActive &&
+            !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
+            !Graphics._wqaResize && Graphics.app?.stage === this)
+            globalThis.WendyQuestAccessBattleRadialReady?.(this,wqaRadial);
+    }
+'''
     log_update = b'''
     {
         const wqaLog = this._actionLogWindow;
@@ -580,7 +593,7 @@ def battle_notification(original):
             this._fadeDuration === 0 && this._fadeOpacity === 0 && !this._wqaSettingsActive &&
             !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
             !Graphics._wqaResize && Graphics.app?.stage === this) {
-            if (wqaLog?._wqaBattleLogRows?.length)
+            if (wqaLog._wqaBattleLogRows?.length || this._wqaRadialReport)
                 globalThis.WendyQuestAccessBattleLogReady?.(this,wqaLog);
         } else if (this._wqaBattleLogActive || wqaLog?._wqaBattleLogRows?.length) {
             globalThis.WendyQuestAccessBattleLogLeaving?.(this);
@@ -633,7 +646,7 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
                 BATTLE_CUE_LEAVING + b';' + BATTLE_LOG_LEAVING + b';',
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=BattleManager._wqaBattleSpritesBusy=undefined;',
-        242214: target_update + bag_update + timing_update + log_update + dialogue_update(ready),
+        242214: target_update + bag_update + timing_update + radial_update + log_update + dialogue_update(ready),
         247196: log_paint,
         247397: b'if(wqaLogPaint){this._wqaBattleLogPaint=null;if(wqaLogPaint.text){'
                 b'wqaLogPaint.row._wqaLogQueued=true;(this._wqaBattleLogRows||=[]).push(wqaLogPaint);}}',
@@ -657,8 +670,15 @@ def action_notification(original):
     cue_sample = b',this._wqaBattleCueActive&&globalThis.WendyQuestAccessBattleCueSample?.(SceneManager._scene,this,'
     cue_end_sweep = (b'this._wqaBattleCueActive&&'
                      b'globalThis.WendyQuestAccessBattleCueEndSweep?.(SceneManager._scene,this);')
+    # A radial sweep dispatches one qualitative Sprite_Text through the shared
+    # native feedback method. Mark its producer only at these two call sites.
+    feedback_begin = (b'(this._wqaRadialWords=null,this._wqaCollectRadialWords='
+                      b'SceneManager._scene?._wqaBattleStarted&&this===BattleManager._currentActionCommand,')
+    feedback_end = b',this._wqaCollectRadialWords=false)'
     return insert(original, ACTION_SHA, {
         25684: BATTLE_TARGET_LEAVING + b',' + timing_leaving + b',' + BATTLE_CUE_LEAVING + b',',
+        26228: b'this._wqaRadialPaint=this._wqaRadialWords=this._wqaRadialPowerWords=null;',
+        30027: b',this._wqaCollectRadialWords&&(this._wqaRadialWords=_0xc36689)',
         48198: BATTLE_TARGET_LEAVING + b';' + timing_leaving + b';' + BATTLE_CUE_LEAVING + b';',
         67807: b'if(!this._wqaTimingWaiting&&this===BattleManager._currentActionCommand&&'
                b'SceneManager._scene?._wqaBattleStarted)this._wqaTimingWaiting=true;',  # Ready input loop
@@ -669,9 +689,19 @@ def action_notification(original):
                 b'this._params.powerCritZoneAmountEnd,this._params.powerFailAmount,'
                 b'_0x17f391?_0x1fd196:-1,_0x7de663,_0x2f41e3>0,!!_0x26a0b4.Frosty,_0x21be67)',
         71232: cue_end_sweep,
+        72577: feedback_begin,
+        72630: feedback_end,
+        73686: b',this._wqaRadialWords&&(this._wqaRadialPaint={words:this._wqaRadialWords,attempts:0},'
+               b'this._wqaRadialWords=null)',
+        75351: b'this._wqaRadialPaint=null;',  # Power feedback has ended before accuracy input.
         77631: cue_sample + b'1,_0x1327af,_0x3dbe15,_0x3d8aee,_0x357499,this._params.hitFailAmount,'
                 b'_0x2191e9?_0x8a92bb:-1,_0x44198f,_0x592e0d>0,!!_0x26a0b4.Frosty,_0x197d36)',
         77639: BATTLE_CUE_LEAVING + b';',
+        79586: feedback_begin,
+        79639: feedback_end,
+        80846: b',SceneManager._scene?._wqaBattleStarted&&this===BattleManager._currentActionCommand&&'
+               b'(this._wqaRadialPaint={words:this._wqaRadialWords,power:_0x3f7d26,powerBadge:_0x2b5f46,'
+               b'accuracy:_0x168297,accuracyBadge:_0x11601c,attempts:0},this._wqaRadialWords=null)',
     })
 
 

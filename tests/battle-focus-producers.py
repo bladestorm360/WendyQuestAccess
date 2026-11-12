@@ -43,6 +43,50 @@ def native_text_methods():
     return [sprite_method(text, 'Sprite_Text', name) for name in names]
 
 
+if sys.argv[2:] == ['radial-result']:
+    original_action = (installed / ACTION_REL).read_bytes()
+    action, _ = decode(action_notification(original_action).decode('utf8'))
+    baseline, _ = decode(original_action.decode('utf8'))
+    methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]
+    methods.extend(native_text_methods())
+    methods.extend(sprite_method(text, 'Sprite_Text', name) for name in ('GetText', 'StartTextAnimation'))
+    animation = sprite_method(text, 'Sprite_Text', 'updateAnimation')
+    methods.append(animation.split(',VFXBody', 1)[0] + ';')
+    for source, prefix in ((action, 'observed'), (baseline, 'native')):
+        feedback_names = ('CreateFeedbackText', 'ShowFeedbackText', 'ShowNormalFeedbackText',
+                          'ShowFrozenFeedbackText', 'CleanUp')
+        for name in feedback_names:
+            method = sprite_method(source, 'ActionCommand', name)
+            method = method.replace(f"['{name}']", f"['{prefix}{name}']", 1)
+            for feedback in feedback_names:
+                method = method.replace(f"this['{feedback}']", f"this['{prefix}{feedback}']")
+            methods.append(method)
+        start = source.index('_0x28cf50=Lerp(_0x58262b,_0x448ce3,_0x279acd),_0x4dc78a=',
+                             source.index('for(;!_0x21be67'))
+        power_end = source.index('let _0x5499a6=', start)
+        accuracy_start = source.index("AudioManager['stopSound'](_0x4a1ae6)", power_end)
+        end = source.index("}['bind'](this));};", accuracy_start)
+        outcome = (source[start:power_end] + source[accuracy_start:end]).replace(
+            "this['ShowFeedbackText']", f"this['{prefix}ShowFeedbackText']")
+        methods.append(f'ActionCommand.prototype.{prefix}Score = function* (fixture) {{' + '''
+const _0x26a0b4 = fixture.settings, _0x58262b = Math.PI, _0x448ce3 = Math.PI * 2;
+const _0x48e2e7 = a0_0x453a8f;
+const _0x3f7d26 = fixture.power, _0x168297 = fixture.accuracy;
+const _0x2b5f46 = fixture.powerBadge, _0x11601c = fixture.accuracyBadge;
+const _0x2e26b2 = this._backing, _0xbb5d19 = {}, _0x42d8de = {}, _0x45b2fb = { scale: {} };
+const _0x65b79b = { scale: {}, show() {} }, _0x3f7522 = {}, _0x4b4d3f = {}, _0x176edd = {},
+    _0x2d2f24 = {}, _0x19f1f8 = {}, _0x4d4624 = {}, _0xc16277 = null;
+const _0x2b5dae = 0, _0x4a1ae6 = 0, _0x16a40a = {}, _0x299a80 = {},
+    _0x445be5 = 0, _0x319c3b = 0, _0x2357e9 = '', _0x47b1e6 = '', _0x52643a = 1,
+    _0x29b4d0 = 0.35, _0x17f391 = fixture.powerFrozen, _0x2191e9 = fixture.accuracyFrozen;
+let _0x279acd = fixture.powerAmount, _0x1327af = fixture.accuracyAmount,
+    _0x28cf50 = 0, _0x4dc78a = 0, _0x4656fa = 0, _0x264dda = 0, _0x2dcbbd = 0,
+    _0x50b1f9 = 0, _0x5678be = null;
+''' + outcome + '};')
+    print(json.dumps(methods))
+    sys.exit(0)
+
+
 if sys.argv[2:] == ['log']:
     stock = windows_notification((installed / WINDOWS_REL).read_bytes()).decode('utf8')
     methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]

@@ -10,6 +10,7 @@ const { createBattleTargets } = require('./battle/targets');
 const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createBattleLog } = require('./battle/action-log');
+const { createRadialResult } = require('./battle/radial-result');
 const { partyVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
@@ -34,6 +35,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let battleTiming = null;
     let battleCues = null;
     let battleLog = null;
+    let radialResult = null;
     let quests = null;
     let mapBanner = null;
     let dialogue = null;
@@ -124,6 +126,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleTargets = createBattleTargets(root, host, notifications, () => speechPreferences);
         battleTiming = createBattleTiming(root, host, notifications, battleTargets, warmBattleAudio);
         battleLog = createBattleLog(root, host, notifications, battleFocus.appendFeedback);
+        radialResult = createRadialResult(root, host);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
@@ -260,6 +263,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 battleTiming.retire(scene);
                 battleCues.retire(scene);
                 battleLog.retire(scene);
+                radialResult.retire(scene);
                 quests.suspend(scene);
                 field.autowalk.stop(scene);
                 field.changed(scene);
@@ -322,6 +326,7 @@ function boot(root, nodeRequire, nodeProcess) {
             battleTiming.retire(host.manager._scene);
             battleCues.retire(host.manager._scene);
             battleLog.retire(host.manager._scene);
+            radialResult.retire(host.manager._scene);
             quests.leave(host.manager._scene);
             controller.reset();
         });
@@ -424,6 +429,11 @@ function boot(root, nodeRequire, nodeProcess) {
     };
     root.WendyQuestAccessBattleCueEndSweep = function (scene, action) { battleCues?.endSweep(scene, action); };
     root.WendyQuestAccessBattleCueLeaving = function (scene) { battleCues?.retire(scene); };
+
+    root.WendyQuestAccessBattleRadialReady = function (scene, action) {
+        try { radialResult?.observe(scene, action); } catch { radialResult?.retire(scene); }
+    };
+    root.WendyQuestAccessBattleRadialLeaving = function (scene) { radialResult?.retire(scene); };
 
     root.WendyQuestAccessBattleLogReady = function (scene, window) {
         try { battleLog?.observe(scene, window); } catch { battleLog?.retire(scene); }
@@ -578,6 +588,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleTiming?.retire(scene);
         battleCues?.retire(scene);
         battleLog?.leave(scene);
+        radialResult?.retire(scene);
         mapBanner?.leave(scene);
         dialogue?.leave(scene);
         field?.leave(scene);
@@ -610,6 +621,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleTiming?.retire(scene);
         battleCues?.retire(scene);
         battleLog?.retire(scene);
+        radialResult?.retire(scene);
     };
 
     root.WendyQuestAccessResizeReady = function () {
