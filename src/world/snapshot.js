@@ -3,7 +3,7 @@
 const { surface, MAX_CELLS, CELL_BITS } = require('./geometry.cjs');
 const { destination } = require('./destinations');
 const { localDestination } = require('./local-destinations');
-const { worldDestination } = require('./world-destinations');
+const { worldDestination, discoveryEntrance } = require('./world-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination } = require('./puzzles/cave');
 
@@ -53,7 +53,7 @@ function captureWorld(root, routing = true, label) {
     const objects = [];
     const tiles = routing ? new Set(map._tileEvents) : null;
     for (const event of map._events) {
-        if (!event || event._erased) continue;
+        if (!event || (event._erased && mode !== 'airship')) continue;
         const { _eventId: eventId, _x: x, _y: y, _pageIndex: pageIndex, _trigger: trigger } = event;
         const entry = data.events[eventId];
         if (!entry || !Number.isFinite(x) || !Number.isFinite(y)) return null;
@@ -64,19 +64,23 @@ function captureWorld(root, routing = true, label) {
             const rectangle = box ? [x + box.x1, y + box.y1, x + box.x2, y + box.y2] : undefined;
             if (rectangle && !rectangle.every(Number.isFinite)) return null;
             events.push({ id: eventId, x, y, normal: event._priorityType === 1, through: event._through === true,
-                tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action });
+                tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action,
+                erased: event._erased === true,
+                discoveryFor: mode === 'airship' ? discoveryEntrance(id, event) : undefined });
         }
-        if (!action) continue;
+        if (event._erased || !action) continue;
         let target = worldDestination(root, mode, event, entry, page);
         if (target === undefined) target = localDestination(root, event, page);
         if (target === undefined) target = checkpointTarget(id, eventId, pageIndex, trigger)
             ? { name: 'Checkpoint', category: 'objects' } : caveDestination(id, event, entry, page) || destination(entry, page, trigger);
-        if (target) {
+        if (target && (mode !== 'airship' || target.category === 'exits')) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
         }
     }
     if (mode === 'walk') objects.push(...boardingTargets(map));
+    if (mode === 'airship') objects.push({ id: 517, x: player._x, y: player._y, name: 'Nearest landing site',
+        category: 'vehicles', nearestLanding: true });
     const snapshot = { map: id, mode, x: player._x, y: player._y, objects };
     if (!routing) return snapshot;
     const vehicles = [];

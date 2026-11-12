@@ -228,7 +228,35 @@ async function verifySurfaceField(tilesets) {
     assert.equal(f.routeEpoch(), 0);
     reply(pending);
     assert.equal(directions().length, 1, 'the native getting-off state retires the old directions');
-    console.log('Verified field input and spoken sailing directions through native admission and getting-off retirement.');
+
+    player._vehicleGettingOff = false;
+    player._vehicleType = 'airship';
+    player._through = true;
+    player.setPosition(43, 28);
+    let atCruise = false;
+    let landingAllowed = true;
+    map._vehicles[2] = { _type: 'airship', _mapId: 113, _x: 43, _y: 28, _driving: true,
+        isHighest: () => atCruise, isLandOk: () => landingAllowed };
+    c.SceneManager.updateScene();
+    const beforeTakeoff = routePackets.length;
+    request();
+    assert.equal(routePackets.length, beforeTakeoff, 'directions wait for native cruising altitude');
+    atCruise = true;
+    f.dispatchWindowEvent('keydown', { key: 'l', keyCode: 76, shiftKey: true });
+    f.dispatchWindowEvent('keyup', { key: 'l', keyCode: 76, shiftKey: true });
+    f.frame();
+    const landing = request();
+    assert.equal(landing.live.mode, 'airship');
+    assert(landing.request.landing);
+    assert.equal(landing.request.event, undefined);
+    landingAllowed = false;
+    reply(landing);
+    const reports = f.packets.filter(packet => packet.kind === 'fieldStatus');
+    assert.equal(formatSpeech(reports.at(-1)), 'Landing site changed. Request directions again.');
+    landingAllowed = true;
+    reply(request());
+    assert.equal(formatSpeech(directions().at(-1)), 'Nearest landing site. Press the action button to land.');
+    console.log('Verified spoken sailing and airship directions, native transition gates and landing-site recheck.');
 }
 
 function profileSnapshot(tilesets) {

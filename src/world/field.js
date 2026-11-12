@@ -1,7 +1,7 @@
 'use strict';
 
 const { captureWorld } = require('./snapshot');
-const { travelMode, parkedVehicle } = require('./vehicle-navigation');
+const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
 const { browse, createDestinationBrowser } = require('./destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
@@ -100,18 +100,24 @@ function createField(root, host, notifications) {
             }
             if (result?.status === 'timedWait') status(job, 'No crossing preview ready. Check the patrols and request again');
             else if (result?.status === 'ready') {
+                if (result.land && !canLand(root.$gameMap, result.arrival.x, result.arrival.y))
+                    return status(job, 'Landing site changed. Request directions again.');
                 if (!result.reenter) host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
                     warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type);
                 present(job, { kind: 'routeDirections', name: job.label,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
-                    reenter: result.reenter === true, board: !!job.vehicle });
+                    reenter: result.reenter === true, board: !!job.vehicle, land: result.land === true,
+                    discovery: result.discovery && worldBoundaryName(root, result.discovery) });
             }
             else if (result?.status === 'interrupted') present(job, { kind: 'routeDirections', name: job.label,
                 legs: result.legs, boundary: result.boundary, boundaryName: worldBoundaryName(root, result.boundaryEvent),
                 more: result.more === true });
             else if (result?.status === 'approachBlocked') status(job, 'A floor event blocks the approach to ' + job.label);
-            else if (result?.status === 'unreachable')
-                status(job, (job.mode === 'walk' ? 'No walkable route to ' : 'No sailing route to ') + job.label);
+            else if (result?.status === 'unreachable') {
+                const prefix = job.mode === 'walk' ? 'No walkable route to ' : job.mode === 'airship' ?
+                    'No connected landing for ' : 'No sailing route to ';
+                status(job, job.nearestLanding ? 'No landing site is available' : prefix + job.label);
+            }
             else if (result?.status === 'unavailable') status(job, 'Directions unavailable for ' + job.label);
         } else if (active?.action === 'directions' && ready(active.scene)) afterRender();
     }
@@ -144,6 +150,7 @@ function createField(root, host, notifications) {
             job.x = snapshot.x;
             job.y = snapshot.y;
             job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
+            job.nearestLanding = target.nearestLanding === true;
             job.motionFrame = motion?.frame;
             if (motion) {
                 host.caveTiming?.warm(job.scene);
@@ -152,7 +159,8 @@ function createField(root, host, notifications) {
             Atomics.store(admission, 0, job.sequence);
             inFlight = job;
             worker.postMessage({ map: snapshot.map, sequence: job.sequence, epoch: job.sequence, live: snapshot.live,
-                request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area, motion, field: true,
+                request: { x: snapshot.x, y: snapshot.y, event: target.nearestLanding ? undefined : target.id,
+                    limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship',
                     surface: snapshot.mode !== 'walk', vehicle: target.vehicle, entryDirection: target.entryDirection,
                     beacon: !motion && host.beacon?.enabled() === true, timingCue: !!job.timing } }, [snapshot.live.terrain.buffer]);
         } catch {

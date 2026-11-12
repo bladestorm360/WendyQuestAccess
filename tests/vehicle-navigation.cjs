@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { captureWorld } = require('../src/world/snapshot');
 const { solveRoute } = require('../src/world/routes.cjs');
+const { composeWorld, LAND } = require('../src/world/geometry.cjs');
 const { travelMode } = require('../src/world/vehicle-navigation');
 const { worldBoundaryName } = require('../src/world/world-destinations');
 const { createBeacon } = require('../src/world/beacon');
@@ -91,7 +92,8 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         const view = captureWorld(c);
         const target = view.objects.find(item => item.id === id);
         assert(target, `Missing native target ${id}`);
-        const request = { x: view.x, y: view.y, event: target.id, field: true, surface: view.mode !== 'walk',
+        const request = { x: view.x, y: view.y, event: target.nearestLanding ? undefined : target.id, field: true,
+            surface: view.mode === 'ship' || view.mode === 'boat', landing: view.mode === 'airship',
             entryDirection: target.entryDirection, vehicle: target.vehicle, limit: 8, beacon: true };
         const result = solveRoute(fixture.geometry, view.live, request);
         const boundary = result.boundary && [
@@ -241,6 +243,8 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         assert.equal(port.player._newMapId, destination);
     }
 
+    await verifyAirship();
+
     c.$gameParty.inBattle = inBattle;
     c.$gameParty.onPlayerWalk = onPlayerWalk;
     c.$dataCommonEvents = common;
@@ -254,6 +258,133 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     delete c.WendyQuestAccessSceneLeaving;
     delete c.Tyruswoo.TileControl.param;
     console.log('Verified native ship landing, island transfer and return, exact reboarding direction, parked boat and forced handback.');
+
+    async function verifyAirship() {
+        const flight = begin(113);
+        const { gameMap, player, geometry } = flight;
+        const aircraft = gameMap.airship();
+        aircraft.setLocation(113, 43, 28);
+        player.setPosition(43, 29);
+        const boarding = directions(flight, 516);
+        assert.equal(boarding.target.name, 'Airship');
+        assert.equal(boarding.result.arrival.facing, null);
+        assert.match(formatSpeech({ kind: 'routeDirections', name: boarding.target.name, legs: [], board: true }),
+            /Press the action button to board/);
+        follow(flight, boarding.result, undefined);
+        scene._wqaRouteActive = true;
+        assert(player.triggerButtonAction());
+        assert.equal(leaving.at(-1), 'walk');
+        assert.equal(travelMode(gameMap, player), null);
+        settle(player);
+        assert(player._through);
+        for (let altitude = 1; altitude <= 48; altitude++) {
+            aircraft.updateAirship();
+            assert.equal(aircraft._altitude, altitude);
+            assert.equal(aircraft.canMove(), altitude === 48);
+            assert.equal(travelMode(gameMap, player), altitude === 48 ? 'airship' : null);
+        }
+
+        function compareLandings() {
+            const view = captureWorld(c);
+            const model = composeWorld(geometry, view.live);
+            let count = 0;
+            for (let y = 0; y < model.height; y++) for (let x = 0; x < model.width; x++) {
+                const allowed = !!(model.cells[y * model.width + x] & LAND);
+                assert.equal(allowed, aircraft.isLandOk(x, y, 2), `Map 113 landing at ${x},${y}`);
+                count += allowed;
+            }
+            return count;
+        }
+        assert.equal(compareLandings(), 636);
+        const event = gameMap._events[90];
+        event.setPosition(43, 28);
+        event.setupPage = () => {};
+        event.erase();
+        assert.equal(compareLandings(), 636);
+        assert(!aircraft.isLandOk(43, 28, 2));
+        assert(aircraft.isLandOk(49, 7, 2));
+        event.setPosition(49, 7);
+        assert.equal(compareLandings(), 636);
+        const { width, height, data } = flight.map;
+        const regionIndex = 5 * width * height + 28 * width + 43;
+        data[regionIndex] = 253;
+        c.$gameTileChanges[113] = { [regionIndex]: 253 };
+        assert.equal(compareLandings(), 635);
+        assert(!player.triggerButtonAction(), 'native OK rejects the changed water tile');
+        assert.equal(travelMode(gameMap, player), 'airship');
+
+        const nearest = directions(flight, 517);
+        assert(nearest.result.land && nearest.result.distance > 0);
+        assert(aircraft.isLandOk(nearest.result.arrival.x, nearest.result.arrival.y, 2));
+        await verifyWorker(flight, nearest.request, nearest.view.live, result => {
+            assert.deepEqual(result.arrival, nearest.result.arrival);
+            assert.equal(result.course.length, nearest.result.distance);
+        });
+        const legacy = { ...geometry, hasLandings: false };
+        assert.equal(solveRoute(legacy, nearest.view.live, nearest.request).status, 'unavailable');
+
+        const linked = directions(flight, 122);
+        assert.equal(linked.target.name, 'Lost Ruins 17');
+        assert.equal(linked.result.discovery, 124);
+        assert(linked.result.land);
+        follow(flight, linked.result, undefined);
+        assert(aircraft.isLandOk(player._x, player._y, 2));
+        const renderer = new EventEmitter();
+        c.Graphics.app = { renderer };
+        c.Graphics.frameCount = 900;
+        const cues = [];
+        const reports = [];
+        const audio = { cues: CUE, isPrepared: () => true, play(_scene, _hrtf, cue) { cues.push(cue); return true; }, retire() {} };
+        const beacon = createBeacon(c, () => travelMode(gameMap, player) === 'airship', audio,
+            () => ({ enabled: true, beacon: true, beaconVolume: 60 }), text => reports.push(text));
+        const atLanding = { distance: 0, land: true, arrival: linked.result.arrival, course: new Uint8Array() };
+        assert(beacon.start(scene, 517, player._x, player._y, atLanding));
+        event.setPosition(player._x, player._y);
+        beacon.update(scene);
+        renderer.emit('postrender');
+        assert.deepEqual(cues, []);
+        assert.equal(reports.at(-1), 'Approach changed. Request directions again.');
+        event.setPosition(49, 7);
+        assert(beacon.start(scene, 517, player._x, player._y, atLanding));
+        beacon.update(scene);
+        renderer.emit('postrender');
+        assert.deepEqual(cues, [CUE.beaconArrival]);
+        beacon.stop(scene);
+        scene._wqaRouteActive = true;
+        assert(player.triggerButtonAction());
+        assert.equal(leaving.at(-1), 'airship');
+        assert(player._vehicleGettingOff && !player._through);
+        for (let altitude = 47; altitude >= 0; altitude--) {
+            aircraft.updateAirship();
+            settle(player);
+            assert.equal(aircraft._altitude, altitude);
+            assert.equal(travelMode(gameMap, player), altitude === 0 ? 'walk' : null);
+        }
+        const ground = directions(flight, 124);
+        assert(ground.result.distance > 0);
+        follow(flight, ground.result, 124);
+        const discovery = gameMap._events[124];
+        const discovered = worldBoundaryName(c, 124);
+        assert.equal(discovered, 'Lost Ruins 17 discovery');
+        flight.source.command357 = ([plugin, name, , args]) => {
+            assert.equal(plugin, 'Tyruswoo_TileControl');
+            assert.equal(name, 'set_tile');
+            const { x, y, z } = JSON.parse(args.coordinates);
+            gameMap.setTileId(+x, +y, +z, args.tileId, args.clearUpperLayers, args.allowAutotiling);
+            return true;
+        };
+        execute(flight.source);
+        assert(c.$gameSelfSwitches.value([113, 124, 'A']));
+        discovery.setupPage = () => { discovery._trigger = discovery.page().trigger; };
+        discovery.refresh();
+        flight.source._list = null;
+        flight.source._eventId = undefined;
+        const afterDiscovery = directions(flight, 122);
+        follow(flight, afterDiscovery.result, 122);
+        assert.match(formatSpeech({ kind: 'routeDirections', name: linked.target.name, legs: [], land: true, discovery: discovered }),
+            /Press the action button to land. Then request walking directions to Lost Ruins 17 discovery/);
+        console.log('Verified native airship boarding, 48-update ascent and descent, 9,504 landing comparisons, and an actual walking approach after flight.');
+    }
 }
 
 module.exports = { verifyVehicleNavigation };

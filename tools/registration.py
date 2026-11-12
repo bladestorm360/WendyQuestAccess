@@ -96,7 +96,7 @@ ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._
                b'SceneManager._scene?._wqaCaveTimingActive)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||this._eventId!==undefined||'
-               b'this._type==="boat"||this._type==="ship")||'
+               b'this._type==="boat"||this._type==="ship"||this._type==="airship")||'
                b'SceneManager._scene?._wqaCaveReview&&this===$gamePlayer)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 AUTO_DISCARD = (b'SceneManager._scene?._messageWindow?._wqaAutoPaint&&'

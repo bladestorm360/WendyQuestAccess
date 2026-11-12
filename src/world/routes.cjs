@@ -1,6 +1,6 @@
 'use strict';
 
-const { DIRECTIONS, COUNTER, composeWorld, indexOf, offset, step, clipRectangle } = require('./geometry.cjs');
+const { DIRECTIONS, COUNTER, LAND, composeWorld, indexOf, offset, step, clipRectangle } = require('./geometry.cjs');
 
 function bounds(world, event) {
     return clipRectangle(world, event.rectangle || [event.x, event.y, event.x, event.y]);
@@ -57,7 +57,9 @@ function actionGoals(world, id, cancelled, surface) {
 }
 
 function boardingGoals(world, type) {
-    if (world.mode !== 'walk' || (type !== 'ship' && type !== 'boat')) return null;
+    if (world.mode !== 'walk') return null;
+    if (type === 'airship') return pointGoal(world, world.aircraft?.x, world.aircraft?.y);
+    if (type !== 'ship' && type !== 'boat') return null;
     const vehicle = world.vehicles?.find(candidate => candidate.type === type);
     if (!vehicle || (type === 'boat' && world.vehicles.some(candidate =>
         candidate.type === 'ship' && candidate.x === vehicle.x && candidate.y === vehicle.y))) return null;
@@ -71,6 +73,89 @@ function boardingGoals(world, type) {
         if (before >= 0 && before !== aircraft) goals[before] = DIRECTIONS[heading];
     }
     return goals;
+}
+
+function groundDistances(world, event, cancelled) {
+    const ground = { ...world, mode: 'walk', through: false };
+    const goals = actionGoals(ground, event, cancelled);
+    if (!goals || cancelled()) return null;
+    const stops = automaticEvents(ground, cancelled);
+    const distance = new Uint16Array(goals.length);
+    const queue = new Uint16Array(goals.length);
+    let count = 0;
+    for (let cell = 0; cell < goals.length; cell++) {
+        if ((cell & 63) === 0 && cancelled()) return null;
+        if (!goals[cell] || (stops[cell] && stops[cell] !== event)) continue;
+        distance[cell] = 1;
+        queue[count++] = cell;
+    }
+    for (let cursor = 0; cursor < count; cursor++) {
+        if ((cursor & 63) === 0 && cancelled()) return null;
+        const cell = queue[cursor];
+        for (let heading = 0; heading < DIRECTIONS.length; heading++) {
+            const previous = offset(ground, cell, 3 - heading);
+            if (previous < 0 || distance[previous] || stops[previous] || step(ground, previous, heading) !== cell) continue;
+            distance[previous] = distance[cell] + 1;
+            queue[count++] = previous;
+        }
+    }
+    return distance;
+}
+
+function nearestLanding(world, request, ground, cancelled) {
+    let nearest = null;
+    let cost = Infinity;
+    let bestWalk = Infinity;
+    for (let cell = 0; cell < world.cells.length; cell++) {
+        if ((cell & 63) === 0 && cancelled()) return null;
+        // Leave the parked airship behind before the player uses the final
+        // interaction. On its tile, native OK would try to board it first.
+        if (!(world.cells[cell] & LAND) || (ground && ground[cell] <= 1)) continue;
+        let east = Math.abs(cell % world.width - request.x);
+        let south = Math.abs(Math.floor(cell / world.width) - request.y);
+        if (world.scrollType & 2) east = Math.min(east, world.width - east);
+        if (world.scrollType & 1) south = Math.min(south, world.height - south);
+        const walk = ground ? ground[cell] - 1 : 0;
+        const total = east + south + walk;
+        if (total < cost || (total === cost && walk < bestWalk)) {
+            nearest = { cell, cost: total };
+            cost = total;
+            bestWalk = walk;
+        }
+    }
+    return nearest;
+}
+
+function landingRoute(world, start, request, area, cancelled) {
+    if (world.mode !== 'airship' || !world.hasLandings) return { status: 'unavailable' };
+    const linked = Number.isInteger(request.event);
+    const ground = linked ? groundDistances(world, request.event, cancelled) : null;
+    if (cancelled()) return { status: 'cancelled' };
+    if (linked && !ground) return { status: 'unavailable' };
+    let site = nearestLanding(world, request, ground, cancelled);
+    let discovery;
+    if (linked && !site) {
+        for (const event of world.events) {
+            if (cancelled()) return { status: 'cancelled' };
+            if (event.discoveryFor !== request.event) continue;
+            const approach = groundDistances(world, event.id, cancelled);
+            const candidate = approach && nearestLanding(world, request, approach, cancelled);
+            if (candidate && (!site || candidate.cost < site.cost)) {
+                site = candidate;
+                discovery = event.id;
+            }
+        }
+    }
+    if (cancelled()) return { status: 'cancelled' };
+    if (!site) return { status: 'unreachable' };
+    const goals = new Uint8Array(world.cells.length);
+    goals[site.cell] = 1;
+    const result = route(world, start, goals, cancelled, area);
+    if (result.status === 'ready') {
+        result.land = true;
+        if (discovery) result.discovery = discovery;
+    }
+    return result;
 }
 
 function automaticEvents(world, cancelled) {
@@ -148,14 +233,18 @@ function route(world, start, goals, cancelled, area, stops, crossStops = false) 
     return { status: 'unreachable' };
 }
 
-function routeGoals(world, request, cancelled) {
-    if (request.vehicle) return boardingGoals(world, request.vehicle);
-    if (Number.isInteger(request.event)) return actionGoals(world, request.event, cancelled, request.surface === true);
-    const end = indexOf(world, request.targetX, request.targetY);
+function pointGoal(world, x, y) {
+    const end = indexOf(world, x, y);
     if (end < 0) return null;
     const goals = new Uint8Array(world.cells.length);
     goals[end] = 1;
     return goals;
+}
+
+function routeGoals(world, request, cancelled) {
+    if (request.vehicle) return boardingGoals(world, request.vehicle);
+    if (Number.isInteger(request.event)) return actionGoals(world, request.event, cancelled, request.surface === true);
+    return pointGoal(world, request.targetX, request.targetY);
 }
 
 function entryGoal(world, goals, request, area) {
@@ -186,6 +275,7 @@ function solveWorldRoute(world, request, cancelled = () => false) {
     if (start < 0) return { status: 'unavailable' };
     const area = request.area && clipRectangle(world, request.area);
     if (request.area && (!area || !inside(world, start, area))) return { status: 'unavailable' };
+    if (request.landing === true) return landingRoute(world, start, request, area, cancelled);
     const goals = routeGoals(world, request, cancelled);
     if (cancelled()) return { status: 'cancelled' };
     if (!goals) return { status: 'unavailable' };

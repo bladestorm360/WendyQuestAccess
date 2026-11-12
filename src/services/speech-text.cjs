@@ -96,6 +96,12 @@ function formatSpeech(message) {
             else if (boundary) parts.push(`${label({ name: message.boundaryName }) || 'Floor event'} one tile ${boundary}`);
             else if (message.reenter === true) parts.push('Walk off this tile and back to activate');
             else if (message.board === true && facing) parts.push(`face ${facing} and press the action button`);
+            else if (message.board === true) parts.push('Press the action button to board');
+            else if (message.land === true) {
+                parts.push('Press the action button to land');
+                const discovery = label({ name: message.discovery });
+                if (discovery) parts.push(`Then request walking directions to ${discovery}`);
+            }
             else if (facing) parts.push(`face ${facing}`);
             if (!parts.length) parts.push('you are here');
             text = `${name}. ${parts.join('. ')}.`;
