@@ -17,6 +17,8 @@ REGISTRY_REL = Path('package.nw/js/plugins.js')
 MENU_REL = Path('package.nw/js/plugins/MenuScene.js')
 MANAGERS_REL = Path('package.nw/js/rmmz_managers.js')
 SCENES_REL = Path('package.nw/js/rmmz_scenes.js')
+CORE_REL = Path('package.nw/js/rmmz_core.js')
+WINDOW_REL = Path('package.nw/js/plugins/MonkeyWrenchMZ.js')
 STATS_REL = Path('package.nw/js/plugins/WendyQuest.js')
 TITLE_SHA = 'a3c35f004b66a6d4e7a918e36b8bc7e48f2383875165ce1c00ae1a5a031e5634'
 REGISTRY_SHA = '083317d6b2ee7ba9655762dee7671564a64b0bba82bb33d8cbacd52a7e7b3ab7'
@@ -26,11 +28,12 @@ TITLE_EVENT = (b';if(typeof globalThis.WendyQuestAccessTitleReady==="function")'
 MENU_SHA = 'b4426d78f76e1d799f178e31b981292d404cc60a819b767f80573c133b1cd82a'
 MANAGERS_SHA = 'e87efc29229a80c903c1651a78bbeafa8b9ffb925227b31cfa7f4741875140bd'
 SCENES_SHA = '0f69c04d51b9ce17410e952ceafa31527a1b6c94663a12e11ca7d0e30cf2913a'
+CORE_SHA = 'f7f807a8329b6996577771dd5b65b84dac072117b6f24e4f2fc0a6068ccd61e0'
+WINDOW_SHA = '37dfb71367496ca5f96a86156c3ea9fb4f813a3d6323280e342848d3bfd9cd42'
 STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
 DEPENDENCIES = {
     STATS_REL: STATS_SHA,
     Path('package.nw/js/plugins/UIGeneral.js'): '9a282cc96ee2edb4777fc18228d4a5976e2ad7546d50df72a6d0429bc6af9b0e',
-    Path('package.nw/js/plugins/MonkeyWrenchMZ.js'): '37dfb71367496ca5f96a86156c3ea9fb4f813a3d6323280e342848d3bfd9cd42',
 }
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
 PLUGIN = {'name': 'WendyQuestAccess', 'status': True, 'description': 'WendyQuest accessibility support',
@@ -59,11 +62,11 @@ def files_ready(scene):
     # the mod callback when a scene is loading, changing, fading or retired.
     ready = f'''{scene}&&{scene}._wqaFileKind&&{scene}===SceneManager._scene&&
 !SceneManager._nextScene&&!SceneManager._exiting&&{scene}._started&&{scene}._active&&
-{scene}._fadeDuration===0&&{scene}._fadeOpacity===0&&Graphics.app?.stage==={scene}&&
+{scene}._fadeDuration===0&&{scene}._fadeOpacity===0&&Graphics.app?.stage==={scene}&&!Graphics._wqaResize&&
 (({scene}._wqaFileKind===1&&{scene}._listWindow?._wqaCards===true)||
 ({scene}._wqaFileKind===2&&{scene}._wqaDetailText===true&&{scene}._wqaDetailArt===true&&!{scene}._destroySave)||
 ({scene}._wqaFileKind===3&&({scene}._deleteCount===0||{scene}._wqaDeleteStatus))||
-({scene}._wqaFileKind===4&&{scene}._optionsWindow?._wqaOptionsPainted===true&&!{scene}._wqaOptionsResizing)||
+({scene}._wqaFileKind===4&&{scene}._optionsWindow?._wqaOptionsPainted===true)||
 ({scene}._wqaFileKind===5&&{scene}._commandWindow&&( {scene}._commandWindow._wqaRetryRows&
 (1<<{scene}._commandWindow._index))))'''.replace('\n', '')
     return f'if({ready})globalThis.WendyQuestAccessFilesReady?.({scene});'.encode('ascii')
@@ -112,6 +115,35 @@ def scenes_notification(original):
     return insert(original, SCENES_SHA, {3177: b'\n' + files_ready('this')})
 
 
+def core_notification(original):
+    markers = (Path(__file__).resolve().parents[1] / 'src/runtime/resize-markers.js').read_bytes()
+    return insert(original, CORE_SHA, {
+        19696: b'\n    this._wqaViewportWidth = window.innerWidth;\n'
+               b'    this._wqaViewportHeight = window.innerHeight;\n'
+               b'    if (this._wqaResize) this._wqaTryResumeResize();',
+        24315: b'\n' + markers + b'\n',
+    })
+
+
+def window_notification(original):
+    # Use the ticket belonging to each native async callback, including
+    # overlapping requests, and the size issued by the native scale path.
+    return insert(original, WINDOW_SHA, {
+        30441: b'Graphics._wqaFrontEndObserved&&globalThis.WendyQuestAccessResizeStarting?.(),',
+        33274: b'{const wqaResize=Graphics._wqaBeginResize();',
+        33367: b',wqaResize',
+        33369: b'}',
+        33463: b',wqaResize',
+        33736: b'(',
+        33772: b',Graphics._wqaFinishResize(wqaResize,!_0x1812cd.isFullscreen,'
+               b'screenWidth*_0x1a0275,screenHeight*_0x1a0275))',
+        34676: b'const wqaResize=Graphics._wqaBeginResize();',
+        34787: b'(',
+        34805: b',Graphics._wqaFinishResize(wqaResize,_0x497b42.isFullscreen,'
+               b'window.screen.width,window.screen.height))',
+    })
+
+
 def register(original):
     if hashlib.sha256(original).hexdigest() != REGISTRY_SHA:
         raise ValueError('Plugin list does not match the supported Steam build')
@@ -140,6 +172,7 @@ def main():
             raise ValueError(f'Front-end dependency does not match the supported Steam build: {relative}')
     for relative, transform in ((TITLE_REL, title_notification), (MENU_REL, menu_notifications),
                                 (MANAGERS_REL, managers_notification), (SCENES_REL, scenes_notification),
+                                (CORE_REL, core_notification), (WINDOW_REL, window_notification),
                                 (REGISTRY_REL, register)):
         file = args.game_root / relative
         if file.stat().st_size > 1024 * 1024:

@@ -8,8 +8,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from registration import (MANAGERS_REL, MENU_REL, SCENES_REL, managers_notification, menu_notifications,
-                          scenes_notification)
+from registration import (CORE_REL, MANAGERS_REL, MENU_REL, SCENES_REL, WINDOW_REL, core_notification,
+                          managers_notification, menu_notifications, scenes_notification, window_notification)
 
 
 def load_decoder():
@@ -33,7 +33,8 @@ def main():
     menu, _ = decode(menu_notifications((root / MENU_REL).read_bytes()).decode('utf8'))
     manager = managers_notification((root / MANAGERS_REL).read_bytes()).decode('utf8')
     scenes = scenes_notification((root / SCENES_REL).read_bytes()).decode('utf8')
-    core = (root / 'package.nw/js/rmmz_core.js').read_text(encoding='utf8')
+    core = core_notification((root / CORE_REL).read_bytes()).decode('utf8')
+    native_window, _ = decode(window_notification((root / WINDOW_REL).read_bytes()).decode('utf8'))
     general, _ = decode((root / 'package.nw/js/plugins/UIGeneral.js').read_text(encoding='utf8'))
     result = {}
     for target, name, tail in [
@@ -74,7 +75,18 @@ def main():
         result[f'{target}.{name}'] = between(menu, anchor, tail) + '};'
     result['SceneManager.onSceneStart'] = between(manager, 'SceneManager.onSceneStart = function(', '\n};') + '\n};'
     result['Scene_Base.updateFade'] = between(scenes, 'Scene_Base.prototype.updateFade = function(', '\n};') + '\n};'
-    result['Graphics._onWindowResize'] = between(core, 'Graphics._onWindowResize = function(', '\n};') + '\n};'
+    for name in ('_onWindowResize', '_updateAllElements', '_switchFullScreen'):
+        result[f'Graphics.{name}'] = between(core, f'Graphics.{name} = function(', '\n};') + '\n};'
+    result['resizeMarkers'] = (ROOT / 'src/runtime/resize-markers.js').read_text(encoding='utf8')
+    for name, tail in [
+        ('_onKeyDown', "},SceneManager['onKeyDown']"),
+        ('_cancelFullScreen', "},Graphics['_resizeNwjsToExactScaleWhenWindowed']"),
+        ('_resizeNwjsToExactScaleWhenWindowed', '},0x280)'),
+        ('_resizeNwjsToExactScale', "},Graphics['_requestFullScreen'])"),
+        ('_requestFullScreen', "},Graphics['_isFullScreen']"),
+        ('_isFullScreen', '},function('),
+    ]:
+        result[f'Graphics.{name}'] = between(native_window, f"Graphics['{name}']=function(", tail) + '};'
     result['Window_Selectable.initialize'] = between(general, "Window_Selectable['prototype']['initialize']=function(",
         "},Window_Selectable['prototype']['refreshCursor']") + '};'
     print(json.dumps(result))

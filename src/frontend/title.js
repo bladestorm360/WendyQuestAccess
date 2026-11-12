@@ -3,7 +3,7 @@
 const LIMIT_TITLE_LABEL = 256;
 
 function presented(host, scene, window) {
-    return host.manager._scene === scene && !host.manager._nextScene &&
+    return !host.graphics._wqaResize && host.manager._scene === scene && !host.manager._nextScene &&
         !host.manager._exiting && scene._started === true && scene._active === true &&
         scene._fadeDuration === 0 && host.graphics.app && host.graphics.app.stage === scene &&
         window && window.visible === true && window.active === true && window.openness === 255 &&
@@ -90,7 +90,7 @@ function createTitleObserver(host, notifications) {
         host.window.addEventListener('pagehide', leave);
     }
 
-    return scene => {
+    function observe(scene) {
         const window = scene && scene._commandWindow;
         if (!window || !presented(host, scene, window)) return false;
         if (observedScene !== scene || observedWindow !== window) {
@@ -103,7 +103,8 @@ function createTitleObserver(host, notifications) {
         }
         openIfPresented();
         return true;
-    };
+    }
+    return { observe, suspend: close };
 }
 
 module.exports = { createTitleObserver, presented };

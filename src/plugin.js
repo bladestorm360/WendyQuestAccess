@@ -40,6 +40,7 @@ function boot(root, nodeRequire, nodeProcess) {
         const { notifications } = createRenderer(host);
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
+        root.Graphics._wqaFrontEndObserved = true;
     }
 
     // The installer's source-checked notification invokes this after the
@@ -50,14 +51,16 @@ function boot(root, nodeRequire, nodeProcess) {
             if (!supported() || !(scene instanceof root.Scene_Title) || scene === titleWaiting ||
                 root.SceneManager._scene !== scene || root.SceneManager._nextScene) return;
             const app = root.Graphics.app;
-            if (!app || app.stage !== scene || !app.renderer || typeof app.renderer.once !== 'function') return;
+            if (root.Graphics._wqaResize || !app || app.stage !== scene ||
+                !app.renderer || typeof app.renderer.once !== 'function') return;
             titleWaiting = scene;
             app.renderer.once('postrender', () => {
-                if (titleWaiting === scene) titleWaiting = null;
+                if (titleWaiting !== scene) return;
+                titleWaiting = null;
                 try {
                     if (!presented(view(), scene, scene._commandWindow)) return;
                     if (!title) initialize();
-                    title(scene);
+                    title.observe(scene);
                 } catch {
                     // Fail closed. The original title and native input stay live.
                 }
@@ -90,6 +93,20 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessFilesLeaving = function (scene) {
         if (filesWaiting === scene) filesWaiting = null;
         files?.leave(scene);
+    };
+
+    root.WendyQuestAccessResizeStarting = function () {
+        titleWaiting = null;
+        filesWaiting = null;
+        title?.suspend();
+        files?.suspend();
+    };
+
+    root.WendyQuestAccessResizeReady = function () {
+        const scene = root.SceneManager?._scene;
+        if (!scene) return;
+        if (scene instanceof root.Scene_Title) root.WendyQuestAccessTitleReady(scene);
+        else if (scene._wqaFileKind) root.WendyQuestAccessFilesReady(scene);
     };
 }
 

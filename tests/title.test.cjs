@@ -86,7 +86,7 @@ const host = {
         return { postMessage: message => messages.push(message), on() {}, unref() {} };
     }
 };
-const observeTitle = createTitleObserver(host, createRenderer(host).notifications);
+const { observe: observeTitle } = createTitleObserver(host, createRenderer(host).notifications);
 
 manager.updateScene();
 assert.equal(observeTitle(scene), false);

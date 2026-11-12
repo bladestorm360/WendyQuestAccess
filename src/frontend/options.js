@@ -36,7 +36,7 @@ function optionFocus(scene, window) {
     return record;
 }
 
-function observeOptionActions(scene, window, changed, suspend, leave) {
+function observeOptionActions(window, changed, suspend, leave) {
     for (const name of ['cursorLeft', 'cursorRight', 'cursorPageup', 'cursorPagedown']) {
         const original = window[name];
         if (typeof original !== 'function') continue;
@@ -52,7 +52,7 @@ function observeOptionActions(scene, window, changed, suspend, leave) {
     const setConfigValue = window.setConfigValue;
     if (typeof setConfigValue === 'function') window.setConfigValue = function (symbol) {
         // Native changeValue reaches this setter only for an accepted change.
-        if (symbol === 'fullscreen' && suspend()) scene._wqaOptionsResizing = true;
+        if (symbol === 'fullscreen') suspend();
         const result = setConfigValue.apply(this, arguments);
         if (this._list?.[this._index]?.symbol === symbol) changed(true);
         return result;

@@ -48,10 +48,12 @@ def fixture(runtime):
     app.mkdir()
     (app / 'package.json').write_text(json.dumps({
         'name': 'wendyquest-access-offline-fixture', 'main': 'index.html',
-        'window': {'show': False}, 'chromium-args': '--in-process-gpu --disable-devtools'
+        'window': {'show': False, 'width': 320, 'height': 200},
+        'chromium-args': '--in-process-gpu --disable-devtools'
     }), encoding='utf8')
     (app / 'index.html').write_text('''<!doctype html><title>WendyQuest Access Offline Fixture</title>
-<script src="fixture.js"></script><script src="plugin.js"></script><script src="run.js"></script>
+<script src="fixture.js"></script><script src="plugin.js"></script><script src="resize-markers.js"></script>
+<script src="run.js"></script>
 ''', encoding='utf8')
     (app / 'fixture.js').write_text('''
 const receipt = require('path').join(require('path').dirname(process.mainModule.filename), 'receipt.json');
@@ -78,10 +80,23 @@ var DataManager = { savefileInfo: () => null };
     (app / 'run.js').write_text('''
 if (SceneManager._scene.update() !== 123) throw Error('Native result changed');
 if (SceneManager._scene._commandWindow.select !== nativeSelect) throw Error('Hook installed at boot');
-WendyQuestAccessTitleReady(SceneManager._scene);
-if (SceneManager._scene._commandWindow.select !== nativeSelect) throw Error('Hook installed before render');
+const transition = Graphics._wqaBeginResize();
+WendyQuestAccessTitleReady(SceneManager._scene); // A ready title during resize is still gated.
 Graphics.app.renderer.emit('postrender');
-if (SceneManager._scene._commandWindow.select === nativeSelect) throw Error('No hook after render');
+if (SceneManager._scene._commandWindow.select !== nativeSelect) throw Error('Hook installed before geometry');
+function updatedViewport() {
+    Graphics._wqaViewportWidth = window.innerWidth;
+    Graphics._wqaViewportHeight = window.innerHeight;
+    Graphics._wqaTryResumeResize();
+    if (Graphics._wqaResize) return;
+    window.removeEventListener('resize', updatedViewport);
+    if (SceneManager._scene._commandWindow.select !== nativeSelect) throw Error('Hook installed before render');
+    Graphics.app.renderer.emit('postrender');
+    if (SceneManager._scene._commandWindow.select === nativeSelect) throw Error('No hook after render');
+}
+window.addEventListener('resize', updatedViewport);
+nw.Window.get().resizeTo(440, 320);
+Graphics._wqaFinishResize(transition, true, 440, 320);
 const interval = setInterval(() => {
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
         fileShown = true;
@@ -121,6 +136,7 @@ parentPort.on('message', message => {
 });
 ''', encoding='utf8')
     shutil.copyfile(ROOT / '.build' / 'payload' / 'js' / 'plugins' / 'WendyQuestAccess.js', app / 'plugin.js')
+    shutil.copyfile(ROOT / 'src' / 'runtime' / 'resize-markers.js', app / 'resize-markers.js')
     return app / 'receipt.json'
 
 
@@ -152,8 +168,8 @@ def main():
                 slot.get('slot') != 2 or not slot.get('empty') or title['epoch'] == slot['epoch']:
             raise RuntimeError(f'NW fixture did not deliver distinct title and slot packets: {data}')
         versions = data['versions']
-        print(f"Delivered title and save slot packets in NW {versions.get('nw', VERSION)}, Node {versions['node']}, "
-              f"modules ABI {versions['modules']}. Distinct shared epochs verified.")
+        print(f"Verified hidden window resize, title and save slot in NW {versions.get('nw', VERSION)}, "
+              f"Node {versions['node']}, modules ABI {versions['modules']}. Distinct shared epochs verified.")
 
 
 if __name__ == '__main__':

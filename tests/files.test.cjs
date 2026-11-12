@@ -22,7 +22,8 @@ function fixture() {
     const messages = [];
     const images = [];
     const events = new EventEmitter();
-    const makeWorker = function () {};
+    const windowTimers = [];
+    const nwWindow = { isFullscreen: false };
     const data = [{ level: 8, playtime: '01:27:19', stones: [true, false, true, false, false],
         characters: [['test', 1], ['test2', 3]], faces: [['Three', 0], ['One', 0]] }, null,
         { level: 11, stones: [true, true, true, true, true] }];
@@ -33,6 +34,7 @@ function fixture() {
     const coroutines = [];
     const context = vm.createContext({
         a16_0x55d438: key => { throw Error('Unexpected undecoded property ' + key); },
+        a18_0x52f0af: key => { throw Error('Unexpected undecoded property ' + key); },
         a22_0x524e38: key => { throw Error('Unexpected undecoded property ' + key); },
         Scene_Title: function () {}, Scene_File: function () {}, Scene_Load: function () {},
         Scene_FileLoad: function () {}, Scene_Base: function () {}, Scene_Options: function () {},
@@ -44,11 +46,16 @@ function fixture() {
         Scene_Load_prototype_start() {}, Scene_Load_prototype_update() {},
         Scene_MenuBase: { prototype: { update() {} } },
         Utils: { RPGMAKER_NAME: 'MZ', RPGMAKER_VERSION: '1.8.0', isMobileSafari: () => false,
-            isMobileDevice: () => false },
-        Graphics: { app: { renderer, stage: null }, boxXOffset: 0, endLoading() {}, setStage(stage) { this.app.stage = stage; } },
+            isMobileDevice: () => false, isNwjs: () => true, isOptionValid: () => false },
+        Graphics: { app: { renderer, stage: null }, boxXOffset: 0, endLoading() {},
+            setStage(stage) { this.app.stage = stage; },
+            _updateRealScale() {}, _updateErrorPrinter() {}, _updateCanvas() {}, _updateVideo() {} },
+        window: { innerWidth: 1280, innerHeight: 720, screen: { width: 1920, height: 1080 } },
+        require(name) { assert.equal(name, 'nw.gui'); return { Window: { get: () => nwWindow } }; },
+        screenWidth: 640, screenHeight: 360, ResizeEnable() {}, GetResizeEnabled: () => false,
         document: { hasFocus: () => true },
         addEventListener: (name, listener) => events.on(name, listener),
-        setTimeout: callback => timers.push(callback),
+        setTimeout: (callback, interval) => (interval === 50 || interval === 16 ? windowTimers : timers).push(callback),
         DataManager: { _globalInfo: [true, true, true], savefileInfo(index) { saveReads++; return data[index]; },
             deleteGame() { assert.equal(Atomics.load(word, 0), 0); deleted++; } },
         SceneManager: {
@@ -131,7 +138,8 @@ function fixture() {
         context.SceneManager._scene = scene;
         return scene;
     }
-    return { context, renderer, timers, images, messages, show, coroutines, saveReads: () => saveReads,
+    return { context, renderer, timers, images, messages, show, coroutines, nwWindow, windowTimers,
+        saveReads: () => saveReads,
         deleted: () => deleted, nativeClose: () => nativeClose, epoch: () => word && Atomics.load(word, 0) };
 }
 
@@ -153,10 +161,23 @@ function displayed(f) {
     const pips = [];
     const rect = () => new c.Rectangle(0, 0, 200, 30);
     c.ConfigManager.bgmVolume = 15;
-    let fullscreen = false;
+    let nativeEnters = 0;
+    let nativeLeaves = 0;
+    const nativeWindow = f.nwWindow;
+    nativeWindow.enterFullscreen = () => { assert.equal(f.epoch(), 0); nativeEnters++; };
+    nativeWindow.leaveFullscreen = () => { assert.equal(f.epoch(), 0); nativeLeaves++; };
+    nativeWindow.setPosition = place => assert.equal(place, 'center');
+    let windowSize;
+    nativeWindow.resizeTo = (width, height) => { windowSize = [width, height]; };
+    c.ResizeEnable = () => assert.equal(f.epoch(), 0);
     Object.defineProperty(c.ConfigManager, 'fullscreen', {
-        get: () => fullscreen,
-        set(value) { assert.equal(f.epoch(), 0); fullscreen = value; }
+        get: () => c.Graphics._isFullScreen(),
+        set(value) {
+            c.ResizeEnable(true);
+            if (value) c.Graphics._requestFullScreen();
+            else c.Graphics._cancelFullScreen();
+            c.ResizeEnable(false);
+        }
     });
     Object.assign(window, {
         parent: scene,
@@ -214,23 +235,89 @@ function displayed(f) {
     const epoch = f.epoch();
     scene.doSystemButton(-1);
     assert.equal(f.epoch(), epoch);
-    window.changeValue('fullscreen', false);
+    window.changeValue('fullscreen', c.ConfigManager.fullscreen);
     assert.equal(f.epoch(), epoch);
     window.changeValue('fullscreen', true);
     readyFrame(f);
     assert.equal(f.epoch(), 0);
+    assert.equal(nativeEnters, 1);
     assert.equal(displayed(f).at(-1), 'Display, Fixture full screen, OFF');
-    c.Graphics._updateAllElements = () => assert.equal(f.epoch(), 0);
+    c.ConfigManager.developerMode = true;
+    c.Graphics._onKeyDown({ keyCode: 115, preventDefault() {} });
+    assert.equal(nativeEnters, 2);
+    assert.equal(c.Graphics._wqaResize.pending, 2);
+    nativeWindow.isFullscreen = true;
+    Object.assign(c.window, { innerWidth: 1920, innerHeight: 1080 });
+    c.Graphics._updateCanvas = () => assert.equal(f.epoch(), 0);
     c.Graphics._onWindowResize();
+    window.redrawItem(0);
+    f.windowTimers.shift()();
+    readyFrame(f);
     assert.equal(f.epoch(), 0);
+    assert.equal(c.Graphics._wqaResize.pending, 1);
+    f.windowTimers.shift()();
+    assert.equal(f.epoch(), 0, 'native terminal still waits for postrender');
     readyFrame(f);
     assert.equal(drawn.at(-1), 'ON');
+    assert.equal(displayed(f).at(-1), 'Display, Fixture full screen, ON');
+    window.changeValue('fullscreen', false);
+    assert.equal(nativeLeaves, 1);
+    assert.equal(f.epoch(), 0);
+    nativeWindow.isFullscreen = false;
+    Object.assign(c.window, { innerWidth: 1100, innerHeight: 660 });
+    c.Graphics._onWindowResize();
+    window.redrawItem(0);
+    readyFrame(f);
+    assert.equal(f.epoch(), 0, 'the restore event precedes the game’s final resize');
+    f.windowTimers.shift()();
+    assert.deepEqual(windowSize, [1280, 720]);
+    readyFrame(f);
+    assert.equal(f.epoch(), 0, 'resizeTo return alone does not prove new geometry');
+    Object.assign(c.window, { innerWidth: 1280, innerHeight: 720 });
+    c.Graphics._onWindowResize();
+    readyFrame(f);
     assert.equal(displayed(f).at(-1), 'Display, Fixture full screen, OFF');
+    assert.notEqual(f.epoch(), 0);
     scene.doSystemButton(-1);
     assert.equal(f.nativeClose(), 0);
     scene.doSystemButton(0);
     assert.equal(f.epoch(), 0);
     assert.equal(f.nativeClose(), 1);
+}
+
+{
+    const f = fixture();
+    const c = f.context;
+    c.Graphics._updateAllElements();
+    f.nwWindow.enterFullscreen = () => {};
+    c.Graphics._requestFullScreen();
+    for (let count = 0; count < 60; count++) f.windowTimers.shift()();
+    assert.equal(f.windowTimers.length, 0);
+    assert.equal(c.Graphics._wqaResize.failed, true);
+    assert.equal(c.Graphics._wqaResize.pending, 0);
+    c.Graphics._onWindowResize();
+    assert(c.Graphics._wqaResize, 'a timeout plus a resize cannot establish readiness');
+
+    c.Graphics._requestFullScreen();
+    f.nwWindow.isFullscreen = true;
+    f.windowTimers.shift()();
+    assert(c.Graphics._wqaResize, 'successful mode alone cannot open admission');
+    Object.assign(c.window, { innerWidth: 1920, innerHeight: 1080 });
+    c.Graphics._onWindowResize();
+    assert.equal(c.Graphics._wqaResize, null);
+}
+
+{
+    const f = fixture();
+    const c = f.context;
+    // A successful mode change can retain the size already applied by the renderer.
+    Object.assign(c.window, { innerWidth: 1920, innerHeight: 1080 });
+    c.Graphics._updateAllElements();
+    f.nwWindow.enterFullscreen = () => {};
+    c.Graphics._requestFullScreen();
+    f.nwWindow.isFullscreen = true;
+    f.windowTimers.shift()();
+    assert.equal(c.Graphics._wqaResize, null);
 }
 
 for (const [withDave, selection] of [[false, 'continue'], [true, 'continue'], [true, 'dave'], [true, 'title']]) {
@@ -429,4 +516,4 @@ for (const imagesBeforeStage of [false, true]) {
     assert.equal(f.deleted(), 1);
     assert.equal(f.epoch(), 0);
 }
-console.log('Verified native file, Options and retry presentation, accepted settings, and close-before-entry.');
+console.log('Verified native file, Options and retry presentation, fullscreen settlement, and close-before-entry.');

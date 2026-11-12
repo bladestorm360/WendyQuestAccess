@@ -22,14 +22,14 @@ function fileWindow(scene) {
 }
 
 function isReady(host, scene, window) {
-    if (!scene || !window || fileWindow(scene) !== window || host.manager._scene !== scene ||
+    if (!scene || !window || host.graphics._wqaResize || fileWindow(scene) !== window || host.manager._scene !== scene ||
         host.manager._nextScene || host.manager._exiting || !scene._started || !scene._active ||
         scene._fadeDuration !== 0 || scene._fadeOpacity !== 0 || host.graphics.app?.stage !== scene ||
         !window.visible || !window.active || window.openness !== 255) return false;
     if (scene._wqaFileKind === SLOTS) return window._wqaCards === true;
     if (scene._wqaFileKind === DETAILS) return scene._wqaDetailArt === true &&
         scene._wqaDetailText === true && !scene._destroySave;
-    if (scene._wqaFileKind === OPTIONS) return window._wqaOptionsPainted === true && !scene._wqaOptionsResizing;
+    if (scene._wqaFileKind === OPTIONS) return window._wqaOptionsPainted === true;
     if (scene._wqaFileKind === RETRY) return window._index >= 0 && window._index < 3 &&
         !!(window._wqaRetryRows & (1 << window._index));
     return scene._wqaFileKind === DELETE && (scene._deleteCount === 0 || !!scene._wqaDeleteStatus);
@@ -220,13 +220,11 @@ function createFilesObserver(host, notifications) {
                 };
             }
         } else if (scene._wqaFileKind === OPTIONS) {
-            observeOptionActions(scene, window, settingChanged => {
+            observeOptionActions(window, settingChanged => {
                 if (settingChanged) context.settingChanged = true;
                 afterRender(context);
             }, () => {
-                if (current !== context) return false;
-                close(context);
-                return true;
+                if (current === context) close(context);
             }, () => leave(scene));
         }
         return true;
@@ -240,6 +238,7 @@ function createFilesObserver(host, notifications) {
 
     return {
         leave,
+        suspend() { if (current) close(current); },
         observe(scene) {
             const window = scene && fileWindow(scene);
             if (!isReady(host, scene, window)) return false;
