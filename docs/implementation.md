@@ -32,6 +32,12 @@ An explicit mute can request one Stop while the current settings modal owns the 
 
 The worker and native pipe fixtures verified the eight-record limit, startup preference gating, retirement before provider work, a deliberately stalled speech call, delayed Stop, cancelled Stop, braille-only dispatch, a provider without Stop or braille, and unmute without replay. The actual packaged helper passed its silent `--check`. The matching NW.js fixture saved mute, played a mod sound preview while muted, restarted before any title speech, opened settings via the remapped controller, then restored speech and received a fresh title announcement. The fixture used silent provider receipts. Physical screen-reader, braille and in-flight stop behavior remain release verification items. [Worker fixture](../tests/transport.test.cjs) · [Native pipe fixture](../tests/speech-pipe.test.py) · [Matching NW fixture](../tests/nw-smoke.py)
 
+### Mod language
+
+Open **F8 → Speech → Language**. Auto is the default and reports English when the game's current locale matches. Activate the button to choose English explicitly. Activate it again to return to Auto. The same button is available with the controller settings controls and retains focus after saving. The stored preference affects the mod settings and text language. Your screen reader controls its own voice, and the game controls its own language.
+
+This Windows build ships one supported text language. The manifest language is English and the pinned `System.json` locale is `en_US`. The mod supplies English labels and messages, tags its settings dialog `en-US`, and reports English fallback if the native locale is missing or unfamiliar. Existing Speech records default to Auto when they lack a language field. The matching runtime fixture verified actual installed locale recognition, fallback, focus and the manual preference after restart alongside saved mute, Autodetail and menu indexing. [Installed build evidence](engine-evidence.md) · [Settings source](../src/settings/menu.js) · [Matching runtime fixture](../tests/nw-smoke.py)
+
 ## Spatial audio
 
 The Audio settings group uses a separate worker and a small Windows Node-API addon, with SDL3 for output and OpenAL Soft loopback for HRTF. The renderer revokes preview and field audio generations directly. The Soundscape submenu manages category output through the same worker and uses active navigation targets with additional native presentation checks. [Controls, ABI and output lifecycle](audio.md) · [Entity eligibility and verification](soundscape.md)

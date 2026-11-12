@@ -39,13 +39,20 @@ function normalizeAudio(value) {
         soundscape: normalizeSoundscape(value?.soundscape) };
 }
 
+const ENGLISH_LOCALE = 'en-US';
+
+function normalizeSpeech(value) {
+    return { enabled: value?.enabled !== false, autodetail: value?.autodetail === true,
+        indexing: value?.indexing === true, language: value?.language === 'en' ? 'en' : 'auto' };
+}
+
 function createSettingsMenu(root, host) {
     let session = null;
     let keys = normalizeKeys(DEFAULT_KEYS);
     let pad = normalizeController();
     let navigation = normalizeNavigation();
     let audio = normalizeAudio();
-    let speech = { enabled: true, autodetail: false, indexing: false };
+    let speech = normalizeSpeech();
     let storage = null;
     let loading = true;
     let saving = false;
@@ -76,8 +83,7 @@ function createSettingsMenu(root, host) {
         pad = normalizeController(controller);
         navigation = normalizeNavigation(savedNavigation, [keys.puzzleGuide, keys.puzzleStop]);
         audio = normalizeAudio(savedAudio);
-        speech = { enabled: savedSpeech?.enabled !== false, autodetail: savedSpeech?.autodetail === true,
-            indexing: savedSpeech?.indexing === true };
+        speech = normalizeSpeech(savedSpeech);
         host.controllerChanged();
         host.navigationChanged(navigation);
         host.audioChanged(audio);
@@ -202,8 +208,15 @@ function createSettingsMenu(root, host) {
             item.setAttribute('aria-pressed', String(speech[key]));
             if (selection === key || !focused) focused = item;
         }
+        // This Steam build presents English only. Auto checks the game's locale, with English as the fallback.
+        const locale = root.$dataSystem?.locale;
+        const knownEnglish = typeof locale === 'string' && /^en(?:[-_]us)?$/i.test(locale);
+        const automatic = speech.language === 'auto';
+        const language = automatic ? (knownEnglish ? 'Auto, English' : 'Auto, English fallback') : 'English';
+        const languageButton = button(owner, 'Language, ' + language, () =>
+            change(owner, { ...speech, language: automatic ? 'en' : 'auto' }, 'language', 'speech'));
         button(owner, 'Back', () => showRoot(owner, 'speech'));
-        focused.focus();
+        (selection === 'language' ? languageButton : focused).focus();
     }
 
     function previewAudio(owner, bearing, cue, gain) {
@@ -500,6 +513,7 @@ function createSettingsMenu(root, host) {
         if (session) return false;
         const document = root.document;
         const dialog = document.createElement('dialog');
+        dialog.lang = ENGLISH_LOCALE;
         if (typeof dialog.showModal !== 'function') return false;
         const owner = { kind: 'settings', scene, family, dialog, heading: document.createElement('h1'),
             contents: document.createElement('div'), status: document.createElement('p'),

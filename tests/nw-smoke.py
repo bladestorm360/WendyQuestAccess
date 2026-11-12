@@ -22,7 +22,7 @@ ARCHIVE_HASH = '1731a5ed81139a63a5d1d7e7c521b5f08add023ffe4b719d06796a1ba77dc8a3
 PIXI_HASH = '6eca31989af44e87ac64319da69b9e484a7fdf0cbbdcaf3cd85869362588cee1'
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from registration import OBJECTS_REL, objects_notification
+from registration import OBJECTS_REL, SYSTEM_REL, SYSTEM_SHA, objects_notification
 
 
 def sha(path):
@@ -74,6 +74,10 @@ def fixture(runtime, installed):
         end = objects.index('\n};', start) + 3
         movement.append(objects[start:end])
     (app / 'native-movement.js').write_text('\n'.join(movement), encoding='utf8')
+    system = installed / SYSTEM_REL
+    if sha(system) != SYSTEM_SHA:
+        raise ValueError('Unexpected installed system locale source')
+    game_locale = json.loads(system.read_text(encoding='utf8'))['locale']
     (app / 'fixture.js').write_text('''
 const receipt = require('path').join(require('path').dirname(process.mainModule.filename), 'receipt.json');
 const write = data => require('fs').writeFileSync(receipt, JSON.stringify(data));
@@ -98,10 +102,10 @@ const nativeSelect = SceneManager._scene._commandWindow.select;
 var DataManager = { savefileInfo: () => null };
 var $gameMap, $gamePlayer, $gameScreen, $gameTemp, $dataMap, $dataTilesets, $gameTileChanges;
 var $gameMessage = { isBusy: () => false };
-var $dataSystem = { tileSize: 32 }, $dataMapInfos = [null, { id: 1 }, { id: 2 }, { id: 3 }];
+var $dataSystem = { tileSize: 32, locale: GAME_LOCALE }, $dataMapInfos = [null, { id: 1 }, { id: 2 }, { id: 3 }];
 var Input = { keyMapper: { 90: 'ok' }, clear() {} };
 Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 3: 'menu', 9: 'menu', 12: 'up', 13: 'down' };
-''', encoding='utf8')
+'''.replace('GAME_LOCALE', json.dumps(game_locale)), encoding='utf8')
     (app / 'run.js').write_text('''
 if (SceneManager._scene.update() !== 123) throw Error('Native result changed');
 if (SceneManager._scene._commandWindow.select !== nativeSelect) throw Error('Hook installed at boot');
@@ -436,6 +440,8 @@ const interval = setInterval(() => {
             const speechChoices = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
             if (!speechChoices.includes('Autodetail, on') || !speechChoices.includes('Menu indexing, on'))
                 throw Error('The independent menu speech preferences were not restored');
+            if (!speechChoices.includes('Language, English') || document.querySelector('dialog').lang !== 'en-US')
+                throw Error('The manual language choice was not restored');
             restartSettings = { bindings, controller, navigation, audio, soundscape };
             fs.writeFileSync(receipt + '.allow-restoration', '');
             pad();
@@ -1422,6 +1428,20 @@ const interval = setInterval(() => {
             Graphics.app.renderer.emit('postrender');
             tap('v', 'KeyV');
             choose('Speech');
+            if (document.querySelector('dialog').lang !== 'en-US') throw Error('The settings language tag is missing');
+            tap('Escape');
+            const locale = $dataSystem.locale;
+            $dataSystem.locale = 'und';
+            choose('Speech');
+            if (!Array.from(document.querySelectorAll('dialog button')).some(item =>
+                item.textContent === 'Language, Auto, English fallback')) throw Error('No automatic language fallback');
+            tap('Escape');
+            $dataSystem.locale = locale;
+            choose('Speech');
+            choose('Language, Auto, English');
+            endingStep = 64;
+        } else if (endingStep === 64 && menuStatus() === 'Speech settings saved') {
+            if (document.activeElement.textContent !== 'Language, English') throw Error('Manual language did not retain focus');
             choose('Speech enabled, on');
             endingStep = 28;
         } else if (endingStep === 28 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
@@ -1884,7 +1904,7 @@ def main():
               f'{browse_receipt_ms:.1f} ms with 40 ms polling, warm route submission {submit_ms:.1f} ms.')
         print('Verified native autowalk dispatch, both narration settings, spoken arrival and explicit cancellation.')
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
-        print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
+        print('Verified Auto language detection and fallback, manual persistence, saved mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
         print('Verified battle actor, commands, targets, party vitals, rendered Bag items and controller handback.')
         print('Verified the Battle timing setting, preview and action retirement. '
