@@ -338,6 +338,9 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessQuestUpdate = function (scene, gameQuest) {
         try { quests?.observe(scene, gameQuest); } catch { quests?.leave(scene); }
     };
+    root.WendyQuestAccessQuestNavigationLeaving = function (scene) {
+        try { field?.questRefresh(scene); } catch { /* Preserve the native marker rebuild. */ }
+    };
 
     root.WendyQuestAccessMapBannerReady = function (scene, revision) {
         try {
@@ -411,7 +414,7 @@ function boot(root, nodeRequire, nodeProcess) {
         soundscape?.leave(scene);
         caveTiming?.stop(scene);
         const stopped = field?.autowalk.stop(scene);
-        if (stopped || scene?._wqaCaveReview) field?.changed(scene);
+        if (stopped || scene?._wqaCaveReview || scene?._wqaQuestNavigation) field?.changed(scene);
         beacon?.stop(scene);
         wall?.interrupt(scene);
     };

@@ -2,6 +2,7 @@
 
 const { DIRECTIONS, MAX_CELLS, MAX_EVENTS } = require('./geometry.cjs');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
+const { questDestinationCurrent } = require('./quest-destinations');
 
 const TOUCH_TRIGGERS = [1, 2];
 
@@ -48,6 +49,7 @@ function createAutowalk(root, ready, preferences, report) {
     function valid(state) {
         const { map, job, target, player } = state;
         if (map !== root.$gameMap || player !== root.$gamePlayer || travelMode(map, player) !== job.mode ||
+            (job.quest && !questDestinationCurrent(root, state.scene, job.quest)) ||
             player._x !== state.x || player._y !== state.y || !Array.isArray(map._events) ||
             map._events.length > MAX_EVENTS + 1) return false;
         const current = targetAt(map, job);

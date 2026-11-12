@@ -1,14 +1,25 @@
 'use strict';
 
 const CATEGORY_LABELS = Object.freeze({ objects: 'Objects', people: 'People', merchants: 'Merchants', exits: 'Exits',
-    treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles' });
+    treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests' });
+
+function eventName(entry) {
+    const raw = typeof entry.name === 'string' ? entry.name.trim() : '';
+    return raw.length <= 64 && !/^ev(?:ent)?\s*\d+$/i.test(raw)
+        ? raw.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/[\x00-\x1f\x7f]/g, ' ').trim() : '';
+}
+
+function treasureName(entry, page) {
+    const sprite = page.image?.characterName || '';
+    return /chest|treasure|loot|collectible/i.test(entry.name + ' ' + sprite)
+        ? /chest/i.test(sprite) ? 'Chest' : 'Treasure' : '';
+}
 
 function destination(entry, page, trigger) {
     if (!page || page.list.length < 2 || trigger < 0 || trigger > 2 || !Number.isInteger(trigger)) return null;
     const raw = typeof entry.name === 'string' ? entry.name.trim() : '';
     if (/^(?:test|debug|developer)/i.test(raw)) return null;
-    const name = raw.length <= 64 && !/^ev(?:ent)?\s*\d+$/i.test(raw)
-        ? raw.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ').replace(/[\x00-\x1f\x7f]/g, ' ').trim() : '';
+    const name = eventName(entry);
     const sprite = page.image?.characterName || '';
     let shop = false;
     let battle = false;
@@ -20,9 +31,8 @@ function destination(entry, page, trigger) {
         else if (command.code === 201 && command.indent === 0) transfer = true;
         else if (command.code >= 125 && command.code <= 128) reward = true;
     }
-    if (/chest|treasure|loot|collectible/i.test(raw + ' ' + sprite)) {
-        return trigger === 0 ? { category: 'treasure', name: /chest/i.test(sprite) ? 'Chest' : 'Treasure' } : null;
-    }
+    const treasure = treasureName(entry, page);
+    if (treasure) return trigger === 0 ? { category: 'treasure', name: treasure } : null;
     if (shop && trigger === 0) return { category: 'merchants', name: !reward && name || 'Merchant' };
     if (transfer && /^(?:(?:go\s+)?to\s|exit\b)|\b(?:exit|door|stairs)\b/i.test(name)) {
         return { category: 'exits', name: name || 'Exit' };
@@ -86,4 +96,4 @@ function browse(state, snapshot, changes) {
         (previousCategory && previousCategory !== state.category) ? CATEGORY_LABELS[state.category] : '' };
 }
 
-module.exports = { destination, createDestinationBrowser, browse };
+module.exports = { destination, eventName, treasureName, createDestinationBrowser, browse };

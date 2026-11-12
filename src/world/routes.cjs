@@ -1,6 +1,6 @@
 'use strict';
 
-const { DIRECTIONS, COUNTER, LAND, composeWorld, indexOf, offset, step, clipRectangle } = require('./geometry.cjs');
+const { DIRECTIONS, COUNTER, LAND, PASSAGE, composeWorld, indexOf, offset, step, clipRectangle } = require('./geometry.cjs');
 
 function bounds(world, event) {
     return clipRectangle(world, event.rectangle || [event.x, event.y, event.x, event.y]);
@@ -241,8 +241,36 @@ function pointGoal(world, x, y) {
     return goals;
 }
 
+function markerGoals(world, id) {
+    const target = world.events.find(event => event.id === id && !event.erased);
+    if (!target || world.mode !== 'walk') return null;
+    const center = indexOf(world, target.x, target.y);
+    if (center < 0) return null;
+    if (!world.blocked[center] && (world.cells[center] & PASSAGE)) return pointGoal(world, target.x, target.y);
+    // A marked prop may be solid. Route to the walkable perimeter of its
+    // actual footprint and leave native input with the player on arrival.
+    const rectangle = bounds(world, target);
+    const [left, top, right, bottom] = rectangle;
+    if (left > right || top > bottom) return null;
+    const goals = new Uint8Array(world.cells.length);
+    const add = (x, y, heading) => {
+        const cell = offset(world, indexOf(world, x, y), heading);
+        if (cell >= 0 && !world.blocked[cell] && !inside(world, cell, rectangle)) goals[cell] = 1;
+    };
+    for (let x = left; x <= right; x++) {
+        add(x, top, 3);
+        add(x, bottom, 0);
+    }
+    for (let y = top; y <= bottom; y++) {
+        add(left, y, 1);
+        add(right, y, 2);
+    }
+    return goals;
+}
+
 function routeGoals(world, request, cancelled) {
     if (request.vehicle) return boardingGoals(world, request.vehicle);
+    if (request.waypoint === true) return markerGoals(world, request.event);
     if (Number.isInteger(request.event)) return actionGoals(world, request.event, cancelled, request.surface === true);
     return pointGoal(world, request.targetX, request.targetY);
 }

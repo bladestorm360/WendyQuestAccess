@@ -50,6 +50,7 @@ def bundle():
         './spatial-direction': 'world/spatial-direction.js',
         './snapshot': 'world/snapshot.js',
         './destinations': 'world/destinations.js',
+        './quest-destinations': 'world/quest-destinations.js',
         './local-destinations': 'world/local-destinations.js',
         './world-destinations': 'world/world-destinations.js',
         './vehicle-navigation': 'world/vehicle-navigation.js',

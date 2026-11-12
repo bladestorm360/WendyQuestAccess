@@ -222,6 +222,10 @@ def quest_notification(original):
         166031: b'this._wqaQuestCapture?.endRow();',
         166914: b'this._wqaQuestCapture?.beginRow();',
         167877: b'this._wqaQuestCapture?.endRow();',
+        # Retire a quest route before the old native sprites are removed and
+        # the asset waiter is started. Ordinary field requests are untouched.
+        343956: b'if(SceneManager._scene?._wqaQuestNavigation&&SceneManager._scene._spriteset===this)'
+                b'globalThis.WendyQuestAccessQuestNavigationLeaving?.(SceneManager._scene);',
         369098: b'if(this._wqaQuestTracking||((this._wqaFieldReady||this._questNavWindow?._wqaQuestDraft)&&'
                 b'this._questNavWindow?._init&&this._questNavWindow.visible&&this._questNavWindow.offsetY===0&&'
                 b'this._questNavWindow._needContentRefresh===false&&'
@@ -292,7 +296,7 @@ def objects_notification(original):
         249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive||'
                 b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||'
                 b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive||'
-                b'SceneManager._scene._wqaQuestTracking))'
+                b'SceneManager._scene._wqaQuestTracking||SceneManager._scene._wqaQuestNavigation))'
                 b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene);\n        ',  # Accepted event start
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING + b'}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload

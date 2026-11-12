@@ -76,7 +76,7 @@ parentPort.on('message', message => {
                 result.course = course;
             }
             if (result.status === 'ready' && request.autowalk === true && !result.land && !request.vehicle &&
-                result.distance > 0 && result.arrival.facing === null) {
+                request.waypoint !== true && result.distance > 0 && result.arrival.facing === null) {
                 const target = live.events.find(event => event.id === request.event);
                 if (target && !target.normal && (target.trigger === 1 || target.trigger === 2)) {
                     const last = result.legs[result.legs.length - 1];

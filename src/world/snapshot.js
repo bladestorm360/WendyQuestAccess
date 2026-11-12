@@ -4,6 +4,7 @@ const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination } = require('./destinations');
 const { localDestination } = require('./local-destinations');
 const { worldDestination, discoveryEntrance } = require('./world-destinations');
+const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination } = require('./puzzles/cave');
 
@@ -12,8 +13,8 @@ function eventTarget(root, mode, event, entry, page) {
     if (target === undefined) target = localDestination(root, event, page);
     if (target === undefined) target = checkpointTarget(root.$gameMap._mapId, event._eventId, event._pageIndex, event._trigger)
         ? { name: 'Checkpoint', category: 'objects' }
-        : caveDestination(root.$gameMap._mapId, event, entry, page) || destination(entry, page, event._trigger);
-    return target && (mode !== 'airship' || target.category === 'exits') ? target : null;
+        : caveDestination(root.$gameMap._mapId, event, entry, page) || destination(entry, page, event._trigger) || undefined;
+    return target && mode === 'airship' && target.category !== 'exits' ? null : target;
 }
 
 function terrainDelta(changes, layers, flags, count) {
@@ -37,7 +38,7 @@ function terrainDelta(changes, layers, flags, count) {
     return terrain.subarray(0, changedCount);
 }
 
-function captureWorld(root, routing = true, label) {
+function captureWorld(root, routing = true, label, scene) {
     const map = root.$gameMap;
     const player = root.$gamePlayer;
     const data = root.$dataMap;
@@ -58,6 +59,7 @@ function captureWorld(root, routing = true, label) {
 
     const events = [];
     const objects = [];
+    const quests = scene ? collectQuestDestinations(root, scene, mode) : null;
     const tiles = routing ? new Set(map._tileEvents) : null;
     for (const event of map._events) {
         if (!event || (event._erased && mode !== 'airship')) continue;
@@ -80,6 +82,11 @@ function captureWorld(root, routing = true, label) {
         if (target) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
+        }
+        const quest = quests?.get(eventId);
+        if (quest && target !== null && (mode !== 'airship' || target?.category === 'exits')) {
+            objects.push({ id: eventId, x, y, name: questDestinationLabel(entry, quest, target), category: 'quests',
+                entryDirection: target?.entryDirection, quest });
         }
     }
     if (mode === 'walk') objects.push(...boardingTargets(map));
