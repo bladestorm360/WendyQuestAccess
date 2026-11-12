@@ -50,6 +50,7 @@ function formatSpeech(message) {
             text = Object.prototype.hasOwnProperty.call(fileControls, message.label) ? fileControls[message.label] : '';
             break;
         case 'fileLabel':
+        case 'controllerStatus':
         case 'mapBanner': text = label(message); break;
         case 'optionTab': {
             const name = label(message);

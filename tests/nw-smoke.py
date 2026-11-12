@@ -77,6 +77,7 @@ var Graphics = { app: { stage: SceneManager._scene, renderer: new (require('even
 const nativeSelect = SceneManager._scene._commandWindow.select;
 var DataManager = { savefileInfo: () => null };
 var Input = { keyMapper: { 90: 'ok' }, clear() {} };
+Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 3: 'menu', 9: 'menu', 12: 'up', 13: 'down' };
 ''', encoding='utf8')
     (app / 'run.js').write_text('''
 if (SceneManager._scene.update() !== 123) throw Error('Native result changed');
@@ -104,6 +105,8 @@ let dialogueShown = false;
 let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
+let controllerStep = 0;
+let dialoguePadStep = 0;
 let nativeZ = 0;
 const restart = require('fs').existsSync(receipt + '.restart');
 document.addEventListener('keydown', event => { if (event.code === 'KeyZ') nativeZ++; });
@@ -114,6 +117,10 @@ function tap(keyValue, code = keyValue) {
     key('keydown', keyValue, code);
     key('keyup', keyValue, code);
 }
+function pad(...buttons) {
+    return WendyQuestAccessPadSample(0, 'standard', 'Xbox fixture', buttons.reduce((mask, button) => mask | 1 << button, 0));
+}
+function padTap(button) { const mask = pad(button); pad(); return mask; }
 function choose(label) {
     const button = Array.from(document.querySelectorAll('dialog button')).find(item => item.textContent.startsWith(label));
     if (!button) throw Error('Missing settings control ' + label);
@@ -157,6 +164,46 @@ function verifySettings() {
         settingsStep++;
     }
 }
+function verifyController() {
+    const focus = document.activeElement.textContent;
+    if (controllerStep === 0) {
+        pad();
+        if (padTap(8) !== 1 << 8) throw Error('View was not owned at the title');
+    } else if (controllerStep === 1 && require('fs').existsSync(receipt + '.title-mode')) {
+        if (padTap(9) !== 1 << 9) throw Error('Start was not consumed in mode');
+    } else if (controllerStep === 2 && document.querySelector('dialog')) {
+        pad();
+        padTap(13);
+    } else if (controllerStep === 3 && focus === 'Controller bindings') padTap(0);
+    else if (controllerStep === 4 && focus === 'Controller support, on') padTap(13);
+    else if (controllerStep === 5 && focus === 'Toggle mod mode, View') padTap(0);
+    else if (controllerStep === 6 && menuStatus()?.startsWith('Press and release a button')) {
+        const node = document.querySelector('dialog [role=status]');
+        const watch = new MutationObserver(() => {
+            if (node.textContent !== 'Saving controller settings') return;
+            watch.disconnect();
+            Array.from(document.querySelectorAll('dialog button')).find(item => item.textContent === 'Back').focus();
+        });
+        watch.observe(node, { childList: true });
+        padTap(6);
+    }
+    else if (controllerStep === 7 && menuStatus() === 'Controller settings saved') {
+        const mode = Array.from(document.querySelectorAll('dialog button')).some(item => item.textContent === 'Toggle mod mode, LT');
+        if (!mode || focus !== 'Back') throw Error('Controller remap, family label, or save focus failed');
+        choose('Controller support');
+    } else if (controllerStep === 8 && menuStatus() === 'Controller settings saved' && focus === 'Controller support, off') {
+        pad();
+        padTap(13); // No controller navigation while passthrough is selected.
+        pad(10, 11);
+        pad();
+    } else if (controllerStep === 9 && menuStatus() === 'Controller settings saved' && focus === 'Controller support, on') {
+        pad(); // Applying a setting retires the previous device baseline.
+        padTap(1);
+    } else if (controllerStep === 10 && focus === 'Controller bindings') padTap(1);
+    else if (controllerStep === 11 && !document.querySelector('dialog')) Graphics.app.renderer.emit('postrender');
+    else return;
+    controllerStep++;
+}
 Input.keyMapper[87] = 'up';
 const interval = setInterval(() => {
     if (restart) {
@@ -166,7 +213,10 @@ const interval = setInterval(() => {
         }
         if (document.querySelector('dialog') && menuStatus() !== 'Loading settings') {
             const bindings = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
-            write({ bindings });
+            tap('Escape');
+            choose('Controller bindings');
+            const controller = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
+            write({ bindings, controller });
             clearInterval(interval);
             nw.App.quit();
         }
@@ -175,6 +225,8 @@ const interval = setInterval(() => {
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
         if (settingsStep < 4) return verifySettings();
         if (!require('fs').existsSync(receipt + '.returned-title')) return;
+        if (controllerStep < 12) return verifyController();
+        if (!require('fs').existsSync(receipt + '.controller-returned-title')) return;
         fileShown = true;
         tap('j', 'KeyJ');
         if (!document.querySelector('dialog')) throw Error('Remapped settings key is inactive');
@@ -221,7 +273,16 @@ const interval = setInterval(() => {
         tap('r', 'KeyR');
         tap('t', 'KeyT');
     }
-    if (!numberShown && require('fs').existsSync(receipt + '.repeat')) {
+    if (dialoguePadStep === 0 && require('fs').existsSync(receipt + '.repeat')) {
+        dialoguePadStep++;
+        pad();
+        if (padTap(8) !== 0 || padTap(6) !== 1 << 6) throw Error('Old and new mode bindings did not hand back correctly');
+    }
+    if (dialoguePadStep === 1 && require('fs').existsSync(receipt + '.dialogue-mode')) {
+        dialoguePadStep++;
+        if (padTap(0) !== 1) throw Error('Dialogue repeat did not consume native confirm');
+    }
+    if (!numberShown && require('fs').existsSync(receipt + '.controller-repeat')) {
         numberShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         const layer = {};
@@ -255,12 +316,19 @@ parentPort.on('message', message => {
         text: message.text, append: message.append, speech: formatSpeech(message) });
     parentPort.postMessage('ack');
     if (message.kind === 'title') {
-        fs.writeFileSync(fs.existsSync(receipt + '.title') ? receipt + '.returned-title' : receipt + '.title', '');
+        const titleCount = records.filter(record => record.kind === 'title').length;
+        fs.writeFileSync(receipt + ['.title', '.returned-title', '.controller-returned-title'][titleCount - 1], '');
+    }
+    if (message.kind === 'controllerStatus') {
+        const kind = message.name.includes('opens settings') ? '.title-mode' : '.dialogue-mode';
+        fs.writeFileSync(receipt + kind, '');
     }
     if (message.kind === 'saveSlot') fs.writeFileSync(receipt + '.slot', '');
     if (message.kind === 'mapBanner') fs.writeFileSync(receipt + '.map', '');
     if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
-    if (message.kind === 'dialoguePage' && fs.existsSync(receipt + '.choice')) fs.writeFileSync(receipt + '.repeat', '');
+    if (message.kind === 'dialoguePage' && fs.existsSync(receipt + '.choice')) {
+        fs.writeFileSync(receipt + (fs.existsSync(receipt + '.repeat') ? '.controller-repeat' : '.repeat'), '');
+    }
     if (message.kind === 'numberEntry') {
         fs.writeFileSync(receipt + '.tmp', JSON.stringify({ versions: process.versions, records }));
         fs.renameSync(receipt + '.tmp', receipt);
@@ -295,20 +363,22 @@ def main():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 8 or not all(r.get('sameEpoch') for r in records):
+        if result.returncode or data.get('error') or len(records) != 12 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, returned_title, slot, banner, page, choice, repeat, number = records
-        if returned_title['name'] != title['name'] or returned_title['epoch'] == title['epoch']:
+        title, returned_title, title_mode, controller_title, slot, banner, page, choice, repeat, dialogue_mode, pad_repeat, number = records
+        if any(item['name'] != title['name'] for item in (returned_title, controller_title)) or \
+                len({title['epoch'], returned_title['epoch'], controller_title['epoch']}) != 3:
             raise RuntimeError(f'NW fixture did not restore the title focus: {data}')
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
-                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:5]}) != 5:
+                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:7]}) != 6:
             raise RuntimeError(f'NW fixture did not deliver distinct presentation epochs: {data}')
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
-        if repeat != page:
-            raise RuntimeError(f'NW keydown did not repeat the page after the choice: {data}')
+        if repeat != page or pad_repeat != page or title_mode['speech'] != 'Mod mode. Menu opens settings. View cancels.' or \
+                dialogue_mode['speech'] != 'Mod mode. A repeats dialogue. LT cancels.':
+            raise RuntimeError(f'NW fixture did not deliver the controller mode prompt and current page repeat: {data}')
         if number['kind'] != 'numberEntry' or number.get('speech') != 'Number entry. 0, 7. Digit 2 of 2, 7' or \
                 number['epoch'] in {record['epoch'] for record in records[:-1]}:
             raise RuntimeError(f'NW fixture did not deliver the padded number in a fresh epoch: {data}')
@@ -316,10 +386,11 @@ def main():
         receipt.unlink()
         receipt.with_suffix('.json.restart').touch()
         restarted = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25)
-        if restarted.returncode or not receipt.exists() or json.loads(receipt.read_text(encoding='utf8')).get('bindings') != \
-                ['Open mod settings, J', 'Repeat dialogue, T']:
+        reloaded = json.loads(receipt.read_text(encoding='utf8')) if receipt.exists() else {}
+        if restarted.returncode or reloaded.get('bindings') != ['Open mod settings, J', 'Repeat dialogue, T'] or \
+                reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Left trigger']:
             raise RuntimeError('NW settings did not survive restart in the isolated profile')
-        print(f"Verified hidden window resize, title, persistent settings and remapped dialogue repeat in NW {versions.get('nw', VERSION)}, "
+        print(f"Verified hidden window resize, persistent keyboard/controller settings and dialogue repeat in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
 
 

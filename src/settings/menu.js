@@ -2,6 +2,8 @@
 
 const { DEFAULT_KEYS, keyName, nativeConflict, normalizeKeys } = require('./keyboard');
 const { openSettings } = require('./storage');
+const { CONTROLLER_DEFAULTS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
+    normalizeController } = require('./controller-bindings');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue' });
 const POINTER_EVENTS = ['mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
@@ -9,6 +11,7 @@ const POINTER_EVENTS = ['mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstar
 function createSettingsMenu(root, host) {
     let session = null;
     let keys = normalizeKeys(DEFAULT_KEYS);
+    let pad = normalizeController();
     let storage = null;
     let loading = true;
     let saving = false;
@@ -21,7 +24,10 @@ function createSettingsMenu(root, host) {
     let heldMouse = false;
 
     openSettings(root.indexedDB).then(async database => {
-        keys = normalizeKeys(await database.read());
+        const [keyboard, controller] = await Promise.all([database.read(), database.read('controller')]);
+        keys = normalizeKeys(keyboard);
+        pad = normalizeController(controller);
+        host.controllerChanged();
         storage = database;
     }).catch(() => {}).finally(() => {
         loading = false;
@@ -37,47 +43,69 @@ function createSettingsMenu(root, host) {
         return node;
     }
 
-    function showRoot(owner) {
+    function showRoot(owner, selection = 'keyboard') {
         owner.group = false;
         owner.capture = null;
         owner.heading.textContent = 'WendyQuest accessibility settings';
         owner.status.textContent = '';
         owner.contents.textContent = '';
-        const controls = button(owner, 'Keyboard bindings', () => showGroup(owner));
+        const keyboard = button(owner, 'Keyboard bindings', () => showKeyboard(owner));
+        const controller = button(owner, 'Controller bindings', () => showController(owner));
         button(owner, 'Close settings', () => close(owner.scene, true));
-        controls.focus();
+        (selection === 'controller' ? controller : keyboard).focus();
     }
 
     function status(owner, message) {
         if (session === owner) owner.status.textContent = message;
     }
 
-    function change(owner, next, selection) {
-        if (loading || saving) return;
-        const previous = keys;
-        keys = next;
-        if (!storage) {
-            showGroup(owner, selection);
-            status(owner, 'Changed for this session. Settings storage is unavailable.');
-            return;
+    function change(owner, next, selection, key = 'keyboard', failure) {
+        if (loading || saving) return false;
+        const isController = key === 'controller';
+        const previous = isController ? pad : keys;
+        const origin = owner?.group;
+        function apply(value) {
+            if (isController) {
+                pad = value;
+                host.controllerChanged();
+            } else keys = value;
         }
+        function refresh(message) {
+            if (owner && session === owner) {
+                showGroup(owner, selection);
+                status(owner, message);
+            }
+        }
+        apply(next);
+        if (!storage) {
+            refresh('Changed for this session. Settings storage is unavailable.');
+            return true;
+        }
+        const subject = isController ? 'Controller settings' : 'Keyboard bindings';
         saving = true;
-        showGroup(owner, selection);
-        status(owner, 'Saving keyboard bindings');
-        storage.save(next).then(() => {
+        refresh(`Saving ${subject.toLowerCase()}`);
+        storage.save(next, key).then(() => {
             saving = false;
-            if (session?.group) showGroup(session, session.selected);
-            status(owner, 'Keyboard bindings saved');
+            if (owner && owner.group === origin) status(owner, `${subject} saved`);
         }, () => {
             saving = false;
-            keys = previous;
-            if (session?.group) showGroup(session, session.selected);
-            status(owner, 'Could not save keyboard bindings. Previous bindings restored.');
+            apply(previous);
+            if (session?.group === key) showGroup(session, session.selected);
+            if (owner && owner.group === origin) {
+                status(owner, `Could not save ${subject.toLowerCase()}. Previous settings restored.`);
+            }
+            if (failure) failure();
         });
+        return true;
     }
 
-    function showGroup(owner, selection = 'settings') {
-        owner.group = true;
+    function showGroup(owner, selection) {
+        if (owner.group === 'controller') showController(owner, selection);
+        else if (owner.group === 'keyboard') showKeyboard(owner, selection);
+    }
+
+    function showKeyboard(owner, selection = 'settings') {
+        owner.group = 'keyboard';
         owner.selected = selection;
         owner.capture = null;
         owner.heading.textContent = 'Keyboard bindings';
@@ -99,6 +127,61 @@ function createSettingsMenu(root, host) {
         focused.focus();
     }
 
+    function showController(owner, selection = 'enabled') {
+        owner.group = 'controller';
+        owner.selected = selection;
+        owner.capture = null;
+        owner.heading.textContent = 'Controller bindings';
+        owner.status.textContent = loading ? 'Loading settings' : '';
+        owner.contents.textContent = '';
+        const master = button(owner, `Controller support, ${pad.enabled ? 'on' : 'off'}`, () => toggleController(owner));
+        let focused = master;
+        for (const action of Object.keys(ACTION_NAMES)) {
+            const item = button(owner, `${ACTION_NAMES[action]}, ${buttonName(owner.family, pad[action])}`, () => {
+                if (loading || saving) return;
+                owner.capture = { action };
+                owner.selected = action;
+                const gesture = action === 'recovery' ? 'Hold two buttons together, then release' : 'Press and release a button';
+                const cancel = buttonName(owner.family, [pad.confirm, pad.back]);
+                status(owner, `${gesture}. To cancel, press Escape or hold ${cancel} together and release.`);
+            });
+            if (action === selection) focused = item;
+        }
+        button(owner, 'Unassign controller repeat', () => change(owner, { ...pad, repeat: null }, 'repeat', 'controller'));
+        button(owner, 'Reset controller defaults', () => change(owner,
+            { ...normalizeController(), enabled: pad.enabled }, selection, 'controller'));
+        button(owner, 'Back', () => showRoot(owner, 'controller'));
+        focused.focus();
+    }
+
+    function toggleController(owner, failure) {
+        const accepted = change(owner, { ...pad, enabled: !pad.enabled }, 'enabled', 'controller', failure);
+        return accepted ? (pad.enabled ? 'Controller support on' : 'Controller support off') : '';
+    }
+
+    function back(owner) {
+        if (owner.capture) showGroup(owner, owner.selected);
+        else if (owner.group) showRoot(owner, owner.group);
+        else close(owner.scene, true);
+    }
+
+    function captureController(owner, family, mask) {
+        const action = owner.capture?.action;
+        if (!action) return;
+        const buttons = [];
+        for (let index = 0; index < 16; index++) {
+            if (mask & buttonBit(index)) buttons.push(index);
+        }
+        if (mask === (buttonBit(pad.confirm) | buttonBit(pad.back))) return back(owner);
+        const value = action === 'recovery' ? buttons : buttons.length === 1 ? buttons[0] : null;
+        if (!bindingAllowed(action, value, pad, host.nativeButton)) {
+            status(owner, 'That controller binding is unavailable. Try another.');
+            return;
+        }
+        owner.family = family;
+        change(owner, { ...pad, [action]: value }, action, 'controller');
+    }
+
     function close(scene, resume = false) {
         if (!session || session.scene !== scene) return;
         const retired = session;
@@ -113,11 +196,12 @@ function createSettingsMenu(root, host) {
         finally { if (resume) host.resume(scene); }
     }
 
-    function open(scene) {
+    function open(scene, family = '') {
+        if (session) return false;
         const document = root.document;
         const dialog = document.createElement('dialog');
         if (typeof dialog.showModal !== 'function') return false;
-        const owner = { scene, dialog, heading: document.createElement('h1'),
+        const owner = { kind: 'settings', scene, family, dialog, heading: document.createElement('h1'),
             contents: document.createElement('div'), status: document.createElement('p') };
         owner.heading.id = 'wqa-settings-heading';
         dialog.setAttribute('aria-labelledby', owner.heading.id);
@@ -132,6 +216,7 @@ function createSettingsMenu(root, host) {
             scene._wqaSettingsActive = true;
             heldMouse = mouseDown;
             for (const touch of touching) heldTouches.add(touch);
+            for (const pressed of down) held.add(pressed);
             host.capturePads();
             host.suspend(scene);
             dialog.showModal();
@@ -167,17 +252,14 @@ function createSettingsMenu(root, host) {
         if (physical && (owner || ready) && down.size < 64) down.add(physical);
         if (owner) {
             event.stopPropagation();
-            const back = event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
-            if (back || owner.capture) {
+            const goBack = event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+            if (goBack || owner.capture) {
                 const key = keyName(event);
                 event.preventDefault();
                 if (!event.repeat && physical && held.size < 64) held.add(physical);
                 if (event.repeat) return;
-                if (back) {
-                    if (owner.capture) showGroup(owner, owner.selected);
-                    else if (owner.group) showRoot(owner);
-                    else close(owner.scene, true);
-                } else capture(key, event, owner);
+                if (goBack) back(owner);
+                else if (owner.group === 'keyboard') capture(key, event, owner);
             } else if (physical && held.size < 64 && !event.repeat) {
                 held.add(physical);
             }
@@ -192,7 +274,6 @@ function createSettingsMenu(root, host) {
             if (ready && open(ready)) {
                 event.preventDefault();
                 event.stopPropagation();
-                for (const pressed of down) held.add(pressed);
             }
         }
     }
@@ -251,6 +332,27 @@ function createSettingsMenu(root, host) {
         if (scene) host.resume(scene);
     });
     return {
+        open,
+        controllerOwner: () => session,
+        controllerBindings: () => pad,
+        toggleController,
+        controllerInput(owner, action, family, mask) {
+            if (session !== owner) return;
+            if (action === 'capture') return captureController(owner, family, mask);
+            if (owner.capture) return;
+            if (action === 'back') return back(owner);
+            owner.family = family;
+            const active = root.document.activeElement;
+            if (action === 'confirm') {
+                if (owner.contents.contains(active)) active.click();
+                return;
+            }
+            const items = owner.contents.children;
+            const index = Array.prototype.indexOf.call(items, active);
+            const offset = action === 'previous' ? -1 : 1;
+            const next = index === -1 ? 0 : (index + offset + items.length) % items.length;
+            items[next]?.focus();
+        },
         retire(scene) {
             if (resumeOnFocus === scene) resumeOnFocus = null;
             close(scene);

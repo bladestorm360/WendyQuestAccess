@@ -12,19 +12,19 @@ function openSettings(indexedDB) {
             const database = request.result;
             database.onversionchange = () => database.close();
             resolve({
-                read() {
+                read(key = 'keyboard') {
                     return new Promise((read, failed) => {
-                        const entry = database.transaction('preferences').objectStore('preferences').get('keyboard');
+                        const entry = database.transaction('preferences').objectStore('preferences').get(key);
                         entry.onsuccess = () => read(entry.result);
                         entry.onerror = () => failed(entry.error);
                     });
                 },
-                save(value) {
+                save(value, key = 'keyboard') {
                     return new Promise((saved, failed) => {
                         const transaction = database.transaction('preferences', 'readwrite');
                         transaction.oncomplete = () => saved();
                         transaction.onabort = () => failed(transaction.error);
-                        transaction.objectStore('preferences').put(value, 'keyboard');
+                        transaction.objectStore('preferences').put(value, key);
                     });
                 }
             });

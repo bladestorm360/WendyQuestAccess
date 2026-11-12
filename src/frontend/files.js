@@ -239,6 +239,12 @@ function createFilesObserver(host, notifications) {
 
     return {
         leave,
+        announce(scene, record) {
+            const context = current;
+            if (!context || context.scene !== scene || !ready(context)) return;
+            if (context.epoch) notifications.focus(context.epoch, record);
+            else context.epoch = notifications.open(record, () => ready(context));
+        },
         suspend() { if (current) close(current); },
         observe(scene) {
             const window = scene && fileWindow(scene);

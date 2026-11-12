@@ -16,6 +16,7 @@ function createDialogueObserver(host, notifications) {
         const epoch = current.epoch;
         current = null;
         scene._wqaDialogue = false;
+        scene._wqaControllerReady = false;
         scene._wqaDialoguePending = false;
         scene._wqaPresentation = false;
         if (epoch) notifications.close(epoch);
@@ -60,6 +61,7 @@ function createDialogueObserver(host, notifications) {
             // The draw tracker survives explicit pauses on the same page.
             // Keep the rendered extent and its original name for manual review.
             context.page = { paint, end: paint.end, automatic: !!autoPaint };
+            if (!autoPaint) scene._wqaControllerReady = true;
             window._wqaAutoPaint = null;
             submit(context, { kind: 'dialoguePage', text, speaker });
         }
@@ -112,7 +114,7 @@ function createDialogueObserver(host, notifications) {
         const renderer = host.graphics.app?.renderer;
         if (!window || typeof renderer?.once !== 'function' || scene._wqaDialoguePending) return;
         if (current && (current.scene !== scene || current.window !== window)) leave(current.scene);
-        if (!current) current = { scene, window, epoch: 0 };
+        if (!current) current = { kind: 'dialogue', scene, window, epoch: 0 };
         const context = current;
         scene._wqaDialogue = scene._wqaDialoguePending = scene._wqaPresentation = true;
         try {
@@ -129,7 +131,15 @@ function createDialogueObserver(host, notifications) {
         host.window.addEventListener('blur', suspend);
         host.window.addEventListener('pagehide', () => { if (current) leave(current.scene); });
     }
-    return { observe, leave, repeatPage };
+    return {
+        observe, leave, repeatPage,
+        controllerOwner(scene) {
+            return current && current.scene === scene && !current.page?.automatic && pageIsCurrent(current) ? current : null;
+        },
+        announce(context, record) {
+            if (context === current && pageIsCurrent(context)) submit(context, record);
+        }
+    };
 }
 
 module.exports = { createDialogueObserver };

@@ -29,6 +29,8 @@ def bundle():
         './settings/menu': 'settings/menu.js',
         './keyboard': 'settings/keyboard.js',
         './storage': 'settings/storage.js',
+        './settings/controller': 'settings/controller.js',
+        './controller-bindings': 'settings/controller-bindings.js',
     }
     target = OUT / 'js' / 'plugins' / 'WendyQuestAccess.js'
     target.parent.mkdir(parents=True, exist_ok=True)

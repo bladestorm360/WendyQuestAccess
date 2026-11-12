@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const vm = require('node:vm');
+const { createController } = require('../src/settings/controller');
+const { normalizeController, bindingAllowed } = require('../src/settings/controller-bindings');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
     path.join(__dirname, 'input-producers.py'), process.argv[2]], { encoding: 'utf8', timeout: 6000, maxBuffer: 32000 }));
@@ -107,4 +109,139 @@ Input._pollGamepads(); // The close sample runs even if no regular frame polled 
 SceneManager._scene._wqaSettingsActive = false;
 Input.update();
 assert.equal(Input._currentState.ok, false, 'rapid settings close still captures the current physical press');
-console.log('Verified retail/test F8, modal scene hold, controller action boundaries, and release-before-handback.');
+
+const front = { kind: 'front' };
+const modal = { kind: 'settings', group: 'controller', capture: null };
+const dialogue = { kind: 'dialogue' };
+let context = front;
+let bindings = normalizeController();
+const deferred = [];
+const commands = [];
+const nativeButton = button => Input.gamepadMapper[button];
+const controller = createController({ context: () => context, bindings: () => bindings, nativeButton,
+    schedule: work => deferred.push(work), dispatch: (owner, action, family, mask) => {
+        commands.push({ action, family, mask });
+        if (action === 'settings') {
+            context = modal;
+            SceneManager._scene._wqaSettingsActive = true;
+        } else if (action === 'recovery') {
+            bindings = { ...bindings, enabled: !bindings.enabled };
+            controller.reset();
+        }
+    } });
+pad.id = 'Xbox fixture';
+c.WendyQuestAccessPadSample = controller.sample;
+SceneManager._scene._wqaControllerReady = true;
+function poll(...pressed) {
+    for (let index = 0; index < pad.buttons.length; index++) pad.buttons[index].pressed = pressed.includes(index);
+    Input.update();
+}
+function flush() { while (deferred.length) deferred.shift()(); }
+
+poll();
+poll(9);
+assert.equal(Input._currentState.menu, true, 'Start outside mode remains native');
+poll();
+poll(8, 9);
+assert.equal(Input._currentState.menu, false, 'mode entry consumes simultaneous native presses');
+assert.deepEqual(commands, [], 'no mod action runs inside the native poll');
+flush();
+assert.deepEqual(commands.splice(0), [{ action: 'modeEntered', family: 'xbox', mask: undefined }]);
+poll(9);
+flush();
+assert.deepEqual(commands, [], 'Start requires a fresh press after releasing View');
+poll();
+poll(9);
+flush();
+assert.equal(commands.pop().action, 'settings');
+assert.equal(Input._currentState.menu, false, 'opening settings did not trigger the native menu');
+poll();
+poll(13);
+flush();
+assert.equal(commands.pop().action, 'next');
+assert.equal(Input._currentState.down, false);
+poll(0);
+flush();
+assert.equal(commands.pop().action, 'confirm');
+modal.capture = { action: 'mode' };
+poll();
+poll(6);
+flush();
+assert.deepEqual(commands, [], 'capture waits for release and ignores the original confirm');
+poll();
+flush();
+assert.deepEqual(commands.pop(), { action: 'capture', family: 'xbox', mask: 1 << 6 });
+modal.capture = null;
+
+context = dialogue;
+SceneManager._scene._wqaSettingsActive = false;
+poll();
+poll(8);
+flush();
+assert.equal(commands.pop().action, 'modeEntered');
+poll();
+poll(8);
+flush();
+assert.equal(commands.pop().action, 'modeLeft');
+poll();
+poll(8);
+poll();
+poll(0);
+assert.equal(Input._currentState.ok, false);
+flush();
+assert.deepEqual(commands.splice(0).map(value => value.action), ['modeEntered', 'repeat']);
+poll(0);
+assert.equal(Input._currentState.ok, false, 'repeat keeps native confirmation consumed through release');
+poll();
+poll(0);
+assert.equal(Input._latestButton, 'ok');
+poll();
+poll(10);
+flush();
+assert.deepEqual(commands, []);
+poll(10, 11);
+flush();
+assert.equal(commands.pop().action, 'recovery');
+assert.equal(bindings.enabled, false);
+poll();
+poll(8, 0);
+assert.equal(Input._latestButton, 'ok', 'support off returns actual native input');
+flush();
+assert.deepEqual(commands, []);
+poll();
+poll(10, 11);
+flush();
+assert.equal(commands.pop().action, 'recovery');
+assert.equal(bindings.enabled, true);
+
+assert.equal(bindingAllowed('mode', 0, bindings, nativeButton), false);
+assert.equal(bindingAllowed('recovery', [6, 0], bindings, nativeButton), false);
+assert.equal(bindingAllowed('mode', 6, bindings, nativeButton), true);
+bindings = normalizeController({ ...bindings, mode: 6, settings: 4, repeat: 2, recovery: [7, 11] });
+controller.reset();
+poll();
+poll(8, 10, 11);
+flush();
+assert.deepEqual(commands, [], 'old remapped inputs are released');
+poll();
+poll(6);
+flush();
+assert.equal(commands.pop().action, 'modeEntered');
+poll();
+poll(2);
+controller.disconnect(0);
+flush();
+assert.deepEqual(commands, [], 'disconnect retires a pending controller command');
+poll();
+poll(6);
+context = null;
+flush();
+assert.deepEqual(commands, [], 'native owner retirement invalidates a queued action');
+context = front;
+controller.reset();
+poll();
+for (let index = 0; index < 20; index++) { poll(6); poll(); }
+assert.equal(deferred.length, 1, 'the controller schedules one deferred drain');
+flush();
+assert.equal(commands.length, 4, 'controller command backlog stays bounded');
+console.log('Verified native controller mode, settings, remap, recovery, disconnect, and release-before-handback.');

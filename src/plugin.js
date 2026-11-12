@@ -6,6 +6,7 @@ const { createFilesObserver, fileWindow, isReady } = require('./frontend/files')
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createDialogueObserver } = require('./dialogue/observer');
 const { createSettingsMenu } = require('./settings/menu');
+const { createController, modeAnnouncement } = require('./settings/controller');
 
 function boot(root, nodeRequire, nodeProcess) {
     let title = null;
@@ -14,11 +15,22 @@ function boot(root, nodeRequire, nodeProcess) {
     let dialogue = null;
     let settings = null;
     let settingsScene = null;
+    let frontendControl = null;
+    let controller = null;
     let titleWaiting = null;
     let filesWaiting = null;
 
     const view = () => ({ manager: root.SceneManager, graphics: root.Graphics });
     const supported = () => root.Utils?.RPGMAKER_NAME === 'MZ' && root.Utils.RPGMAKER_VERSION === '1.8.0';
+
+    function setSettingsScene(scene) {
+        if (settingsScene && settingsScene !== scene) settingsScene._wqaControllerReady = false;
+        settingsScene = scene;
+        if (scene && frontendControl?.scene !== scene) frontendControl = { kind: 'front', scene };
+        else if (!scene) frontendControl = null;
+        if (scene) scene._wqaControllerReady = scene instanceof root.Scene_Title ||
+            scene._wqaFileKind === 1 || scene._wqaFileKind === 4;
+    }
 
     function initialize() {
         const host = {
@@ -51,19 +63,37 @@ function boot(root, nodeRequire, nodeProcess) {
         files = createFilesObserver(host, notifications);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
+        function readyScene() {
+            const scene = host.manager._scene;
+            if (settingsScene !== scene || !scene?._wqaPresentation || !host.hasFocus() ||
+                host.manager._wqaNativeAutosaves) return null;
+            if (scene instanceof root.Scene_Title) return presented(host, scene, scene._commandWindow) ? scene : null;
+            if ((scene._wqaFileKind === 1 || scene._wqaFileKind === 4) && isReady(host, scene, fileWindow(scene))) return scene;
+            return null;
+        }
+        function controlContext() {
+            const scene = host.manager._scene;
+            if (!scene || !host.hasFocus() || host.manager._nextScene || host.manager._exiting ||
+                host.manager._wqaNativeAutosaves || host.graphics._wqaResize || host.graphics.app?.stage !== scene) return null;
+            const panel = settings?.controllerOwner();
+            if (panel?.scene === scene && scene._wqaSettingsActive) return panel;
+            if (readyScene()) return frontendControl;
+            return dialogue.controllerOwner(scene);
+        }
+        function announce(context, text) {
+            if (controlContext() !== context) return;
+            const record = { kind: 'controllerStatus', name: text };
+            if (context.kind === 'dialogue') dialogue.announce(context, record);
+            else if (context.scene instanceof root.Scene_Title) title.announce(context.scene, record);
+            else files.announce(context.scene, record);
+        }
+        const nativeButton = button => root.Input?.gamepadMapper?.[button];
         settings = createSettingsMenu(root, {
-            readyScene() {
-                const scene = host.manager._scene;
-                if (settingsScene !== scene || !scene?._wqaPresentation || !host.hasFocus() ||
-                    host.manager._wqaNativeAutosaves) return null;
-                if (scene instanceof root.Scene_Title) return presented(host, scene, scene._commandWindow) ? scene : null;
-                if ((scene._wqaFileKind === 1 || scene._wqaFileKind === 4) && isReady(host, scene, fileWindow(scene))) {
-                    return scene;
-                }
-                return null;
-            },
+            readyScene,
+            nativeButton,
+            controllerChanged: () => controller?.reset(),
             suspend() {
-                settingsScene = null;
+                setSettingsScene(null);
                 title.suspend();
                 files.suspend();
                 root.Input?.clear();
@@ -73,9 +103,29 @@ function boot(root, nodeRequire, nodeProcess) {
             resume(scene) { if (host.manager._scene === scene) root.WendyQuestAccessResizeReady(); },
             repeat() { try { dialogue.repeatPage(); } catch { /* Leave native input in charge. */ } }
         });
+        controller = createController({
+            schedule: host.schedule, context: controlContext, bindings: settings.controllerBindings, nativeButton,
+            dispatch(context, action, family, buttons) {
+                if (action === 'recovery') {
+                    const owner = context.kind === 'settings' ? context : null;
+                    const text = settings.toggleController(owner, () => announce(context, 'Controller setting could not be saved'));
+                    if (text && !owner) announce(context, text);
+                } else if (context.kind === 'settings') settings.controllerInput(context, action, family, buttons);
+                else if (action === 'settings') settings.open(context.scene, family);
+                else if (action === 'repeat') dialogue.repeatPage();
+                else if (action === 'modeLeft') announce(context, 'Mod mode off');
+                else if (action === 'modeEntered') announce(context,
+                    modeAnnouncement(family, context, settings.controllerBindings()));
+            }
+        });
+        root.WendyQuestAccessPadSample = function (index, mapping, id, pressed) {
+            try { return controller.sample(index, mapping, id, pressed); } catch { return 0; }
+        };
         root.addEventListener('gamepaddisconnected', event => {
+            controller.disconnect(event.gamepad.index);
             if (root.Input?._wqaSettingsPads) delete root.Input._wqaSettingsPads[event.gamepad.index];
         });
+        for (const type of ['blur', 'pagehide']) root.addEventListener(type, controller.reset);
         root.Graphics._wqaFrontEndObserved = true;
     }
 
@@ -97,7 +147,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 try {
                     if (!presented(view(), scene, scene._commandWindow)) return;
                     if (!title) initialize();
-                    if (title.observe(scene)) settingsScene = scene;
+                    if (title.observe(scene)) setSettingsScene(scene);
                 } catch {
                     // Fail closed. The original title and native input stay live.
                 }
@@ -120,7 +170,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 try {
                     if (!isReady(view(), scene, fileWindow(scene))) return;
                     if (!files) initialize();
-                    if (files.observe(scene)) settingsScene = scene;
+                    if (files.observe(scene)) setSettingsScene(scene);
                 } catch { /* Leave native file controls in charge. */ }
             });
         } catch {
@@ -129,7 +179,9 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFilesLeaving = function (scene) {
-        if (settingsScene === scene) settingsScene = null;
+        if (settingsScene === scene) setSettingsScene(null);
+        if (scene) scene._wqaControllerReady = false;
+        controller?.reset();
         settings?.retire(scene);
         if (filesWaiting === scene) filesWaiting = null;
         if (scene?._wqaFileKind) scene._wqaPresentation = false;
@@ -156,7 +208,9 @@ function boot(root, nodeRequire, nodeProcess) {
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
     root.WendyQuestAccessSceneLeaving = function (scene) {
-        if (settingsScene === scene) settingsScene = null;
+        if (settingsScene === scene) setSettingsScene(null);
+        if (scene) scene._wqaControllerReady = false;
+        controller?.reset();
         settings?.retire(scene);
         if (titleWaiting === scene) titleWaiting = null;
         if (filesWaiting === scene) filesWaiting = null;
@@ -170,7 +224,9 @@ function boot(root, nodeRequire, nodeProcess) {
         titleWaiting = null;
         filesWaiting = null;
         const scene = root.SceneManager._scene;
-        settingsScene = null;
+        setSettingsScene(null);
+        if (scene) scene._wqaControllerReady = false;
+        controller?.reset();
         settings?.retire(scene);
         if (scene?._wqaPresentation) scene._wqaPresentation = false;
         mapBanner?.leave(scene);

@@ -106,6 +106,13 @@ function createTitleObserver(host, notifications) {
     }
     return {
         observe,
+        announce(scene, record) {
+            if (scene !== observedScene) return;
+            openIfPresented();
+            if (generation && !closing && host.hasFocus() && presented(host, scene, observedWindow)) {
+                notifications.focus(generation, record);
+            }
+        },
         suspend: close,
         leave(scene) { if (observedScene === scene) leave(); }
     };
