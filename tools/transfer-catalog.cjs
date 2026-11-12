@@ -2,13 +2,14 @@
 
 const { PASSAGE, indexOf, tileKey } = require('../src/world/geometry.cjs');
 const { walkingLanding } = require('../src/world/routes.cjs');
-const { catalogTransferOptions } = require('../src/world/transfer-events.cjs');
+const { catalogTransferOptions, shipPort } = require('../src/world/transfer-events.cjs');
 const { MAX_LANDINGS, validTile, readCatalog } = require('../src/world/walking-catalog.cjs');
 const { timedCave } = require('../src/world/puzzles/cave');
 
 function transferMap(id, map, geometry, flags, common) {
     const events = [];
     const exits = [];
+    const portLandings = [];
     const barriers = new Map();
     for (const entry of map.events) {
         if (!entry?.pages?.length) continue;
@@ -34,10 +35,12 @@ function transferMap(id, map, geometry, flags, common) {
         if (id === 185 || id === 198 || timedCave(id)) continue;
         for (const destination of catalogTransferOptions(id, entry, common))
             exits.push({ event, ...destination });
+        const port = id === 113 && shipPort(entry, pages[0], common);
+        if (port) portLandings.push(port);
     }
     const terrain = Array.from(barriers, ([cell, mask]) =>
         [cell % geometry.width, Math.floor(cell / geometry.width), geometry.cells[cell] & ~mask]);
-    return { geometry, live: { mode: 'walk', terrain, events, vehicles: [] }, exits };
+    return { geometry, live: { mode: 'walk', terrain, events, vehicles: [] }, exits, portLandings };
 }
 
 function encodePoints(reached) {
@@ -52,7 +55,9 @@ function bakeCatalog(sources, maps) {
     const byTile = new Map();
     const origins = [];
     for (const source of sources.values()) {
-        for (const { map, x, y } of source.exits) {
+        // Ports contribute arrival geometry. A walking route cannot use
+        // a ship-only port as an outgoing link from the world map.
+        for (const { map, x, y } of [...source.exits, ...source.portLandings]) {
             if (!validTile(map, x, y, maps)) continue;
             const key = tileKey(map, x, y);
             if (byTile.has(key)) continue;

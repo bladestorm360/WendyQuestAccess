@@ -66,7 +66,7 @@ function remainingTransfers(catalog, map, point, state, visited, maps, cancelled
     return ranks;
 }
 
-function rankEntrances(catalog, source, transfer, maps, cancelled) {
+function rankEntrances(catalog, source, transfer, maps, cancelled, allowDirectFallback = true) {
     const { map, point, candidates, state, trail = [] } = transfer || {};
     if (!Number.isInteger(map) || map === source || !maps[map] || !Array.isArray(candidates) ||
         candidates.length > MAX_EVENTS || !Array.isArray(trail) || trail.length > MAX_LANDINGS) return [];
@@ -83,7 +83,8 @@ function rankEntrances(catalog, source, transfer, maps, cancelled) {
         if (visited.has(key)) continue;
         const index = catalog?.byTile.get(key);
         const rank = ranks?.[index];
-        if (rank || (target === map && index === undefined)) options.push({ event, rank: rank || MAX_LANDINGS + 1 });
+        if (rank || (allowDirectFallback && target === map && index === undefined))
+            options.push({ event, rank: rank || MAX_LANDINGS + 1 });
     }
     return options;
 }

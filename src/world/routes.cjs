@@ -435,7 +435,8 @@ function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () 
 }
 
 function entranceRoute(world, start, events, tiles, cancelled) {
-    if (world.mode !== 'walk' || !Array.isArray(events) || !events.length || events.length > MAX_EVENTS)
+    const walking = world.mode === 'walk';
+    if ((!walking && world.mode !== 'ship') || !Array.isArray(events) || !events.length || events.length > MAX_EVENTS)
         return { status: 'unavailable' };
     const eligible = new Map(events.map(item => Number.isInteger(item) ? [item, 1] : [item.event, item.rank]));
     const goals = new Uint8Array(world.cells.length);
@@ -452,7 +453,7 @@ function entranceRoute(world, start, events, tiles, cancelled) {
             ranks[cell] = eligible.get(touch);
             best = Math.min(best, ranks[cell]);
         }
-        if (touch && cell !== start) continue;
+        if (!walking || (touch && cell !== start)) continue;
         for (let heading = 0; heading < DIRECTIONS.length; heading++) {
             const target = buttonEvent(world, tiles, cell, heading);
             const rank = eligible.get(target);

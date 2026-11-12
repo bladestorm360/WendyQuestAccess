@@ -152,6 +152,33 @@ function cauldronSpecial(map, event, page, index, common) {
         landingIs(edge, 63, 12, 28) ? [edge] : [];
 }
 
+const SHIP_PORTS = {
+    30: { map: 26, x: 29, y: 14, direction: 0, facing: 4, turn: 17, name: 'Float Fort port' },
+    31: { map: 49, x: 2, y: 13, direction: 2, facing: 6, turn: 18, name: 'Breaded Bay port' }
+};
+
+function shipPort(entry, page, common) {
+    const port = SHIP_PORTS[entry?.id];
+    if (!port || !page || entry.pages.length !== 1 || entry.pages[0] !== page || !flagsAre(page) ||
+        page.trigger !== 1 || page.priorityType !== 0 || page.moveType !== 0 || page.through) return null;
+    const { list } = page;
+    const breaded = entry.id === 31;
+    const codes = breaded ? [117, 205, 505, 122, 117, 206, 111, 123, 357, 657, 657, 0, 412, 201, 0]
+        : [117, 205, 505, 206, 201, 0];
+    const route = list?.[1]?.parameters?.[1];
+    // The ports turn the ship before native disembarkation. Breaded Bay
+    // also runs native boat positioning and an optional quest branch.
+    if (list?.length !== codes.length ||
+        !codes.every((code, index) => rowIs(list[index], code, breaded && index >= 7 && index <= 11 ? 1 : 0)) ||
+        !parametersAre(list[0], [138]) || !common?.[138]?.list || list[1].parameters[0] !== -1 ||
+        route?.wait !== true || route.repeat || route.skippable || route.list?.length !== 2 ||
+        route.list[0]?.code !== port.turn || route.list[1]?.code !== 0 ||
+        (breaded && (!parametersAre(list[4], [139]) || !common[139]?.list))) return null;
+    const edge = transferTo(list[list.length - 2], 113);
+    return landingIs(edge, port.map, port.x, port.y) && edge.direction === port.direction
+        ? { ...edge, facing: port.facing, name: port.name } : null;
+}
+
 function transferOptions(map, entry, page, common) {
     if (!page || ![0, 1].includes(page.trigger) || page.moveType !== 0 || page.through ||
         ![0, 1].includes(page.priorityType) || /^(?:test|debug|developer)/i.test(entry.name || '') ||
@@ -196,4 +223,5 @@ function cauldronIntroductionFinished(root) {
         rowIs(list[20], 123) && parametersAre(list[20], ['A', 0]);
 }
 
-module.exports = { houseStair, houseBranches, transferOptions, catalogTransferOptions, cauldronIntroductionFinished };
+module.exports = { houseStair, houseBranches, transferOptions, catalogTransferOptions, cauldronIntroductionFinished,
+    SHIP_PORTS, shipPort };

@@ -1,10 +1,11 @@
 'use strict';
 
-const { transferOptions, cauldronIntroductionFinished } = require('./transfer-events.cjs');
+const { transferOptions, cauldronIntroductionFinished, SHIP_PORTS, shipPort } = require('./transfer-events.cjs');
+const { travelMode, vehicleOnMap } = require('./vehicle-navigation');
 const { transferState, gateAllows } = require('./transfer-gates.cjs');
 const { tileKey } = require('./geometry.cjs');
 
-function liveEntrance(root, event, state) {
+function liveEntrance(root, event, state, mode) {
     const map = root.$gameMap;
     const id = event?._eventId;
     if (!Number.isInteger(id) || id < 1 || map?._events?.[id] !== event || event._erased ||
@@ -12,10 +13,14 @@ function liveEntrance(root, event, state) {
     const entry = root.$dataMap?.events?.[id];
     const page = entry?.pages?.[event._pageIndex];
     if (!page || event._trigger !== page.trigger || event._priorityType !== page.priorityType) return null;
-    const destination = transferOptions(map._mapId, entry, page, root.$dataCommonEvents).find(edge => gateAllows(edge.gate, state));
-    if (!destination || !root.$dataMapInfos?.[destination.map]) return null;
+    const common = root.$dataCommonEvents;
+    const craft = mode === 'ship' && vehicleOnMap(map, mode);
+    const destination = mode === 'walk' ? transferOptions(map._mapId, entry, page, common).find(edge => gateAllows(edge.gate, state))
+        : craft && shipPort(entry, page, common);
+    if (!destination || !root.$dataMapInfos?.[destination.map] ||
+        (craft && !craft.isLandOk?.(event._x, event._y, destination.facing))) return null;
     return { ...destination, event: id, sourceX: event._x, sourceY: event._y, action: page.trigger === 0 || page.priorityType === 1,
-        list: page.list };
+        mode, craft, list: page.list };
 }
 
 function createTransferBookmarks(root, host) {
@@ -30,8 +35,11 @@ function createTransferBookmarks(root, host) {
     }
 
     function current(edge) {
-        const entrance = liveEntrance(root, root.$gameMap?._events?.[edge.event], transferState(root));
-        return !!entrance && entrance.list === edge.list && entrance.map === edge.map &&
+        const map = root.$gameMap;
+        const mode = travelMode(map, root.$gamePlayer);
+        if (mode !== edge.mode) return false;
+        const entrance = liveEntrance(root, map?._events?.[edge.event], transferState(root), mode);
+        return !!entrance && entrance.craft === edge.craft && entrance.list === edge.list && entrance.map === edge.map &&
             entrance.x === edge.x && entrance.y === edge.y && entrance.direction === edge.direction &&
             entrance.action === edge.action &&
             entrance.sourceX === edge.sourceX && entrance.sourceY === edge.sourceY;
@@ -54,6 +62,10 @@ function createTransferBookmarks(root, host) {
         if (!edge || pending.scene !== scene || pending.player !== player || pending.map !== root.$gameMap ||
             interpreter?._eventId !== edge.event || interpreter._list !== edge.list ||
             map !== edge.map || x !== edge.x || y !== edge.y || direction !== edge.direction) return clear();
+        // The surface port reservation comes from the accepted event only
+        // after native getOff stops the same ship and begins the handback.
+        if (edge.craft && (player._vehicleType !== 'ship' || player._vehicleGettingOff !== true ||
+            vehicleOnMap(root.$gameMap, 'ship') !== edge.craft || edge.craft._driving !== false)) return clear();
         const firstCauldronWalk = map === 32 && (direction || player._direction) === 2 &&
             root.$gameSelfSwitches?.value?.([32, 5, 'A']) === false;
         pending = { scene, player, ownerMap: root.$gameMap, map, x, y, bookmark, firstCauldronWalk };
@@ -80,9 +92,13 @@ function createTransferBookmarks(root, host) {
         matchesState: state => transferState(root).every((value, index) => state[index] === value),
         candidates() {
             const state = transferState(root);
+            const map = root.$gameMap;
+            const mode = travelMode(map, root.$gamePlayer);
+            const events = mode === 'walk' ? map._events :
+                mode === 'ship' ? Object.keys(SHIP_PORTS).map(id => map._events[id]) : [];
             const entrances = [];
-            for (const event of root.$gameMap._events) {
-                const edge = liveEntrance(root, event, state);
+            for (const event of events) {
+                const edge = liveEntrance(root, event, state, mode);
                 if (edge) entrances.push(edge);
             }
             return { entrances, state };

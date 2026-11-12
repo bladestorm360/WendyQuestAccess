@@ -13,6 +13,11 @@ const { createSaltGuide } = require('./puzzles/salt-caverns');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 
+function remoteBookmarkAvailable(map, mode, bookmark) {
+    return bookmark.mode === 'walk' && bookmark.map !== map &&
+        ((mode === 'walk' && !timedCave(map)) || (mode === 'ship' && map === 113));
+}
+
 function createField(root, host, notifications) {
     const salt = createSaltGuide(root);
     const cave = createCaveGuide(root, host.graphics);
@@ -143,7 +148,8 @@ function createField(root, host, notifications) {
                     return status(job, 'The entrance changed. Request directions again.');
                 job.target = entrance.event;
                 job.entrance = entrance;
-                if (entrance.map !== job.remote.bookmark.map) job.label = 'Next entrance toward ' + job.remote.bookmark.name;
+                if (entrance.name) job.label = entrance.name + ' toward ' + job.remote.bookmark.name;
+                else if (entrance.map !== job.remote.bookmark.map) job.label = 'Next entrance toward ' + job.remote.bookmark.name;
                 transfers.arm(job.scene, job.remote.selection, entrance);
             }
             if (result?.status === 'timedCue') {
@@ -177,7 +183,7 @@ function createField(root, host, notifications) {
                     { quest: job.quest, point: job.point });
                 follow(job, result, { kind: 'routeDirections', name: job.label,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
-                    reenter: result.reenter === true, enter: job.entrance?.action,
+                    reenter: result.reenter === true, enter: job.entrance?.action, sailing: job.entrance?.mode === 'ship',
                     board: !!job.vehicle, land: result.land === true,
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
             }
@@ -299,7 +305,7 @@ function createField(root, host, notifications) {
         const sameMode = bookmark.mode === snapshot.mode;
         const where = (sameMap ? 'Saved here ' : 'Saved on another map, ') + MODES[bookmark.mode] + '.';
         const display = (category ? category + ', ' : '') + bookmark.name + '. ' + where;
-        if (!sameMap && sameMode && snapshot.mode === 'walk' && !timedCave(snapshot.map)) {
+        if (remoteBookmarkAvailable(snapshot.map, snapshot.mode, bookmark)) {
             if (owner.remoteBookmark?.id !== bookmark.id || owner.remoteBookmark.revision !== bookmark.revision)
                 owner.remoteBookmark = { id: bookmark.id, revision: bookmark.revision, trail: [] };
             return job.action === 'directions' ? remoteDirections(job, snapshot, bookmark) : status(job, display);
@@ -447,7 +453,8 @@ function createField(root, host, notifications) {
                 !Number.isInteger(y) || y < 0 || y >= data.height) return null;
             const mode = travelMode(map, root.$gamePlayer);
             const point = { kind: 'point', map: map._mapId, mode, x, y };
-            const context = { point, remote: mode === 'walk' && !timedCave(map._mapId) };
+            const context = { point, canSelect: entry => (point.map === entry.map && point.mode === entry.mode) ||
+                remoteBookmarkAvailable(point.map, point.mode, entry) };
             const target = owner?.scene === scene ? owner.target : null;
             if (!Number.isInteger(target?.id) || owner.browser.category !== target.category ||
                 owner.browser.selections[target.category] !== target.id) return context;
@@ -463,9 +470,9 @@ function createField(root, host, notifications) {
         selectBookmark(scene, entry) {
             const map = root.$gameMap;
             const remote = map?._mapId !== entry.map;
+            const mode = travelMode(map, root.$gamePlayer);
             if (scene !== host.manager._scene || !scene._wqaSettingsActive ||
-                travelMode(map, root.$gamePlayer) !== entry.mode ||
-                (remote && (entry.mode !== 'walk' || timedCave(map._mapId)))) return false;
+                !(remote ? remoteBookmarkAvailable(map?._mapId, mode, entry) : mode === entry.mode)) return false;
             transfers.clear();
             activateBookmark(scene, entry, remote);
             return true;
