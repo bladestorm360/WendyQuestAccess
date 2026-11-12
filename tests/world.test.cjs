@@ -17,12 +17,13 @@ const data = path.join(game, 'package.nw', 'data');
 const read = name => JSON.parse(fs.readFileSync(path.join(data, name), 'utf8'));
 const tilesets = read('Tilesets.json');
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning', path.join(__dirname, 'world-producers.py'), game],
-    { encoding: 'utf8', timeout: 7000, maxBuffer: 48000 }));
+    { encoding: 'utf8', timeout: 7000, maxBuffer: 64000 }));
 const c = vm.createContext({
     a15_0x363c12() { throw new Error('Unresolved movement property'); },
     _0x34cc1b() { throw new Error('Unresolved tile property'); },
     Game_Map: function () {}, Game_CharacterBase: function () {}, Game_Character: function () {},
     Game_Player: function () {}, Game_Event: function () {}, Game_Vehicle: function () {}, Tilemap: function () {},
+    Game_Followers: function () {},
     TileEditor: {}, SceneManager: { _scene: { _spriteset: {} } }, Point: function (x, y) { this.x = x; this.y = y; },
     Time: { GetDeltaTime: () => 1 / 60 }, $dataTilesets: tilesets, $dataItems: read('Items.json'),
     $gameSwitches: { value: () => false }, $gameSelfSwitches: { value: () => false },
@@ -134,6 +135,54 @@ function verifyRoute(fixture, request, result) {
     } else assert.deepEqual([x, y], [request.targetX, request.targetY]);
 }
 
+function verifyPatrolContact() {
+    const { map, gameMap, player } = load(196);
+    const patrol = gameMap._events[4];
+    const checkpoint = gameMap._events[21];
+    const firstStep = patrol.page().moveRoute.list[0];
+    const direction = [0, 2, 4, 6, 8][firstStep.code];
+    assert(direction);
+    const x = gameMap.roundXWithDirection(patrol.x, direction);
+    const y = gameMap.roundYWithDirection(patrol.y, direction);
+    player._followers = new c.Game_Followers();
+    Object.assign(player, { _x: x, _y: y, _realX: x, _realY: y });
+    patrol._jumpCount = 0;
+
+    patrol.checkEventTriggerTouch(x, y + 1);
+    assert(!patrol.isStarting(), 'looking at an adjacent tile does not trigger patrol contact');
+    patrol.moveStraight(direction);
+    assert(!patrol.isMovementSucceeded());
+    assert(patrol.isStarting(), 'a blocked patrol step into the player triggers the encounter');
+    assert.equal(patrol.list()[0].code, 117);
+    assert.equal(patrol.list()[0].parameters[0], 102);
+
+    patrol._starting = false;
+    c.Game_CharacterBase.prototype.moveStraight.call(player, player.reverseDir(direction));
+    assert(!player.isMovementSucceeded());
+    assert(patrol.isStarting(), 'walking into a patrol triggers the same encounter from the player side');
+    assert.equal(player._followers.isSomeoneCollided(x, y), false);
+
+    patrol._starting = false;
+    gameMap.isEventRunning = () => true;
+    patrol.checkEventTriggerTouch(x, y);
+    player.checkEventTriggerTouch(patrol.x, patrol.y);
+    assert(!patrol.isStarting(), 'a running map interpreter already owns contact');
+    gameMap.isEventRunning = () => false;
+
+    Object.assign(player, { _x: checkpoint.x, _y: checkpoint.y });
+    player.checkEventTriggerHere([1, 2]);
+    assert(checkpoint.isStarting(), 'the checkpoint is a floor trigger');
+    assert.equal(map.events[21].pages[0].trigger, 1);
+
+    const disabled = load(196, { switches: [590] });
+    const stopped = disabled.gameMap._events[4];
+    Object.assign(disabled.player, { _x: x, _y: y });
+    assert.equal(stopped._pageIndex, 1);
+    stopped.checkEventTriggerTouch(x, y);
+    disabled.player.checkEventTriggerTouch(stopped.x, stopped.y);
+    assert(!stopped.isStarting(), 'the native caught page disables repeat contact');
+}
+
 async function verifyWorker(fixture, request, live) {
     const admission = new Int32Array(new SharedArrayBuffer(4));
     const worker = new Worker(path.join(__dirname, '..', '.build', 'payload', 'wendyquest-access', 'route-worker.cjs'),
@@ -234,12 +283,14 @@ async function main() {
     Object.assign(world.gameMap.boat(), { _mapId: world.id, _x: 3, _y: 3 });
     compare(world);
     for (const id of [195, 196, 199, 200, 201, 202, 206]) compare(load(id));
+    verifyPatrolContact();
     const entry = read('Map199.json').events[26].pages.flatMap(page => page.list).find(command =>
         command.code === 201 && command.parameters[1] === 200).parameters;
     const secret = load(200);
     const distraction = { x: entry[2], y: entry[3], event: 5 };
     verifyRoute(secret, distraction, solveRoute(secret.geometry, snapshot(secret), distraction));
     console.log(`Verified ${compared} directed movement comparisons across authored maps and dynamic cases.`);
+    console.log('Verified native Map 196 patrol contact, catch-page handback and checkpoint floor trigger.');
 }
 
 function changedCrossing(before, after) {

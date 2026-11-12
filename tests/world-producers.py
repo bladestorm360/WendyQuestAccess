@@ -23,11 +23,14 @@ def methods(installed):
                      'terrainTag', 'regionId', 'checkLayeredTilesFlags', 'isCounter', 'events', 'eventsXyNt',
                      'refreshTileEvents', 'vehicle', 'boat', 'ship', 'airship', 'isAnyEventStarting'],
         'Game_CharacterBase': ['pos', 'posNt', 'isNormalPriority', 'tileId', 'isTile', 'reverseDir', 'isThrough',
-                               'isMapPassable', 'isCollidedWithCharacters', 'isCollidedWithEvents', 'isCollidedWithVehicles'],
+                               'isMapPassable', 'isCollidedWithCharacters', 'isCollidedWithEvents', 'isCollidedWithVehicles',
+                               'moveStraight', 'setMovementSuccess', 'isMovementSucceeded', 'checkEventTriggerTouchFront',
+                               'isDebugThrough', 'isJumping', 'setDirection', 'isDirectionFixed', 'resetStopCount'],
         'Game_Player': ['isMapPassable', 'vehicle', 'isInAirship', 'canStartLocalEvents',
-                        'checkEventTriggerHere', 'checkEventTriggerThere'],
+                        'checkEventTriggerHere', 'checkEventTriggerThere', 'checkEventTriggerTouch', 'isCollided'],
         'Game_Vehicle': ['pos', 'isBoat', 'isShip', 'isAirship', 'isMapPassable'],
-        'Game_Event': ['findProperPageIndex', 'meetsConditions', 'event', 'page', 'list', 'isTriggerIn', 'start', 'isStarting'],
+        'Game_Event': ['findProperPageIndex', 'meetsConditions', 'event', 'page', 'list', 'isTriggerIn', 'start', 'isStarting',
+                       'checkEventTriggerTouch', 'isCollidedWithCharacters', 'isCollidedWithPlayerCharacters', 'isCollidedWithEvents'],
     }.items():
         for name in names:
             output.append(between(stock, f'\n{group}.prototype.{name} = function(', '\n};') + '\n};')
@@ -43,6 +46,7 @@ def methods(installed):
         ("Game_Map['prototype']['isShipPassable']", "},Game_Map['prototype']['isAirshipLandOk']"),
         ("Game_Map['prototype']['IsWater']", '},function('),
         ("Game_CharacterBase['prototype']['canPass']", "},Game_Followers['prototype']['isSomeoneCollided']"),
+        ("Game_Followers['prototype']['isSomeoneCollided']", "},Game_Follower['prototype']['actor']"),
         ("Game_Player['prototype']['startMapEvent']", "},Game_Player['prototype']['canTriggerEvent']"),
         ("Game_Player['prototype']['canTriggerEvent']", "},Game_Player['prototype']['findEventsAt']"),
         ("Game_Player['prototype']['findEventsAt']", "},Game_Player['prototype']['triggerTouchActionD3']"),
