@@ -1128,9 +1128,27 @@ const interval = setInterval(() => {
             if (padTap(2) !== 0) throw Error('Vitals review did not return to native input');
             endingStep = 39;
         } else if (endingStep === 39 && fs.existsSync(receipt + '.battle-target-vitals')) {
-            WendyQuestAccessBattleTargetLeaving(SceneManager._scene);
-            if (SceneManager._scene._wqaBattleTargetControl) throw Error('Retired target still owns controller review');
+            const scene = SceneManager._scene;
+            WendyQuestAccessBattleTargetLeaving(scene);
+            if (scene._wqaBattleTargetControl) throw Error('Retired target still owns controller review');
             fs.unlinkSync(receipt + '.battle-target-stage');
+            fs.writeFileSync(receipt + '.battle-bag-stage', '');
+            Object.assign(BattleManager, { _phase: 'input', _targets: [] });
+            const item = { name: 'Unpainted item name' };
+            const layer = scene._windowLayer = {};
+            const bag = scene._itemWindow = { parent: layer, _index: 0, _data: [item], _openAmount: 1, active: true,
+                worldVisible: true, worldAlpha: 1, openness: 255, contentsOpacity: 255, innerWidth: 120, innerHeight: 120,
+                contents: { isReady: () => true }, itemRect: () => ({ x: 0, y: 0, width: 100, height: 40 }), maxItems: () => 1 };
+            bag._wqaBattleBagRows = new Map([[0, { item, description: 'Synthetic item effect', list: bag._data,
+                contents: bag.contents, enabled: true, quantity: 4 }]]);
+            WendyQuestAccessMenuReady(scene, 3);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 40;
+        } else if (endingStep === 40 && fs.existsSync(receipt + '.battle-bag-autodetail')) {
+            tap('i', 'KeyI');
+            endingStep = 41;
+        } else if (endingStep === 41 && fs.existsSync(receipt + '.battle-bag-details')) {
+            fs.unlinkSync(receipt + '.battle-bag-stage');
             fs.unlinkSync(receipt + '.battle-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
@@ -1201,7 +1219,8 @@ parentPort.on('message', message => {
                 message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'hp') :
                     vitals === 'Synthetic companion' ? 'slot2' : message.append ? 'autodetail' : 'details') :
                 message.kind === 'menuReview' ? 'review' : message.kind === 'controllerStatus' ? 'mode' : '';
-            const prefix = target ? '.battle-target-' : '.battle-';
+            const prefix = target ? '.battle-target-' :
+                fs.existsSync(receipt + '.battle-bag-stage') ? '.battle-bag-' : '.battle-';
             if (suffix) fs.writeFileSync(receipt + prefix + suffix, speech);
             parentPort.postMessage('ack');
             return;
@@ -1483,6 +1502,9 @@ def main():
             'battle-target-focus': 'Target, Synthetic target, 1 of 1',
             'battle-target-autodetail': 'Synthetic target, HP about 50 percent',
             'battle-target-details': 'Synthetic target, HP about 50 percent',
+            'battle-bag-focus': 'Battle Bag, Synthetic item effect, 4, 1 of 1',
+            'battle-bag-autodetail': 'Synthetic item effect',
+            'battle-bag-details': 'Synthetic item effect',
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:
@@ -1522,7 +1544,7 @@ def main():
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
-        print('Verified battle actor, commands, targets, party vitals, rendered gauge details and controller handback.')
+        print('Verified battle actor, commands, targets, party vitals, rendered Bag items and controller handback.')
         print('Verified the Quests category, packaged route and marker replacement handback.')
         print('Verified controller bookmark naming, keyboard save, native tile arrival, linked event removal and persistence.')
         print('Verified reachable entrance speech, two manual transfers, native loading gates and restored bookmark selection.')

@@ -57,7 +57,7 @@ function formatSpeech(message) {
         case 'menuFocus': {
             const name = label(message);
             if (!name) return '';
-            const screen = ['Menu', 'Inventory', 'Battle commands'].includes(message.screen) ? message.screen : '';
+            const screen = ['Menu', 'Inventory', 'Battle commands', 'Battle Bag'].includes(message.screen) ? message.screen : '';
             const actor = screen === 'Battle commands' && typeof message.actor === 'string' && message.actor.length <= 48 ?
                 message.actor : '';
             const parts = [actor, screen, name];

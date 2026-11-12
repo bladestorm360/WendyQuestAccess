@@ -94,6 +94,8 @@ DEPENDENCIES = {
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
 BATTLE_TARGET_LEAVING = (b'SceneManager._scene?._wqaBattleTargetActive&&'
                          b'globalThis.WendyQuestAccessBattleTargetLeaving?.(SceneManager._scene)')
+BATTLE_BAG_LEAVING = (b'SceneManager._scene?._wqaBattleBagActive&&'
+                      b'globalThis.WendyQuestAccessMenuLeaving?.(SceneManager._scene)')
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
@@ -251,6 +253,7 @@ def managers_notification(original):
         59505: b'\n    ' + MAP_LEAVING,
         62230: b'\n    if(SceneManager._scene?._wqaBattleFocusActive&&this._phase!=="input")'
                b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);'
+               b'\n    if(this._phase!=="input")' + BATTLE_BAG_LEAVING + b';'
                b'\n    if(this._phase!=="input"&&this._phase!=="ActionCommand")' + BATTLE_TARGET_LEAVING + b';',
         62280: b'        if(SceneManager._scene?._wqaBattleStarted){' + MAP_LEAVING + b'}\n',
     })
@@ -258,6 +261,7 @@ def managers_notification(original):
 
 def scenes_notification(original):
     return insert(original, SCENES_SHA, {
+        106138: b'    if(this._wqaBattleBagActive)globalThis.WendyQuestAccessMenuLeaving?.(this);\n',
         2349: b'\n    ' + MAP_LEAVING,
         3177: b'\n' + files_ready('this'),
     })
@@ -317,7 +321,7 @@ def objects_notification(original):
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING +
                 b'if(SceneManager._scene?._wqaBattleFocusActive)'
                 b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);' +
-                BATTLE_TARGET_LEAVING + b';}',
+                BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
         257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
@@ -509,7 +513,8 @@ def battle_notification(original):
             this._fadeDuration === 0 && this._fadeOpacity === 0 && !this._wqaSettingsActive &&
             !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
             !Graphics._wqaResize && Graphics.app?.stage === this &&
-            wqaTargets?.length && (wqaPhase === 'input' ? BattleManager._inputting && !this._wqaBattleFocusActive :
+            wqaTargets?.length && (wqaPhase === 'input' ? BattleManager._inputting && !this._wqaBattleFocusActive &&
+                !this._itemWindow?.active :
                 wqaDriver?._cancelable && wqaDriver._coroutineContainer)) {
             if (this._wqaBattleTargetKey !== wqaTargets || this._wqaBattleTargetMode !== wqaPhase ||
                 this._wqaBattleTargetDriver !== wqaDriver)
@@ -519,6 +524,35 @@ def battle_notification(original):
         }
     }
 '''
+    bag_update = b'''
+    {
+        const wqaBag = this._itemWindow;
+        if (this._wqaBattleStarted && wqaBag?.active && wqaBag._openAmount === 1 &&
+            BattleManager._phase === 'input' && BattleManager._wqaDialogueBusy === false &&
+            this._fadeDuration === 0 && this._fadeOpacity === 0 && !this._wqaSettingsActive &&
+            !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
+            !Graphics._wqaResize && Graphics.app?.stage === this) {
+            const wqaRow = wqaBag._wqaBattleBagRows?.get(wqaBag._index);
+            if (wqaRow && wqaRow !== wqaBag._wqaBattleBagPresented)
+                globalThis.WendyQuestAccessMenuReady?.(this,3);
+        } else if (this._wqaBattleBagActive) {
+            globalThis.WendyQuestAccessMenuLeaving?.(this);
+        }
+    }
+'''
+    # Keep the exact availability and quantity expressions in the native
+    # draw calls. Capture them only for a live battle inventory row.
+    bag_row = b'''
+const wqaBagScene=SceneManager._scene;
+const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
+    BattleManager._phase==="input"&&wqaBagScene._fadeDuration===0&&wqaBagScene._fadeOpacity===0&&
+    !wqaBagScene._wqaSettingsActive&&!Graphics._wqaResize&&!SceneManager._nextScene&&
+    !SceneManager._exiting&&!SceneManager._wqaNativeAutosaves&&Graphics.app?.stage===wqaBagScene&&
+    _0x276644>=0&&_0x276644<128?{
+        index:_0x276644, item:_0x19bc8b||null, description:_0x19bc8b?.description,
+        contents:this.contents, list:this._data, enabled:false, quantity:undefined
+    }:null;
+'''
     return insert(original, BATTLE_SHA, {
         155370: command_leaving,  # Accepted activation, before native effects
         155394: b')',
@@ -527,13 +561,23 @@ def battle_notification(original):
         162176: b'((' + command_ready +
                 b')&&globalThis.WendyQuestAccessBattleFocusReady?.(SceneManager._scene,this),',
         162205: b')',
-        192463: BATTLE_TARGET_LEAVING + b';',  # Return to native command input
+        192463: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';',  # Return to native input
         193431: b'(this._wqaDialogueBusy=',
         193508: b')',
-        196596: BATTLE_TARGET_LEAVING + b';',  # Native action start
+        196596: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';',  # Native action start
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=undefined;',
-        242214: target_update + dialogue_update(ready),
+        242214: target_update + bag_update + dialogue_update(ready),
+        253388: bag_row,
+        253468: b'(wqaBagRow?(wqaBagRow.enabled=',
+        253501: b'):' + original[253468:253501] + b')',
+        253676: b',wqaBagRow',
+        254065: b'if(wqaBagRow){(this._wqaBattleBagRows||=new Map()).set(wqaBagRow.index,wqaBagRow);}',
+        255016: b',wqaBagRow',
+        255216: b'(wqaBagRow?(wqaBagRow.quantity=',
+        255249: b'):' + original[255216:255249] + b')',
+        257237: BATTLE_BAG_LEAVING + b';',  # Native force-hide
+        257461: BATTLE_BAG_LEAVING + b';',  # Native cancel or hide
     })
 
 

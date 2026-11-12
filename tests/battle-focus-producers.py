@@ -10,8 +10,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from registration import (
-    ACTION_REL, BATTLE_REL, MANAGERS_REL, STATS_REL, WINDOW_REL,
-    action_notification, battle_notification, managers_notification,
+    ACTION_REL, BATTLE_REL, MANAGERS_REL, SCENES_REL, STATS_REL, WINDOW_REL, WINDOWS_REL,
+    action_notification, battle_notification, managers_notification, scenes_notification,
 )
 
 decode = runpy.run_path(str(ROOT / 'tools' / 'inspect-plugin.py'))['decode']
@@ -36,6 +36,23 @@ def manager_method(source, name):
     start = source.index(f"BattleManager['{name}']=function(")
     end = source.index('},BattleManager', start)
     return source[start:end + 1] + ';'
+
+
+if sys.argv[2:] == ['bag']:
+    scenes = scenes_notification((installed / SCENES_REL).read_bytes()).decode('utf8')
+    windows = (installed / WINDOWS_REL).read_text(encoding='utf-8-sig')
+    methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]
+    methods.extend(sprite_method(battle, 'Window_BattleItem', name) for name in
+                   ('drawItem', 'drawItemName', 'drawItemNumber', 'drawText', 'select', 'processHandling',
+                    'hide', 'forceHide', 'maxItems', 'maxVisibleItems', 'itemHeight', 'itemRect'))
+    for source, token in ((scenes, 'Scene_Battle.prototype.onItemOk'),
+                          (windows, 'Window_Selectable.prototype.processOk'),
+                          (windows, 'Window_Selectable.prototype.processCancel')):
+        start = source.index(token + ' = function(')
+        end = source.index('\n};', start) + 3
+        methods.append(source[start:end])
+    print(json.dumps(methods))
+    sys.exit(0)
 
 
 if sys.argv[2:] == ['vitals']:

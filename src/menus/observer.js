@@ -1,6 +1,7 @@
 'use strict';
 
 const { reviewLines, moveReview } = require('./review');
+const { battlePresented } = require('../battle/presentation');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
 const PARAMS = [0, 1, 2, 3];
@@ -12,6 +13,7 @@ function visible(scene, window) {
 
 function focusWindow(scene, screen) {
     if (screen === 1) return scene._commandWindow;
+    if (screen === 3) return scene._itemWindow;
     if (scene._actorWindow?.active) return null;
     return scene._itemWindow?.isFocused ? scene._itemWindow : scene._categoryWindow;
 }
@@ -19,6 +21,13 @@ function focusWindow(scene, screen) {
 function selectedItem(window) {
     const index = window._index;
     return Number.isInteger(index) && index >= 0 ? (window._list || window._data)?.[index] : null;
+}
+
+function battleBagRow(window) {
+    const rows = window?._wqaBattleBagRows;
+    const row = rows?.get(window._index);
+    return row && row.contents === window.contents && row.list === window._data &&
+        row.item === (selectedItem(window) || null) ? row : null;
 }
 
 function label(value) {
@@ -48,14 +57,23 @@ function createMenuObserver(root, host, notifications, preferences) {
     let current = null;
     let waiting = null;
 
-    function ready(scene) {
+    function ready(scene, screen) {
+        if (screen === 3) return battlePresented(root, host, scene, true) &&
+            root.BattleManager._phase === 'input' && scene._itemWindow?._openAmount === 1;
         return scene && scene === host.manager._scene && host.graphics.app?.stage === scene &&
             scene._started && scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 &&
             !scene._wqaSettingsActive && !host.manager._nextScene && !host.manager._exiting &&
             !host.manager._wqaNativeAutosaves && !host.graphics._wqaResize && host.hasFocus();
     }
 
+    function retireBag(scene) {
+        if (!scene?._wqaBattleBagActive) return;
+        scene._wqaBattleBagActive = false;
+        if (scene._itemWindow) scene._itemWindow._wqaBattleBagPresented = null;
+    }
+
     function retire(scene) {
+        retireBag(scene);
         if (waiting?.scene === scene) waiting = null;
         if (current?.scene !== scene) return;
         notifications.close(current.epoch);
@@ -64,6 +82,7 @@ function createMenuObserver(root, host, notifications, preferences) {
     }
 
     function suspend(scene) {
+        retireBag(scene);
         if (waiting?.scene === scene) waiting = null;
         if (current?.scene !== scene || current.suspended) return;
         notifications.close(current.epoch);
@@ -72,8 +91,10 @@ function createMenuObserver(root, host, notifications, preferences) {
     }
 
     function live(page) {
-        if (!page || page.suspended || !ready(page.scene)) return false;
+        if (!page || page.suspended || !ready(page.scene, page.screen)) return false;
         const window = focusWindow(page.scene, page.screen);
+        if (page.screen === 3) return window === page.window && window.active && visible(page.scene, window) &&
+            window._index === page.index && battleBagRow(window) === page.bagRow && presentedRow(window);
         return window === page.window && window.active && visible(page.scene, window) && window._index === page.index &&
             selectedItem(window) === page.item && window._wqaMenuRowPaint === page.rowPaint &&
             (!page.inventory || (page.scene._helpWindow?._wqaMenuHelpPaint === page.helpPaint &&
@@ -93,11 +114,45 @@ function createMenuObserver(root, host, notifications, preferences) {
         page.epoch = notifications.open(record, () => current === page && live(page));
     }
 
+    function present(page, focus) {
+        const { scene, screen, window, lines } = page;
+        const previous = current;
+        const same = previous?.scene === scene && previous.window === window &&
+            previous.item === page.item && previous.index === page.index;
+        if (same) page.position = Math.min(previous.position, Math.max(0, lines.length - 1));
+        if (previous) retire(previous.scene);
+        current = page;
+        if (screen === 3) {
+            scene._wqaBattleBagActive = true;
+            window._wqaBattleBagPresented = page.bagRow;
+        }
+        scene._wqaControllerReady = scene._wqaMenuActive = scene._wqaPresentation = true;
+        const options = preferences();
+        const heading = screen === 1 ? 'Menu' : screen === 2 ? 'Inventory' : 'Battle Bag';
+        show(page, { kind: 'menuFocus', ...focus, indexed: options.indexing,
+            screen: previous?.scene === scene && !previous.suspended &&
+                (screen !== 3 || previous.screen === 3) ? '' : heading });
+        if (page.lines.length && options.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
+    }
+
+    function publishBag(scene, window) {
+        const row = battleBagRow(window);
+        if (!row) return;
+        const text = label(row.description);
+        const lines = text ? reviewLines(text.split(/\r?\n/)) : [];
+        const page = { kind: 'menu', scene, screen: 3, window, index: window._index, item: row.item, bagRow: row, lines,
+            position: 0, epoch: 0, hasReview: lines.length > 0 };
+        present(page, { name: text || (row.item ? 'Item' : 'Empty'), enabled: row.enabled, quantity: row.quantity,
+            position: window._index + 1, total: window.maxItems() });
+    }
+
     function publish(scene, screen) {
-        if (!ready(scene)) return retire(scene);
+        if (!ready(scene, screen)) return retire(scene);
         const window = focusWindow(scene, screen);
-        const item = window && selectedItem(window);
-        if (!window?.active || !visible(scene, window) || !item || !label(item.name) || !presentedRow(window)) return;
+        if (!window?.active || !visible(scene, window) || !presentedRow(window)) return;
+        if (screen === 3) return publishBag(scene, window);
+        const item = selectedItem(window);
+        if (!item || !label(item.name)) return;
         const inventory = screen === 2 && window === scene._itemWindow;
         const help = scene._helpWindow;
         const status = scene._equipStatusWindow;
@@ -114,36 +169,28 @@ function createMenuObserver(root, host, notifications, preferences) {
             comparePaint: status?._wqaMenuCompareActor, helpVisible: !!visible(scene, help),
             compareTarget: status?._tempActor, compareOwner: status?._actor, compareVisible: !!visible(scene, status),
             hasReview: lines.length > 0 };
-        const previous = current;
-        const same = previous?.scene === scene && previous.window === window && previous.item === item && previous.index === page.index;
-        if (same) page.position = Math.min(previous.position, Math.max(0, lines.length - 1));
-        if (previous) retire(previous.scene);
-        current = page;
-        scene._wqaControllerReady = scene._wqaMenuActive = scene._wqaPresentation = true;
-        const options = preferences();
-        show(page, { kind: 'menuFocus', name: item.name,
-            screen: previous?.scene === scene && !previous.suspended ? '' : screen === 1 ? 'Menu' : 'Inventory',
+        present(page, { name: item.name,
             enabled: inventory ? equipment || window.isEnabled(item) : item.enabled !== false,
             equipped: equipment && window._equippedSprite?.isReady?.() && window.itemIsEquipped(item),
             quantity: inventory && !equipment && window.needsNumber() ? root.$gameParty.numItems(item) : undefined,
             position: choices ? choices.indexOf(item) + 1 : page.index + 1,
-            total: choices ? choices.length : list.length, indexed: options.indexing });
-        if (page.lines.length && options.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
+            total: choices ? choices.length : list.length });
     }
 
     function observe(scene, screen) {
         if (scene._wqaSettingsActive || (screen === 2 && scene._actorWindow?.active)) return suspend(scene);
-        if (!ready(scene)) return retire(scene);
+        if (!ready(scene, screen)) return retire(scene);
         if (current?.scene === scene && live(current)) return;
         if (waiting?.scene === scene) return;
         const window = focusWindow(scene, screen);
-        if (!window?.active || !selectedItem(window)) return retire(scene);
+        if (!window?.active || (screen === 3 ? !battleBagRow(window) : !selectedItem(window))) return retire(scene);
         // Close stale output immediately. Keep the old cursor until the next
         // painted selection settles so a refresh of the same row can clamp it.
         if (current?.scene === scene) notifications.close(current.epoch);
         const renderer = host.graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return;
         scene._wqaPresentation = true;
+        if (screen === 3) scene._wqaBattleBagActive = true;
         const task = waiting = { scene };
         renderer.once('postrender', () => {
             if (waiting !== task) return;
