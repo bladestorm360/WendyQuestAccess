@@ -39,8 +39,14 @@ function formatSpeech(message) {
         case 'title': {
             const name = label(message);
             text = name && (message.enabled ? name : `${name}, unavailable`);
+            if (text && message.titleArt === true) {
+                const start = message.startArt === true ? ' Start.' : '';
+                text = `WendyQuest. Legend of the Four Corner Stones.${start} ${text}`;
+                limit = 384;
+            }
             break;
         }
+        case 'splashCard': text = label(message); break;
         case 'saveSlot': text = describeSlot(message, []); break;
         case 'saveAction': {
             const name = label(message);
@@ -101,6 +107,7 @@ function formatSpeech(message) {
             text = message.lines.map((line, index) =>
                 index + 1 < message.lines.length && !/[.!?]$/.test(line) ? line + '.' : line).join(' ');
             break;
+        case 'interactionPrompt': text = 'Interact'; break;
         case 'fieldTarget': {
             const name = label(message);
             const category = typeof message.category === 'string' && message.category.length <= 32 ? message.category : '';

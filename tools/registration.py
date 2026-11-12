@@ -61,6 +61,11 @@ PIXI_SHA = '6eca31989af44e87ac64319da69b9e484a7fdf0cbbdcaf3cd85869362588cee1'
 DEPENDENCIES = {
     SYSTEM_REL: SYSTEM_SHA,
     PIXI_REL: PIXI_SHA,
+    Path('package.nw/img/system/Splash.png'): 'fdb48bb2dc78ea6d501ce325f52398a64bcb75ff517c5848614e44c9d7851fe7',
+    Path('package.nw/img/system/81monkeysSplashLogo.png'): 'fa8a5159a925325905df5ac2ea11d60240a8e551a238d85e98bac17d3b9a6dba',
+    Path('package.nw/img/system/81monkeysSplashLogo.json'): '6d01e76a61e3f39bf5947191a0b8a01ba3e2a526e119aa88a5c0211e1c8250ce',
+    Path('package.nw/img/titlescreen/TITLE SCREEN - LOGO.png'): 'a08b69c8cc7304921cf71eb31658270024878f4f8b582a3f93b02e59b7e87ffd',
+    Path('package.nw/img/titlescreen/UI - START.png'): '20efaea251136a7238f266eeeb72acfca6aad7fb8b9e26654fb91ba796b7d387',
     Path('package.nw/img/pictures/Ending.png'): '5e2da2fdd47aedcccf1987649c01e26a155aa29a48aa28321f450a28aef06ac3',
     Path('package.nw/img/pictures/TheEnd.png'): '9b69e9fa84b661d09ba8b3a80ab3b13b05ad811f098450867b36f6cb1e6cc361',
     Path('package.nw/img/system/Caffeine Caverns Map.png'): '12bc943da57f479922703bc70451f5b95658830d3a391868e6ce77fa2e86f483',
@@ -133,6 +138,7 @@ SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentatio
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
                  b'SceneManager._scene?._wqaAutosaveNotice||SceneManager._scene?._wqaCreditsActive||'
+                 b'SceneManager._scene?._wqaInteractionActive||'
                  b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
@@ -204,6 +210,14 @@ def menu_notifications(original):
     # Build 26578620. Offsets refer to completed native draw or accepted
     # native actions. Existing event arguments and call order are preserved.
     return insert(original, MENU_SHA, {
+        4303: b"if(this._started&&this._active&&!this._fadeDuration&&!this._fadeOpacity&&"
+              b"this===SceneManager._scene&&!SceneManager._nextScene&&!SceneManager._exiting&&!Graphics._wqaResize&&"
+              b"Graphics.app?.stage===this){const wqaSplash=this._81monkeys?.alpha>0?2:1;"
+              b"if(this._wqaSplashSeen&&this._wqaSplashSeen!==wqaSplash&&this._wqaSplashRetired!==wqaSplash){"
+              b"this._wqaSplashRetired=wqaSplash;globalThis.WendyQuestAccessSplashLeaving?.(this);}"
+              b"if(this._wqaSplashSeen!==wqaSplash&&this._waitCount>this._updateRate&&"
+              b"(wqaSplash===1?this._backSprite?.texture?.valid:this._81monkeys?._frame?.y===1550))"
+              b"globalThis.WendyQuestAccessSplashReady?.(this,wqaSplash);}",
         9404: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
         9431: b'this._wqaMenuSave={status:0};this._wqaLastManualSave=null;',
         12025: b',this._wqaMenuSave&&(this._wqaMenuSave.banner=_0x385754)',
@@ -420,7 +434,7 @@ def objects_notification(original):
                 b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||'
                 b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive||'
                 b'SceneManager._scene._wqaQuestTracking||SceneManager._scene._wqaQuestNavigation||'
-                b'SceneManager._scene._wqaRouteActive))'
+                b'SceneManager._scene._wqaRouteActive||SceneManager._scene._wqaInteractionActive))'
                 b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene);\n        ',  # Accepted event start
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING +
                 b'if(SceneManager._scene?._wqaBattleFocusActive)'
@@ -570,6 +584,11 @@ def map_notification(original):
     if (this._wqaFieldReady) {
         if (this._wqaStepNavigation && $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY)
             globalThis.WendyQuestAccessStepNavigationReady?.(this);
+        const wqaIcon = $gamePlayer._iconState === 1 && $gamePlayer._interactIcon?.visible ? $gamePlayer._interactIcon : null;
+        if ((this._wqaInteractionActive && this._wqaInteractionActive !== wqaIcon) ||
+            (!this._wqaInteractionActive && !this._wqaRouteActive && wqaIcon && wqaIcon !== this._wqaInteractionSeen &&
+            wqaIcon.scale.x > 0 && wqaIcon.children[0]?.texture?.valid))
+            globalThis.WendyQuestAccessInteractionUpdate?.(this, wqaIcon);
         if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaBookmarkTransferPending) &&
             !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||
@@ -585,7 +604,7 @@ def map_notification(original):
             !this._wqaSoundscapeDue || Graphics.frameCount >= this._wqaSoundscapeDue))
             globalThis.WendyQuestAccessSoundscapeUpdate?.(this);
     } else if (wqaWasFieldReady || this._wqaRouteActive || this._wqaCaveReview || this._wqaWallAudio ||
-        this._wqaBeaconActive || this._wqaCaveTimingActive || this._wqaSoundscapeActive)
+        this._wqaBeaconActive || this._wqaCaveTimingActive || this._wqaSoundscapeActive || this._wqaInteractionActive)
         globalThis.WendyQuestAccessFieldControlLost?.(this);
 '''
     credits_update = b'''
@@ -631,6 +650,7 @@ def map_notification(original):
         59596: b'this._wqaMapRestored=true;',
         62779: field_update + banner_update + credits_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
                                                b'this.srcStones && $gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),
+        67386: b'||(this._wqaNavigationWake&&globalThis.WendyQuestAccessIdleInput?.(this))',
         69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
         86279: b'if(SceneManager._scene?._mapNameWindow===this&&SceneManager._scene._wqaMapAnnouncement)'
                b'globalThis.WendyQuestAccessMapBannerLeaving?.(SceneManager._scene);'

@@ -14,6 +14,37 @@ const { createSaltGuide } = require('./puzzles/salt-caverns');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
+const HEADINGS = Object.freeze({ 2: [0, 1], 4: [-1, 0], 6: [1, 0], 8: [0, -1] });
+
+function spokenRouteBounds(x, y, legs) {
+    if (!Array.isArray(legs) || legs.length > 8) return null;
+    let left = x, top = y, right = x, bottom = y;
+    for (const { direction, tiles } of legs) {
+        const offset = HEADINGS[direction];
+        if (!offset || !Number.isInteger(tiles) || tiles < 1 || tiles > 16384) return null;
+        x += offset[0] * tiles;
+        y += offset[1] * tiles;
+        left = Math.min(left, x);
+        top = Math.min(top, y);
+        right = Math.max(right, x);
+        bottom = Math.max(bottom, y);
+    }
+    // Include a neighboring floor trigger and a two-tile counter approach.
+    return { left: left - 2, top: top - 2, right: right + 2, bottom: bottom + 2 };
+}
+
+function outsideSpokenRoute(job, actor) {
+    const bounds = job.spokenBounds;
+    if (!bounds || !Number.isInteger(actor._eventId) || actor._eventId === job.target ||
+        !Number.isFinite(actor._x) || !Number.isFinite(actor._y) ||
+        !Number.isFinite(actor._realX) || !Number.isFinite(actor._realY)) return false;
+    const box = actor.blockerProperties;
+    const left = Math.min(actor._x, actor._realX) + (box ? Math.min(0, box.x1) : 0);
+    const right = Math.max(actor._x, actor._realX) + (box ? Math.max(0, box.x2) : 0);
+    const top = Math.min(actor._y, actor._realY) + (box ? Math.min(0, box.y1) : 0);
+    const bottom = Math.max(actor._y, actor._realY) + (box ? Math.max(0, box.y2) : 0);
+    return right < bounds.left || left > bounds.right || bottom < bounds.top || top > bounds.bottom;
+}
 
 function remoteBookmarkAvailable(map, mode, bookmark) {
     return bookmark.mode === 'walk' && bookmark.map !== map &&
@@ -51,16 +82,18 @@ function createField(root, host, notifications) {
         return cave.available(scene) ? cave : null;
     }
 
-    function ready(scene, moving = false) {
+    function ready(scene, moving = false, waking = false) {
         const player = root.$gamePlayer;
         const map = root.$gameMap;
-        return !!(scene?._wqaFieldReady && !scene._wqaSettingsActive &&
+        const nativeField = scene?._wqaFieldReady || waking && scene?._wqaMapRestored && scene._mapLoaded &&
+            scene._started && scene._prevCanMove && scene.srcWendy && scene.srcStones;
+        return !!(nativeField && !scene._wqaSettingsActive &&
             scene === host.manager._scene && host.graphics.app?.stage === scene &&
             !host.manager._nextScene && !host.manager._exiting && !host.manager._wqaNativeAutosaves &&
             !host.graphics._wqaResize && !host.screenFading() && host.hasFocus() && !scene._wqaTerrainWork &&
             scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 && root.$gameScreen?._brightness === 255 &&
-            map?.inactiveTime < 30 && (!map._needsRefresh || (map._mapId === 13 && scene._wqaLightningRefreshOnly)) &&
-            !map._needsTilemapRefresh && !player?._transferring &&
+            (waking || map?.inactiveTime < 30) && (!map?._needsRefresh || (map._mapId === 13 && scene._wqaLightningRefreshOnly)) &&
+            map && !map._needsTilemapRefresh && !player?._transferring &&
             !player?._vehicleGettingOn && !player?._vehicleGettingOff &&
             !root.$gameMessage?.isBusy() && !map?._interpreter?._list && travelMode(map, player) &&
             !player._moveRouteForcing && (moving || player._x === player._realX && player._y === player._realY) &&
@@ -89,6 +122,7 @@ function createField(root, host, notifications) {
         active = null;
         scene._wqaRouteActive = false;
         scene._wqaStepNavigation = false;
+        scene._wqaNavigationWake = false;
         scene._wqaCaveReview = false;
         scene._wqaQuestNavigation = false;
         scene._wqaPreviewUntil = 0;
@@ -128,6 +162,12 @@ function createField(root, host, notifications) {
             }
             return;
         }
+        // A distant event can move before the speech helper reads this
+        // route. Keep spoken directions admitted when the move could not
+        // reach the spoken portion or its final interaction.
+        if (job.mode === 'walk' && root.$dataMap?.scrollType === 0 && !job.area && !job.remote && !job.vehicle &&
+            !job.autowalk && !host.beacon?.enabled() && !timedCave(job.map) && !result.reenter)
+            job.spokenBounds = spokenRouteBounds(job.x, job.y, record.legs);
         present(job, record);
     }
 
@@ -439,7 +479,7 @@ function createField(root, host, notifications) {
 
     function perform(job) {
         const movingReport = job.action === 'navigationReport';
-        if (active !== job || job.step || !ready(job.scene, movingReport)) return;
+        if (active !== job || job.step || job.idle || !ready(job.scene, movingReport)) return;
         if (navigationRequest(job) && inFlight) return;
         if (movingReport) return present(job, job.text, true);
         if (job.action === 'status') return status(job, job.text);
@@ -496,11 +536,11 @@ function createField(root, host, notifications) {
     function queue(job) {
         const { scene } = job;
         active = { ...job, sequence: ++sequence };
-        scene._wqaStepNavigation = !!job.step;
+        scene._wqaStepNavigation = !!(job.step || job.idle);
         scene._wqaCaveReview = timedCave(root.$gameMap._mapId);
         scene._wqaRouteActive = !scene._wqaCaveReview && !autowalk.active(scene);
         scene._wqaPresentation = true;
-        if (!job.step) afterRender();
+        if (!scene._wqaStepNavigation) afterRender();
     }
 
     function pendingAutowalk(scene) {
@@ -533,7 +573,8 @@ function createField(root, host, notifications) {
         const reporting = action === 'navigationReport';
         const navigation = navigationRequest({ action });
         const canWaitForStep = navigation && !timedCave(root.$gameMap?._mapId);
-        if (!ready(scene, reporting || canWaitForStep) || sequence >= 0x7ffffffe) return false;
+        const idle = canWaitForStep && root.$gameMap?.inactiveTime >= 30;
+        if (!ready(scene, reporting || canWaitForStep, idle) || sequence >= 0x7ffffffe) return false;
         const player = root.$gamePlayer;
         const step = canWaitForStep && (player._x !== player._realX || player._y !== player._realY) ?
             { x: player._x, y: player._y } : null;
@@ -554,7 +595,10 @@ function createField(root, host, notifications) {
             owner.remoteBookmark = null;
             transfers.clear();
         }
-        queue({ scene, action, changes, text, step, retries: 0 });
+        queue({ scene, action, changes, text, step, idle, retries: 0 });
+        // An accepted pathfinder key is activity in the native idle detector.
+        // It never supplies a game action or changes the timer directly.
+        if (canWaitForStep) scene._wqaNavigationWake = true;
         return true;
     }
 
@@ -644,13 +688,21 @@ function createField(root, host, notifications) {
             return autowalk.active(scene) ? command('navigationReport', { kind: 'fieldStatus', name: text }) :
                 command('status', text);
         },
+        idleInput(scene) {
+            scene._wqaNavigationWake = false;
+            return active?.scene === scene && ready(scene, true, active.idle);
+        },
+        interactionReady(scene) {
+            return !(active?.scene === scene && navigationRequest(active)) && ready(scene);
+        },
         stepReady(scene) {
             const job = active;
-            if (job?.scene !== scene || !job.step) return;
+            if (job?.scene !== scene || !(job.step || job.idle)) return;
             const player = root.$gamePlayer;
-            if (!ready(scene) || player._x !== job.step.x || player._y !== job.step.y) return retire(scene);
+            if (!ready(scene) || (job.step && (player._x !== job.step.x || player._y !== job.step.y))) return retire(scene);
             scene._wqaStepNavigation = false;
             job.step = null;
+            job.idle = false;
             afterRender();
         },
         changed(scene, steppedActor) {
@@ -663,7 +715,7 @@ function createField(root, host, notifications) {
             if (inFlight !== job) {
                 // A fresh capture already sees the next pose. Once browse
                 // speech starts, ordinary ambient steps need no new result.
-                if (!job.performed || job.action !== 'directions') return;
+                if (!job.performed || job.action !== 'directions' || outsideSpokenRoute(job, steppedActor)) return;
                 return retire(scene);
             }
             if (!ready(scene)) return retire(scene);

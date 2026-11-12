@@ -10,8 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PLUGINS = Path(sys.argv[1]) / 'js' / 'plugins'
 decode = runpy.run_path(str(ROOT / 'tools' / 'inspect-plugin.py'))['decode']
 between = runpy.run_path(str(ROOT / 'tests' / 'file-producers.py'))['between']
-from registration import (CANVAS_REL, CORE_REL, MANAGERS_REL, MAP_REL, OBJECTS_REL, SCENES_REL, TILE_REL, WINDOW_REL,
-                          canvas_notification, core_notification, managers_notification, map_notification,
+from registration import (CANVAS_REL, CORE_REL, MANAGERS_REL, MAP_REL, MENU_REL, OBJECTS_REL, SCENES_REL, TILE_REL, WINDOW_REL,
+                          canvas_notification, core_notification, managers_notification, map_notification, menu_notifications,
                           objects_notification, scenes_notification, tile_notification, window_notification)
 
 
@@ -41,6 +41,23 @@ def read_methods(file, transform, pairs):
             for target, name, tail in pairs]
 
 
+if sys.argv[2:] == ['splash']:
+    names = ['totalWaitCount', 'getTimeWaited', 'getPhase', 'initWaitCount', 'getTotalPercent', 'checkSkip',
+             'updateWaitCount', 'updateWendy', 'update81Monkeys', 'getPhasePercent', 'gotoTitle']
+    pairs = [('Scene_Splash', name, f"}},Scene_Splash['prototype']['{after}']") for name, after in zip(names, names[1:])]
+    pairs.append(('Scene_Splash', 'gotoTitle', "},Scene_MenuBase['prototype']['createBackground']"))
+    print(json.dumps(read_methods(MENU_REL.name, menu_notifications, pairs)))
+    sys.exit()
+
+if sys.argv[2:] == ['interaction']:
+    print(json.dumps(read_methods(MAP_REL.name, map_notification, [
+        ('Game_Player', 'canTriggerEvent', "},Game_Player['prototype']['findEventsAt']"),
+        ('Game_Player', 'findEventsAt', "},Game_Player['prototype']['triggerTouchActionD3']"),
+        ('Game_Player', 'update', "},Game_Player['prototype']['onSceneEnd']"),
+    ])))
+    sys.exit()
+
+
 methods = read_methods(MAP_REL.name, map_notification, [
     ('Scene_Map', 'start', "},Scene_Map['prototype']['forceLeaveVehicle']"),
     ('Scene_Map', 'doSceneStart', "},Scene_Map['prototype']['createStatusWindow']"),
@@ -60,7 +77,7 @@ for relative, transform, names in [
     (CORE_REL, core_notification, ['Graphics._onWindowResize']),
     (SCENES_REL, scenes_notification, ['Scene_Base.prototype.startFadeOut']),
     (OBJECTS_REL, objects_notification, ['Game_Player.prototype.reserveTransfer', 'Game_Screen.prototype.startFadeOut',
-                                        'Game_Interpreter.prototype.setup', 'Game_Interpreter.prototype.loadImages',
+                                        'Game_Event.prototype.start', 'Game_Interpreter.prototype.setup', 'Game_Interpreter.prototype.loadImages',
                                         'Game_CharacterBase.prototype.setPosition', 'Game_CharacterBase.prototype.moveStraight',
                                         'Game_Map.prototype.setupStartingMapEvent', 'Game_Map.prototype.requestRefresh',
                                         'Game_Map.prototype.update', 'Game_Map.prototype.refreshIfNeeded',

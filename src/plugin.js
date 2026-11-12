@@ -3,6 +3,7 @@
 const { createRenderer } = require('./runtime/renderer');
 const { createAudio } = require('./runtime/audio');
 const { createTitleObserver, presented } = require('./frontend/title');
+const { createSplashObserver, splashReady } = require('./frontend/splash');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
 const { createMenuObserver } = require('./menus/observer');
 const { createBattleFocus } = require('./battle/focus');
@@ -14,6 +15,7 @@ const { createRadialResult } = require('./battle/radial-result');
 const { partyVitals, menuVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
+const { createInteractionPrompt } = require('./world/interaction-prompt');
 const { createAutosaveNotice } = require('./world/autosave-notice');
 const { createField } = require('./world/field');
 const { createWallAudio } = require('./world/wall-audio');
@@ -31,6 +33,8 @@ const QUEST_ACTIONS = Object.freeze({ questDetails: 'details', questPrevious: 'r
 
 function boot(root, nodeRequire, nodeProcess) {
     let title = null;
+    let splash = null;
+    let splashWaiting = null;
     let files = null;
     let menus = null;
     let battleFocus = null;
@@ -41,6 +45,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let radialResult = null;
     let quests = null;
     let mapBanner = null;
+    let interaction = null;
     let autosaveNotice = null;
     let dialogue = null;
     let credits = null;
@@ -130,6 +135,7 @@ function boot(root, nodeRequire, nodeProcess) {
         host.bookmarks = () => settings?.bookmarkEntries() || [];
         audio = createAudio(host);
         title = createTitleObserver(host, notifications);
+        splash = createSplashObserver(host, notifications);
         files = createFilesObserver(host, notifications);
         menus = createMenuObserver(root, host, notifications, () => speechPreferences);
         battleCues = createBattleCues(root, host, audio, () => audioPreferences);
@@ -147,6 +153,7 @@ function boot(root, nodeRequire, nodeProcess) {
         dialogue = createDialogueObserver(host, notifications);
         credits = createCredits(root, host, notifications, host.speechPreferences);
         field = createField(root, host, notifications);
+        interaction = createInteractionPrompt(root, host, field.interactionReady, notifications);
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
         quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
@@ -227,8 +234,12 @@ function boot(root, nodeRequire, nodeProcess) {
         function fieldAction(action) {
             const questAction = QUEST_ACTIONS[action];
             if (questAction) return quests.command(host.manager._scene, questAction);
-            if (action !== 'beaconToggle' && action !== 'wallToggle') return field.command(action);
             const scene = host.manager._scene;
+            if (action !== 'beaconToggle' && action !== 'wallToggle') {
+                if (!field.command(action)) return false;
+                if (scene._wqaInteractionActive && !field.interactionReady(scene)) interaction.leave(scene);
+                return true;
+            }
             if (!field.ready(scene)) return false;
             const text = settings.toggleFieldAudio(action, () => {
                 if (host.manager._scene === scene) field.report('Could not save audio settings. Previous setting restored.');
@@ -280,6 +291,7 @@ function boot(root, nodeRequire, nodeProcess) {
                     owner.group === panel && controlContext() === owner && !host.screenFading(), report, audio.cues[cue], gain);
             },
             suspend(scene) {
+                interaction.leave(scene);
                 wall.leave(scene);
                 beacon.stop(scene);
                 caveTiming.stop(scene);
@@ -354,6 +366,8 @@ function boot(root, nodeRequire, nodeProcess) {
             if (root.Input?._wqaSettingsPads) delete root.Input._wqaSettingsPads[event.gamepad.index];
         });
         for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+            splash.leave(host.manager._scene);
+            interaction.leave(host.manager._scene);
             wall.leave();
             beacon.stop();
             caveTiming.stop();
@@ -378,6 +392,31 @@ function boot(root, nodeRequire, nodeProcess) {
         });
         root.Graphics._wqaFrontEndObserved = true;
     }
+
+    root.WendyQuestAccessSplashLeaving = function (scene) {
+        if (splashWaiting === scene) splashWaiting = null;
+        splash?.leave(scene);
+    };
+    root.WendyQuestAccessSplashReady = function (scene, phase) {
+        const host = { ...view(), hasFocus: () => root.document.hasFocus() };
+        try {
+            if (!supported() || !(scene instanceof root.Scene_Splash) || splashWaiting === scene ||
+                !splashReady(host, scene, phase)) return;
+            const renderer = host.graphics.app?.renderer;
+            if (typeof renderer?.once !== 'function') return;
+            splashWaiting = scene;
+            scene._wqaPresentation = true;
+            renderer.once('postrender', () => {
+                if (splashWaiting !== scene) return;
+                splashWaiting = null;
+                try {
+                    if (!splashReady(host, scene, phase)) return;
+                    if (!splash) initialize();
+                    splash.observe(scene, phase);
+                } catch { splash?.leave(scene); }
+            });
+        } catch { splashWaiting = null; }
+    };
 
     // The installer's source-checked notification invokes this after the
     // native title intro activates its own command window. Loading the plugin
@@ -565,6 +604,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessStepNavigationReady = function (scene) { field?.stepReady(scene); };
+    root.WendyQuestAccessIdleInput = function (scene) { return field?.idleInput(scene); };
 
     root.WendyQuestAccessFieldChanged = function (scene, steppedActor) {
         quests?.suspend(scene);
@@ -575,7 +615,11 @@ function boot(root, nodeRequire, nodeProcess) {
         else beacon?.invalidate(scene);
         field?.changed(scene, steppedActor);
     };
+    root.WendyQuestAccessInteractionUpdate = function (scene, icon) {
+        try { interaction?.update(scene, icon); } catch { interaction?.leave(scene); }
+    };
     root.WendyQuestAccessFieldControlLost = function (scene) {
+        interaction?.leave(scene);
         quests?.suspend(scene);
         soundscape?.leave(scene);
         wall?.leave(scene);
@@ -592,6 +636,7 @@ function boot(root, nodeRequire, nodeProcess) {
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
     };
     root.WendyQuestAccessFieldEvent = function (scene) {
+        interaction?.leave(scene);
         autosaveNotice?.leave(scene);
         quests?.suspend(scene);
         soundscape?.leave(scene);
@@ -630,6 +675,7 @@ function boot(root, nodeRequire, nodeProcess) {
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
     root.WendyQuestAccessSceneLeaving = function (scene) {
+        root.WendyQuestAccessSplashLeaving(scene);
         quests?.leave(scene);
         soundscape?.leave(scene);
         wall?.leave(scene);
@@ -653,6 +699,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleLog?.leave(scene);
         radialResult?.retire(scene);
         mapBanner?.leave(scene);
+        interaction?.leave(scene);
         autosaveNotice?.leave(scene);
         credits?.leave(scene);
         dialogue?.leave(scene);
@@ -664,6 +711,7 @@ function boot(root, nodeRequire, nodeProcess) {
         filesWaiting = null;
         fieldWaiting = null;
         const scene = root.SceneManager._scene;
+        root.WendyQuestAccessSplashLeaving(scene);
         quests?.leave(scene);
         soundscape?.leave(scene);
         wall?.leave(scene);
@@ -676,6 +724,7 @@ function boot(root, nodeRequire, nodeProcess) {
         settings?.retire(scene);
         if (scene?._wqaPresentation) scene._wqaPresentation = false;
         mapBanner?.leave(scene);
+        interaction?.leave(scene);
         autosaveNotice?.leave(scene);
         credits?.leave(scene);
         dialogue?.leave(scene);

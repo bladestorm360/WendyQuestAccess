@@ -88,7 +88,9 @@ function Scene_Title() {
     this._started = true;
     this._active = true;
     this._fadeDuration = 0;
-    this.spr_ui_start = { alpha: 1 };
+    const art = { parent: this, worldVisible: true, worldAlpha: 1, texture: { valid: true } };
+    this.spr_logo = art;
+    this.spr_ui_start = { ...art, alpha: 1 };
     this.spr_black_rect = { alpha: 0 };
     this._commandWindow = { active: true, visible: true, openness: 255, _index: 0,
         _list: [{ name: 'Synthetic title command', enabled: true }], select() {}, callHandler() {},
@@ -526,6 +528,18 @@ const interval = setInterval(() => {
         const fs = require('fs');
         const scene = SceneManager._scene;
         if (mapVitalsStep === 0) {
+            if (!$gamePlayer._interactIcon) {
+                const icon = $gamePlayer._interactIcon = { parent: scene, visible: true, worldVisible: true,
+                    worldAlpha: 1, scale: { x: 1, y: 1 }, x: 32, y: 32 };
+                icon.children = [{ parent: icon, worldVisible: true, worldAlpha: 1, texture: { valid: true } }];
+                $gamePlayer._iconState = 1;
+                WendyQuestAccessInteractionUpdate(scene, icon);
+                Graphics.app.renderer.emit('postrender');
+                return;
+            }
+            if (!fs.existsSync(receipt + '.interaction-prompt')) return;
+            $gamePlayer._iconState = 2;
+            WendyQuestAccessInteractionUpdate(scene, null);
             fs.writeFileSync(receipt + '.field-vitals-stage', '');
             const visible = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
             const hud = scene._statusWindow = { ...visible(scene), offsetY: 0, states: [],
@@ -1824,6 +1838,12 @@ parentPort.on('message', message => {
         parentPort.postMessage('ack');
         return;
     }
+    if (message.kind === 'interactionPrompt') {
+        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
+            fs.writeFileSync(receipt + '.interaction-prompt', formatSpeech(message));
+        parentPort.postMessage('ack');
+        return;
+    }
     records.push({ sameEpoch: Atomics.load(new Int32Array(workerData), 0) === message.epoch,
         epoch: message.epoch, name: message.name, kind: message.kind, slot: message.slot, empty: message.empty,
         text: message.text, append: message.append, speech: formatSpeech(message) });
@@ -1974,6 +1994,9 @@ def main():
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
                 banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:14]}) != 13:
             raise RuntimeError(f'NW fixture did not deliver distinct presentation epochs: {data}')
+        if title['speech'] != 'WendyQuest. Legend of the Four Corner Stones. Start. Synthetic title command' or \
+                receipt.with_suffix('.json.interaction-prompt').read_text(encoding='utf8') != 'Interact':
+            raise RuntimeError('NW did not speak the presented title artwork and interaction prompt')
         if [item.get('name') for item in (first, second, third)] != ['Synthetic wall', 'Synthetic switch', 'Synthetic wall'] or \
                 any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
             raise RuntimeError(f'NW field selection or layout priority failed: {data}')

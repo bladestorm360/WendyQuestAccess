@@ -1,5 +1,6 @@
 'use strict';
 
+const { renderedSprite } = require('../runtime/rendered-sprite');
 const LIMIT_TITLE_LABEL = 256;
 
 function presented(host, scene, window) {
@@ -30,6 +31,7 @@ function createTitleObserver(host, notifications) {
     let generation = 0;
     let closing = false;
     let loadFailed = false;
+    let readArt = false;
 
     function close() {
         if (!generation) return;
@@ -44,6 +46,11 @@ function createTitleObserver(host, notifications) {
         const focused = readFocused(observedWindow);
         if (focused) {
             focused.loadFailed = loadFailed;
+            if (!readArt && renderedSprite(observedScene.spr_logo, observedScene)) {
+                focused.titleArt = true;
+                focused.startArt = renderedSprite(observedScene.spr_ui_start, observedScene);
+                readArt = true;
+            }
             generation = notifications.open(focused);
             if (generation) loadFailed = false;
         }
@@ -100,6 +107,7 @@ function createTitleObserver(host, notifications) {
             observedWindow = window;
             closing = false;
             loadFailed = scene._wqaRetryFailed === true;
+            readArt = false;
         }
         openIfPresented();
         return true;

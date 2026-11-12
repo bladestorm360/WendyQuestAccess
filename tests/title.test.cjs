@@ -6,6 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { createRenderer } = require('../src/runtime/renderer');
 const { createTitleObserver } = require('../src/frontend/title');
+const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 // Installed functions are the test input. Their source is not copied into the
 // repo. PIXI rendering and the custom intro's final state are represented by
@@ -97,7 +98,8 @@ window.active = true;
 manager.updateScene();
 assert.equal(observeTitle(scene), false);
 assert.equal(timers.length, 0);
-scene.spr_ui_start.alpha = 1;
+Object.assign(scene.spr_ui_start, { alpha: 1, worldAlpha: 1, worldVisible: true, texture: { valid: true }, parent: scene });
+scene.spr_logo = { parent: scene, worldAlpha: 1, worldVisible: true, texture: { valid: true } };
 scene.spr_black_rect.alpha = 0;
 manager.updateScene();
 assert.equal(observeTitle(scene), true);
@@ -107,9 +109,11 @@ assert.equal(messages.length, 1);
 assert.equal(messages[0].name, originalLabel);
 assert.equal(messages[0].epoch, Atomics.load(admission, 0));
 assert.equal(messages[0].loadFailed, true);
+assert.match(formatSpeech(messages[0]), /WendyQuest\. Legend of the Four Corner Stones\. Start\. Synthetic action/);
 window.select(1);
 assert.equal(messages[1].name, 'Synthetic second action');
 assert.equal(messages[1].loadFailed, undefined);
+assert.equal(messages[1].titleArt, undefined, 'moving focus does not replay the artwork');
 acceptThisFrame = true;
 manager.updateScene();
 assert.equal(nativeAccepted, 1);

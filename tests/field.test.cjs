@@ -293,6 +293,20 @@ async function verifyOpeningField(tilesets) {
     f.frame();
     assert(f.packets.some(packet => packet.kind === 'routeDirections'));
 
+    map.inactiveTime = 30;
+    c.SceneManager.updateScene();
+    assert.equal(scene._wqaFieldReady, false, 'native idle temporarily closes field admission');
+    key('p', 80);
+    f.frame();
+    assert.equal(routePackets.at(-1), directions, 'idle input cannot start work until the native wake');
+    c.SceneManager.updateScene();
+    f.frame();
+    const afterIdle = routePackets.at(-1);
+    assert.notEqual(afterIdle.sequence, directions.sequence, 'a single directions press wakes the field and submits a route');
+    assert.equal(afterIdle.request.event, 14);
+    submit(afterIdle, solveRoute(base, afterIdle.live, afterIdle.request));
+    f.frame();
+
     for (const phase of ['before', 'after', 'quest']) {
         otherChange = phase;
         c.SceneManager.updateScene();
@@ -302,7 +316,7 @@ async function verifyOpeningField(tilesets) {
         key('p', 80);
         f.frame();
         assert.equal(settingsAttempts, 1);
-        assert.equal(routePackets.at(-1), directions);
+        assert.equal(routePackets.at(-1), afterIdle);
     }
     otherChange = '';
     c.SceneManager.updateScene();
@@ -312,7 +326,7 @@ async function verifyOpeningField(tilesets) {
     key('p', 80);
     f.frame();
     assert.equal(settingsAttempts, 1, 'a genuine refresh after the frame closes the immediate keyboard gate');
-    assert.equal(routePackets.at(-1), directions);
+    assert.equal(routePackets.at(-1), afterIdle);
 
     const barrelData = data.events[20];
     map._events[20] = Object.assign(f.event(20, 0), {
@@ -325,7 +339,7 @@ async function verifyOpeningField(tilesets) {
     key('p', 80);
     f.frame();
     const resumed = routePackets.at(-1);
-    assert.notEqual(resumed.sequence, directions.sequence);
+    assert.notEqual(resumed.sequence, afterIdle.sequence);
     assert.equal(resumed.request.event, 14, 'same-map retirement keeps Treasure selected instead of jumping to Objects');
     submit(resumed, solveRoute(base, resumed.live, resumed.request));
     f.frame();
@@ -367,6 +381,10 @@ async function verifyOpeningField(tilesets) {
     assert.notEqual(settled.sequence, retry.sequence, 'a directions key during the step uses its settled landing');
     assert.equal(settled.request.event, 20);
     submit(settled, solveRoute(base, settled.live, settled.request));
+    const directionEpoch = f.epoch();
+    assert(directionEpoch);
+    elder.moveStraight(6);
+    assert.equal(f.epoch(), directionEpoch, 'an unrelated actor step cannot revoke completed directions before the helper reads them');
     f.frame();
 
     key('k', 75);
