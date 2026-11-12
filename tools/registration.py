@@ -97,6 +97,8 @@ BATTLE_TARGET_LEAVING = (b'SceneManager._scene?._wqaBattleTargetActive&&'
                          b'globalThis.WendyQuestAccessBattleTargetLeaving?.(SceneManager._scene)')
 BATTLE_BAG_LEAVING = (b'SceneManager._scene?._wqaBattleBagActive&&'
                       b'globalThis.WendyQuestAccessMenuLeaving?.(SceneManager._scene)')
+BATTLE_TIMING_LEAVING = (b'SceneManager._scene?._wqaBattleTimingActive&&'
+                         b'globalThis.WendyQuestAccessBattleTimingLeaving?.(SceneManager._scene)')
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
@@ -255,6 +257,7 @@ def managers_notification(original):
         62230: b'\n    if(SceneManager._scene?._wqaBattleFocusActive&&this._phase!=="input")'
                b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);'
                b'\n    if(this._phase!=="input")' + BATTLE_BAG_LEAVING + b';'
+               b'\n    if(this._phase!=="ActionCommand")' + BATTLE_TIMING_LEAVING + b';'
                b'\n    if(this._phase!=="input"&&this._phase!=="ActionCommand")' + BATTLE_TARGET_LEAVING + b';',
         62280: b'        if(SceneManager._scene?._wqaBattleStarted){' + MAP_LEAVING + b'}\n',
     })
@@ -322,7 +325,7 @@ def objects_notification(original):
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING +
                 b'if(SceneManager._scene?._wqaBattleFocusActive)'
                 b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);' +
-                BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';}',
+                BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
         257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
@@ -541,6 +544,21 @@ def battle_notification(original):
         }
     }
 '''
+    timing_update = b'''
+    {
+        const wqaAction = BattleManager._currentActionCommand;
+        if (this._wqaBattleStarted && BattleManager._phase === 'ActionCommand' &&
+            wqaAction?._wqaTimingWaiting && wqaAction._cancelable && wqaAction._coroutineContainer &&
+            BattleManager._wqaDialogueBusy === false && this._fadeDuration === 0 && this._fadeOpacity === 0 &&
+            !this._wqaSettingsActive && !SceneManager._nextScene && !SceneManager._exiting &&
+            !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this) {
+            if (!wqaAction._wqaTimingPromptSeen)
+                globalThis.WendyQuestAccessBattleTimingReady?.(this,wqaAction);
+        } else if (this._wqaBattleTimingActive) {
+            globalThis.WendyQuestAccessBattleTimingLeaving?.(this);
+        }
+    }
+'''
     # Keep the exact availability and quantity expressions in the native
     # draw calls. Capture them only for a live battle inventory row.
     bag_row = b'''
@@ -562,13 +580,13 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         162176: b'((' + command_ready +
                 b')&&globalThis.WendyQuestAccessBattleFocusReady?.(SceneManager._scene,this),',
         162205: b')',
-        192463: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';',  # Return to native input
+        192463: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';',
         193431: b'(this._wqaDialogueBusy=',
         193508: b')',
-        196596: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';',  # Native action start
+        196596: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';',
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=undefined;',
-        242214: target_update + bag_update + dialogue_update(ready),
+        242214: target_update + bag_update + timing_update + dialogue_update(ready),
         253388: bag_row,
         253468: b'(wqaBagRow?(wqaBagRow.enabled=',
         253501: b'):' + original[253468:253501] + b')',
@@ -583,10 +601,13 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
 
 
 def action_notification(original):
+    timing_leaving = (b'(this._wqaTimingWaiting&&(this._wqaTimingWaiting=false,' + BATTLE_TIMING_LEAVING + b'))')
     return insert(original, ACTION_SHA, {
-        25684: BATTLE_TARGET_LEAVING + b',',  # Accepted cancellation, before coroutine effects
-        48198: BATTLE_TARGET_LEAVING + b';',  # Native radial cleanup
-        67814: BATTLE_TARGET_LEAVING + b';',  # Native radial windup starts
+        25684: BATTLE_TARGET_LEAVING + b',' + timing_leaving + b',',  # Accepted cancellation
+        48198: BATTLE_TARGET_LEAVING + b';' + timing_leaving + b';',  # Native radial cleanup
+        67807: b'if(!this._wqaTimingWaiting&&this===BattleManager._currentActionCommand&&'
+               b'SceneManager._scene?._wqaBattleStarted)this._wqaTimingWaiting=true;',  # Ready input loop
+        67814: BATTLE_TARGET_LEAVING + b';' + timing_leaving + b';',  # Native windup starts
     })
 
 

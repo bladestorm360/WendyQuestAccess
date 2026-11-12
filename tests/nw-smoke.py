@@ -1114,12 +1114,16 @@ const interval = setInterval(() => {
                 _frame: { x: 32, y: 128, width: 32, height: 32 },
                 bitmap: { width: 576, height: 720, isReady: () => true } };
             scene._spriteset._enemySprites = [sprite];
-            Object.assign(BattleManager, { _phase: 'ActionCommand', _targets: [enemy],
-                _currentActionCommand: { _cancelable: true, _coroutineContainer: {} } });
+            const action = { _cancelable: true, _coroutineContainer: {}, _wqaTimingWaiting: true,
+                _spriteBase: { parent: scene } };
+            action._backing = drawn(action._spriteBase);
+            Object.assign(BattleManager, { _phase: 'ActionCommand', _targets: [enemy], _currentActionCommand: action });
             WendyQuestAccessBattleTargetReady(scene);
+            WendyQuestAccessBattleTimingReady(scene, action);
             Graphics.app.renderer.emit('postrender');
             endingStep = 34;
-        } else if (endingStep === 34 && fs.existsSync(receipt + '.battle-target-autodetail')) {
+        } else if (endingStep === 34 && fs.existsSync(receipt + '.battle-target-autodetail') &&
+            fs.existsSync(receipt + '.battle-target-timing')) {
             pad();
             if (padTap(7) !== 1 << 7) throw Error('Battle target mod mode did not claim its binding');
             endingStep = 35;
@@ -1134,6 +1138,7 @@ const interval = setInterval(() => {
         } else if (endingStep === 39 && fs.existsSync(receipt + '.battle-target-vitals')) {
             const scene = SceneManager._scene;
             WendyQuestAccessBattleTargetLeaving(scene);
+            WendyQuestAccessBattleTimingLeaving(scene);
             if (scene._wqaBattleTargetControl) throw Error('Retired target still owns controller review');
             fs.unlinkSync(receipt + '.battle-target-stage');
             fs.writeFileSync(receipt + '.battle-bag-stage', '');
@@ -1222,7 +1227,8 @@ parentPort.on('message', message => {
             const suffix = message.kind === 'menuFocus' ? 'focus' :
                 message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'hp') :
                     vitals === 'Synthetic companion' ? 'slot2' : message.append ? 'autodetail' : 'details') :
-                message.kind === 'menuReview' ? 'review' : message.kind === 'controllerStatus' ? 'mode' : '';
+                message.kind === 'menuReview' ? (target && message.append ? 'timing' : 'review') :
+                message.kind === 'controllerStatus' ? 'mode' : '';
             const prefix = target ? '.battle-target-' :
                 fs.existsSync(receipt + '.battle-bag-stage') ? '.battle-bag-' : '.battle-';
             if (suffix) fs.writeFileSync(receipt + prefix + suffix, speech);
@@ -1414,8 +1420,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--archive', type=Path, required=True)
     parser.add_argument('--installed', type=Path, required=True)
+    parser.add_argument('--scratch-root', type=Path, required=True,
+                        help='Existing workspace scratch directory outside every Git tree')
     args = parser.parse_args()
-    temp_base = Path(tempfile.gettempdir()).resolve()
+    temp_base = args.scratch_root.resolve(strict=True)
+    if not temp_base.is_dir() or any((parent / '.git').exists() for parent in (temp_base, *temp_base.parents)):
+        parser.error('The scratch directory must be outside every Git tree')
     with tempfile.TemporaryDirectory(prefix='wendy-nw-fixture-', dir=temp_base) as name:
         runtime = Path(name).resolve()
         if runtime.parent != temp_base or runtime.is_relative_to(ROOT):
@@ -1426,7 +1436,7 @@ def main():
                   else 'differs from installed', flush=True)
         receipt = fixture(runtime, args.installed)
         launch = [str(runtime / 'nw.exe'), f'--user-data-dir={runtime / "profile"}']
-        environment = {**os.environ, 'SDL_AUDIO_DRIVER': 'dummy'}
+        environment = {**os.environ, 'SDL_AUDIO_DRIVER': 'dummy', 'TEMP': str(runtime), 'TMP': str(runtime)}
         result, errors = run_fixture(launch, runtime, environment)
         if not receipt.exists():
             raise RuntimeError(f'NW exited {result} without a receipt: {errors!r}')
@@ -1500,6 +1510,7 @@ def main():
             'battle-hp': 'Synthetic hero. HP 8 of 14',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
+            'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',
             'battle-autodetail': 'Shield raised. Cost 2 MP',
             'battle-details': 'Shield raised. Cost 2 MP',
             'battle-review': 'Cost 2 MP, 2 of 2',

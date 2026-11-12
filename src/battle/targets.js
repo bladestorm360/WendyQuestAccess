@@ -182,7 +182,12 @@ function createBattleTargets(root, host, notifications, preferences) {
             } else return false;
             return true;
         },
-        announce(page, record) { if (page === current && live(page)) show(page, record); }
+        announce(page, record) { if (page === current && live(page)) show(page, record); },
+        appendTiming(scene, action, record) {
+            if (current?.scene !== scene || current.action !== action || !live(current)) return false;
+            notifications.focus(current.epoch, { ...record, append: true });
+            return true;
+        }
     };
 }
 

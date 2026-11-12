@@ -38,6 +38,19 @@ def manager_method(source, name):
     return source[start:end + 1] + ';'
 
 
+if sys.argv[2:] == ['timing']:
+    action, _ = decode(action_notification((installed / ACTION_REL).read_bytes()).decode('utf8'))
+    methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]
+    methods.extend(sprite_method(action, 'ActionCommand', name) for name in ('InputPressed', 'CancelInputPressed', 'Cancel'))
+    start = action.index("for(;!this['InputPressed']();){")
+    end = action.index(",BattleManager['hideAllSelectionArrows']()", start)
+    methods.append('ActionCommand.prototype.nativeWait = function* () {'
+                   'const _0x26a0b4 = {}, _0xd97bf1 = () => {};'
+                   + action[start:end] + ';};')
+    print(json.dumps(methods))
+    sys.exit(0)
+
+
 if sys.argv[2:] == ['bag']:
     scenes = scenes_notification((installed / SCENES_REL).read_bytes()).decode('utf8')
     windows = (installed / WINDOWS_REL).read_text(encoding='utf-8-sig')

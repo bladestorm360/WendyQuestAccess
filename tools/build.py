@@ -40,6 +40,7 @@ def bundle():
         '../menus/review': 'menus/review.js',
         './battle/focus': 'battle/focus.js',
         './battle/targets': 'battle/targets.js',
+        './battle/timing': 'battle/timing.js',
         './enemy-state': 'battle/enemy-state.js',
         './presentation': 'battle/presentation.js',
         '../battle/presentation': 'battle/presentation.js',

@@ -7,6 +7,7 @@ const { createFilesObserver, fileWindow, isReady } = require('./frontend/files')
 const { createMenuObserver } = require('./menus/observer');
 const { createBattleFocus } = require('./battle/focus');
 const { createBattleTargets } = require('./battle/targets');
+const { createBattleTiming } = require('./battle/timing');
 const { partyVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
@@ -28,6 +29,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let menus = null;
     let battleFocus = null;
     let battleTargets = null;
+    let battleTiming = null;
     let quests = null;
     let mapBanner = null;
     let dialogue = null;
@@ -111,6 +113,7 @@ function boot(root, nodeRequire, nodeProcess) {
         menus = createMenuObserver(root, host, notifications, () => speechPreferences);
         battleFocus = createBattleFocus(root, host, notifications, () => speechPreferences);
         battleTargets = createBattleTargets(root, host, notifications, () => speechPreferences);
+        battleTiming = createBattleTiming(root, host, notifications, battleTargets);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
@@ -232,6 +235,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 menus.suspend(scene);
                 battleFocus.retire(scene);
                 battleTargets.retire(scene);
+                battleTiming.retire(scene);
                 quests.suspend(scene);
                 field.autowalk.stop(scene);
                 field.changed(scene);
@@ -290,6 +294,7 @@ function boot(root, nodeRequire, nodeProcess) {
             menus.retire(host.manager._scene);
             battleFocus.retire(host.manager._scene);
             battleTargets.retire(host.manager._scene);
+            battleTiming.retire(host.manager._scene);
             quests.leave(host.manager._scene);
             controller.reset();
         });
@@ -376,6 +381,11 @@ function boot(root, nodeRequire, nodeProcess) {
         try { battleTargets?.observe(scene); } catch { battleTargets?.retire(scene); }
     };
     root.WendyQuestAccessBattleTargetLeaving = function (scene) { battleTargets?.retire(scene); };
+
+    root.WendyQuestAccessBattleTimingReady = function (scene, action) {
+        try { battleTiming?.observe(scene, action); } catch { battleTiming?.retire(scene); }
+    };
+    root.WendyQuestAccessBattleTimingLeaving = function (scene) { battleTiming?.retire(scene); };
 
     root.WendyQuestAccessQuestPaint = function (window) {
         try { return quests?.paint(window); } catch { return null; }
@@ -522,6 +532,7 @@ function boot(root, nodeRequire, nodeProcess) {
         menus?.retire(scene);
         battleFocus?.retire(scene);
         battleTargets?.retire(scene);
+        battleTiming?.retire(scene);
         mapBanner?.leave(scene);
         dialogue?.leave(scene);
         field?.leave(scene);
@@ -551,6 +562,7 @@ function boot(root, nodeRequire, nodeProcess) {
         menus?.retire(scene);
         battleFocus?.retire(scene);
         battleTargets?.retire(scene);
+        battleTiming?.retire(scene);
     };
 
     root.WendyQuestAccessResizeReady = function () {
