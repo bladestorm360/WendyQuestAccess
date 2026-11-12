@@ -179,6 +179,15 @@ function pad(...buttons) {
     return WendyQuestAccessPadSample(0, 'standard', 'Xbox fixture', buttons.reduce((mask, button) => mask | 1 << button, 0));
 }
 function padTap(button) { const mask = pad(button); pad(); return mask; }
+function battleText(parent, value) {
+    const sprite = { parent, worldVisible: true, worldAlpha: 1, _dirty: false, _currentString: value, children: [] };
+    for (let position = 0; position < value.length; position++) {
+        if (value[position] === '\\n') continue;
+        sprite.children.push({ parent: sprite, worldVisible: true, worldAlpha: 1,
+            scale: { x: 1, y: 1 }, bitmap: { isReady: () => true } });
+    }
+    return sprite;
+}
 function padStick(x, y) { return WendyQuestAccessPadSample(0, 'standard', 'Xbox fixture', 0, x, y); }
 function choose(label) {
     const button = Array.from(document.querySelectorAll('dialog button')).find(item => item.textContent.startsWith(label));
@@ -1063,11 +1072,9 @@ const interval = setInterval(() => {
             window.BattleManager = { _phase: 'input', _inputting: true, _wqaDialogueBusy: false };
             const option = { parent: layer, _hasFocus: true, _animationPosition: 1, _animationPositionTarget: 1,
                 worldVisible: true, worldAlpha: 1, _prerequisitesMet: true };
-            const drawn = value => ({ parent: option, worldVisible: true, worldAlpha: 1, _dirty: false,
-                _currentString: value, bitmap: { isReady: () => true } });
-            option._nameSprite = drawn('Synthetic guard');
-            option._subTextSprite = drawn('Shield raised');
-            option._costTextSprite = drawn('2 MP');
+            option._nameSprite = battleText(option, 'Synthetic guard');
+            option._subTextSprite = battleText(option, 'Shield raised');
+            option._costTextSprite = battleText(option, '2 MP');
             const actorData = { name: 'Synthetic hero', battlerName: 'Hero animation' };
             const actor = { actor: () => actorData };
             const visible = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
@@ -1081,7 +1088,7 @@ const interval = setInterval(() => {
             const hud = scene._statusWindow = { ...visible(scene), battler: actor, offsetY: 0, states: [] };
             for (const [key, value] of Object.entries({ _numberSprite: '8', _totalSprite: '14', _dividerSprite: '/',
                 _FPSprite: '3', _totalSpriteFP: '5', _dividerSpriteFP: '/', levelNumberSprite: '7' }))
-                hud[key] = { ...visible(hud), _dirty: false, _currentString: value };
+                hud[key] = battleText(hud, value);
             hud._HPIcon = visible(hud);
             hud._FPIcon = visible(hud);
             BattleManager._subject = actor;
@@ -1133,7 +1140,7 @@ const interval = setInterval(() => {
             const enemy = { isAlive: () => true };
             const sprite = { _enemy: enemy, _isSelected: true, x: 12, worldVisible: true, worldAlpha: 1 };
             const drawn = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
-            sprite._nameSprite = { ...drawn(sprite), _dirty: false, _currentString: 'Synthetic target' };
+            sprite._nameSprite = battleText(sprite, 'Synthetic target');
             sprite._selectorIconPivot = { parent: sprite };
             sprite._selectorIcon = drawn(sprite._selectorIconPivot);
             sprite._gaugeSprite = { ...drawn(sprite), _statusType: 'hp', _battler: enemy, gaugeRate: () => 0.5 };

@@ -38,6 +38,11 @@ def manager_method(source, name):
     return source[start:end + 1] + ';'
 
 
+def native_text_methods():
+    names = ('initialize', 'setText', 'RedrawText', 'createChildSprite', 'createBitmap', 'update')
+    return [sprite_method(text, 'Sprite_Text', name) for name in names]
+
+
 if sys.argv[2:] == ['log']:
     stock = windows_notification((installed / WINDOWS_REL).read_bytes()).decode('utf8')
     methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]
@@ -133,7 +138,7 @@ if sys.argv[2:] == ['vitals']:
     hud, _ = decode((installed / STATS_REL).read_text(encoding='utf-8-sig'))
     methods = [sprite_method(hud, 'RadialStatus', name) for name in
                ('SetBattler', 'SetFPText', 'AddState', 'SetStateFrame', 'RemoveState', 'UpdateStateIconPositions')]
-    methods.extend(sprite_method(text, 'Sprite_Text', name) for name in ('setText', 'update'))
+    methods.extend(native_text_methods())
     print(json.dumps(methods))
     sys.exit(0)
 
@@ -155,13 +160,14 @@ if sys.argv[2:] == ['targets']:
     start = battle.index("Sprite_EnemyGauge['prototype']['drawGaugeRect']=function(")
     end = battle.index('},Sprite_StarEffect', start)
     methods.append(battle[start:end + 1] + ';')
+    methods.extend(native_text_methods())
     print(json.dumps(methods))
     sys.exit(0)
 
 
 methods = [sprite_method(battle, 'Sprite_BattleOption', name) for name in
            ('hasFocus', 'focusGained', 'focusLost', 'getIsActive', 'canActivate', 'onClick', 'update')]
-methods.extend(sprite_method(text, 'Sprite_Text', name) for name in ('setText', 'update'))
+methods.extend(native_text_methods())
 start = manager.index('BattleManager.update = function(')
 end = manager.index('\n};', start) + 3
 methods.append(manager[start:end])

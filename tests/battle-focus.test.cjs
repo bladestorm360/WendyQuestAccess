@@ -6,6 +6,7 @@ const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const vm = require('node:vm');
 const { createBattleFocus } = require('../src/battle/focus');
+const { nativeTextHost } = require('./native-text-host.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 const { methods, baseline_update: baselineUpdate } = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
@@ -18,7 +19,7 @@ let paint = true;
 let activated = 0;
 let errors = 0;
 const c = vm.createContext({
-    Sprite_BattleOption: function () {}, Sprite_Text: function () {}, Sprite_UIButton: function () {}, Sprite: function () {},
+    ...nativeTextHost(), Sprite_BattleOption: function () {}, Sprite_UIButton: function () {},
     a2_0x990531() { throw Error('Unresolved battle property'); },
     a18_0x52f0af() { throw Error('Unresolved text property'); },
     SceneManager: { _scene: scene }, Graphics: { app: { stage: scene, renderer } },
@@ -28,7 +29,7 @@ const c = vm.createContext({
     BattleHelper: { IsBattleScene: () => true, unfocusAllBattleOptions() { for (const item of group) item.focusLost(); } },
     AudioManager: { playSe() { errors++; } }
 });
-c.Sprite.prototype.update = () => {};
+
 c.Sprite_UIButton.prototype.update = function () {
     if (!paint) return;
     for (const child of [this._nameSprite, this._subTextSprite, this._costTextSprite]) child?.update();
@@ -38,10 +39,7 @@ for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 const group = [];
 const actor = { _battleOptionsActive: 0, battleOptions: [group] };
 function text(parent, value) {
-    const sprite = Object.assign(new c.Sprite_Text(), { parent, worldVisible: true, worldAlpha: 1, _dirty: false,
-        _currentString: '', updateAnimation() {}, RedrawText() { this.bitmap = { isReady: () => true }; } });
-    sprite.setText(value);
-    return sprite;
+    return Object.assign(new c.Sprite_Text().setText(value), { parent });
 }
 function command(name, enabled) {
     const option = Object.assign(new c.Sprite_BattleOption(), { parent: scene._uiLayer, _followTarget: actor,
@@ -91,6 +89,12 @@ renderer.emit('postrender');
 const firstFocus = performance.now() - start;
 assert.equal(messages[0], 'Battle commands, Attack from paint, 1 of 2');
 assert(observer.controlOwner(scene));
+assert.equal(attack._nameSprite.bitmap, undefined);
+assert.equal(attack._nameSprite.children.map(glyph => glyph.bitmap.paint).join(''), 'Attack from paint');
+const finalGlyph = attack._nameSprite.children.at(-1);
+finalGlyph.scale.x = 0;
+assert.equal(observer.controlOwner(scene), null, 'an invisible glyph withholds the text');
+finalGlyph.scale.x = 1;
 
 attack.update();
 renderer.emit('postrender');

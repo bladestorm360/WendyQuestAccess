@@ -19,10 +19,20 @@ function visibleSprite(parent, sprite) {
 }
 
 function drawnText(parent, sprite, maximum) {
-    // Sprite_Text publishes its string before repainting the bitmap.
-    if (!visibleSprite(parent, sprite) || sprite._dirty !== false) return '';
+    if (!parent || sprite?.parent !== parent || !sprite.worldVisible || !(sprite.worldAlpha > 0) ||
+        sprite.renderable === false || sprite._dirty !== false) return '';
     const value = sprite._currentString;
-    return typeof value === 'string' && value.length <= maximum ? value : '';
+    if (typeof value !== 'string' || !value.length || value.length > maximum || !Array.isArray(sprite.children)) return '';
+
+    // Sprite_Text paints one bitmap child per character. The container has
+    // no bitmap. Animated text can also have glyphs still scaled to zero.
+    let index = 0;
+    for (let position = 0; position < value.length; position++) {
+        if (value[position] === '\n') continue;
+        const glyph = sprite.children[index++];
+        if (!visibleSprite(sprite, glyph) || !glyph.scale?.x || !glyph.scale?.y) return '';
+    }
+    return index ? value : '';
 }
 
 module.exports = { battleScenePresented, battlePresented, visibleSprite, drawnText };

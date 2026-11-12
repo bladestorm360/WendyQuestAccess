@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { createBattleTargets } = require('../src/battle/targets');
+const { nativeTextHost } = require('./native-text-host.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
@@ -32,7 +33,7 @@ function nativeTargets(...targets) {
 let cancellations = 0;
 const sprites = [];
 const c = vm.createContext({
-    Scene_Battle: function () {}, Scene_Message: function () {}, Sprite_Enemy: function () {},
+    ...nativeTextHost(), Scene_Battle: function () {}, Scene_Message: function () {}, Sprite_Enemy: function () {},
     Sprite_EnemyGauge: function () {}, Sprite_StateIcon: function () {}, ActionCommand: function () {},
     ActionCommandResult: function () { this.Cancel = () => {}; },
     a2_0x990531() { throw Error('Unresolved battle property'); },
@@ -62,7 +63,8 @@ function makeSprite(enemy, x, name, rate) {
         worldVisible: true, worldAlpha: 1, setBlendColor() {}, revertToNormal() {} });
     sprite._selectorIconPivot = { parent: sprite };
     sprite._selectorIcon = { ...visible(sprite._selectorIconPivot), visible: false, worldVisible: false };
-    sprite._nameSprite = { ...visible(sprite), _currentString: name, _dirty: false, alpha: 0, worldAlpha: 0 };
+    sprite._nameSprite = Object.assign(new c.Sprite_Text().setText(name), { parent: sprite, alpha: 0, worldAlpha: 0 });
+    sprite._nameSprite.update();
     sprite._gaugeSprite = Object.assign(new c.Sprite_EnemyGauge(), visible(sprite), {
         _battler: enemy, _statusType: 'hp', gaugeRate: () => rate, gaugeBackColor: () => '',
         gaugeColor1: () => '', gaugeColor2: () => ''

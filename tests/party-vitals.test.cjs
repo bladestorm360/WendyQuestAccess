@@ -6,6 +6,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
 const { partyVitals, portraitActor } = require('../src/battle/party-vitals');
+const { nativeTextHost } = require('./native-text-host.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { normalizeKeys } = require('../src/settings/keyboard');
 const { normalizeController } = require('../src/settings/controller-bindings');
@@ -20,18 +21,10 @@ const actualState = states.find(state => state?.iconIndex > 0 && state.name);
 const scene = {};
 const ready = { isReady: () => true };
 
-function Sprite(bitmap) {
-    Object.assign(this, { bitmap, children: [], anchor: {}, scale: {}, worldVisible: true, worldAlpha: 1 });
-}
-Sprite.prototype.update = function () { for (const child of this.children) child.update(); };
-Sprite.prototype.addChild = function (child) { this.children.push(child); child.parent = this; };
-Sprite.prototype.removeChild = function (child) { this.children.splice(this.children.indexOf(child), 1); child.parent = null; };
-Sprite.prototype.setFrame = function (x, y, width, height) { this._frame = { x, y, width, height }; };
-function SpriteText() { Sprite.call(this, ready); }
-SpriteText.prototype = Object.create(Sprite.prototype);
+const host = nativeTextHost();
+const { Sprite, Sprite_Text: SpriteText } = host;
 Object.assign(SpriteText.prototype, {
-    setAlignment() { return this; }, setShadowEnabled() { return this; }, setShadowDraw() { return this; },
-    updateAnimation() {}, RedrawText() {}
+    setAlignment() { return this; }, setShadowEnabled() { return this; }, setShadowDraw() { return this; }
 });
 function RadialStatus() { Sprite.call(this, ready); }
 RadialStatus.prototype = Object.create(Sprite.prototype);
@@ -46,10 +39,9 @@ Object.assign(RadialStatus.prototype, {
         });
     }
 });
-const c = vm.createContext({ Sprite, Sprite_Text: SpriteText, RadialStatus,
-    ImageManager: { iconWidth: 32, iconHeight: 32 }, Bitmap: { load: () => ready }, TextAlignment: { Left: 0 },
-    a23_0x243974() { throw Error('Unresolved native HUD property'); },
-    a18_0x52f0af() { throw Error('Unresolved native text property'); } });
+host.Bitmap.load = () => ready;
+const c = vm.createContext({ ...host, RadialStatus, ImageManager: { iconWidth: 32, iconHeight: 32 },
+    a23_0x243974() { throw Error('Unresolved native HUD property'); } });
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 
 const hud = scene._statusWindow = Object.assign(new RadialStatus(), { parent: scene, y: 0, offsetY: 0,
