@@ -1059,7 +1059,23 @@ const interval = setInterval(() => {
             option._nameSprite = drawn('Synthetic guard');
             option._subTextSprite = drawn('Shield raised');
             option._costTextSprite = drawn('2 MP');
-            option._followTarget = { _battleOptionsActive: 0, battleOptions: [[option]] };
+            const actorData = { name: 'Synthetic hero', battlerName: 'Hero animation' };
+            const actor = { actor: () => actorData };
+            const visible = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
+            const main = option._followTarget = { _battleOptionsActive: 0, battleOptions: [[option]],
+                _actor: actor, _battlerName: actorData.battlerName };
+            main._mainSprite = visible(main);
+            const companion = { ...visible(layer), _actor: { name: 'Synthetic companion', battlerName: 'Companion animation' },
+                _battlerName: 'Companion animation' };
+            companion._mainSprite = companion;
+            scene._spriteset = { _actorSprites: [main], _subActorSprite: companion };
+            const hud = scene._statusWindow = { ...visible(scene), battler: actor, offsetY: 0, states: [] };
+            for (const [key, value] of Object.entries({ _numberSprite: '8', _totalSprite: '14', _dividerSprite: '/',
+                _FPSprite: '3', _totalSpriteFP: '5', _dividerSpriteFP: '/', levelNumberSprite: '7' }))
+                hud[key] = { ...visible(hud), _dirty: false, _currentString: value };
+            hud._HPIcon = visible(hud);
+            hud._FPIcon = visible(hud);
+            BattleManager._subject = actor;
             WendyQuestAccessBattleFocusReady(scene, option);
             if (!option._wqaBattleCommandSeen) throw Error('Battle focus did not observe the command');
             Graphics.app.renderer.emit('postrender');
@@ -1076,6 +1092,12 @@ const interval = setInterval(() => {
             if (padTap(15) !== 0) throw Error('Battle review did not return to native input');
             endingStep = 33;
         } else if (endingStep === 33 && fs.existsSync(receipt + '.battle-review')) {
+            tap('h', 'KeyH');
+            endingStep = 37;
+        } else if (endingStep === 37 && fs.existsSync(receipt + '.battle-hp')) {
+            tap('2', 'Digit2');
+            endingStep = 38;
+        } else if (endingStep === 38 && fs.existsSync(receipt + '.battle-slot2')) {
             const scene = SceneManager._scene;
             WendyQuestAccessBattleFocusLeaving(scene);
             fs.writeFileSync(receipt + '.battle-target-stage', '');
@@ -1087,7 +1109,7 @@ const interval = setInterval(() => {
             sprite._selectorIcon = drawn(sprite._selectorIconPivot);
             sprite._gaugeSprite = { ...drawn(sprite), _statusType: 'hp', _battler: enemy, gaugeRate: () => 0.5 };
             sprite._gaugeSprite.bitmap.width = 64;
-            scene._spriteset = { _enemySprites: [sprite] };
+            scene._spriteset._enemySprites = [sprite];
             Object.assign(BattleManager, { _phase: 'ActionCommand', _targets: [enemy],
                 _currentActionCommand: { _cancelable: true, _coroutineContainer: {} } });
             WendyQuestAccessBattleTargetReady(scene);
@@ -1102,6 +1124,10 @@ const interval = setInterval(() => {
             if (padTap(0) !== 0) throw Error('Target review did not return to native confirmation');
             endingStep = 36;
         } else if (endingStep === 36 && fs.existsSync(receipt + '.battle-target-details')) {
+            if (padTap(7) !== 1 << 7 || padTap(2) !== 1 << 2) throw Error('Controller did not claim battle vitals');
+            if (padTap(2) !== 0) throw Error('Vitals review did not return to native input');
+            endingStep = 39;
+        } else if (endingStep === 39 && fs.existsSync(receipt + '.battle-target-vitals')) {
             WendyQuestAccessBattleTargetLeaving(SceneManager._scene);
             if (SceneManager._scene._wqaBattleTargetControl) throw Error('Retired target still owns controller review');
             fs.unlinkSync(receipt + '.battle-target-stage');
@@ -1169,10 +1195,13 @@ parentPort.on('message', message => {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
         if (fs.existsSync(receipt + '.battle-stage')) {
+            const target = fs.existsSync(receipt + '.battle-target-stage');
+            const vitals = message.lines?.[0];
             const suffix = message.kind === 'menuFocus' ? 'focus' :
-                message.kind === 'menuDetails' ? (message.append ? 'autodetail' : 'details') :
+                message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'hp') :
+                    vitals === 'Synthetic companion' ? 'slot2' : message.append ? 'autodetail' : 'details') :
                 message.kind === 'menuReview' ? 'review' : message.kind === 'controllerStatus' ? 'mode' : '';
-            const prefix = fs.existsSync(receipt + '.battle-target-stage') ? '.battle-target-' : '.battle-';
+            const prefix = target ? '.battle-target-' : '.battle-';
             if (suffix) fs.writeFileSync(receipt + prefix + suffix, speech);
             parentPort.postMessage('ack');
             return;
@@ -1444,7 +1473,10 @@ def main():
             'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
             'cross-map-next': 'Next entrance toward Return marker. Move east to activate.',
             'cross-map-arrived': 'Return marker. you are here.',
-            'battle-focus': 'Battle commands, Synthetic guard, 1 of 1',
+            'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',
+            'battle-hp': 'Synthetic hero. HP 8 of 14',
+            'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
+            'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-autodetail': 'Shield raised. Cost 2 MP',
             'battle-details': 'Shield raised. Cost 2 MP',
             'battle-review': 'Cost 2 MP, 2 of 2',
@@ -1490,7 +1522,7 @@ def main():
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
-        print('Verified battle command and target review, rendered gauge details and controller handback.')
+        print('Verified battle actor, commands, targets, party vitals, rendered gauge details and controller handback.')
         print('Verified the Quests category, packaged route and marker replacement handback.')
         print('Verified controller bookmark naming, keyboard save, native tile arrival, linked event removal and persistence.')
         print('Verified reachable entrance speech, two manual transfers, native loading gates and restored bookmark selection.')

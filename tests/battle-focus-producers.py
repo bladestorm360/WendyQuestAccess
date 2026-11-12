@@ -10,7 +10,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from registration import (
-    ACTION_REL, BATTLE_REL, MANAGERS_REL, WINDOW_REL,
+    ACTION_REL, BATTLE_REL, MANAGERS_REL, STATS_REL, WINDOW_REL,
     action_notification, battle_notification, managers_notification,
 )
 
@@ -36,6 +36,15 @@ def manager_method(source, name):
     start = source.index(f"BattleManager['{name}']=function(")
     end = source.index('},BattleManager', start)
     return source[start:end + 1] + ';'
+
+
+if sys.argv[2:] == ['vitals']:
+    hud, _ = decode((installed / STATS_REL).read_text(encoding='utf-8-sig'))
+    methods = [sprite_method(hud, 'RadialStatus', name) for name in
+               ('SetBattler', 'SetFPText', 'AddState', 'SetStateFrame', 'RemoveState', 'UpdateStateIconPositions')]
+    methods.extend(sprite_method(text, 'Sprite_Text', name) for name in ('setText', 'update'))
+    print(json.dumps(methods))
+    sys.exit(0)
 
 
 if sys.argv[2:] == ['targets']:

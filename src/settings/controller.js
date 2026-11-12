@@ -1,6 +1,7 @@
 'use strict';
 
-const { MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, REVIEW_ACTIONS, BINDABLE_MASK, buttonBit, controllerFamily, buttonName,
+const { MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, REVIEW_ACTIONS, BATTLE_REVIEW_ACTIONS,
+    BINDABLE_MASK, buttonBit, controllerFamily, buttonName,
     recoveryMask } = require('./controller-bindings');
 const QUEUE_LIMIT = 4;
 const FIELD_MODE = ['settings', ...FIELD_MODE_ACTIONS];
@@ -8,15 +9,18 @@ const MOVING_MODE = ['beaconStop'];
 const FRONT_MODE = ['settings'];
 const DIALOGUE_MODE = ['repeat', 'puzzleStop'];
 const MENU_MODE = ['settings', ...REVIEW_ACTIONS];
+const BATTLE_MODE = ['settings', ...BATTLE_REVIEW_ACTIONS];
 
 function modeAnnouncement(family, context, bindings) {
     if (context.kind === 'menu' || context.kind === 'battle' || context.kind === 'battleTarget') {
         const settings = context.kind === 'battleTarget' ? '' :
             buttonName(family, bindings.settings) + ' opens settings. ';
+        const vitals = context.kind !== 'menu' && bindings.battleVitals != null ?
+            buttonName(family, bindings.battleVitals) + ' reads vitals. ' : '';
         const details = bindings.details === null ? '' : `${buttonName(family, bindings.details)} reads details. `;
         const review = context.hasReview && bindings.reviewPrevious != null && bindings.reviewNext != null ?
             `${buttonName(family, bindings.reviewPrevious)} and ${buttonName(family, bindings.reviewNext)} review lines. ` : '';
-        return `Mod mode. ${settings}${details}${review}${buttonName(family, bindings.mode)} cancels.`;
+        return `Mod mode. ${settings}${vitals}${details}${review}${buttonName(family, bindings.mode)} cancels.`;
     }
     if (context.kind === 'field') {
         if (context.navigationOnly) {
@@ -155,8 +159,8 @@ function createController(host) {
         if (!(pressed & modeBit) && !(previous & modeBit)) {
             const actions = context.navigationOnly ? MOVING_MODE :
                 context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE :
-                (context.kind === 'menu' || context.kind === 'battle') ? MENU_MODE :
-                context.kind === 'battleTarget' ? REVIEW_ACTIONS : DIALOGUE_MODE;
+                context.kind === 'menu' ? MENU_MODE : context.kind === 'battle' ? BATTLE_MODE :
+                context.kind === 'battleTarget' ? BATTLE_REVIEW_ACTIONS : DIALOGUE_MODE;
             for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
                 (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive) &&
                 (action !== 'beaconStop' || context.beaconActive) &&

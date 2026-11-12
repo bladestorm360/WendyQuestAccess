@@ -7,6 +7,7 @@ const { createFilesObserver, fileWindow, isReady } = require('./frontend/files')
 const { createMenuObserver } = require('./menus/observer');
 const { createBattleFocus } = require('./battle/focus');
 const { createBattleTargets } = require('./battle/targets');
+const { partyVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createField } = require('./world/field');
@@ -155,6 +156,19 @@ function boot(root, nodeRequire, nodeProcess) {
             else if (context.scene instanceof root.Scene_Title) title.announce(context.scene, record);
             else files.announce(context.scene, record);
         }
+        function battleVitalsAction(action, context) {
+            const scene = host.manager._scene;
+            const owner = context || battleFocus.controlOwner(scene) || battleTargets.controlOwner(scene);
+            if (!owner || owner.scene !== scene) return false;
+            const main = scene._spriteset?._actorSprites?.[0];
+            const active = owner.kind === 'battle' ? owner.option._followTarget :
+                main?._actor === root.BattleManager?._subject ? main : null;
+            const sprite = action === 'battleSlot1' ? main : action === 'battleSlot2' ? scene._spriteset?._subActorSprite : active;
+            const record = partyVitals(scene, host.graphics, sprite, action === 'battleHP');
+            if (!record) return false;
+            (owner.kind === 'battle' ? battleFocus : battleTargets).announce(owner, record);
+            return true;
+        }
         function fieldAction(action) {
             const questAction = QUEST_ACTIONS[action];
             if (questAction) return quests.command(host.manager._scene, questAction);
@@ -235,6 +249,7 @@ function boot(root, nodeRequire, nodeProcess) {
                     battleTargets.command(battleTargets.controlOwner(scene), action) || quests.command(scene, action); }
                 catch { return false; }
             },
+            battleCommand(action) { try { return battleVitalsAction(action); } catch { return false; } },
             fieldCommand(key) { try { return fieldAction(key); } catch { return false; } }
         });
         controller = createController({
@@ -247,6 +262,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 } else if (context.kind === 'settings') settings.controllerInput(context, action, family, buttons);
                 else if (action === 'settings') settings.open(context.scene, family);
                 else if (action === 'repeat') dialogue.repeatPage();
+                else if (action === 'battleVitals') battleVitalsAction(action, context);
                 else if (action === 'puzzleStop') field.command(action);
                 else if (action === 'modeLeft') announce(context, 'Mod mode off');
                 else if (action === 'modeEntered') announce(context,

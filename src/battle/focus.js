@@ -1,6 +1,7 @@
 'use strict';
 
 const { battlePresented, drawnText } = require('./presentation');
+const { portraitActor } = require('./party-vitals');
 const { reviewLines, moveReview } = require('../menus/review');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
@@ -76,7 +77,8 @@ function createBattleFocus(root, host, notifications, preferences) {
         const settings = preferences();
         const screen = spokenGroup?.group === group ? '' : 'Battle commands';
         spokenGroup = { scene, group };
-        show(page, { kind: 'menuFocus', name, screen, enabled: page.enabled,
+        const actor = screen && portraitActor(scene, option._followTarget)?.name;
+        show(page, { kind: 'menuFocus', name, screen, actor, enabled: page.enabled,
             position: choices.indexOf(option) + 1, total: choices.length, indexed: settings.indexing });
         if (lines.length && settings.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
         return true;

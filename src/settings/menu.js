@@ -1,6 +1,7 @@
 'use strict';
 
-const { DEFAULT_KEYS, PUZZLE_KEYS, REVIEW_KEYS, keyName, nativeConflict, normalizeKeys, puzzleGesture, reviewGesture } = require('./keyboard');
+const { DEFAULT_KEYS, BATTLE_KEYS, PUZZLE_KEYS, REVIEW_KEYS, keyName, nativeConflict,
+    normalizeKeys, puzzleGesture, reviewGesture } = require('./keyboard');
 const { openSettings } = require('./storage');
 const { ACTIONS, DEFAULTS: NAVIGATION_DEFAULTS, LAYOUT_NAMES, navigationGesture, nativeNavigationConflict,
     normalizeNavigation, navigationAction, gestureName } = require('./navigation-keys');
@@ -11,8 +12,10 @@ const { createBookmarkMenu } = require('./bookmark-menu');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
     puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance',
-    details: 'Read details', reviewPrevious: 'Previous review line', reviewNext: 'Next review line',
+    details: 'Read details', battleHP: 'Read active HP in battle', battleSlot1: 'Read party slot 1 in battle',
+    battleSlot2: 'Read party slot 2 in battle', reviewPrevious: 'Previous review line', reviewNext: 'Next review line',
     reviewFirst: 'First review line', reviewLast: 'Last review line' });
+const BATTLE_ACTIONS = Object.keys(BATTLE_KEYS);
 const POINTER_EVENTS = ['mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
 const AUDIO_PREVIEWS = [
     ['ahead', [0, 0, 1]], ['left', [-1, 0, 0]], ['right', [1, 0, 0]],
@@ -359,7 +362,7 @@ function createSettingsMenu(root, host) {
                 if (loading || saving) return;
                 owner.capture = owner.selected = action;
                 const available = REVIEW_KEYS[action] ? 'Shift and an arrow or letter' : { settings: 'a letter or F8', puzzleGuide: 'Shift and a letter',
-                    puzzleStop: 'Ctrl and a letter' }[action] || 'a letter';
+                    puzzleStop: 'Ctrl and a letter' }[action] || (BATTLE_KEYS[action] ? 'a letter or digit from 1 to 9' : 'a letter');
                 status(owner, `Press ${available} for ${LABELS[action].toLowerCase()}. Press Escape to cancel.`);
             });
             if (action === selection) focused = item;
@@ -538,9 +541,12 @@ function createSettingsMenu(root, host) {
             change(owner, { ...keys, [action]: review }, action);
             return;
         }
-        if (!key || (key === 'F8' && action !== 'settings')) return;
+        if (!key || (key === 'F8' && action !== 'settings') || (/^[1-9]$/.test(key) && !BATTLE_KEYS[action])) return;
         const other = action === 'settings' ? 'repeat' : 'settings';
-        if (nativeConflict(root, key, event.keyCode) || key === keys[other] ||
+        const battleConflict = BATTLE_KEYS[action] ?
+            ['settings', 'repeat', 'details', ...BATTLE_ACTIONS].some(id => id !== action && keys[id] === key) :
+            BATTLE_ACTIONS.some(id => keys[id] === key);
+        if (nativeConflict(root, key, event.keyCode) || key === keys[other] || battleConflict ||
             (action === 'settings' && key === keys.details) ||
             (action === 'settings' && navigationAction(navigation, key))) {
             status(owner, `${key} is already in use. Choose another key.`);
@@ -585,6 +591,13 @@ function createSettingsMenu(root, host) {
         }
         if (event.repeat || event.target?.closest?.('input, textarea, select, [contenteditable]')) return;
         const key = keyName(event);
+        const battleAction = key && BATTLE_ACTIONS.find(action => keys[action] === key);
+        if (battleAction && !nativeConflict(root, key, event.keyCode) && host.battleCommand?.(battleAction)) {
+            if (physical && held.size < 64) held.add(physical);
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
         const review = reviewGesture(event);
         const menuAction = review ? Object.keys(REVIEW_KEYS).find(action => keys[action] === review &&
             (review.includes('Arrow') || !nativeConflict(root, review, event.keyCode))) :

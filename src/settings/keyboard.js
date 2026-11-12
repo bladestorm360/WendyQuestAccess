@@ -2,9 +2,11 @@
 
 const REVIEW_KEYS = Object.freeze({ reviewPrevious: 'Shift+ArrowUp', reviewNext: 'Shift+ArrowDown',
     reviewFirst: 'Shift+ArrowLeft', reviewLast: 'Shift+ArrowRight' });
+const BATTLE_KEYS = Object.freeze({ battleHP: 'H', battleSlot1: '1', battleSlot2: '2' });
 const DEFAULT_KEYS = Object.freeze({ settings: 'F8', repeat: 'R', puzzleGuide: 'Shift+G', puzzleStop: 'Ctrl+G',
-    details: 'I', ...REVIEW_KEYS });
+    details: 'I', ...BATTLE_KEYS, ...REVIEW_KEYS });
 const LETTER = /^[A-Z]$/;
+const SIMPLE_BATTLE_KEY = /^[A-Z1-9]$/;
 const REVIEW_GESTURE = /^Shift\+(?:Arrow(?:Up|Down|Left|Right)|[A-Z])$/;
 const PUZZLE_KEYS = Object.freeze({ puzzleGuide: /^Shift\+[A-Z]$/, puzzleStop: /^Ctrl\+[A-Z]$/ });
 
@@ -12,7 +14,7 @@ function keyName(event) {
     if (event.ctrlKey || event.altKey || event.shiftKey || event.metaKey || event.isComposing ||
         event.defaultPrevented || typeof event.key !== 'string') return '';
     const key = event.key.toUpperCase();
-    return key === 'F8' || LETTER.test(key) ? key : '';
+    return key === 'F8' || SIMPLE_BATTLE_KEY.test(key) ? key : '';
 }
 
 function normalizeKeys(value) {
@@ -29,6 +31,13 @@ function normalizeKeys(value) {
     }
     const details = typeof value?.details === 'string' && LETTER.test(value.details) ? value.details : DEFAULT_KEYS.details;
     normalized.details = settingsKey === details ? null : details;
+    const used = new Set([normalized.settings, normalized.repeat, normalized.details]);
+    for (const [action, defaultKey] of Object.entries(BATTLE_KEYS)) {
+        const key = value?.[action];
+        const preferred = typeof key === 'string' && SIMPLE_BATTLE_KEY.test(key) ? key : defaultKey;
+        normalized[action] = key === null ? null : [preferred, defaultKey].find(candidate => !used.has(candidate)) ?? null;
+        used.add(normalized[action]);
+    }
     const actions = Object.keys(REVIEW_KEYS);
     const review = actions.map(action => value?.[action]);
     const valid = review.every(gesture => typeof gesture === 'string' && REVIEW_GESTURE.test(gesture)) &&
@@ -61,4 +70,4 @@ function nativeConflict(root, key, eventCode) {
         !!root.Input?.keyMapper?.[eventCode || (key === 'F8' ? 119 : key.charCodeAt(key.length - 1))];
 }
 
-module.exports = { DEFAULT_KEYS, PUZZLE_KEYS, REVIEW_KEYS, keyName, normalizeKeys, nativeConflict, puzzleGesture, reviewGesture };
+module.exports = { DEFAULT_KEYS, BATTLE_KEYS, PUZZLE_KEYS, REVIEW_KEYS, keyName, normalizeKeys, nativeConflict, puzzleGesture, reviewGesture };
