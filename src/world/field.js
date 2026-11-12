@@ -3,11 +3,12 @@
 const { captureWorld } = require('./snapshot');
 const { browse, createDestinationBrowser } = require('./destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
+const { createCaveGuide, timedCave, warningApproach } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
-const TIMED_MAPS = new Set([196, 199, 200, 201]);
 
 function createField(root, host, notifications) {
-    const guide = createSaltGuide(root);
+    const salt = createSaltGuide(root);
+    const cave = createCaveGuide(root, host.graphics);
     let owner = null;
     let active = null;
     let worker = null;
@@ -17,6 +18,11 @@ function createField(root, host, notifications) {
     let speech = 0;
     let renderOwner = null;
     let control = null;
+
+    function guideFor(scene) {
+        if (salt.available(scene)) return salt;
+        return cave.available(scene) ? cave : null;
+    }
 
     function ready(scene) {
         const player = root.$gamePlayer;
@@ -37,6 +43,7 @@ function createField(root, host, notifications) {
         if (admission) Atomics.store(admission, 0, 0);
         active = null;
         scene._wqaRouteActive = false;
+        scene._wqaCaveReview = false;
         if (speech) notifications.close(speech);
         speech = 0;
     }
@@ -54,6 +61,9 @@ function createField(root, host, notifications) {
         inFlight = null;
         if (admission && Atomics.load(admission, 0) === job.sequence) Atomics.store(admission, 0, 0);
         if (active === job && ready(job.scene)) {
+            const player = root.$gamePlayer;
+            if (job.area && !warningApproach(root.$gameMap, player._x, player._y, job.target))
+                return status(job, 'Warning sign directions are no longer available');
             const result = packet.result;
             if (result?.status === 'ready') present(job, { kind: 'routeDirections', name: job.label,
                 legs: result.legs, facing: result.arrival.facing, more: result.more === true });
@@ -62,7 +72,7 @@ function createField(root, host, notifications) {
         } else if (active?.action === 'directions' && ready(active.scene)) afterRender();
     }
 
-    function route(job, snapshot, target) {
+    function route(job, snapshot, target, area) {
         try {
             if (!worker) {
                 admission = host.makeWord();
@@ -84,10 +94,12 @@ function createField(root, host, notifications) {
             }
             job.map = snapshot.map;
             job.label = target.name;
+            job.area = area;
+            job.target = target.id;
             Atomics.store(admission, 0, job.sequence);
             inFlight = job;
             worker.postMessage({ map: snapshot.map, sequence: job.sequence, epoch: job.sequence, live: snapshot.live,
-                request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8 } }, [snapshot.live.terrain.buffer]);
+                request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area } }, [snapshot.live.terrain.buffer]);
         } catch {
             if (admission) Atomics.store(admission, 0, 0);
             inFlight = null;
@@ -101,12 +113,12 @@ function createField(root, host, notifications) {
         job.performed = true;
         if (job.action === 'status') return status(job, job.text);
         const routing = job.action === 'directions';
-        if (routing && TIMED_MAPS.has(root.$gameMap._mapId)) return status(job, 'Ordinary directions unavailable in this timed area');
-        const label = guide.available(job.scene) ? (id, fallback) => guide.label(job.scene, id, fallback) : undefined;
-        const snapshot = captureWorld(root, routing, label);
+        const timed = timedCave(root.$gameMap._mapId);
+        const label = salt.available(job.scene) ? (id, fallback) => salt.label(job.scene, id, fallback) : undefined;
+        const snapshot = captureWorld(root, routing && !timed, label);
         if (!snapshot) return status(job, 'Map information unavailable');
         if (job.action === 'puzzleGuide') {
-            const result = guide.review(job.scene, snapshot.objects, snapshot.x, snapshot.y);
+            const result = guideFor(job.scene)?.review(job.scene, snapshot.objects, snapshot.x, snapshot.y);
             if (!result) return;
             if (result.target) {
                 owner.browser.category = result.target.category;
@@ -119,7 +131,12 @@ function createField(root, host, notifications) {
         const { target, category } = result;
         if (!routing) return present(job, { kind: 'fieldTarget', name: target.name, category,
             dx: target.x - snapshot.x, dy: target.y - snapshot.y });
-        route(job, snapshot, target);
+        if (!timed) return route(job, snapshot, target);
+        const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.id);
+        if (!area) return status(job, 'Ordinary directions unavailable in this timed area');
+        const terrain = captureWorld(root);
+        if (!terrain) return status(job, 'Map information unavailable');
+        route(job, terrain, target, area);
     }
 
     function afterRender() {
@@ -141,13 +158,13 @@ function createField(root, host, notifications) {
         if (action === 'puzzleStop') {
             if (!host.hasFocus()) return false;
             const pending = active?.scene === scene && active.action === 'puzzleGuide';
-            const stopped = guide.stop(scene);
+            const stopped = salt.stop(scene) || cave.stop(scene);
             if (!pending && !stopped) return false;
             if (pending) retire(scene);
             if (!active && ready(scene)) command('status', 'Puzzle guidance stopped');
             return true;
         }
-        const puzzle = action === 'puzzleGuide' && guide.available(scene);
+        const puzzle = action === 'puzzleGuide' && guideFor(scene);
         if ((!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' && action !== 'status' && !puzzle) ||
             !ready(scene) || sequence >= 0x7ffffffe) return false;
         const changes = active?.scene === scene && !active.performed ? active.changes : [];
@@ -155,7 +172,11 @@ function createField(root, host, notifications) {
         if (owner) retire(owner.scene);
         if (owner?.scene !== scene) owner = { scene, browser: createDestinationBrowser() };
         active = { scene, action, sequence: ++sequence, changes, text };
-        scene._wqaRouteActive = scene._wqaPresentation = true;
+        // Patrol steps between the key press and the rendered frame are
+        // expected. Their new sprite positions belong to the requested sample.
+        scene._wqaCaveReview = timedCave(root.$gameMap._mapId);
+        scene._wqaRouteActive = !scene._wqaCaveReview;
+        scene._wqaPresentation = true;
         afterRender();
         return true;
     }
@@ -164,12 +185,13 @@ function createField(root, host, notifications) {
         controlOwner(scene) {
             if (!ready(scene)) return null;
             if (control?.scene !== scene) control = { kind: 'field', scene };
-            control.puzzle = guide.available(scene);
-            control.puzzleActive = guide.active(scene);
+            control.puzzle = !!guideFor(scene);
+            control.puzzleActive = salt.active(scene) || cave.active(scene);
             return control;
         },
-        dialoguePresented: guide.presented,
-        puzzleActive: guide.active,
+        dialoguePresented(scene, paint) { guideFor(scene)?.presented(scene, paint); },
+        puzzleActive(scene) { return salt.active(scene) || cave.active(scene); },
+        observeRecovery(scene) { if (ready(scene)) cave.recover(scene); },
         command,
         report(text) { return command('status', text); },
         changed: retire,

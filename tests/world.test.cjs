@@ -10,6 +10,7 @@ const { Worker } = require('node:worker_threads');
 const { bake } = require('../tools/bake-world.cjs');
 const { bakeMap, decodeMap, composeWorld, indexOf, DIRECTIONS, step, surface } = require('../src/world/geometry.cjs');
 const { solveRoute } = require('../src/world/routes.cjs');
+const { warningApproach } = require('../src/world/puzzles/cave');
 
 const game = path.resolve(process.argv[2]);
 const derived = path.resolve(process.argv[3]);
@@ -120,6 +121,10 @@ function verifyRoute(fixture, request, result) {
         assert(player.canPass(x, y, leg.direction));
         x = gameMap.roundXWithDirection(x, leg.direction);
         y = gameMap.roundYWithDirection(y, leg.direction);
+        if (request.area) {
+            const [left, top, right, bottom] = request.area;
+            assert(x >= left && x <= right && y >= top && y <= bottom);
+        }
         distance++;
     }
     assert.equal(distance, result.distance);
@@ -181,6 +186,35 @@ function verifyPatrolContact() {
     stopped.checkEventTriggerTouch(x, y);
     disabled.player.checkEventTriggerTouch(stopped.x, stopped.y);
     assert(!stopped.isStarting(), 'the native caught page disables repeat contact');
+}
+
+async function verifyWarningApproach() {
+    const cave = load(196);
+    const { gameMap, geometry } = cave;
+    const entrance = read('Map206.json').events[11].pages.flatMap(page => page.list)
+        .find(command => command.code === 201 && command.parameters[1] === 196);
+    const [, , x, y] = entrance.parameters;
+    assert.equal(geometry.scrollType, 0);
+    for (const event of gameMap.events()) event._moveRoute = event.page()?.moveRoute;
+    const sign = 2;
+    const area = warningApproach(gameMap, x, y, sign);
+    assert(area);
+    assert.equal(warningApproach(gameMap, x, y, 21), null, 'the checkpoint requires a timed route');
+    assert.equal(warningApproach(gameMap, x, area[1] - 1, sign), null);
+    const state = snapshot(cave);
+    const request = { x, y, event: sign, area };
+    const result = solveRoute(geometry, state, request);
+    verifyRoute(cave, request, result);
+    assert.equal(solveRoute(geometry, state, { ...request, area: [x, y, x, y] }).status, 'unreachable');
+    const patrol = gameMap._events[4];
+    patrol._moveRouteForcing = true;
+    assert.equal(warningApproach(gameMap, x, y, sign), null);
+    patrol._moveRouteForcing = false;
+    const oldX = patrol._x;
+    patrol._x = area[0];
+    assert.equal(warningApproach(gameMap, x, y, sign), null, 'a skippable patrol can drift along its entire column');
+    patrol._x = oldX;
+    await verifyWorker(cave, request, state);
 }
 
 async function verifyWorker(fixture, request, live) {
@@ -284,13 +318,14 @@ async function main() {
     compare(world);
     for (const id of [195, 196, 199, 200, 201, 202, 206]) compare(load(id));
     verifyPatrolContact();
+    await verifyWarningApproach();
     const entry = read('Map199.json').events[26].pages.flatMap(page => page.list).find(command =>
         command.code === 201 && command.parameters[1] === 200).parameters;
     const secret = load(200);
     const distraction = { x: entry[2], y: entry[3], event: 5 };
     verifyRoute(secret, distraction, solveRoute(secret.geometry, snapshot(secret), distraction));
     console.log(`Verified ${compared} directed movement comparisons across authored maps and dynamic cases.`);
-    console.log('Verified native Map 196 patrol contact, catch-page handback and checkpoint floor trigger.');
+    console.log('Verified native Map 196 patrol contact, catch-page handback, checkpoint floor trigger and bounded warning sign route.');
 }
 
 function changedCrossing(before, after) {

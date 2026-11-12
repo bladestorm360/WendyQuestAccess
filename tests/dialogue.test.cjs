@@ -16,7 +16,13 @@ async function enter(map, mapId = 19, battle = false) {
     c.a2_0x990531 = () => { throw Error('Unresolved battle property'); };
     c.a9_0x3a9886 = () => { throw Error('Unresolved message owner property'); };
     c.Alias = {};
+    c.Eli = { Utils: { spriteCharacters: {} } };
     c.Game_Message = function () {};
+    c.Sprite_Character = function () {};
+    c.Tilemap = function () {};
+    c.Game_Character = function () {};
+    Object.setPrototypeOf(c.Game_Character.prototype, c.Game_CharacterBase.prototype);
+    Object.setPrototypeOf(c.Game_Event.prototype, c.Game_Character.prototype);
     c.Window_Message = function () {};
     c.Window_Selectable = function () {};
     c.Window_ChoiceList = function () {};
@@ -193,6 +199,29 @@ function authoredPage(commands, first = commands.findIndex(command => command.co
         speaker: commands[first].parameters[4] || '', choices: commands[end]?.code === 102 ? commands[end].parameters[0] : [] };
 }
 
+function enableNativeMessage({ c, settings }) {
+    settings.faceReady = true;
+    c.$gameMessage.setFaceImage = c.$gameMessage.setBackground = c.$gameMessage.setPositionType = () => {};
+    c.$gameMessage.setSpeakerName = name => { settings.speaker = name; };
+    c.$gameMessage.add = text => { settings.text += (settings.text ? '\n' : '') + text; };
+}
+
+function tapPuzzleKey(f, key, modifiers = {}) {
+    let prevented = false;
+    const code = 'Key' + key.toUpperCase();
+    f.dispatchWindowEvent('keydown', { key, code, keyCode: key.toUpperCase().charCodeAt(0), ...modifiers,
+        preventDefault() { prevented = true; }, stopPropagation() {} });
+    f.dispatchWindowEvent('keyup', { key, code });
+    return prevented;
+}
+
+function installInterpreterConstructor(c) {
+    const prototype = c.Game_Interpreter.prototype;
+    c.Game_Interpreter = function (depth) { this.initialize(depth); };
+    c.Game_Interpreter.prototype = prototype;
+    c.$gameMap._interpreter.initialize();
+}
+
 async function verifyNumberEntry() {
     const common = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', 'CommonEvents.json'), 'utf8'));
     const commands = common[98].list;
@@ -242,7 +271,7 @@ async function verifyNumberEntry() {
 async function verifySaltGuide() {
     const data = mapData(19);
     const f = await enter(data);
-    const { c, settings, scene, window, speaker } = f;
+    const { c, scene, window, speaker } = f;
     const map = c.$gameMap;
     const interpreter = map._interpreter;
     const player = c.$gamePlayer;
@@ -254,19 +283,9 @@ async function verifySaltGuide() {
     }
     player._vehicleType = 'walk';
     player.setPosition(26, 12);
-    settings.faceReady = true;
-    c.$gameMessage.setFaceImage = c.$gameMessage.setBackground = c.$gameMessage.setPositionType = () => {};
-    c.$gameMessage.setSpeakerName = name => { settings.speaker = name; };
-    c.$gameMessage.add = text => { settings.text += (settings.text ? '\n' : '') + text; };
+    enableNativeMessage(f);
     interpreter._list = null;
-    const key = (key, modifiers = {}) => {
-        let prevented = false;
-        const code = 'Key' + key.toUpperCase();
-        f.dispatchWindowEvent('keydown', { key, code, keyCode: key.toUpperCase().charCodeAt(0), ...modifiers,
-            preventDefault() { prevented = true; }, stopPropagation() {} });
-        f.dispatchWindowEvent('keyup', { key, code });
-        return prevented;
-    };
+    const key = (key, modifiers) => tapPuzzleKey(f, key, modifiers);
     const status = () => f.records.filter(packet => packet.kind === 'fieldStatus').map(formatSpeech);
     const review = () => {
         f.tick();
@@ -363,10 +382,7 @@ async function verifySaltGuide() {
     c.$gameVariables.setValue = (id, value) => variables.set(id, value);
     c.$gameSwitches = { value: id => switches.get(id) === true, setValue: (id, value) => switches.set(id, value) };
     delete interpreter.setupChild;
-    const prototype = c.Game_Interpreter.prototype;
-    c.Game_Interpreter = function (depth) { this.initialize(depth); };
-    c.Game_Interpreter.prototype = prototype;
-    interpreter.initialize();
+    installInterpreterConstructor(c);
     c.Game_Interpreter.prototype.command357 = ([plugin, , , args]) => {
         if (plugin === 'MonkeyWrenchMZ') c.ExecuteEvent(Number(args.eventID), Number(args.pageID));
         return true;
@@ -410,8 +426,210 @@ async function verifySaltGuide() {
     assert.equal(c.$gameVariables.value(variable), 0);
     assert.match(review(), /The crystals were reset/);
     assert.doesNotMatch(status().at(-1), /Lights observed/);
-    map._mapId = 196;
+    map._mapId = 187;
     assert.equal(key('g', { shiftKey: true }), false);
+}
+
+async function verifyCaveGuide() {
+    const data = mapData(196);
+    const common = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', 'CommonEvents.json'), 'utf8'));
+
+    function selectRoom(f, room, scene, id, x, y) {
+        const { c } = f;
+        c.$gameMap._mapId = id;
+        c.$gameMap._events = room.events.map(entry => {
+            if (!entry) return null;
+            const page = entry.pages[0];
+            return Object.assign(new c.Game_Event(), { _eventId: entry.id, _x: entry.x, _realX: entry.x,
+                _y: entry.y, _realY: entry.y, _pageIndex: 0, _trigger: page.trigger,
+                _priorityType: page.priorityType, _through: page.through, _moveRoute: page.moveRoute });
+        });
+        c.$gamePlayer._vehicleType = 'walk';
+        c.$gamePlayer.setPosition(x, y);
+        scene._spriteset = { _tilemap: Object.assign(new c.Tilemap(), { tileWidth: 32, tileHeight: 32,
+            origin: { x: 0, y: 0 }, _mapWidth: room.width, _mapHeight: room.height,
+            _mapData: new Uint8Array(room.width * room.height * 4), flags: [0, 16] }) };
+    }
+    function paintPatrol(c, scene, patrol, x) {
+        const sprite = Object.assign(new c.Sprite_Character(), { _character: patrol, parent: scene._spriteset._tilemap,
+            texture: { valid: true, orig: { width: 48, height: 48 } }, anchor: { x: 0.5, y: 1 },
+            worldAlpha: 1, worldVisible: true, renderable: true, worldTransform: { tx: x, ty: 50 },
+            transform: { localTransform: { a: 1, b: 0, c: 0, d: 1, tx: x, ty: 50 } } });
+        sprite.setMapSprite(patrol);
+        return sprite;
+    }
+
+    const describe = f => f.records.filter(record => record.kind === 'fieldStatus').map(formatSpeech);
+    const review = f => {
+        f.tick();
+        assert(tapPuzzleKey(f, 'g', { shiftKey: true }));
+        f.frame();
+        return describe(f).at(-1);
+    };
+    function speak(f, source) {
+        assert(source.executeCommand());
+        f.until(() => f.window.pause);
+        f.speaker._animationRunning = false;
+        f.tick();
+    }
+    async function moveToReservedMap(f, xAdjust = 0) {
+        const { c } = f;
+        const { _newMapId: id, _newX: x, _newY: y } = c.$gamePlayer;
+        const room = mapData(id);
+        c.Scene_Map.prototype.isBusy = () => false;
+        c.Scene_Map.prototype.terminate = c.Scene_Map.prototype.destroy = () => {};
+        c.SceneManager.goto(c.Scene_Map);
+        c.SceneManager.changeScene();
+        c.$dataMap = room;
+        c.SceneManager.updateScene();
+        await new Promise(setImmediate);
+        const scene = c.Graphics.app.stage;
+        selectRoom(f, room, scene, id, x + xAdjust, y);
+        return scene;
+    }
+    function settle(f, scene) {
+        scene._fadeDuration = scene._fadeOpacity = 0;
+        f.c.SceneManager.updateScene();
+        f.idleCallbacks.shift()?.();
+        f.tick();
+    }
+
+    for (const scenario of [
+        { checkpoint: 0 }, { checkpoint: 1 }, { checkpoint: 2 }, { checkpoint: 3 },
+        { checkpoint: 1, stop: true }, { checkpoint: 1, wrongLanding: true }
+    ]) {
+        const f = await enter(data, 196);
+        const { c, scene, renderer } = f;
+        const map = c.$gameMap;
+        c.$dataCommonEvents = common;
+        c.$gameParty = { inBattle: () => false };
+        c.$gameSwitches = { setValue() {} };
+        const variableId = common[102].list[32].parameters[1];
+        c.$gameVariables.value = id => id === variableId ? scenario.checkpoint : 0;
+        enableNativeMessage(f);
+        installInterpreterConstructor(c);
+        selectRoom(f, data, scene, 196, 10, 43);
+        renderer.screen = { width: 320, height: 200 };
+        assert.match(review(f), /Warning sign selected/);
+        const interpreter = map._interpreter;
+        if (scenario.checkpoint === 0) {
+            const player = c.$gamePlayer;
+            const patrol = map._events[4];
+            c.$dataTilesets = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', 'Tilesets.json'), 'utf8'));
+            Object.assign(map, { _tilesetId: data.tilesetId, _tileEvents: [], _vehicles: [] });
+            tapPuzzleKey(f, 'p');
+            f.frame();
+            const warningRoute = f.routePackets[0];
+            assert.equal(warningRoute.request.event, 2);
+            assert.deepEqual(warningRoute.request.area, [6, 38, 22, 51]);
+            patrol._moveRouteForcing = true;
+            f.routeReply({ sequence: warningRoute.sequence, epoch: warningRoute.epoch, map: warningRoute.map,
+                result: { status: 'ready', legs: [], arrival: { facing: 8 } } });
+            f.frame();
+            assert.match(describe(f).at(-1), /Warning sign directions are no longer available/);
+            patrol._moveRouteForcing = false;
+            player.setPosition(6, 26);
+            f.tick();
+            const sprite = paintPatrol(c, scene, patrol, -1);
+            assert.match(review(f), /No patrol in view/);
+            sprite.worldTransform.tx = 75;
+            sprite.transform.localTransform.tx = 75;
+            sprite.parent = {};
+            assert.match(review(f), /No patrol in view/);
+            sprite.parent = scene._spriteset._tilemap;
+            sprite.texture.valid = false;
+            assert.match(review(f), /No patrol in view/);
+            sprite.texture.valid = true;
+            const cover = 2 + data.width;
+            scene._spriteset._tilemap._mapData[cover] = 1;
+            assert.match(review(f), /No patrol in view/);
+            scene._spriteset._tilemap._mapData[cover] = 0;
+            patrol._pageIndex = 1;
+            assert.match(review(f), /No patrol in view/);
+            patrol._pageIndex = 0;
+            assert(tapPuzzleKey(f, 'g', { shiftKey: true }));
+            patrol.setPosition(4, 25);
+            patrol._realY = 24.5;
+            f.frame();
+            assert.match(describe(f).at(-1), /Closest patrol at this check: 2 west, 2 north, moving south/);
+            const beforeMove = describe(f).length;
+            assert(tapPuzzleKey(f, 'g', { shiftKey: true }));
+            player.setPosition(6, 27);
+            f.frame();
+            assert.equal(describe(f).length, beforeMove, 'player movement retires a queued review');
+            assert.match(review(f), /Closest patrol at this check/);
+            assert(f.epoch());
+            const checkpoint = data.events[21].pages[0].list;
+            interpreter.setup(checkpoint, 21);
+            assert.equal(f.epoch(), 0, 'native event entry closes cave review before resource preload');
+            interpreter._index = checkpoint.findIndex(command => command.code === 101);
+            speak(f, interpreter);
+            f.advance();
+            interpreter._list = null;
+            assert.match(review(f), /Checkpoint reached/);
+        }
+        interpreter.setup(data.events[4].pages[0].list, 4);
+        assert(interpreter.executeCommand());
+        const recovery = interpreter._childInterpreter;
+        assert.equal(recovery._list, common[102].list);
+        recovery._index = recovery._list.findIndex(command => command.code === 101);
+        speak(f, recovery);
+        assert(c.Graphics._wqaCaveRecoveryPending);
+        f.advance();
+        recovery._index = recovery._list.findIndex(command => command.code === 201);
+        assert(recovery.executeCommand());
+        assert.equal(f.epoch(), 0, 'the capture transfer closes the speech epoch');
+        const interstitial = await moveToReservedMap(f);
+        assert.equal(c.$gameMap._mapId, 198);
+        settle(f, interstitial);
+        if (scenario.stop) {
+            assert(tapPuzzleKey(f, 'g', { ctrlKey: true }), 'an active guide can be stopped during recovery');
+            assert(!c.Graphics._wqaCaveRecoveryPending);
+        } else assert(c.Graphics._wqaCaveRecoveryPending, 'the interstitial cannot publish a landing');
+        for (let step = 0; step < 24 && !c.$gamePlayer.isTransferring(); step++) assert(recovery.executeCommand());
+        assert(c.$gamePlayer.isTransferring());
+        const landed = await moveToReservedMap(f, scenario.wrongLanding ? 1 : 0);
+        assert(!tapPuzzleKey(f, 'g', { shiftKey: true }), 'fade owns the field during recovery');
+        interpreter._list = null;
+        settle(f, landed);
+        const result = review(f);
+        assert(!c.Graphics._wqaCaveRecoveryPending);
+        if (scenario.stop || scenario.wrongLanding) assert.doesNotMatch(result, /after capture/);
+        else assert.match(result, scenario.checkpoint ? /Returned to a checkpoint after capture/ : /Returned after capture/);
+    }
+
+    for (const [id, sourceId, pageIndex, patrolId, expected] of [
+        [200, 5, 0, 4, /responding to a distraction/],
+        [200, 10, 0, 9, /responding to a distraction/],
+        [200, 19, 0, 16, /responding to a distraction/],
+        [200, 19, 1, 16, /returning to patrol/],
+        [201, 4, 0, 3, /giving chase/]
+    ]) {
+        const room = mapData(id);
+        const f = await enter(room, id);
+        const { c, scene, renderer } = f;
+        const map = c.$gameMap;
+        c.$gameParty = { inBattle: () => false };
+        installInterpreterConstructor(c);
+        selectRoom(f, room, scene, id, room.events[patrolId].x + 1, room.events[patrolId].y);
+        map.event = id => map._events[id];
+        const patrol = map._events[patrolId];
+        renderer.screen = { width: 320, height: 200 };
+        const sprite = paintPatrol(c, scene, patrol, 75);
+        const interpreter = map._interpreter;
+        const commands = room.events[sourceId].pages[pageIndex].list;
+        interpreter.setup(commands, sourceId);
+        // The first crystal's jump precedes its actual distraction route.
+        interpreter._index = commands.findLastIndex(command => command.code === 205 && command.parameters[0] === patrolId);
+        assert(interpreter.executeCommand());
+        interpreter._list = null;
+        assert.match(review(f), expected);
+        sprite.worldAlpha = 0;
+        assert.doesNotMatch(review(f), expected);
+        sprite.worldAlpha = 1;
+        patrol.processRouteEnd();
+        assert.doesNotMatch(review(f), expected);
+    }
 }
 
 async function verifyAutomaticClose() {
@@ -650,10 +868,11 @@ async function main() {
     assert.equal(intro.settings.result, -2);
     await verifyNumberEntry();
     await verifySaltGuide();
+    await verifyCaveGuide();
     await verifyAutomaticClose();
     await verifyBattleDialogue();
     await verifyRepeat();
-    console.log('Verified installed map and battle dialogue, Salt Caverns guidance, choices, number entry, automatic-close text, and current-page repeat.');
+    console.log('Verified installed dialogue, Salt Caverns guidance, visible cave patrols and all four native recovery branches.');
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

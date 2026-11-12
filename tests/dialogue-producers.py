@@ -46,7 +46,8 @@ for kind, names in {
         methods.append(between(stock, f'{kind}.prototype.{name} = function(', '\n};') + '\n};')
 core = (installed / CORE_REL).read_text(encoding='utf8')
 for name in ('Math.randomInt', 'Number.prototype.clamp', 'Number.prototype.padZero', 'String.prototype.padZero',
-             'Window.prototype.isOpen', 'Window.prototype.isClosed'):
+             'Window.prototype.isOpen', 'Window.prototype.isClosed', 'Tilemap.prototype._readMapData',
+             'Tilemap.prototype._isOverpassPosition', 'Tilemap.prototype._isHigherTile'):
     methods.append(between(core, f'{name} = function(', '\n};') + '\n};')
 methods.extend(runpy.run_path(str(ROOT / 'tests' / 'input-producers.py'))['input_methods'](installed))
 battle, _ = decode(battle_notification((installed / BATTLE_REL).read_bytes()).decode('utf8'))
@@ -59,9 +60,12 @@ for name, tail in [
     methods.append(between(battle, f'{name}=function(', tail) + '};')
 for relative, transform, names in [
     (MANAGERS_REL, managers_notification, ['BattleManager.update']),
-    (OBJECTS_REL, objects_notification, ['Game_Interpreter.prototype.' + name for name in
+    (OBJECTS_REL, objects_notification, ['Game_Event.prototype.eventId', 'Game_Event.prototype.forceMoveRoute',
+        'Game_CharacterBase.prototype.setMovementSuccess', *('Game_Character.prototype.' + name for name in
+        ('forceMoveRoute', 'memorizeMoveRoute', 'restoreMoveRoute', 'processRouteEnd')), *('Game_Interpreter.prototype.' + name for name in
         ('initialize', 'checkOverflow', 'setWaitMode', 'updateWaitMode', 'executeCommand', 'currentCommand', 'nextEventCode', 'skipBranch',
-         'setupChild', 'command101', 'command111', 'command411', 'command121', 'command122', 'operateVariable')]),
+         'setupChild', 'isOnCurrentMap', 'command101', 'command111', 'command411', 'command117', 'command121',
+         'command122', 'operateVariable', 'command201', 'character', 'command205'))]),
 ]:
     source = transform((installed / relative).read_bytes()).decode('utf8')
     methods.extend(between(source, f'{name} = function(', '\n};') + '\n};' for name in names)
@@ -75,6 +79,12 @@ methods.append("Alias['Game_Interpreter_command101'] = Game_Interpreter.prototyp
 for name, tail in [('command101', "},Alias['Game_Interpreter_setupChoices']"),
                    ('assignMesssageInterpreterAndIds', "},Alias['Game_Interpreter_command357']")]:
     methods.append(between(eli, f"Game_Interpreter['prototype']['{name}']=function(", tail) + '};')
+for kind, name, tail in [
+    ('Game_Event', 'getSpriteId', "},Game_Event['prototype']['getMapSprite']"),
+    ('Game_Event', 'getMapSprite', "},Game_Event['prototype']['getGlobalKey']"),
+    ('Sprite_Character', 'setMapSprite', "},Alias['Sprite_Character_setTileBitmap']"),
+]:
+    methods.append(between(eli, f"{kind}['prototype']['{name}']=function(", tail) + '};')
 monkey, _ = decode((installed / WINDOW_REL).read_text(encoding='utf8'))
 methods.append(between(monkey, 'ExecuteEvent=function(', "},PluginManager['registerCommand']") + '};')
 print(json.dumps(methods))

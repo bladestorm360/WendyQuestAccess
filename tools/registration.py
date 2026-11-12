@@ -50,7 +50,13 @@ STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
 DEPENDENCIES = {
     STATS_REL: STATS_SHA,
     MESSAGE_OWNER_REL: '26e0230f7bcf8a425ad4c128c728cb0d74d8589d1a07d9d3026edbc2b09c7ce0',
+    Path('package.nw/js/rmmz_sprites.js'): '33440ac9584344c4a9675d0b464f82eb49f5dcde0c23c485edbd385360475ba1',
     SALT_REL: '4d14b04a8980f4a4eb50dfa01d0ab61dd5507c62b65a1cd23b5df1621662e296',
+    Path('package.nw/data/CommonEvents.json'): '1884583f50d8e6c37c53c7552df9c6628d59faf0b92ea90d1ed3a65769c0b9d9',
+    Path('package.nw/data/Map196.json'): 'bb3dbeb99080470bc3c009ece7b6e5a60aa99d1fad6cfc71fa95b6a8e9a788e8',
+    Path('package.nw/data/Map199.json'): 'ba3fc58a0d8c1c0d71dc2de23010a6e35a7c3c6bd37925becb1fee86adb7998e',
+    Path('package.nw/data/Map200.json'): '7b9894f8c5548d3534e4cd14e9c007a8a8ea594acf8352182f91277b4531f0fa',
+    Path('package.nw/data/Map201.json'): '3d6cde06daacedebc77a44ee826816890128646ea9c68115404405b7ff14ad21',
     Path('package.nw/js/plugins/UIGeneral.js'): '9a282cc96ee2edb4777fc18228d4a5976e2ad7546d50df72a6d0429bc6af9b0e',
     Path('package.nw/img/system/IconSet.png'): '709b556b0c2b217436172d90d7d8af4c722ce421aa19f504261ee72607f5203e',
 }
@@ -58,11 +64,13 @@ FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene)
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
-                 b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaSettingsActive)')
-ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive)'
+                 b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
+                 b'SceneManager._scene?._wqaSettingsActive)')
+ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||this._eventId!==undefined||'
-               b'this._type==="boat"||this._type==="ship"))'
+               b'this._type==="boat"||this._type==="ship")||'
+               b'SceneManager._scene?._wqaCaveReview&&this===$gamePlayer)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 AUTO_DISCARD = (b'SceneManager._scene?._messageWindow?._wqaAutoPaint&&'
                 b'(SceneManager._scene._messageWindow._wqaAutoPaint=null)')
@@ -283,8 +291,9 @@ def map_notification(original):
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
         !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
     if (this._wqaFieldReady) {
-        if (!Graphics._wqaFrontEndObserved) globalThis.WendyQuestAccessFieldReady?.(this);
-    } else if (wqaWasFieldReady || this._wqaRouteActive) globalThis.WendyQuestAccessFieldControlLost?.(this);
+        if (!Graphics._wqaFrontEndObserved || (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198))
+            globalThis.WendyQuestAccessFieldReady?.(this);
+    } else if (wqaWasFieldReady || this._wqaRouteActive || this._wqaCaveReview) globalThis.WendyQuestAccessFieldControlLost?.(this);
 '''
     return insert(original, MAP_SHA, {
         # Track the native generator lifetime, including yielded rings.

@@ -28,6 +28,7 @@ def bundle():
         './snapshot': 'world/snapshot.js',
         './destinations': 'world/destinations.js',
         './puzzles/salt-caverns': 'world/puzzles/salt-caverns.js',
+        './puzzles/cave': 'world/puzzles/cave.js',
         './geometry.cjs': 'world/geometry.cjs',
         './dialogue/observer': 'dialogue/observer.js',
         './number-entry': 'dialogue/number-entry.js',

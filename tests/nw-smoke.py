@@ -1,7 +1,7 @@
 """Check the production plugin bundle on the official standalone NW.js host.
 
-Run inside the resource runner. The fixture has no Steam or game files. It
-uses a hidden window and replaces the speech worker with a silent receipt.
+Run inside the resource runner. The hidden fixture uses synthetic game state,
+the installed open-source PIXI runtime and a silent speech worker receipt.
 """
 
 import argparse
@@ -17,6 +17,7 @@ import zipfile
 
 VERSION = '0.48.4'
 ARCHIVE_HASH = '1731a5ed81139a63a5d1d7e7c521b5f08add023ffe4b719d06796a1ba77dc8a3'
+PIXI_HASH = '6eca31989af44e87ac64319da69b9e484a7fdf0cbbdcaf3cd85869362588cee1'
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -44,16 +45,20 @@ def unpack(archive, destination):
                 shutil.copyfileobj(source, output, 128 * 1024)
 
 
-def fixture(runtime):
+def fixture(runtime, installed):
     app = runtime / 'package.nw'
     app.mkdir()
+    pixi = installed / 'package.nw' / 'js' / 'libs' / 'pixi.js'
+    if sha(pixi) != PIXI_HASH:
+        raise ValueError('Unexpected installed PIXI runtime')
+    shutil.copyfile(pixi, app / 'pixi.js')
     (app / 'package.json').write_text(json.dumps({
         'name': 'wendyquest-access-offline-fixture', 'main': 'index.html',
         'window': {'show': False, 'width': 320, 'height': 200},
         'chromium-args': '--in-process-gpu --disable-devtools'
     }), encoding='utf8')
     (app / 'index.html').write_text('''<!doctype html><title>WendyQuest Access Offline Fixture</title>
-<script src="fixture.js"></script><script src="plugin.js"></script><script src="resize-markers.js"></script>
+<script src="pixi.js"></script><script src="fixture.js"></script><script src="plugin.js"></script><script src="resize-markers.js"></script>
 <script src="run.js"></script>
 ''', encoding='utf8')
     (app / 'fixture.js').write_text('''
@@ -103,6 +108,7 @@ nw.Window.get().resizeTo(440, 320);
 Graphics._wqaFinishResize(transition, true, 440, 320);
 let fileShown = false;
 let mapShown = false;
+let caveShown = false;
 let dialogueShown = false;
 let routeRequested = false;
 let fieldStep = 0;
@@ -345,12 +351,42 @@ const interval = setInterval(() => {
         padTap(6);
     }
     if (fieldStep === 5) Graphics.app.renderer.emit('postrender');
-    if (!dialogueShown && require('fs').existsSync(receipt + '.route-2')) {
-        dialogueShown = true;
+    if (!caveShown && require('fs').existsSync(receipt + '.route-2')) {
+        caveShown = true;
         tap('v', 'KeyV');
         if (!document.querySelector('dialog') || !SceneManager._scene._wqaSettingsActive) throw Error('Field settings did not open');
         tap('Escape');
         if (document.querySelector('dialog')) throw Error('Field settings did not return control');
+        WendyQuestAccessSceneLeaving(SceneManager._scene);
+        const tilemap = new PIXI.Container();
+        Object.assign(tilemap, { tileWidth: 32, tileHeight: 32, origin: new PIXI.Point(),
+            _isOverpassPosition: () => false, _readMapData: () => 0, _isHigherTile: () => false });
+        tilemap.position.set(32, 0);
+        const sprite = new PIXI.Sprite(PIXI.Texture.WHITE);
+        sprite.position.set(24, 48);
+        tilemap.addChild(sprite);
+        const parent = tilemap.enableTempParent();
+        tilemap.updateTransform();
+        tilemap.disableTempParent(parent);
+        const patrol = { _eventId: 4, _x: 5, _realX: 4.5, _y: 24, _realY: 24, _pageIndex: 0, _trigger: 2,
+            _priorityType: 1, getMapSprite: () => sprite };
+        sprite._character = patrol;
+        const events = [null, null, null, null, patrol];
+        const scene = { _active: true, _wqaMapRestored: true, _wqaFieldReady: true, _fadeDuration: 0, _fadeOpacity: 0,
+            _spriteset: { _tilemap: tilemap } };
+        $gameMap = { _mapId: 196, _tilesetId: 1, inactiveTime: 0, _events: events };
+        $dataMap = { width: 23, height: 52, scrollType: 0,
+            events: [null, null, null, null, { name: 'Synthetic patrol', pages: [{ list: [{}, {}] }] }] };
+        $gamePlayer = { _x: 6, _y: 26, _realX: 6, _realY: 26, _vehicleType: 'walk' };
+        SceneManager._scene = Graphics.app.stage = scene;
+        Graphics.app.renderer.screen = new PIXI.Rectangle(0, 0, 320, 200);
+        const started = performance.now();
+        tap('U', 'KeyU', { shiftKey: true });
+        Graphics.app.renderer.emit('postrender');
+        require('fs').writeFileSync(receipt + '.cave-review-ms', String(performance.now() - started));
+    }
+    if (!dialogueShown && require('fs').existsSync(receipt + '.cave')) {
+        dialogueShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         const layer = {};
         const visible = { parent: layer, worldVisible: true, worldAlpha: 1, openness: 255, contentsOpacity: 255 };
@@ -433,6 +469,7 @@ parentPort.on('message', message => {
         const count = records.filter(record => record.kind === 'routeDirections' || record.kind === 'fieldStatus').length;
         fs.writeFileSync(receipt + '.route-' + count, '');
     }
+    if (message.kind === 'fieldStatus' && message.name.startsWith('Secret cave.')) fs.writeFileSync(receipt + '.cave', '');
     if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
     if (message.kind === 'dialoguePage' && fs.existsSync(receipt + '.choice')) {
         fs.writeFileSync(receipt + (fs.existsSync(receipt + '.repeat') ? '.controller-repeat' : '.repeat'), '');
@@ -473,22 +510,22 @@ def main():
         for module in ('nw.dll', 'nw_elf.dll', 'node.dll'):
             print(module, 'matches installed' if sha(runtime / module) == sha(args.installed / module)
                   else 'differs from installed', flush=True)
-        receipt = fixture(runtime)
+        receipt = fixture(runtime, args.installed)
         launch = [str(runtime / 'nw.exe'), f'--user-data-dir={runtime / "profile"}']
         result = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25)
         if not receipt.exists():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 17 or not all(r.get('sameEpoch') for r in records):
+        if result.returncode or data.get('error') or len(records) != 18 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, page, choice, repeat, dialogue_mode, pad_repeat, number = records
+        title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, cave, page, choice, repeat, dialogue_mode, pad_repeat, number = records
         if any(item['name'] != title['name'] for item in (returned_title, controller_title)) or \
                 len({title['epoch'], returned_title['epoch'], controller_title['epoch']}) != 3:
             raise RuntimeError(f'NW fixture did not restore the title focus: {data}')
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
-                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:12]}) != 11:
+                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:13]}) != 12:
             raise RuntimeError(f'NW fixture did not deliver distinct presentation epochs: {data}')
         if [item.get('name') for item in (first, second, third)] != ['Synthetic wall', 'Synthetic switch', 'Synthetic wall'] or \
                 any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
@@ -497,6 +534,9 @@ def main():
                for item in (route, pad_route)):
             raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
+        if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
+            raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
+        cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
@@ -520,6 +560,7 @@ def main():
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic renderer command and cold worker submission: {submit_ms:.1f} ms.')
+        print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
 
 
 if __name__ == '__main__':

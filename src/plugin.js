@@ -231,7 +231,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFieldReady = function (scene) {
-        if (field || fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
+        if ((field && !root.Graphics._wqaCaveRecoveryPending) || fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
             !root.document.hasFocus()) return;
         const renderer = root.Graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return;
@@ -239,10 +239,13 @@ function boot(root, nodeRequire, nodeProcess) {
         renderer.once('postrender', () => {
             if (fieldWaiting !== scene) return;
             fieldWaiting = null;
-            if (field || !scene._wqaFieldReady || root.SceneManager._scene !== scene ||
+            if (!scene._wqaFieldReady || root.SceneManager._scene !== scene ||
                 root.Graphics.app?.stage !== scene || root.SceneManager._nextScene || root.Graphics._wqaResize ||
                 root.SceneManager._wqaNativeAutosaves || !root.document.hasFocus()) return;
-            try { initialize(); } catch { /* Native field input remains available. */ }
+            try {
+                if (!field) initialize();
+                field.observeRecovery(scene);
+            } catch { /* Native field input remains available. */ }
         });
     };
 
@@ -262,7 +265,6 @@ function boot(root, nodeRequire, nodeProcess) {
         settings?.retire(scene);
         if (titleWaiting === scene) titleWaiting = null;
         if (filesWaiting === scene) filesWaiting = null;
-        if (fieldWaiting === scene) fieldWaiting = null;
         if (fieldWaiting === scene) fieldWaiting = null;
         title?.leave(scene);
         files?.leave(scene);
