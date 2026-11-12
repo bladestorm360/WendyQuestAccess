@@ -4,11 +4,13 @@ const CONTROLLER_DEFAULTS = Object.freeze({ enabled: true, mode: 8, settings: 9,
     previous: 12, next: 13, confirm: 0, back: 1, recovery: Object.freeze([10, 11]),
     previousDestination: 20, nextDestination: 21, previousCategory: 22, nextCategory: 23, directions: 6,
     currentDestination: 0, puzzleGuide: 4, puzzleStop: 5, beaconToggle: 6, wallToggle: 21, beaconStop: 20,
-    details: 0, reviewPrevious: 12, reviewNext: 13, reviewFirst: 14, reviewLast: 15 });
+    details: 0, reviewPrevious: 12, reviewNext: 13, reviewFirst: 14, reviewLast: 15,
+    questDetails: 3, questPrevious: 12, questNext: 13, questFirst: 14, questLast: 15 });
 const MODE_ACTIONS = ['mode', 'settings', 'repeat'];
 const MENU_ACTIONS = ['previous', 'next', 'confirm', 'back'];
 const FIELD_ACTIONS = ['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory', 'directions'];
-const FIELD_MODE_ACTIONS = ['currentDestination', 'puzzleGuide', 'puzzleStop', 'beaconToggle', 'wallToggle', 'beaconStop'];
+const FIELD_MODE_ACTIONS = ['currentDestination', 'puzzleGuide', 'puzzleStop', 'beaconToggle', 'wallToggle', 'beaconStop',
+    'questDetails', 'questPrevious', 'questNext', 'questFirst', 'questLast'];
 const REVIEW_ACTIONS = ['details', 'reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast'];
 const RECOVERY_CONFLICTS = [...MODE_ACTIONS, ...FIELD_MODE_ACTIONS, ...FIELD_ACTIONS, ...REVIEW_ACTIONS];
 const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mod settings', repeat: 'Repeat dialogue',
@@ -20,7 +22,9 @@ const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mo
     beaconToggle: 'Toggle navigation beacon in mod mode', wallToggle: 'Toggle wall sounds in mod mode',
     beaconStop: 'Stop current navigation in mod mode', details: 'Read details in mod mode',
     reviewPrevious: 'Previous review line in mod mode', reviewNext: 'Next review line in mod mode',
-    reviewFirst: 'First review line in mod mode', reviewLast: 'Last review line in mod mode' });
+    reviewFirst: 'First review line in mod mode', reviewLast: 'Last review line in mod mode',
+    questDetails: 'Read quest details in mod mode', questPrevious: 'Previous quest line in mod mode',
+    questNext: 'Next quest line in mod mode', questFirst: 'First quest line in mod mode', questLast: 'Last quest line in mod mode' });
 const BUTTONS = ['South button', 'East button', 'West button', 'North button', 'Left bumper', 'Right bumper',
     'Left trigger', 'Right trigger', 'Left center button', 'Right center button', 'Left stick click', 'Right stick click',
     'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', null, null, null, null,
@@ -99,7 +103,8 @@ function normalizeController(saved) {
     }
     for (const action of FIELD_MODE_ACTIONS) {
         if (saved?.[action] === null || result[action] !== null) continue;
-        const defaults = action === 'currentDestination' ? [0, 2, 3] : [CONTROLLER_DEFAULTS[action]];
+        const defaults = action === 'currentDestination' ? [0, 2, 3] :
+            action === 'questDetails' ? [3, 2, 7] : [CONTROLLER_DEFAULTS[action]];
         result[action] = defaults.find(value => bindingAllowed(action, value, result, () => false)) ?? null;
     }
     for (const action of FIELD_ACTIONS) {

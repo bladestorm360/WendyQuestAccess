@@ -5,6 +5,7 @@ const { createAudio } = require('./runtime/audio');
 const { createTitleObserver, presented } = require('./frontend/title');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
 const { createMenuObserver } = require('./menus/observer');
+const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createField } = require('./world/field');
 const { createWallAudio } = require('./world/wall-audio');
@@ -15,10 +16,14 @@ const { createDialogueObserver } = require('./dialogue/observer');
 const { createSettingsMenu } = require('./settings/menu');
 const { createController, modeAnnouncement } = require('./settings/controller');
 
+const QUEST_ACTIONS = Object.freeze({ questDetails: 'details', questPrevious: 'reviewPrevious',
+    questNext: 'reviewNext', questFirst: 'reviewFirst', questLast: 'reviewLast' });
+
 function boot(root, nodeRequire, nodeProcess) {
     let title = null;
     let files = null;
     let menus = null;
+    let quests = null;
     let mapBanner = null;
     let dialogue = null;
     let audio = null;
@@ -101,6 +106,7 @@ function boot(root, nodeRequire, nodeProcess) {
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
+        quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
         beacon = host.beacon = createBeacon(root, field.ready, audio, () => audioPreferences, field.report);
         caveTiming = host.caveTiming = createCaveTiming(root, field.ready, audio, () => audioPreferences, field.report);
@@ -123,7 +129,11 @@ function boot(root, nodeRequire, nodeProcess) {
             const menu = menus.controlOwner(scene);
             if (menu) return menu;
             const speaking = dialogue.controllerOwner(scene);
-            if (!speaking) return field.controlOwner(scene);
+            if (!speaking) {
+                const control = field.controlOwner(scene);
+                if (control) control.quest = !control.navigationOnly && quests.available(scene);
+                return control;
+            }
             speaking.puzzleActive = field.puzzleActive(scene);
             return speaking;
         }
@@ -137,6 +147,8 @@ function boot(root, nodeRequire, nodeProcess) {
             else files.announce(context.scene, record);
         }
         function fieldAction(action) {
+            const questAction = QUEST_ACTIONS[action];
+            if (questAction) return quests.command(host.manager._scene, questAction);
             if (action !== 'beaconToggle' && action !== 'wallToggle') return field.command(action);
             const scene = host.manager._scene;
             if (!field.ready(scene)) return false;
@@ -193,6 +205,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 title.suspend();
                 files.suspend();
                 menus.suspend(scene);
+                quests.suspend(scene);
                 field.autowalk.stop(scene);
                 field.changed(scene);
                 scene._wqaPresentation = true;
@@ -203,7 +216,8 @@ function boot(root, nodeRequire, nodeProcess) {
             resume(scene) { if (host.manager._scene === scene) root.WendyQuestAccessResizeReady(); },
             repeat() { try { return dialogue.repeatPage(); } catch { return false; } },
             menuCommand(action) {
-                try { return menus.command(menus.controlOwner(host.manager._scene), action); }
+                const scene = host.manager._scene;
+                try { return menus.command(menus.controlOwner(scene), action) || quests.command(scene, action); }
                 catch { return false; }
             },
             fieldCommand(key) { try { return fieldAction(key); } catch { return false; } }
@@ -241,6 +255,7 @@ function boot(root, nodeRequire, nodeProcess) {
             soundscape.leave();
             audio.retire();
             menus.retire(host.manager._scene);
+            quests.leave(host.manager._scene);
             controller.reset();
         });
         root.addEventListener('focus', () => {
@@ -317,6 +332,13 @@ function boot(root, nodeRequire, nodeProcess) {
     };
     root.WendyQuestAccessMenuLeaving = function (scene) { menus?.retire(scene); };
 
+    root.WendyQuestAccessQuestPaint = function (window) {
+        try { return quests?.paint(window); } catch { return null; }
+    };
+    root.WendyQuestAccessQuestUpdate = function (scene) {
+        try { quests?.observe(scene); } catch { quests?.leave(scene); }
+    };
+
     root.WendyQuestAccessMapBannerReady = function (scene, revision) {
         try {
             if (!supported() || root.SceneManager._scene !== scene || !root.document.hasFocus()) return;
@@ -361,6 +383,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFieldChanged = function (scene) {
+        quests?.suspend(scene);
         soundscape?.invalidate(scene);
         wall?.leave(scene);
         caveTiming?.stop(scene);
@@ -369,6 +392,7 @@ function boot(root, nodeRequire, nodeProcess) {
         field?.changed(scene);
     };
     root.WendyQuestAccessFieldControlLost = function (scene) {
+        quests?.suspend(scene);
         soundscape?.leave(scene);
         wall?.leave(scene);
         caveTiming?.stop(scene);
@@ -383,6 +407,7 @@ function boot(root, nodeRequire, nodeProcess) {
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
     };
     root.WendyQuestAccessFieldEvent = function (scene) {
+        quests?.suspend(scene);
         soundscape?.leave(scene);
         caveTiming?.stop(scene);
         const stopped = field?.autowalk.stop(scene);
@@ -419,6 +444,7 @@ function boot(root, nodeRequire, nodeProcess) {
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
     root.WendyQuestAccessSceneLeaving = function (scene) {
+        quests?.leave(scene);
         soundscape?.leave(scene);
         wall?.leave(scene);
         beacon?.stop(scene);
@@ -444,6 +470,7 @@ function boot(root, nodeRequire, nodeProcess) {
         filesWaiting = null;
         fieldWaiting = null;
         const scene = root.SceneManager._scene;
+        quests?.leave(scene);
         soundscape?.leave(scene);
         wall?.leave(scene);
         beacon?.stop(scene);

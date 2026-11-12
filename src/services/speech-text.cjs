@@ -71,6 +71,12 @@ function formatSpeech(message) {
             if (text && message.indexed && message.position > 0 && message.position <= message.total &&
                 Number.isInteger(message.total) && message.total <= 8) text += `, ${message.position} of ${message.total}`;
             break;
+        case 'questFocus': {
+            const name = label(message) || 'Quest objective';
+            const objective = typeof message.objective === 'string' && message.objective.length <= 96 ? message.objective : '';
+            text = [name, objective].filter(Boolean).join('. ');
+            break;
+        }
         case 'menuDetails':
             if (!Array.isArray(message.lines) || message.lines.length > 8 ||
                 !message.lines.every(line => typeof line === 'string' && line.length <= 96)) return '';

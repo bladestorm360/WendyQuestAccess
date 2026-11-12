@@ -33,6 +33,8 @@ def bundle():
         './frontend/title': 'frontend/title.js',
         './frontend/files': 'frontend/files.js',
         './menus/observer': 'menus/observer.js',
+        './menus/quest-tracker': 'menus/quest-tracker.js',
+        './quest-paint': 'menus/quest-paint.js',
         './review': 'menus/review.js',
         './options': 'frontend/options.js',
         './world/map-banner': 'world/map-banner.js',

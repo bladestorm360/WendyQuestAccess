@@ -723,20 +723,71 @@ const interval = setInterval(() => {
             endingStep++;
         } else if (endingStep === 8 && fs.existsSync(receipt + '.menuDetails-auto')) {
             WendyQuestAccessSceneLeaving(SceneManager._scene);
-            const scene = SceneManager._scene = Graphics.app.stage = new Scene_Title();
-            WendyQuestAccessTitleReady(scene);
+            fs.writeFileSync(receipt + '.quest-stage', '');
+            const scene = SceneManager._scene = Graphics.app.stage = {
+                _wqaFieldReady: true, _wqaMapRestored: true, _mapLoaded: true, _started: true, _active: true,
+                _fadeOpacity: 0, _fadeDuration: 0, _windowLayer: {}
+            };
+            $gameMap = { _mapId: 1, inactiveTime: 0, _interpreter: {} };
+            $gamePlayer = { _x: 0, _realX: 0, _y: 0, _realY: 0, _vehicleType: 'walk' };
+            $gameScreen = { _brightness: 255 };
+            const bitmap = { width: 200, height: 80, paintOpacity: 255, drawText() {},
+                measureTextWidth: text => text.length * 5, isReady: () => true };
+            const tracker = scene._questNavWindow = {
+                _init: true, _questData: {}, _questId: 'fixture', _transitionState: 'full', _targetTransitionState: 'full',
+                parent: scene._windowLayer, visible: true, worldVisible: true, worldAlpha: 1, openness: 255, offsetY: 0,
+                contents: bitmap, contentsOpacity: 255, innerWidth: 200, innerHeight: 80,
+                _contentsSprite: { bitmap, worldVisible: true, worldAlpha: 1,
+                    worldTransform: { a: 1, b: 0, c: 0, d: 1, tx: 8, ty: 8 } }
+            };
+            const finish = WendyQuestAccessQuestPaint(tracker);
+            if (!finish) throw Error('The ready tracker was rejected');
+            tracker._wqaQuestCapture.title = true;
+            bitmap.drawText('Synthetic quest', 4, 4, 180, 16);
+            tracker._wqaQuestCapture.title = false;
+            tracker._wqaQuestCapture.beginRow();
+            bitmap.drawText('A shown clue', 4, 24, 180, 16);
+            bitmap.drawText('1/2', 4, 24, 180, 16, 'right');
+            tracker._wqaQuestCapture.endRow();
+            finish(true);
+            WendyQuestAccessQuestUpdate(scene);
+            Graphics.app.renderer.emit('postrender');
+            endingStep++;
+        } else if (endingStep === 9 && fs.existsSync(receipt + '.quest-detail-auto')) {
+            tap('i', 'KeyI');
+            endingStep++;
+        } else if (endingStep === 10 && fs.existsSync(receipt + '.quest-detail')) {
+            fs.renameSync(receipt + '.quest-detail', receipt + '.quest-detail-key');
+            pad();
+            if (padTap(7) !== 1 << 7) throw Error('Field mod mode did not claim its binding');
+            endingStep++;
+        } else if (endingStep === 11) {
+            Graphics.app.renderer.emit('postrender');
+            if (fs.existsSync(receipt + '.quest-mode')) {
+                if (padTap(3) !== 1 << 3) throw Error('Quest review did not consume the native menu button');
+                endingStep++;
+            }
+        } else if (endingStep === 12 && fs.existsSync(receipt + '.quest-detail')) {
+            const scene = SceneManager._scene;
+            scene._questNavWindow.visible = false;
+            WendyQuestAccessQuestUpdate(scene);
+            if (scene._wqaQuestTracking || padTap(3) !== 0) throw Error('A hidden tracker retained field ownership');
+            fs.unlinkSync(receipt + '.quest-stage');
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
+            WendyQuestAccessTitleReady(title);
             Graphics.app.renderer.emit('postrender');
             tap('v', 'KeyV');
             choose('Speech');
             choose('Speech enabled, on');
             endingStep++;
-        } else if (endingStep === 9 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
+        } else if (endingStep === 13 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
             if (document.activeElement.textContent !== 'Speech enabled, off') throw Error('The mute switch did not retain focus');
             tap('Escape');
             choose('Audio');
             choose('Preview right');
             endingStep++;
-        } else if (endingStep === 10 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        } else if (endingStep === 14 && menuStatus() === 'Preview uses stereo and rear pitch.') {
             fs.writeFileSync(receipt + '.muted-preview', '');
             clearInterval(interval);
             nw.App.quit();
@@ -781,6 +832,15 @@ parentPort.on('message', message => {
     if (fs.existsSync(receipt + '.closing-pass')) {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
+        if (fs.existsSync(receipt + '.quest-stage')) {
+            if (message.kind === 'questFocus') fs.writeFileSync(receipt + '.quest-focus', speech);
+            if (message.kind === 'menuDetails')
+                fs.writeFileSync(receipt + (message.append ? '.quest-detail-auto' : '.quest-detail'), speech);
+            if (message.kind === 'fieldStatus' && message.name.includes('reads the quest'))
+                fs.writeFileSync(receipt + '.quest-mode', speech);
+            parentPort.postMessage('ack');
+            return;
+        }
         if (message.kind === 'menuFocus' || message.kind === 'menuDetails') {
             fs.writeFileSync(receipt + '.' + message.kind + (automatic ? '-auto' : ''), speech);
         }
@@ -950,6 +1010,10 @@ def main():
             'menu-review-second': 'Visible second line',
             'menuFocus-auto': 'Inventory, Synthetic supply, 3, 1 of 1',
             'menuDetails-auto': 'Visible first line. Visible second line',
+            'quest-focus': 'Synthetic quest. A shown clue. 1 of 2',
+            'quest-detail-auto': 'A shown clue. 1 of 2',
+            'quest-detail-key': 'Synthetic quest. A shown clue. 1 of 2',
+            'quest-detail': 'Synthetic quest. A shown clue. 1 of 2',
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:
@@ -987,7 +1051,7 @@ def main():
         print('Verified native autowalk dispatch, both narration settings, spoken arrival and explicit cancellation.')
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
-        print('Verified native-menu plugin focus, keyboard and controller review, Autodetail and indexing persistence.')
+        print('Verified menu and quest focus, keyboard and controller review, Autodetail and indexing persistence.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '

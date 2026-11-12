@@ -26,6 +26,7 @@ MAP_REL = Path('package.nw/js/plugins/MapScene.js')
 OBJECTS_REL = Path('package.nw/js/rmmz_objects.js')
 CANVAS_REL = Path('package.nw/js/plugins/CanvasScaler.js')
 BATTLE_REL = Path('package.nw/js/plugins/BattleSceneArranger.js')
+QUEST_REL = Path('package.nw/js/plugins/Ayatam_HighQualityQuestSystem.js')
 STATS_REL = Path('package.nw/js/plugins/WendyQuest.js')
 MESSAGE_OWNER_REL = Path('package.nw/js/plugins/EliMZ_Book.js')
 SALT_REL = Path('package.nw/data/Map019.json')
@@ -47,6 +48,7 @@ MAP_SHA = 'aff25c073cffce32857bb654d0ae30938f10ddfa534cfc0cb80ebb078a4aaf64'
 OBJECTS_SHA = 'b9da176c2041866df643b7d62b36d99d67bf1b44216deb52568adbd08264848a'
 CANVAS_SHA = '713457886c5589be41d137d81b327947e37b19707c2f30c5da1b1ff43a9d8ccf'
 BATTLE_SHA = 'b6e5b59162e89c38e4d24c55ea622846509ac6d77e91ec0e24c0bb745fd0eab5'
+QUEST_SHA = '5a17621ec14791c85716cb13ced13b1ceb82a83d3d05df0e850f2f0059c8daf3'
 STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
 DEPENDENCIES = {
     STATS_REL: STATS_SHA,
@@ -91,11 +93,12 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
-                 b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaSoundscapeActive)')
+                 b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaSoundscapeActive||'
+                 b'SceneManager._scene?._wqaQuestTracking)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                b'SceneManager._scene?._wqaWallAudio||SceneManager._scene?._wqaBeaconActive||'
                b'SceneManager._scene?._wqaCaveTimingActive||SceneManager._scene?._wqaAutowalkActive||'
-               b'SceneManager._scene?._wqaSoundscapeSample)'
+               b'SceneManager._scene?._wqaSoundscapeSample||SceneManager._scene?._wqaQuestTracking)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||this._eventId!==undefined||'
                b'this._type==="boat"||this._type==="ship"||this._type==="airship")||'
@@ -198,6 +201,30 @@ def menu_notifications(original):
     })
 
 
+def quest_notification(original):
+    # The tracker can repaint during an animation. Sample only the actual
+    # stable paint and tag its title and objective draw scopes.
+    return insert(original, QUEST_SHA, {
+        157600: b'let wqaQuestEnd,wqaQuestComplete=false;'
+                b'if(this._needContentRefresh&&this._transitionState===this._targetTransitionState){'
+                b'this._wqaQuestDraft=null;wqaQuestEnd=globalThis.WendyQuestAccessQuestPaint?.(this);}'
+                b'try{',
+        158215: b'wqaQuestComplete=true;}finally{wqaQuestEnd?.(wqaQuestComplete);}',
+        159810: b'if(this._wqaQuestCapture)this._wqaQuestCapture.title=true;',
+        161688: b'if(this._wqaQuestCapture)this._wqaQuestCapture.title=false;',
+        163660: b'this._wqaQuestCapture?.beginRow();',
+        166031: b'this._wqaQuestCapture?.endRow();',
+        166914: b'this._wqaQuestCapture?.beginRow();',
+        167877: b'this._wqaQuestCapture?.endRow();',
+        369098: b'if(this._wqaQuestTracking||(this._questNavWindow?._wqaQuestDraft&&'
+                b'this._questNavWindow.visible&&this._questNavWindow.offsetY===0))'
+                b'globalThis.WendyQuestAccessQuestUpdate?.(this);',
+        375124: b'if(this._questNavWindow){this._questNavWindow._wqaQuestRevision='
+                b'(this._questNavWindow._wqaQuestRevision||0)+1;'
+                b'if(this._wqaQuestTracking)globalThis.WendyQuestAccessQuestUpdate?.(this);}',
+    })
+
+
 def managers_notification(original):
     return insert(original, MANAGERS_SHA, {
         # These entry sites precede Chromium reload or the next scene constructor.
@@ -256,7 +283,8 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',
         249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive||'
                 b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||'
-                b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive))'
+                b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive||'
+                b'SceneManager._scene._wqaQuestTracking))'
                 b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene);\n        ',  # Accepted event start
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING + b'}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
@@ -527,7 +555,7 @@ def main():
                                 (INPUT_REL, input_notification), (TILE_REL, tile_notification),
                                 (OBJECTS_REL, objects_notification), (MAP_REL, map_notification),
                                 (CANVAS_REL, canvas_notification), (WINDOWS_REL, windows_notification),
-                                (BATTLE_REL, battle_notification),
+                                (BATTLE_REL, battle_notification), (QUEST_REL, quest_notification),
                                 (REGISTRY_REL, register)):
         file = args.game_root / relative
         if file.stat().st_size > 1024 * 1024:
