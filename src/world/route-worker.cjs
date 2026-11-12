@@ -4,14 +4,16 @@ const { parentPort, workerData } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
 const { createHash } = require('crypto');
-const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, MAX_EVENTS } = require('./geometry.cjs');
+const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS } = require('./geometry.cjs');
 const { solveRoute, findReachable } = require('./routes.cjs');
+const { MAX_CATALOG_BYTES, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
 
 const BUILD = '26578620';
 const admission = new Int32Array(workerData.admission);
 const directory = workerData.geometryDirectory;
 let manifest = null;
+let walking;
 let cachedId = 0;
 let cachedGeometry = null;
 
@@ -32,7 +34,7 @@ function readBounded(name, limit) {
 function geometry(id) {
     if (id === cachedId) return cachedGeometry;
     if (!manifest) {
-        const source = JSON.parse(readBounded('manifest.json', 65536));
+        const source = JSON.parse(readBounded('manifest.json', 128 * 1024));
         if (source.build !== BUILD || !source.maps) throw new Error('Unsupported map geometry build');
         manifest = source;
     }
@@ -45,17 +47,16 @@ function geometry(id) {
     return cachedGeometry;
 }
 
-function qualifiedEntrances(map, transfer) {
-    const target = transfer?.map;
-    const landing = manifest.maps[target];
-    const { candidates } = transfer || {};
-    if (!Number.isInteger(target) || target < 1 || target > 999 || target === map ||
-        !Number.isInteger(landing?.width) || !Number.isInteger(landing?.height) ||
-        landing.width < 1 || landing.height < 1 || landing.width * landing.height > MAX_CELLS ||
-        !Array.isArray(candidates) || candidates.length > MAX_EVENTS) return [];
-    return candidates.filter(({ event, x, y }) => Number.isInteger(event) && event > 0 && event <= MAX_EVENTS &&
-        Number.isInteger(x) && x >= 0 && x < landing.width && Number.isInteger(y) && y >= 0 && y < landing.height)
-        .map(candidate => candidate.event);
+function walkingCatalog() {
+    if (walking !== undefined) return walking;
+    walking = null;
+    if (!manifest.walking) return walking;
+    const { hash, catalog } = manifest.walking;
+    if (!catalog || typeof hash !== 'string') return walking;
+    const bytes = Buffer.from(JSON.stringify(catalog));
+    if (bytes.length <= MAX_CATALOG_BYTES && createHash('sha256').update(bytes).digest('hex') === hash)
+        walking = readCatalog(catalog, manifest.maps);
+    return walking;
 }
 
 // Each request carries a copied world state. Keep one current geometry, with
@@ -73,7 +74,7 @@ parentPort.on('message', message => {
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
             if (request.candidates !== undefined) result = findReachable(base, live, request, cancelled);
             else if (request.transfer !== undefined) result = solveRoute(base, live,
-                { ...request, entrances: qualifiedEntrances(map, request.transfer) }, cancelled);
+                { ...request, entrances: rankEntrances(walkingCatalog(), map, request.transfer, manifest.maps, cancelled) }, cancelled);
             else result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
             const follows = result.status === 'ready' && !result.reenter && (request.beacon === true || request.autowalk === true);
             if (follows || (result.status === 'interrupted' && request.autowalk === true)) {

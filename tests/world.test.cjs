@@ -927,7 +927,7 @@ async function main() {
     await verifyReachability(c, load, verifyWorker);
     await verifyQuestDestinations(c, game, read, load, verifyRoute, verifyWorker);
     await verifyBookmarks(c, load, verifyRoute, verifyWorker);
-    await verifyTransferBookmarks(c, load, verifyRoute, verifyWorker);
+    await verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, read('CommonEvents.json'));
     console.log(`Verified ${compared} directed movement comparisons across authored maps and dynamic cases.`);
     console.log('Verified native Map 196 patrol contact, catch-page handback, checkpoint floor trigger and bounded warning sign route.');
 }

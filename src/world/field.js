@@ -5,6 +5,7 @@ const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
+const { tileKey } = require('./geometry.cjs');
 const { browse, createDestinationBrowser } = require('./destinations');
 const { questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
@@ -137,11 +138,12 @@ function createField(root, host, notifications) {
             const result = packet.result;
             if (job.remote && result?.status === 'ready') {
                 const entrance = job.remote.entrances.find(edge => edge.event === result.entrance);
-                if (!entrance || !transfers.current(entrance))
+                if (!entrance || !transfers.current(entrance) || !transfers.matchesState(job.remote.state))
                     return status(job, 'The entrance changed. Request directions again.');
                 job.target = entrance.event;
                 job.entrance = entrance;
-                transfers.arm(job.scene, job.remote.bookmark, entrance);
+                if (entrance.map !== job.remote.bookmark.map) job.label = 'Next entrance toward ' + job.remote.bookmark.name;
+                transfers.arm(job.scene, job.remote.selection, entrance);
             }
             if (result?.status === 'timedCue') {
                 if (!job.cueRetried && host.graphics.frameCount > job.motionFrame + result.opening?.through - TIMING_CUE.lead) {
@@ -174,7 +176,7 @@ function createField(root, host, notifications) {
                     { quest: job.quest, point: job.point });
                 follow(job, result, { kind: 'routeDirections', name: job.label,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
-                    reenter: result.reenter === true, enter: job.entrance?.normal,
+                    reenter: result.reenter === true, enter: job.entrance?.action,
                     board: !!job.vehicle, land: result.land === true,
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
             }
@@ -290,7 +292,8 @@ function createField(root, host, notifications) {
 
     function remoteDirections(job) {
         job.performed = true;
-        const bookmark = savedBookmark(owner.remoteBookmark);
+        const selection = owner.remoteBookmark;
+        const bookmark = savedBookmark(selection);
         if (!bookmark) {
             owner.remoteBookmark = null;
             return status(job, 'The selected bookmark changed. Select it again in settings.');
@@ -301,13 +304,15 @@ function createField(root, host, notifications) {
         const snapshot = captureWorld(root);
         if (!snapshot || snapshot.mode !== 'walk' || timedCave(snapshot.map))
             return status(job, 'Entrance directions are unavailable here');
-        const entrances = transfers.candidates(bookmark);
+        const { entrances, state } = transfers.candidates();
         if (!entrances.length) return status(job, 'No verified reachable entrance for ' + bookmark.name);
         job.label = 'Entrance for ' + bookmark.name;
-        job.remote = { bookmark, entrances };
+        const trail = [...new Set([...selection.trail, tileKey(snapshot.map, snapshot.x, snapshot.y)])];
+        job.remote = { bookmark, entrances, state, selection: { ...selection, trail } };
         job.autowalk = preferences().autowalk;
+        const point = bookmark.kind === 'point' ? { x: bookmark.x, y: bookmark.y } : undefined;
         submit(job, snapshot, { limit: 8, field: true, autowalk: job.autowalk, beacon: host.beacon?.enabled() === true,
-            transfer: { map: bookmark.map, candidates: entrances.map(({ event, x, y }) => ({ event, x, y })) } });
+            transfer: { map: bookmark.map, point, state, trail, candidates: entrances.map(({ event, map, x, y }) => ({ event, map, x, y })) } });
     }
 
     function perform(job) {
@@ -413,9 +418,9 @@ function createField(root, host, notifications) {
         return true;
     }
 
-    function activateBookmark(scene, entry, remote = false) {
+    function activateBookmark(scene, entry, remote = false, trail = []) {
         if (owner?.scene !== scene) owner = { scene, browser: createDestinationBrowser() };
-        owner.remoteBookmark = remote ? entry : null;
+        owner.remoteBookmark = remote ? { id: entry.id, revision: entry.revision, trail } : null;
         if (!remote) {
             owner.browser.category = 'bookmarks';
             owner.browser.selections.bookmarks = bookmarkId(entry.id);
@@ -485,7 +490,8 @@ function createField(root, host, notifications) {
             if (!ready(scene)) return;
             const arrived = transfers.settle(scene);
             const bookmark = arrived && savedBookmark(arrived);
-            if (bookmark && travelMode(root.$gameMap, root.$gamePlayer) === bookmark.mode) activateBookmark(scene, bookmark);
+            if (bookmark && travelMode(root.$gameMap, root.$gamePlayer) === bookmark.mode)
+                activateBookmark(scene, bookmark, root.$gameMap._mapId !== bookmark.map, arrived.trail);
             cave.recover(scene);
             const outcome = cave.settleProgress(scene);
             if (outcome && !active) command('status', outcome);

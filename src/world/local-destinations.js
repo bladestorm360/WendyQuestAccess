@@ -1,5 +1,7 @@
 'use strict';
 
+const { houseStair, houseBranches } = require('./transfer-events.cjs');
+
 // Each locator describes the active page's native destination. The worker
 // still derives the interaction approach from live collision and priority.
 const EXITS = {
@@ -23,31 +25,19 @@ const EXITS = {
     205: { 8: ['Return to Caffeine Caverns', 87], 12: ['Return to Caffeine Caverns', 87] }
 };
 
-const HOUSE_STAIRS = {
-    127: { gate: 503, check: 0, unlocked: 2, normal: 6, secretMap: 195, normalMap: 128, floor: 'Third floor' },
-    132: { gate: 525, check: 1, unlocked: 2, normal: 5, secretMap: 203, normalMap: 133, floor: 'Second floor' }
-};
-
 const PULLS = { 51: [2], 53: [3, 4], 55: [4] };
-
-function goesTo(command, map) {
-    return command?.code === 201 && command.parameters[0] === 0 && command.parameters[1] === map;
-}
 
 function localDestination(root, event, page) {
     const map = root.$gameMap._mapId;
     const id = event._eventId;
     const trigger = event._trigger;
     const list = page.list;
-    const stairs = id === 2 && HOUSE_STAIRS[map];
+    const stairs = houseStair(map, id);
     if (stairs) {
         // The landing changes within the same native page when the hidden
         // passage opens. Read the exact condition but only speak the target.
-        const condition = list[stairs.check];
-        if (trigger !== 1 || condition?.code !== 111 || condition.parameters[0] !== 0 ||
-            condition.parameters[1] !== stairs.gate || condition.parameters[2] !== 0 ||
-            !goesTo(list[stairs.unlocked], stairs.secretMap) || !goesTo(list[stairs.normal], stairs.normalMap)) return null;
-        const open = root.$gameSwitches?.value?.(stairs.gate);
+        if (trigger !== 1 || !houseBranches(stairs, list, map)) return null;
+        const open = root.$gameSwitches?.value?.(stairs.switchId);
         if (typeof open !== 'boolean') return null;
         return { name: open ? 'Secret room stairs' : stairs.floor, category: 'exits' };
     }

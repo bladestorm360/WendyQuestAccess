@@ -101,7 +101,7 @@ The **Quests** category adds current-map quest interactions and waypoints from t
 
 Personal bookmarks can mark a tile or an eligible live destination. [Bookmark controls and evidence](bookmarks.md)
 
-Verified direct walking entrances support bookmarks on neighboring maps. Broader cross-map routing remains in progress. A worker disk read already in flight can outlast admission. That and the speech-provider lifecycle remain release gaps. Steam deployment remains pending. [Transfer controls and evidence](cross-map-routing.md)
+Walking bookmarks can use connected entrances across several maps, including both house stair branches when their native state permits. Request directions after each map settles. Vehicle and special puzzle transitions remain open. A worker disk read already in flight can outlast admission. That and the speech-provider lifecycle remain release gaps. Steam deployment remains pending. [Transfer controls and evidence](cross-map-routing.md)
 
 ## Native input boundary for autowalk
 

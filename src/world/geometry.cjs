@@ -94,6 +94,8 @@ function indexOf(world, x, y) {
         ? y * world.width + x : -1;
 }
 
+function tileKey(map, x, y) { return map + '/' + x + '/' + y; }
+
 function offset(world, cell, heading) {
     let x = cell % world.width + DX[heading];
     let y = Math.floor(cell / world.width) + DY[heading];
@@ -195,4 +197,4 @@ function step(world, cell, heading) {
 }
 
 module.exports = { DIRECTIONS, COUNTER, LAND, PASSAGE, MAX_CELLS, MAX_EVENTS, CELL_BITS, HEADER, bakeMap, encodeMap, decodeMap, surface,
-    composeWorld, indexOf, offset, step, clipRectangle };
+    composeWorld, indexOf, tileKey, offset, step, clipRectangle };

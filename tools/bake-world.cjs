@@ -6,6 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const { createHash } = require('crypto');
 const { bakeMap, encodeMap } = require('../src/world/geometry.cjs');
+const { MAX_CATALOG_BYTES } = require('../src/world/walking-catalog.cjs');
+const { transferMap, bakeCatalog } = require('./transfer-catalog.cjs');
 
 const BUILD = '26578620';
 const ROOT = path.resolve(__dirname, '..');
@@ -35,22 +37,32 @@ function bake(installed, destination) {
     const data = path.join(game, 'package.nw', 'data');
     const tilesetsBytes = read(path.join(data, 'Tilesets.json'), 2 * 1024 * 1024);
     const tilesets = JSON.parse(tilesetsBytes);
+    const common = JSON.parse(read(path.join(data, 'CommonEvents.json'), 2 * 1024 * 1024));
     const maps = JSON.parse(read(path.join(data, 'MapInfos.json'), 128 * 1024)).filter(Boolean);
     if (maps.length !== 239 || new Set(maps.map(map => map.id)).size !== maps.length) throw new Error('Unexpected map catalog');
     fs.mkdirSync(output);
     const manifest = { build: BUILD, tilesets: digest(tilesetsBytes), maps: {} };
+    const transferMaps = new Map();
     let cells = 0;
     for (const { id } of maps) {
         if (!Number.isInteger(id) || id < 1 || id > 999) throw new Error('Invalid map identifier');
         const source = read(path.join(data, `Map${String(id).padStart(3, '0')}.json`), 2 * 1024 * 1024);
         const map = JSON.parse(source);
-        const geometry = bakeMap(map, tilesets[map.tilesetId]?.flags);
+        const flags = tilesets[map.tilesetId]?.flags;
+        const geometry = bakeMap(map, flags);
         const binary = encodeMap(id, geometry);
         fs.writeFileSync(path.join(output, `${id}.wqg`), binary, { flag: 'wx' });
         manifest.maps[id] = { input: digest(source), geometry: digest(binary), width: geometry.width, height: geometry.height };
+        transferMaps.set(id, transferMap(id, map, geometry, flags, common));
         cells += geometry.cells.length;
     }
-    fs.writeFileSync(path.join(output, 'manifest.json'), JSON.stringify(manifest), { flag: 'wx' });
+    const catalog = bakeCatalog(transferMaps, manifest.maps);
+    const bytes = Buffer.from(JSON.stringify(catalog));
+    if (bytes.length > MAX_CATALOG_BYTES) throw Error('Walking catalog exceeds its size limit');
+    manifest.walking = { hash: digest(bytes), catalog };
+    const index = JSON.stringify(manifest);
+    if (Buffer.byteLength(index) > 128 * 1024) throw Error('Map geometry manifest exceeds its size limit');
+    fs.writeFileSync(path.join(output, 'manifest.json'), index, { flag: 'wx' });
     return { maps: maps.length, cells };
 }
 

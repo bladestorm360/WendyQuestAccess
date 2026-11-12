@@ -214,17 +214,26 @@ function trace(world, start, goal, facing, parents, cancelled, stops) {
     return result;
 }
 
-function route(world, start, goals, cancelled, area, stops, crossStops = false) {
+function route(world, start, goals, cancelled, area, stops, crossStops = false, preference) {
     const parents = new Uint8Array(world.cells.length);
     const frontier = new Uint16Array(world.cells.length);
     parents[start] = 255;
     frontier[0] = start;
     let count = 1;
+    let preferred = -1;
+    let bestRank = Infinity;
     for (let cursor = 0; cursor < count; cursor++) {
         if ((cursor & 63) === 0 && cancelled()) return { status: 'cancelled' };
         const cell = frontier[cursor];
         const facing = goals[cell];
-        if (facing) return trace(world, start, cell, facing, parents, cancelled, crossStops ? stops : null);
+        if (facing) {
+            const rank = preference?.ranks[cell];
+            if (!preference || rank === preference.best) return trace(world, start, cell, facing, parents, cancelled, crossStops ? stops : null);
+            if (rank < bestRank) {
+                preferred = cell;
+                bestRank = rank;
+            }
+        }
         if (!crossStops && cell !== start && stops?.[cell]) continue;
         for (let heading = 0; heading < DIRECTIONS.length; heading++) {
             const next = step(world, cell, heading);
@@ -233,6 +242,7 @@ function route(world, start, goals, cancelled, area, stops, crossStops = false) 
             frontier[count++] = next;
         }
     }
+    if (preferred >= 0) return trace(world, start, preferred, goals[preferred], parents, cancelled);
     return { status: 'unreachable' };
 }
 
@@ -337,6 +347,20 @@ function reachableApproaches(world, start, tiles, cancelled) {
     return { reached, events };
 }
 
+function walkingLanding(geometry, snapshot, x, y) {
+    const world = composeWorld(geometry, snapshot, () => false);
+    const start = indexOf(world, x, y);
+    if (start < 0) return null;
+    const tiles = interactionTiles(world, () => false);
+    const { reached, events } = reachableApproaches(world, start, tiles, () => false);
+    // Reaching a different floor event does not mean the player retains
+    // control there. A landing itself is already occupied on native handback.
+    for (let cell = 0; cell < reached.length; cell++) {
+        if (cell !== start && tiles.touch[cell]) reached[cell] = 0;
+    }
+    return { reached, events };
+}
+
 function approachAvailable(world, start, candidate, tiles, approaches, cancelled) {
     const { reached, events } = approaches;
     const stops = tiles.touch;
@@ -413,32 +437,39 @@ function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () 
 function entranceRoute(world, start, events, tiles, cancelled) {
     if (world.mode !== 'walk' || !Array.isArray(events) || !events.length || events.length > MAX_EVENTS)
         return { status: 'unavailable' };
-    const eligible = new Set(events);
+    const eligible = new Map(events.map(item => Number.isInteger(item) ? [item, 1] : [item.event, item.rank]));
     const goals = new Uint8Array(world.cells.length);
     const owners = new Uint16Array(world.cells.length);
+    const ranks = new Uint16Array(world.cells.length);
     const stops = tiles.touch;
+    let best = Infinity;
     for (let cell = 0; cell < goals.length; cell++) {
         if ((cell & 63) === 0 && cancelled()) return { status: 'cancelled' };
         const touch = stops[cell];
         if (eligible.has(touch) && (cell !== start || canReenter(world, start, stops))) {
             goals[cell] = 1;
             owners[cell] = touch;
-            continue;
+            ranks[cell] = eligible.get(touch);
+            best = Math.min(best, ranks[cell]);
         }
         if (touch && cell !== start) continue;
         for (let heading = 0; heading < DIRECTIONS.length; heading++) {
             const target = buttonEvent(world, tiles, cell, heading);
-            if (!eligible.has(target)) continue;
-            goals[cell] = DIRECTIONS[heading];
+            const rank = eligible.get(target);
+            if (!rank || (ranks[cell] && ranks[cell] <= rank)) continue;
+            const needsFacing = tiles.here[cell] !== target ||
+                DIRECTIONS.some((_, index) => tiles.boats[offset(world, cell, index)]);
+            goals[cell] = needsFacing ? DIRECTIONS[heading] : 1;
             owners[cell] = target;
-            break;
+            ranks[cell] = rank;
+            best = Math.min(best, rank);
         }
     }
-    const result = route(world, start, goals, cancelled, undefined, stops);
+    const result = route(world, start, goals, cancelled, undefined, stops, false, { best, ranks });
     if (result.status === 'ready') {
         const cell = indexOf(world, result.arrival.x, result.arrival.y);
         result.entrance = owners[cell];
-        if (cell === start && goals[start] === 1) result.reenter = true;
+        if (cell === start && stops[cell] === result.entrance) result.reenter = true;
     }
     return result;
 }
@@ -483,4 +514,4 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     return world ? solveWorldRoute(world, request, cancelled) : { status: 'cancelled' };
 }
 
-module.exports = { solveRoute, solveWorldRoute, findReachable, routeGoals, inside };
+module.exports = { solveRoute, solveWorldRoute, findReachable, walkingLanding, routeGoals, inside };
