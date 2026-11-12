@@ -86,10 +86,43 @@ function experience(hud) {
         'experience bar ' + Math.round(100 * height / 32) + ' percent';
 }
 
-function hudVitals(hud, graphics, name, hpOnly, includeExperience = false) {
-    const hp = pairedValue(hud, 'HP', hud._HPIcon, hud._numberSprite, hud._dividerSprite, hud._totalSprite);
+function radialPercent(hud, fill, mask, radius, end) {
+    if (!visibleSprite(hud, fill) || mask?.parent !== hud || fill.mask !== mask ||
+        mask.currentPath?.points?.length > 2) return null;
+    const shapes = mask.geometry?.graphicsData;
+    if (!Array.isArray(shapes)) return null;
+    if (!shapes.length) return 0;
+    const points = shapes[0]?.shape?.points;
+    if (shapes.length !== 1 || !Array.isArray(points) || points.length % 2 ||
+        points.length < 6 || points.length > 512) return null;
+
+    const base = 0.43 * Math.PI;
+    const start = base - 0.05;
+
+    const x = points[points.length - 2] + 47;
+    const y = points[points.length - 1] - 47;
+    if (!(Math.abs(points[0] + 47 - radius * Math.cos(start)) < 0.001 &&
+        Math.abs(points[1] - 47 - radius * Math.sin(start)) < 0.001 &&
+        Math.abs(Math.hypot(x, y) - radius) < 0.001)) return null;
+    let angle = Math.atan2(y, x);
+    if (angle < 0) angle += 2 * Math.PI;
+    // The installed PIXI path starts at moveTo and its last sampled point
+    // is the arc endpoint. The native mask starts slightly before zero fill.
+    const percent = 100 * (angle - base) / (end - base);
+    return percent >= -0.001 && percent <= 100.001 ? Math.round(percent) : null;
+}
+
+function meter(label, percent) {
+    return percent === null ? '' : label + ' bar ' + percent + ' percent';
+}
+
+function hudVitals(hud, graphics, name, hpOnly, includeExperience = false, mapMeters = false) {
+    const hp = pairedValue(hud, 'HP', hud._HPIcon, hud._numberSprite, hud._dividerSprite, hud._totalSprite) ||
+        (mapMeters && meter('HP', radialPercent(hud, hud.fillSprite, hud.fillMask, 43, 1.21 * Math.PI)));
     if (hpOnly && !hp) return null;
-    const fp = !hpOnly && pairedValue(hud, 'FP', hud._FPIcon, hud._FPSprite, hud._dividerSpriteFP, hud._totalSpriteFP);
+    const fp = !hpOnly && (pairedValue(hud, 'FP', hud._FPIcon, hud._FPSprite, hud._dividerSpriteFP, hud._totalSpriteFP) ||
+        (mapMeters && visibleSprite(hud, hud.backingFP) &&
+            meter('FP', radialPercent(hud, hud.fillFPSprite, hud.fillFPMask, 57, Math.PI))));
     const level = !hpOnly && number(hud, hud.levelNumberSprite);
     const progress = level && includeExperience && experience(hud);
     const lines = reviewLines([name, hp, fp, level && 'Level ' + level + (progress ? ', ' + progress : ''),
@@ -97,12 +130,25 @@ function hudVitals(hud, graphics, name, hpOnly, includeExperience = false) {
     return lines.length > 1 ? { kind: 'menuDetails', lines } : null;
 }
 
-function menuVitals(scene, graphics, hpOnly) {
+function fieldVitalsVisible(scene) {
+    const hud = scene?._statusWindow;
+    return visibleSprite(scene, hud) && hud.offsetY === 0 && !!hud.battler;
+}
+
+function sceneVitals(scene, graphics, hpOnly, mapMeters) {
+    if (!fieldVitalsVisible(scene)) return null;
     const hud = scene._statusWindow;
-    if (scene._wqaMenuStatus !== hud || !visibleSprite(scene, hud) || hud.offsetY !== 0 || !hud.battler) return null;
     const name = hud.battler.actor?.()?.name;
     return hudVitals(hud, graphics, typeof name === 'string' && name.length <= 48 && name ? name : 'Party status',
-        hpOnly, true);
+        hpOnly, true, mapMeters);
+}
+
+function fieldVitals(scene, graphics, hpOnly) {
+    return sceneVitals(scene, graphics, hpOnly, true);
+}
+
+function menuVitals(scene, graphics, hpOnly) {
+    return scene._wqaMenuStatus === scene._statusWindow ? sceneVitals(scene, graphics, hpOnly, false) : null;
 }
 
 function partyVitals(scene, graphics, sprite, hpOnly = false) {
@@ -124,4 +170,4 @@ function partyVitals(scene, graphics, sprite, hpOnly = false) {
     return hudVitals(hud, graphics, displayed.name, hpOnly);
 }
 
-module.exports = { portraitActor, partyVitals, menuVitals };
+module.exports = { portraitActor, partyVitals, menuVitals, fieldVitals, fieldVitalsVisible };

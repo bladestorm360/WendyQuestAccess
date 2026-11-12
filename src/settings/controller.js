@@ -35,9 +35,10 @@ function modeAnnouncement(family, context, bindings) {
         const quest = context.quest && bindings.questDetails != null ? `${buttonName(family, bindings.questDetails)} reads the quest. ` : '';
         const start = context.puzzle && bindings.puzzleGuide != null ? `${buttonName(family, bindings.puzzleGuide)} reviews the puzzle. ` : '';
         const stop = context.puzzleActive && bindings.puzzleStop != null ? `${buttonName(family, bindings.puzzleStop)} stops the guide. ` : '';
+        const vitals = context.vitals && bindings.fieldVitals != null ? `${buttonName(family, bindings.fieldVitals)} reads vitals. ` : '';
         const beacon = context.beaconActive && bindings.beaconStop != null ?
             `${buttonName(family, bindings.beaconStop)} stops ${context.autowalkActive ? 'autowalk' : 'the beacon'}. ` : '';
-        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${current}${quest}${start}${stop}${beacon}${buttonName(family, bindings.mode)} cancels.`;
+        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${current}${quest}${vitals}${start}${stop}${beacon}${buttonName(family, bindings.mode)} cancels.`;
     }
     const next = context.kind === 'front' ? 'opens settings' : 'repeats dialogue';
     const input = context.kind === 'front' ? bindings.settings : bindings.repeat;
@@ -168,7 +169,7 @@ function createController(host) {
                 context.kind === 'battleTarget' ? TARGET_MODE : DIALOGUE_MODE;
             for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
                 (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive) &&
-                (action !== 'beaconStop' || context.beaconActive) &&
+                (action !== 'beaconStop' || context.beaconActive) && (action !== 'fieldVitals' || context.vitals) &&
                 (!action.startsWith('quest') || context.quest) &&
                 (!action.startsWith('review') || context.hasReview)) {
                 mode = null;

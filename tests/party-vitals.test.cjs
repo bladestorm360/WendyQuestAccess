@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
-const { partyVitals, portraitActor, menuVitals } = require('../src/battle/party-vitals');
+const { partyVitals, portraitActor, menuVitals, fieldVitals, fieldVitalsVisible } = require('../src/battle/party-vitals');
 const { nativeTextHost } = require('./native-text-host.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { normalizeKeys } = require('../src/settings/keyboard');
@@ -43,8 +43,11 @@ host.Bitmap.load = () => ready;
 const c = vm.createContext({ ...host, RadialStatus, ImageManager: { iconWidth: 32, iconHeight: 32 },
     Scene_Map: function () {}, Scene_Menu: function () {}, Scene_Item: function () {}, SceneManager: {},
     Graphics: { boxWidth: 640, boxXOffset: 0, boxYOffset: 0 }, $gameParty: { battleMembers: () => [actor] },
+    PIXI: { LINE_CAP: { ROUND: 'round' }, LINE_JOIN: { BEVEL: 'bevel' } },
+    Lerp: (from, to, fraction) => from + (to - from) * fraction,
     a23_0x243974() { throw Error('Unresolved native HUD property'); },
-    a16_0x55d438() { throw Error('Unresolved native menu property'); } });
+    a16_0x55d438() { throw Error('Unresolved native menu property'); },
+    a15_0x363c12() { throw Error('Unresolved native map HUD property'); } });
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 
 const hud = scene._statusWindow = Object.assign(new RadialStatus(), { parent: scene, y: 0, offsetY: 0,
@@ -102,8 +105,27 @@ Sprite.prototype.hide = function () { this.worldVisible = false; };
 c.RadialStatus = function () {
     const next = new RadialStatus();
     Object.assign(next, { offsetY: 0, states: [], stateIcons: {}, iconBitmap: ready, iconBaseX: -128,
-        iconBaseY: 120, iconYStep: 2, currentXPFill: 0.61,
-        fillMask: { clear() {} }, fillFPMask: { clear() {} }, currentHPFill: 0, currentFPFill: 0 });
+        iconBaseY: 120, iconYStep: 2, currentXPFill: 0.61, currentHPFill: 19 / 24, currentFPFill: 3 / 7,
+        fillMaskX: -47, fillMaskY: 47, fillHPAngleStart: 0.43 * Math.PI, fillHPAngleEnd: 1.21 * Math.PI,
+        fillFPAngleStart: 0.43 * Math.PI, fillFPAngleEnd: Math.PI });
+    for (const [fillName, maskName] of [['fillSprite', 'fillMask'], ['fillFPSprite', 'fillFPMask']]) {
+        const mask = next[maskName] = next.addChild(new Sprite());
+        Object.assign(mask, { geometry: { graphicsData: [] }, lineStyle() {},
+            clear() { this.geometry.graphicsData.length = 0; },
+            arc(x, y, radius, start, end) {
+                const points = [x + radius * Math.cos(start), y + radius * Math.sin(start)];
+                const samples = 16;
+                for (let sample = 1; sample <= samples; sample++) {
+                    const angle = start + (end - start) * sample / samples;
+                    points.push(x + radius * Math.cos(angle), y + radius * Math.sin(angle));
+                }
+                this.geometry.graphicsData.push({ shape: { points } });
+            }
+        });
+        next[fillName] = next.addChild(new Sprite(ready));
+        next[fillName].mask = mask;
+    }
+    next.backingFP = next.addChild(new Sprite(ready));
     for (const field of ['_numberSprite', '_totalSprite', '_dividerSprite', '_FPSprite', '_totalSpriteFP',
         '_dividerSpriteFP', 'levelNumberSprite'])
         next[field] = next.addChild(new SpriteText().setText(field.includes('divider') ? '/' : '4'));
@@ -120,30 +142,49 @@ c.RadialStatus = function () {
     return next;
 };
 let menuRead = 0;
-for (const kind of [c.Scene_Menu, c.Scene_Item]) {
+for (const kind of [c.Scene_Menu, c.Scene_Item, c.Scene_Map]) {
     Object.setPrototypeOf(kind.prototype, Sprite.prototype);
     const menu = c.SceneManager._scene = Object.assign(new kind(), { children: [] });
     menu.createStatusWindow();
     const status = menu._statusWindow;
     assert.equal(status.battler, actor);
-    assert.equal(menu._wqaMenuStatus, status);
+    const inMap = kind === c.Scene_Map;
+    const read = inMap ? fieldVitals : menuVitals;
+    if (inMap) {
+        assert(fieldVitalsVisible(menu));
+        assert.equal(status._HPIcon.worldVisible, false);
+        assert.equal(status._FPIcon.worldVisible, false);
+    } else assert.equal(menu._wqaMenuStatus, status);
     status.update();
     const start = performance.now();
-    assert.equal(formatSpeech(menuVitals(menu, graphics)),
-        actors[1].name + '. HP 19 of 24. FP 3 of 7. Level 4, experience bar 59 percent. Momentum 1 of 2');
+    const hp = inMap ? 'HP bar 79 percent' : 'HP 19 of 24';
+    const fp = inMap ? 'FP bar 43 percent' : 'FP 3 of 7';
+    assert.equal(formatSpeech(read(menu, graphics)),
+        [actors[1].name, hp, fp, 'Level 4, experience bar 59 percent', 'Momentum 1 of 2'].join('. '));
     menuRead += performance.now() - start;
     status.currentXPFill = 1;
-    assert.match(formatSpeech(menuVitals(menu, graphics)), /59 percent/, 'the unpainted value cannot change speech');
+    assert.match(formatSpeech(read(menu, graphics)), /59 percent/, 'the unpainted value cannot change speech');
     status.UpdateMask();
-    assert.match(formatSpeech(menuVitals(menu, graphics)), /experience bar full/);
+    assert.match(formatSpeech(read(menu, graphics)), /experience bar full/);
     status.currentXPFill = 0;
     status.UpdateMask();
-    assert.match(formatSpeech(menuVitals(menu, graphics)), /experience bar empty/);
+    assert.match(formatSpeech(read(menu, graphics)), /experience bar empty/);
     status.levelMetreFillSprite.worldVisible = false;
-    assert.doesNotMatch(formatSpeech(menuVitals(menu, graphics)), /experience bar/);
-    assert.equal(formatSpeech(menuVitals(menu, graphics, true)), actors[1].name + '. HP 19 of 24');
+    assert.doesNotMatch(formatSpeech(read(menu, graphics)), /experience bar/);
+    assert.equal(formatSpeech(read(menu, graphics, true)), actors[1].name + '. ' + hp);
+    if (inMap) {
+        status.currentHPFill = 1;
+        assert.match(formatSpeech(read(menu, graphics, true)), /79 percent/);
+        status.UpdateMask();
+        assert.match(formatSpeech(read(menu, graphics, true)), /100 percent/);
+        status.currentHPFill = 0;
+        status.UpdateMask();
+        assert.match(formatSpeech(read(menu, graphics, true)), /0 percent/);
+        status.backingFP.worldVisible = false;
+        assert.doesNotMatch(formatSpeech(read(menu, graphics)), /FP/);
+    }
     status.offsetY = -4;
-    assert.equal(menuVitals(menu, graphics), null);
+    assert.equal(read(menu, graphics), null);
 }
 
 const keys = normalizeKeys({ details: 'H', battleSlot1: '7' });
@@ -156,5 +197,5 @@ assert.equal(normalizeController({ details: 2 }).battleVitals, null);
 assert.equal(normalizeController({ battleVitals: 4 }).battleVitals, 4);
 console.log('Verified installed radial HUD paint, party identity, states, momentum and hidden values.');
 console.log('Throttled rendered vitals read and formatted receipt', measured.toFixed(2), 'ms.');
-console.log('Verified installed pause and Inventory HUD ownership and painted experience geometry.');
-console.log('Throttled two menu vitals reads through formatted receipt', menuRead.toFixed(2), 'ms.');
+console.log('Verified installed map, pause and Inventory HUD ownership and painted experience geometry.');
+console.log('Throttled three map and menu vitals reads through formatted receipt', menuRead.toFixed(2), 'ms.');

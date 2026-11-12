@@ -56,8 +56,11 @@ BITMAP_FONT_SHA = 'b24607bc939ea1f7cfa3972c1121d135550483ffe3ab6484f84c1f135046a
 STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
 SYSTEM_REL = Path('package.nw/data/System.json')
 SYSTEM_SHA = '1f5069331af8e8c2fcce3dde3f5e6d71b2d262bc3d604ceaf6f62d0ac8d41b76'
+PIXI_REL = Path('package.nw/js/libs/pixi.js')
+PIXI_SHA = '6eca31989af44e87ac64319da69b9e484a7fdf0cbbdcaf3cd85869362588cee1'
 DEPENDENCIES = {
     SYSTEM_REL: SYSTEM_SHA,
+    PIXI_REL: PIXI_SHA,
     BITMAP_FONT_REL: BITMAP_FONT_SHA,
     STATS_REL: STATS_SHA,
     MESSAGE_OWNER_REL: '26e0230f7bcf8a425ad4c128c728cb0d74d8589d1a07d9d3026edbc2b09c7ce0',
@@ -896,7 +899,7 @@ def main():
     args = parser.parse_args()
     for relative, expected in DEPENDENCIES.items():
         dependency = args.game_root / relative
-        limit = 1_463_068 if relative == CAFFEINE_REL else 1024 * 1024
+        limit = {CAFFEINE_REL: 1_463_068, PIXI_REL: 1_547_074}.get(relative, 1024 * 1024)
         if dependency.stat().st_size > limit or hashlib.sha256(dependency.read_bytes()).hexdigest() != expected:
             raise ValueError(f'Game dependency does not match the supported Steam build: {relative}')
     for relative, transform in ((TITLE_REL, title_notification), (MENU_REL, menu_notifications),

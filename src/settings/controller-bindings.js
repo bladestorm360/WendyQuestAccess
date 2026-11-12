@@ -5,12 +5,12 @@ const CONTROLLER_DEFAULTS = Object.freeze({ enabled: true, mode: 8, settings: 9,
     previousDestination: 20, nextDestination: 21, previousCategory: 22, nextCategory: 23, directions: 6,
     currentDestination: 0, puzzleGuide: 4, puzzleStop: 5, beaconToggle: 6, wallToggle: 21, beaconStop: 20,
     details: 0, reviewPrevious: 12, reviewNext: 13, reviewFirst: 14, reviewLast: 15, battleVitals: 2, battleLog: 3,
-    questDetails: 3, questPrevious: 12, questNext: 13, questFirst: 14, questLast: 15 });
+    questDetails: 3, questPrevious: 12, questNext: 13, questFirst: 14, questLast: 15, fieldVitals: 2 });
 const MODE_ACTIONS = ['mode', 'settings', 'repeat'];
 const MENU_ACTIONS = ['previous', 'next', 'confirm', 'back'];
 const FIELD_ACTIONS = ['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory', 'directions'];
 const FIELD_MODE_ACTIONS = ['currentDestination', 'puzzleGuide', 'puzzleStop', 'beaconToggle', 'wallToggle', 'beaconStop',
-    'questDetails', 'questPrevious', 'questNext', 'questFirst', 'questLast'];
+    'questDetails', 'questPrevious', 'questNext', 'questFirst', 'questLast', 'fieldVitals'];
 const REVIEW_ACTIONS = ['details', 'reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast'];
 const BATTLE_REVIEW_ACTIONS = [...REVIEW_ACTIONS, 'battleVitals', 'battleLog'];
 const RECOVERY_CONFLICTS = [...MODE_ACTIONS, ...FIELD_MODE_ACTIONS, ...FIELD_ACTIONS, ...BATTLE_REVIEW_ACTIONS];
@@ -26,7 +26,8 @@ const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mo
     reviewPrevious: 'Previous review line in mod mode', reviewNext: 'Next review line in mod mode',
     reviewFirst: 'First review line in mod mode', reviewLast: 'Last review line in mod mode',
     questDetails: 'Read quest details in mod mode', questPrevious: 'Previous quest line in mod mode',
-    questNext: 'Next quest line in mod mode', questFirst: 'First quest line in mod mode', questLast: 'Last quest line in mod mode' });
+    questNext: 'Next quest line in mod mode', questFirst: 'First quest line in mod mode', questLast: 'Last quest line in mod mode',
+    fieldVitals: 'Read map vitals in mod mode' });
 const BUTTONS = ['South button', 'East button', 'West button', 'North button', 'Left bumper', 'Right bumper',
     'Left trigger', 'Right trigger', 'Left center button', 'Right center button', 'Left stick click', 'Right stick click',
     'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', null, null, null, null,

@@ -52,6 +52,7 @@ def bundle():
         '../battle/presentation': 'battle/presentation.js',
         './party-vitals': 'battle/party-vitals.js',
         './battle/party-vitals': 'battle/party-vitals.js',
+        '../battle/party-vitals': 'battle/party-vitals.js',
         './options': 'frontend/options.js',
         './world/map-banner': 'world/map-banner.js',
         './world/field': 'world/field.js',

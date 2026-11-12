@@ -10,8 +10,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from registration import (
-    ACTION_REL, BATTLE_REL, MANAGERS_REL, MENU_REL, SCENES_REL, STATS_REL, WINDOW_REL, WINDOWS_REL,
-    action_notification, battle_notification, managers_notification, menu_notifications, scenes_notification,
+    ACTION_REL, BATTLE_REL, MANAGERS_REL, MAP_REL, MENU_REL, SCENES_REL, STATS_REL, WINDOW_REL, WINDOWS_REL,
+    action_notification, battle_notification, managers_notification, map_notification, menu_notifications, scenes_notification,
     windows_notification,
 )
 
@@ -210,6 +210,10 @@ if sys.argv[2:] == ['vitals']:
         "['UpdateMask']", "['fixtureUpdateMask']", 1))
     menu, _ = decode(menu_notifications((installed / MENU_REL).read_bytes()).decode('utf8'))
     methods.extend(sprite_method(menu, owner, 'createStatusWindow') for owner in ('Scene_Menu', 'Scene_Item'))
+    map_scene, _ = decode(map_notification((installed / MAP_REL).read_bytes()).decode('utf8'))
+    start = map_scene.index("Scene_Map['prototype']['createStatusWindow']=function(")
+    end = map_scene.index("},Scene_Map['prototype']['terminate'])", start)
+    methods.append(map_scene[start:end] + '};')
     methods.extend(native_text_methods())
     print(json.dumps(methods))
     sys.exit(0)

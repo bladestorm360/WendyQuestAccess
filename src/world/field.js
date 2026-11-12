@@ -1,6 +1,7 @@
 'use strict';
 
 const { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks } = require('./snapshot');
+const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
@@ -421,6 +422,13 @@ function createField(root, host, notifications) {
         if (navigationRequest(job) && inFlight) return;
         if (movingReport) return present(job, job.text, true);
         if (job.action === 'status') return status(job, job.text);
+        if (job.action === 'fieldVitals') {
+            // The map scene owns its attached RadialStatus. Read the glyphs
+            // after this frame only while the same HUD is still presented.
+            const record = fieldVitals(job.scene, host.graphics, job.text === true);
+            if (record) present(job, record);
+            return;
+        }
         const routing = job.action === 'directions';
         const timed = timedCave(root.$gameMap._mapId);
         const filtering = !timed && navigationRequest(job) && (!routing || job.changes.length > 0);
@@ -491,10 +499,12 @@ function createField(root, host, notifications) {
             if (!active && ready(scene)) command('status', 'Puzzle guidance stopped');
             return true;
         }
-        const puzzle = action === 'puzzleGuide' && guideFor(scene);
         const reporting = action === 'navigationReport';
-        if ((!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' &&
-            action !== 'status' && !reporting && !puzzle) || !ready(scene, reporting) || sequence >= 0x7ffffffe) return false;
+        if (!ready(scene, reporting) || sequence >= 0x7ffffffe) return false;
+        const puzzle = action === 'puzzleGuide' && guideFor(scene);
+        const vitals = action === 'fieldVitals' && fieldVitalsVisible(scene);
+        if (!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' &&
+            action !== 'status' && !reporting && !puzzle && !vitals) return false;
         if (BROWSE.has(action) || action === 'directions' || puzzle) {
             autowalk.stop(scene);
             host.beacon?.stop(scene);
@@ -574,6 +584,7 @@ function createField(root, host, notifications) {
             if (!settled && (!autowalk.active(scene) || !ready(scene, true))) return null;
             if (control?.scene !== scene) control = { kind: 'field', scene };
             control.navigationOnly = !settled;
+            control.vitals = settled && fieldVitalsVisible(scene);
             control.puzzle = !!guideFor(scene);
             control.puzzleActive = salt.active(scene) || cave.active(scene) || !!host.caveTiming?.active(scene) ||
                 (active?.scene === scene && active.action === 'directions' && timedCave(root.$gameMap._mapId));

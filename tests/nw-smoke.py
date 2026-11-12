@@ -19,10 +19,10 @@ import zipfile
 
 VERSION = '0.48.4'
 ARCHIVE_HASH = '1731a5ed81139a63a5d1d7e7c521b5f08add023ffe4b719d06796a1ba77dc8a3'
-PIXI_HASH = '6eca31989af44e87ac64319da69b9e484a7fdf0cbbdcaf3cd85869362588cee1'
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from registration import OBJECTS_REL, SYSTEM_REL, SYSTEM_SHA, objects_notification
+from registration import OBJECTS_REL, PIXI_REL, PIXI_SHA, SYSTEM_REL, SYSTEM_SHA, objects_notification
 
 
 def sha(path):
@@ -52,8 +52,8 @@ def unpack(archive, destination):
 def fixture(runtime, installed):
     app = runtime / 'package.nw'
     app.mkdir()
-    pixi = installed / 'package.nw' / 'js' / 'libs' / 'pixi.js'
-    if sha(pixi) != PIXI_HASH:
+    pixi = installed / PIXI_REL
+    if sha(pixi) != PIXI_SHA:
         raise ValueError('Unexpected installed PIXI runtime')
     shutil.copyfile(pixi, app / 'pixi.js')
     (app / 'package.json').write_text(json.dumps({
@@ -133,6 +133,7 @@ let caveRoute = false;
 let dialogueShown = false;
 let routeRequested = false;
 let fieldStep = 0;
+let mapVitalsStep = 0;
 let browseStarted = 0;
 let autowalkStep = 0;
 let repeated = false;
@@ -511,7 +512,55 @@ const interval = setInterval(() => {
         Graphics.app.renderer.emit('postrender');
     }
     if (fieldStep === 0 && require('fs').existsSync(receipt + '.map')) {
+        const fs = require('fs');
         const scene = SceneManager._scene;
+        if (mapVitalsStep === 0) {
+            fs.writeFileSync(receipt + '.field-vitals-stage', '');
+            const visible = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
+            const hud = scene._statusWindow = { ...visible(scene), offsetY: 0, states: [],
+                battler: { actor: () => ({ name: 'Synthetic map hero' }) } };
+            for (const [key, value] of Object.entries({ _numberSprite: '8', _totalSprite: '14', _dividerSprite: '/',
+                _FPSprite: '3', _totalSpriteFP: '5', _dividerSpriteFP: '/', levelNumberSprite: '7' }))
+                hud[key] = battleText(hud, value);
+            for (const [fillName, maskName, radius, end, ratio] of [
+                ['fillSprite', 'fillMask', 43, 1.21 * Math.PI, 8 / 14],
+                ['fillFPSprite', 'fillFPMask', 57, Math.PI, 3 / 5],
+            ]) {
+                const mask = hud[maskName] = new PIXI.Graphics();
+                mask.parent = hud;
+                mask.lineStyle({ width: 18, color: 0xffffff });
+                const base = 0.43 * Math.PI;
+                mask.arc(-47, 47, radius, base - 0.05, base + (end - base) * ratio);
+                mask.finishPoly();
+                hud[fillName] = { ...visible(hud), mask };
+            }
+            hud.backingFP = visible(hud);
+            tap('h', 'KeyH');
+            Graphics.app.renderer.emit('postrender');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 1 && fs.existsSync(receipt + '.field-vitals-hp')) {
+            pad();
+            if (padTap(7) !== 1 << 7) throw Error('Map vitals did not enter controller mod mode');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 2) {
+            Graphics.app.renderer.emit('postrender');
+            if (!fs.existsSync(receipt + '.field-vitals-mode')) return;
+            if (padTap(2) !== 1 << 2 || padTap(2) !== 0) throw Error('Map vitals did not return to native input');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 3) {
+            Graphics.app.renderer.emit('postrender');
+            if (!fs.existsSync(receipt + '.field-vitals-full')) return;
+            fs.unlinkSync(receipt + '.field-vitals-stage');
+            delete scene._statusWindow;
+            mapVitalsStep++;
+        }
+        if (mapVitalsStep < 4) return;
         if (!soundscapeStarted) {
             Object.assign($gameMap, { tileWidth: () => 32, deltaX: (x, y) => x - y, deltaY: (x, y) => x - y });
             const actor = $gameMap._events[1];
@@ -1460,7 +1509,7 @@ const interval = setInterval(() => {
 setTimeout(() => {
     const fs = require('fs');
     const last = receipt + '.cross-map-last';
-    write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, dialoguePadStep, endingStep, restartStep,
+    write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, mapVitalsStep, dialoguePadStep, endingStep, restartStep,
         crossMapLeg, crossMapRequested: crossMapStarted > 0, lastTransferMessage: fs.existsSync(last) ? fs.readFileSync(last, 'utf8') : '',
         status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
     nw.App.quit();
@@ -1492,6 +1541,15 @@ parentPort.on('message', message => {
         } else if (message.kind === 'title') {
             fs.writeFileSync(receipt + '.restored-title', '');
         }
+        parentPort.postMessage('ack');
+        return;
+    }
+    if (fs.existsSync(receipt + '.field-vitals-stage')) {
+        const speech = formatSpeech(message);
+        if (message.kind === 'menuDetails')
+            fs.writeFileSync(receipt + (message.lines.length > 2 ? '.field-vitals-full' : '.field-vitals-hp'), speech);
+        if (message.kind === 'fieldStatus' && speech.includes('X reads vitals'))
+            fs.writeFileSync(receipt + '.field-vitals-mode', speech);
         parentPort.postMessage('ack');
         return;
     }
@@ -1906,7 +1964,13 @@ def main():
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified Auto language detection and fallback, manual persistence, saved mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
-        print('Verified battle actor, commands, targets, party vitals, rendered Bag items and controller handback.')
+        for suffix, expected in {
+            'field-vitals-hp': 'Synthetic map hero. HP bar 57 percent',
+            'field-vitals-full': 'Synthetic map hero. HP bar 57 percent. FP bar 60 percent. Level 7',
+        }.items():
+            if receipt.with_suffix('.json.' + suffix).read_text(encoding='utf8') != expected:
+                raise AssertionError(f'Unexpected {suffix} receipt')
+        print('Verified map HUD from keyboard and controller, battle commands, targets, vitals and rendered Bag items.')
         print('Verified the Battle timing setting, preview and action retirement. '
               f'Throttled warm battle cue reached silent SDL submission in {battle_cue_ms:.0f} ms.')
         print('Verified the Quests category, packaged route and marker replacement handback.')

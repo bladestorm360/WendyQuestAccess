@@ -194,7 +194,8 @@ function boot(root, nodeRequire, nodeProcess) {
             const scene = host.manager._scene;
             const owner = context || battleFocus.controlOwner(scene) || battleTargets.controlOwner(scene) ||
                 menus.controlOwner(scene);
-            if (!owner || owner.scene !== scene) return false;
+            if (!owner) return action !== 'battleSlot2' && field.command('fieldVitals', action === 'battleHP');
+            if (owner.scene !== scene) return false;
             if (owner.kind === 'menu') {
                 if (!owner.vitals || action === 'battleSlot2') return false;
                 const record = menuVitals(scene, host.graphics, action === 'battleHP');
