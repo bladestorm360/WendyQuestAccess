@@ -17,6 +17,7 @@ const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
 const { createAudio, CUE } = require('../src/runtime/audio');
 const { createWallAudio } = require('../src/world/wall-audio');
+const { createBeacon } = require('../src/world/beacon');
 
 const game = path.resolve(process.argv[2]);
 const derived = path.resolve(process.argv[3]);
@@ -209,8 +210,8 @@ function verifyWallFeedback() {
     const audio = createAudio({ makeWord: () => word, createAudioWorker: () => worker, schedule: task => queue.push(task) });
     const wall = createWallAudio(c, (scene, moving) => moving && scene._wqaFieldReady &&
         !scene._wqaSettingsActive && c.$gamePlayer._vehicleType === 'walk', audio, () => options);
-    c.WendyQuestAccessWallMove = (scene, motion, success) => wall.move(scene, motion, success);
-    c.WendyQuestAccessWallEvent = scene => wall.interrupt(scene);
+    c.WendyQuestAccessFieldMove = (scene, motion, success) => wall.move(scene, motion, success);
+    c.WendyQuestAccessFieldEvent = scene => wall.interrupt(scene);
     c.Input = { dir4: 0 };
     c.$gameTemp = { clearDestination() {}, isDestinationValid: () => false };
     c.$gameMessage = { isBusy: () => false };
@@ -318,6 +319,172 @@ function verifyWallFeedback() {
     scene._wqaFieldReady = false;
     c.Graphics._wqaWallEnabled = false;
     console.log(`Throttled 120 native blocked attempts: ${baseline.toFixed(2)} ms baseline, ${withCue.toFixed(2)} ms with silent wall requests.`);
+}
+
+async function verifyNativeBeacon() {
+    const fixture = load(196);
+    const { player, gameMap, geometry } = fixture;
+    for (const event of gameMap.events()) event._moveRoute = event.page()?.moveRoute;
+    const live = snapshot(fixture);
+    const sign = 2;
+    const area = warningApproach(gameMap, 11, 49, sign);
+    assert(area);
+    const connected = [[11, 49]];
+    const seen = new Set(['11,49']);
+    for (let i = 0; i < Math.min(connected.length, 30); i++) {
+        const [x, y] = connected[i];
+        for (const direction of DIRECTIONS) {
+            const next = [gameMap.roundXWithDirection(x, direction), gameMap.roundYWithDirection(y, direction)];
+            const key = next.join(',');
+            if (seen.has(key) || !gameMap.isValid(...next) || !player.canPass(...next, 10 - direction)) continue;
+            seen.add(key);
+            connected.push(next);
+        }
+    }
+    const point = connected.find(([x, y]) => {
+        const candidate = solveRoute(geometry, live, { x, y, event: sign, area });
+        return candidate.status === 'ready' && candidate.legs.length > 1 &&
+            DIRECTIONS.some(direction => direction !== candidate.legs[0].direction && player.canPass(x, y, direction));
+    });
+    assert(point, 'a real two-leg route to the warning sign');
+    const request = { x: point[0], y: point[1], event: sign, area, limit: 1, beacon: true };
+    await verifyWorker(fixture, request, live, result => {
+        assert.equal(result.status, 'ready');
+        assert.equal(result.more, true);
+        assert.equal(result.legs.length, 1);
+        assert.equal(result.course.length, result.distance);
+        const scene = c.SceneManager._scene;
+        const renderer = new EventEmitter();
+        const sounds = [];
+        const reports = [];
+        let sounding = null;
+        let prepare = null;
+        let prepared = false;
+        const audio = { cues: CUE, isPrepared: () => prepared,
+            prepare(_scene, _hrtf, ready, done) { prepare = { ready, done }; return true; },
+            play(_scene, _hrtf, cue, gain, bearing, ready) {
+                assert(ready());
+                sounding = { cue, gain, bearing, ready };
+                sounds.push(sounding);
+                return true;
+            },
+            retire(_scene, source) { assert.equal(source, 'beacon'); sounding = prepare = null; }
+        };
+        c.Graphics.app = { renderer };
+        c.Graphics.frameCount = 1000;
+        scene._wqaFieldReady = true;
+        const ready = (current, moving) => current === scene && scene._wqaFieldReady && (moving || !player.isMoving());
+        const beacon = createBeacon(c, ready, audio, () => ({ enabled: true, beacon: true, beaconVolume: 70, hrtf: true }),
+            text => reports.push(text));
+        c.WendyQuestAccessFieldMove = (owner, direction, success) => beacon.moved(owner, direction, success);
+        c.WendyQuestAccessFieldEvent = owner => beacon.stop(owner);
+        c.WendyQuestAccessBeaconActor = (owner, actor, direction) => beacon.actor(owner, actor, direction);
+        const first = DIRECTIONS[result.course[0] & 3];
+        function place(x, y, facing) {
+            Object.assign(player, { _x: x, _y: y, _realX: x, _realY: y, _direction: facing, _moveSpeed: 4,
+                _followers: { areGathering: () => false, updateMove() {} } });
+        }
+        function tick() {
+            if (scene._wqaBeaconUntil && c.Graphics.frameCount >= scene._wqaBeaconUntil) beacon.expire(scene);
+            if (scene._wqaBeaconDue && c.Graphics.frameCount >= scene._wqaBeaconDue) beacon.update(scene);
+            renderer.emit('postrender');
+        }
+        place(...point, 10 - first);
+        const start = () => assert(beacon.start(scene, sign, ...point, result, () =>
+            warningApproach(gameMap, player._x, player._y, sign)));
+        start();
+        tick();
+        assert(prepare?.ready() && sounds.length === 0);
+        prepared = true;
+        prepare.done(2);
+        c.Graphics.frameCount++;
+        tick();
+        assert.deepEqual(sounding.bearing, [0, 0, -1]);
+        assert.equal(sounding.cue, CUE.beaconTurn);
+        assert(sounding.ready());
+        function walk() {
+            const start = performance.now();
+            for (const encoded of result.course) {
+                const direction = DIRECTIONS[encoded & 3];
+                c.Input.dir4 = direction;
+                player.moveByInput();
+                assert(player.isMovementSucceeded());
+                assert.equal(sounding, null, 'accepted movement revokes the old pulse');
+                while (player.isMoving()) {
+                    player.updateMove();
+                    c.Graphics.frameCount++;
+                }
+                tick();
+            }
+            return performance.now() - start;
+        }
+        const enabledMs = walk();
+        assert.deepEqual([player._x, player._y], [result.arrival.x, result.arrival.y]);
+        if (result.arrival.facing !== null && player._direction !== result.arrival.facing) {
+            assert.equal(sounding.cue, CUE.beaconTurn);
+            player.setDirection(result.arrival.facing);
+            tick();
+        }
+        assert.equal(sounding.cue, CUE.beaconArrival);
+        c.Graphics.frameCount = scene._wqaBeaconUntil;
+        tick();
+        assert.equal(sounding, null);
+        assert(!beacon.active(scene));
+        assert.deepEqual(reports, []);
+        place(...point, 10 - first);
+        const baselineMs = walk();
+        console.log(`Throttled ${result.distance}-step beacon traversal: ${baselineMs.toFixed(2)} ms baseline, ` +
+            `${enabledMs.toFixed(2)} ms with silent beacon requests.`);
+        verifyRoute(fixture, request, solveRoute(geometry, live, request));
+        for (const event of gameMap.events()) event._starting = false;
+
+        place(...point, first);
+        start();
+        tick();
+        const firstPulse = sounding;
+        assert(firstPulse?.ready());
+        const other = DIRECTIONS.find(direction => direction !== first && player.canPass(...point, direction));
+        assert(other);
+        c.Input.dir4 = other;
+        player.moveByInput();
+        assert.equal(sounding, null);
+        assert.equal(firstPulse.ready(), false);
+        place(player._x, player._y, player._direction);
+        tick();
+        assert.equal(reports.at(-1), 'Off route. Request directions again.');
+
+        place(...point, first);
+        start();
+        tick();
+        const blocker = gameMap._events[sign];
+        const savedX = blocker._x;
+        beacon.actor(scene, blocker, 6);
+        blocker._x++;
+        assert.equal(sounding, null);
+        tick();
+        assert.equal(reports.at(-1), 'Destination changed. Request directions again.');
+        blocker._x = savedX;
+
+        start();
+        tick();
+        assert(sounding);
+        const [blockedX, blockedY] = [gameMap.roundXWithDirection(point[0], first), gameMap.roundYWithDirection(point[1], first)];
+        const added = Object.assign(new c.Game_Event(), { _eventId: gameMap._events.length, _x: blockedX, _y: blockedY,
+            _priorityType: 1, _through: false, _erased: false, _tileId: 0 });
+        beacon.actor(scene, added, 0);
+        gameMap._events.push(added);
+        tick();
+        assert.equal(reports.at(-1), 'Route blocked. Request directions again.');
+        gameMap._events.pop();
+
+        start();
+        beacon.update(scene);
+        scene._wqaFieldReady = false;
+        renderer.emit('postrender');
+        assert.equal(sounding, null);
+        assert(!beacon.active(scene));
+        console.log(`Verified beacon pulse, turn, exact approach, deviation and phase cancellation on ${result.distance} native steps.`);
+    });
 }
 
 function configureMotion(fixture, x, y, displayX = 0, displayY = 0) {
@@ -597,6 +764,7 @@ async function main() {
     for (const id of [195, 196, 199, 200, 201, 202, 206]) compare(load(id));
     verifyPatrolContact();
     verifyWallFeedback();
+    await verifyNativeBeacon();
     verifyNativePatrolMotion();
     await verifyCrossingPreview();
     await verifyWarningApproach();

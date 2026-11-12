@@ -1,8 +1,11 @@
 'use strict';
 
-const ACTIONS = Object.freeze({ previousDestination: 'Previous destination', nextDestination: 'Next destination',
+const ROUTE_ACTIONS = { previousDestination: 'Previous destination', nextDestination: 'Next destination',
     currentDestination: 'Read selected destination', directions: 'Directions', previousCategory: 'Previous category',
-    nextCategory: 'Next category' });
+    nextCategory: 'Next category' };
+const AUDIO_KEYS = { beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
+const ACTIONS = Object.freeze({ ...ROUTE_ACTIONS, beaconToggle: 'Toggle navigation beacon',
+    wallToggle: 'Toggle wall sounds', beaconStop: 'Stop the current beacon' });
 const LAYOUT_NAMES = Object.freeze({ letters: 'Letters', brackets: 'Brackets and backslash' });
 const DEFAULTS = Object.freeze({
     letters: Object.freeze({ previousDestination: 'J', nextDestination: 'L', currentDestination: 'K', directions: 'P',
@@ -28,16 +31,29 @@ function nativeNavigationConflict(root, gesture, eventCode) {
     return !!root.Input?.keyMapper?.[eventCode || NATIVE_CODES[base] || base.charCodeAt(0)];
 }
 
-function normalizeNavigation(saved) {
+function normalizeNavigation(saved, reserved = []) {
     const bindings = {};
     for (const layout of Object.keys(DEFAULTS)) {
-        const proposed = { ...DEFAULTS[layout] };
-        for (const action of Object.keys(ACTIONS)) {
+        let proposed = { ...DEFAULTS[layout] };
+        for (const action of Object.keys(ROUTE_ACTIONS)) {
             const key = saved?.bindings?.[layout]?.[action];
             if (key === null || (typeof key === 'string' && GESTURE.test(key))) proposed[action] = key;
         }
         const assigned = Object.values(proposed).filter(Boolean);
-        bindings[layout] = new Set(assigned).size === assigned.length ? proposed : { ...DEFAULTS[layout] };
+        if (new Set(assigned).size !== assigned.length) proposed = { ...DEFAULTS[layout] };
+        const used = new Set([...reserved, ...Object.values(proposed).filter(Boolean)]);
+        const put = (action, key) => {
+            proposed[action] = key && !used.has(key) ? key : null;
+            if (proposed[action]) used.add(key);
+        };
+        for (const action of Object.keys(AUDIO_KEYS)) {
+            const key = saved?.bindings?.[layout]?.[action];
+            if (key === null || (typeof key === 'string' && GESTURE.test(key))) put(action, key);
+        }
+        for (const [action, fallback] of Object.entries(AUDIO_KEYS)) {
+            if (proposed[action] === undefined) put(action, fallback);
+        }
+        bindings[layout] = proposed;
     }
     return { layout: saved?.layout === 'brackets' ? 'brackets' : 'letters', bindings };
 }

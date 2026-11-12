@@ -120,6 +120,7 @@ let numberShown = false;
 let settingsStep = 0;
 let audioStarted = 0;
 let wallPreviewStarted = 0;
+let beaconStarted = 0;
 let controllerStep = 0;
 let dialoguePadStep = 0;
 let nativeZ = 0;
@@ -230,11 +231,20 @@ function verifySettings() {
         settingsStep++;
     } else if (settingsStep === 13 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         require('fs').writeFileSync(receipt + '.wall-preview-ms', String(performance.now() - wallPreviewStarted));
-        choose('Mod sounds');
+        choose('Navigation beacon');
         settingsStep++;
     } else if (settingsStep === 14 && menuStatus() === 'Audio settings saved') {
+        choose('Preview beacon arrival');
+        settingsStep++;
+    } else if (settingsStep === 15 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        choose('Mod sounds');
+        settingsStep++;
+    } else if (settingsStep === 16 && menuStatus() === 'Audio settings saved') {
         choose('Preview right');
         if (menuStatus() !== 'Mod sounds are off.') throw Error('The sound switch did not prevent preview');
+        choose('Mod sounds');
+        settingsStep++;
+    } else if (settingsStep === 17 && menuStatus() === 'Audio settings saved') {
         tap('Escape');
         if (document.activeElement.textContent !== 'Audio') throw Error('Audio parent focus was lost');
         key('keydown', 'Escape', 'Escape');
@@ -311,7 +321,7 @@ const interval = setInterval(() => {
             const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 3).map(item => item.textContent);
             tap('Escape');
             choose('Audio');
-            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 4).map(item => item.textContent);
+            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 8).map(item => item.textContent);
             write({ bindings, controller, navigation, audio });
             clearInterval(interval);
             nw.App.quit();
@@ -319,7 +329,7 @@ const interval = setInterval(() => {
         return;
     }
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
-        if (settingsStep < 15) return verifySettings();
+        if (settingsStep < 18) return verifySettings();
         if (!require('fs').existsSync(receipt + '.returned-title')) return;
         if (controllerStep < 13) return verifyController();
         if (!require('fs').existsSync(receipt + '.controller-returned-title')) return;
@@ -348,15 +358,19 @@ const interval = setInterval(() => {
             _wqaBannerDrawnRevision: 1, _wqaBannerText: 'Synthetic map banner' } };
         $gameMap = { _mapId: 1, _tilesetId: 1, inactiveTime: 0, _events: [null,
             { _eventId: 1, _x: 2, _y: 0, _pageIndex: 0, _trigger: 0, _priorityType: 1 },
-            { _eventId: 2, _x: 2, _y: 1, _pageIndex: 0, _trigger: 0, _priorityType: 1 }], _tileEvents: [], _vehicles: [] };
+            { _eventId: 2, _x: 2, _y: 1, _pageIndex: 0, _trigger: 0, _priorityType: 1 }], _tileEvents: [], _vehicles: [],
+            roundXWithDirection: (x, d) => x + (d === 6 ? 1 : d === 4 ? -1 : 0),
+            roundYWithDirection: (y, d) => y + (d === 2 ? 1 : d === 8 ? -1 : 0) };
         $dataMap = { width: 3, height: 2, scrollType: 0, tilesetId: 1, data: new Array(36).fill(0),
             events: [null, { name: 'Synthetic wall', pages: [{ list: [{}, {}] }] },
                 { name: 'Synthetic switch', pages: [{ list: [{}, {}] }] }] };
         $dataTilesets = [null, { flags: [0] }];
         $gameTileChanges = { 1: { 6: 0 } };
-        $gamePlayer = { _x: 0, _y: 0, _realX: 0, _realY: 0, _vehicleType: 'walk' };
+        $gamePlayer = { _x: 0, _y: 0, _realX: 0, _realY: 0, _vehicleType: 'walk', _direction: 6,
+            canPass: (x, y, d) => x === 0 && y === 0 && d === 6 };
         $gameScreen = { _brightness: 255 };
         SceneManager._scene = Graphics.app.stage = scene;
+        Graphics.frameCount = 100;
         WendyQuestAccessMapBannerReady(scene, 1);
         Graphics.app.renderer.emit('postrender');
     }
@@ -388,6 +402,14 @@ const interval = setInterval(() => {
         require('fs').writeFileSync(receipt + '.route-submit-ms', String(performance.now() - start));
     }
     if (fieldStep === 4 && require('fs').existsSync(receipt + '.route-1')) {
+        const scene = SceneManager._scene;
+        if (!scene._wqaBeaconActive) throw Error('The worker did not arm its route beacon');
+        if (!beaconStarted) beaconStarted = performance.now();
+        Graphics.frameCount++;
+        if (scene._wqaBeaconDue && Graphics.frameCount >= scene._wqaBeaconDue) WendyQuestAccessBeaconUpdate(scene);
+        Graphics.app.renderer.emit('postrender');
+        if (!require('fs').existsSync(receipt + '.beacon')) return;
+        require('fs').writeFileSync(receipt + '.beacon-ms', String(performance.now() - beaconStarted));
         fieldStep++;
         padTap(6);
     }
@@ -396,6 +418,7 @@ const interval = setInterval(() => {
         caveShown = true;
         tap('v', 'KeyV');
         if (!document.querySelector('dialog') || !SceneManager._scene._wqaSettingsActive) throw Error('Field settings did not open');
+        if (SceneManager._scene._wqaBeaconActive) throw Error('The settings modal retained the route beacon');
         tap('Escape');
         if (document.querySelector('dialog')) throw Error('Field settings did not return control');
         WendyQuestAccessSceneLeaving(SceneManager._scene);
@@ -540,8 +563,24 @@ parentPort.on('message', message => {
     shutil.copyfile(ROOT / 'src' / 'runtime' / 'resize-markers.js', app / 'resize-markers.js')
     for name in ('speech-text.cjs', 'dialogue-icons.cjs'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
-    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'audio-worker.cjs', 'WendyQuestAudio.node'):
+    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'WendyQuestAudio.node'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
+    shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'audio-worker.cjs', service / 'production-audio-worker.cjs')
+    (service / 'audio-worker.cjs').write_text('''
+const { parentPort } = require('worker_threads');
+const fs = require('fs');
+const path = require('path');
+let active;
+parentPort.on('message', request => { active = request; });
+const post = parentPort.postMessage.bind(parentPort);
+parentPort.postMessage = packet => {
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 3 && active.forward === 1) {
+        fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.beacon'), String(packet.status));
+    }
+    return post(packet);
+};
+require('./production-audio-worker.cjs');
+''', encoding='utf8')
     for directory in ('puzzles', 'audio-deps'):
         shutil.copytree(ROOT / '.build' / 'payload' / 'wendyquest-access' / directory, service / directory)
     geometry = app / 'geometry'
@@ -592,7 +631,7 @@ def main():
         if [item.get('name') for item in (first, second, third)] != ['Synthetic wall', 'Synthetic switch', 'Synthetic wall'] or \
                 any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
             raise RuntimeError(f'NW field selection or layout priority failed: {data}')
-        if any(item['kind'] != 'routeDirections' or item['speech'] != 'Synthetic wall. east, 1 step. face east.'
+        if any(item['kind'] != 'routeDirections' or item['speech'] != 'Synthetic wall. 1 east. face east.'
                for item in (route, pad_route)):
             raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
@@ -604,6 +643,9 @@ def main():
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
         audio_ms = float(receipt.with_suffix('.json.audio-init-ms').read_text(encoding='utf8'))
         wall_ms = float(receipt.with_suffix('.json.wall-preview-ms').read_text(encoding='utf8'))
+        if receipt.with_suffix('.json.beacon').read_text(encoding='utf8') != '1':
+            raise RuntimeError('NW route beacon did not publish stereo PCM to SDL')
+        beacon_ms = float(receipt.with_suffix('.json.beacon-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
@@ -623,7 +665,9 @@ def main():
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Right trigger', 'Next category, Unassigned'] or \
                 reloaded.get('navigation') != ['Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
                                                'Next destination, N'] or reloaded.get('audio') != [
-                    'Mod sounds, off', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent']:
+                    'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
+                    'Increase wall volume, 55 percent', 'Navigation beacon, on', 'Decrease beacon volume, 65 percent',
+                    'Increase beacon volume, 65 percent']:
             raise RuntimeError('NW settings did not survive restart in the isolated profile')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
@@ -633,6 +677,8 @@ def main():
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '
               f'Throttled cold HRTF status observed after {audio_ms:.1f} ms with 40 ms polling.')
         print(f'Throttled warm wall preview status observed after {wall_ms:.1f} ms with 40 ms polling.')
+        print(f'Verified a live stereo route beacon and its retirement in field settings. '
+              f'Throttled warm native submission observed after {beacon_ms:.1f} ms with 40 ms polling.')
 
 
 if __name__ == '__main__':

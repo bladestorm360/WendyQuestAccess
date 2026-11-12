@@ -1,7 +1,8 @@
 'use strict';
 
 // IDs match the original Windows cue bank. Preparation uses no output.
-const CUE = Object.freeze({ prepare: -1, preview: 0, wallBump: 1, wallBrush: 2 });
+const CUE = Object.freeze({ prepare: -1, preview: 0, wallBump: 1, wallBrush: 2,
+    beaconPulse: 3, beaconTurn: 4, beaconArrival: 5 });
 
 function createAudio(host) {
     let generation = null;
@@ -15,8 +16,8 @@ function createAudio(host) {
     let hrtfResolved = false;
     let nextEpoch = 0;
 
-    function retire(scene) {
-        if (!active || (scene && active.scene !== scene)) return;
+    function retire(scene, source) {
+        if (!active || (scene && active.scene !== scene) || (source && active.source !== source)) return;
         Atomics.store(generation, 0, 0);
         active = pending = null;
     }
@@ -73,8 +74,10 @@ function createAudio(host) {
         host.schedule(drain);
     }
 
-    function play(scene, hrtf, cue, gain, bearing, ready, complete) {
+    function play(scene, hrtf, cue, gain, bearing, ready, complete, source = 'preview') {
         if (!ready()) return false;
+        if (active?.scene === scene && source === 'beacon' && active.source === 'wall') return false;
+        if (cue === CUE.prepare && (active?.cue === CUE.prepare || inFlight?.cue === CUE.prepare)) return false;
         if (failed || nextEpoch >= 0x7ffffffe) {
             complete?.(-1);
             return !!complete;
@@ -83,7 +86,7 @@ function createAudio(host) {
         const [right, up, forward] = bearing;
         // Replacing the pending preview also revokes any previous native PCM.
         // The callback observes the same word without a worker round trip.
-        active = pending = { epoch: ++nextEpoch, scene, hrtf, cue, right, up, forward, gain, ready, complete };
+        active = pending = { epoch: ++nextEpoch, scene, source, hrtf, cue, right, up, forward, gain, ready, complete };
         Atomics.store(generation, 0, active.epoch);
         schedule();
         return true;
@@ -92,8 +95,8 @@ function createAudio(host) {
     return {
         cues: CUE, play, retire,
         isPrepared: hrtf => !failed && stereoReady && (!hrtf || hrtfResolved),
-        prepare(scene, hrtf, ready, complete) {
-            return play(scene, hrtf, CUE.prepare, 0, [0, 0, 1], ready, complete);
+        prepare(scene, hrtf, ready, complete, source) {
+            return play(scene, hrtf, CUE.prepare, 0, [0, 0, 1], ready, complete, source);
         },
         preview(scene, hrtf, bearing, ready, report, cue = CUE.preview, gain = 0.65) {
             return play(scene, hrtf, cue, gain, bearing, ready, status => {

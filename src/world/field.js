@@ -62,7 +62,7 @@ function createField(root, host, notifications) {
         if (!job || packet?.sequence !== job.sequence || packet.epoch !== job.sequence || packet.map !== job.map) return;
         inFlight = null;
         if (admission && Atomics.load(admission, 0) === job.sequence) Atomics.store(admission, 0, 0);
-        if (active === job && ready(job.scene)) {
+        if (active === job && ready(job.scene) && root.$gameMap._mapId === job.map) {
             const player = root.$gamePlayer;
             if (job.area && !warningApproach(root.$gameMap, player._x, player._y, job.target))
                 return status(job, 'Warning sign directions are no longer available');
@@ -77,8 +77,12 @@ function createField(root, host, notifications) {
                     terminal: result.terminal === true });
             }
             if (result?.status === 'timedWait') status(job, 'No crossing preview ready. Check the patrols and request again');
-            else if (result?.status === 'ready') present(job, { kind: 'routeDirections', name: job.label,
-                legs: result.legs, facing: result.arrival.facing, more: result.more === true });
+            else if (result?.status === 'ready') {
+                host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
+                    warningApproach(root.$gameMap, player._x, player._y, job.target) : null);
+                present(job, { kind: 'routeDirections', name: job.label,
+                    legs: result.legs, facing: result.arrival.facing, more: result.more === true });
+            }
             else if (result?.status === 'unreachable') status(job, 'No walkable route to ' + job.label);
             else if (result?.status === 'unavailable') status(job, 'Directions unavailable for ' + job.label);
         } else if (active?.action === 'directions' && ready(active.scene)) afterRender();
@@ -108,11 +112,14 @@ function createField(root, host, notifications) {
             job.label = target.name;
             job.area = area;
             job.target = target.id;
+            job.x = snapshot.x;
+            job.y = snapshot.y;
             job.motionFrame = motion?.frame;
             Atomics.store(admission, 0, job.sequence);
             inFlight = job;
             worker.postMessage({ map: snapshot.map, sequence: job.sequence, epoch: job.sequence, live: snapshot.live,
-                request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area, motion } }, [snapshot.live.terrain.buffer]);
+                request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area, motion,
+                    beacon: !motion && host.beacon?.enabled() === true } }, [snapshot.live.terrain.buffer]);
         } catch {
             if (admission) Atomics.store(admission, 0, 0);
             inFlight = null;
@@ -169,18 +176,25 @@ function createField(root, host, notifications) {
     for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => { if (owner) retire(owner.scene); });
     function command(action, text) {
         const scene = host.manager._scene;
+        if (action === 'beaconStop') {
+            if (!ready(scene, true) || !host.beacon?.stop(scene)) return false;
+            command('status', 'Beacon stopped.');
+            return true;
+        }
         if (action === 'puzzleStop') {
             if (!host.hasFocus()) return false;
             const pending = active?.scene === scene && active.action === 'puzzleGuide';
             const stopped = salt.stop(scene) || cave.stop(scene);
             if (!pending && !stopped) return false;
             if (pending) retire(scene);
+            if (stopped && timedCave(root.$gameMap._mapId)) host.beacon?.stop(scene);
             if (!active && ready(scene)) command('status', 'Puzzle guidance stopped');
             return true;
         }
         const puzzle = action === 'puzzleGuide' && guideFor(scene);
         if ((!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' && action !== 'status' && !puzzle) ||
             !ready(scene) || sequence >= 0x7ffffffe) return false;
+        if (BROWSE.has(action) || action === 'directions' || puzzle) host.beacon?.stop(scene);
         const changes = active?.scene === scene && !active.performed ? active.changes : [];
         if (BROWSE.has(action) && changes.length < 16) changes.push(action);
         if (owner) retire(owner.scene);
@@ -201,6 +215,7 @@ function createField(root, host, notifications) {
             if (control?.scene !== scene) control = { kind: 'field', scene };
             control.puzzle = !!guideFor(scene);
             control.puzzleActive = salt.active(scene) || cave.active(scene);
+            control.beaconActive = host.beacon?.active(scene);
             return control;
         },
         dialoguePresented(scene, paint) { guideFor(scene)?.presented(scene, paint); },

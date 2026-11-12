@@ -65,6 +65,16 @@ assert.equal(prepare.cue, CUE.prepare);
 assert.equal(prepare.gain, 0);
 worker.emit('message', { epoch: prepare.epoch, status: 2 });
 
+audio.play(scene, true, CUE.wallBump, 0.5, [0, 0, 1], () => ready, null, 'wall');
+run();
+const wall = messages.at(-1);
+assert.equal(audio.play(scene, true, CUE.beaconPulse, 0.5, [1, 0, 0], () => ready, null, 'beacon'), false);
+audio.retire(scene, 'beacon');
+assert.equal(Atomics.load(word, 0), wall.epoch);
+worker.emit('message', { epoch: wall.epoch, status: 2 });
+audio.retire(scene, 'wall');
+assert.equal(Atomics.load(word, 0), 0);
+
 preview();
 run();
 ready = false;

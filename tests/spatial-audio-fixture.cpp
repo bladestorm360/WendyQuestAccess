@@ -77,6 +77,15 @@ int wmain(int argc, wchar_t** argv) {
     assert(stereo_cue(rear_bump, Cue::wall_bump, {0, 0, -1}, 0.7, ready));
     assert(stereo_cue(rear_brush, Cue::wall_brush, {0, 0, -1}, 0.7, ready));
     assert(crossings(rear_bump, 0) < crossings(bump, 0) && crossings(rear_brush, 0) < crossings(brush, 0));
+    Stereo pulse{}, turn{}, arrival{};
+    assert(hrtf.render(pulse, Cue::beacon_pulse, {-1, 0, 0}, 0.7, ready));
+    assert(hrtf.render(turn, Cue::beacon_turn, {1, 0, 0}, 0.7, ready));
+    assert(hrtf.render(arrival, Cue::beacon_arrival, {0, 0, 1}, 0.7, ready));
+    assert(energy(pulse, 0) > energy(pulse, 1) && energy(turn, 1) > energy(turn, 0) && energy(arrival, 0) > 0);
+    assert(pulse != turn && turn != arrival && arrival != pulse);
+    assert(stereo_cue(turn, Cue::beacon_turn, {0, 0, 1}, 0.7, ready));
+    assert(stereo_cue(pulse, Cue::beacon_turn, {0, 0, -1}, 0.7, ready));
+    assert(crossings(pulse, 0) < crossings(turn, 0));
 
     // The build runner sets SDL_AUDIO_DRIVER=dummy for this process only.
     // The real SDL driver callback consumes the pre-rendered PCM.

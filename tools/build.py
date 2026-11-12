@@ -36,6 +36,8 @@ def bundle():
         './world/map-banner': 'world/map-banner.js',
         './world/field': 'world/field.js',
         './world/wall-audio': 'world/wall-audio.js',
+        './world/beacon': 'world/beacon.js',
+        './spatial-direction': 'world/spatial-direction.js',
         './snapshot': 'world/snapshot.js',
         './destinations': 'world/destinations.js',
         './puzzles/salt-caverns': 'world/puzzles/salt-caverns.js',

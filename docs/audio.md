@@ -1,6 +1,6 @@
 # Spatial audio
 
-Open mod settings with **F8** on the default keyboard binding, choose **Audio**, then choose **Preview ahead**, **left**, **right**, **behind** or **above**. The settings dialog also accepts its configured controller navigation and confirm/back actions. **Mod sounds** and **HRTF** are independent and both default on. They persist in the NW profile. Turning sounds off prevents cues and previews and retains the HRTF preference. Returning to the root focuses **Audio** again. The separate speech master, beacon, soundscape and cave timing sounds remain open. [Feature register](feature-checkpoint.md)
+Open mod settings with **F8** on the default keyboard binding, choose **Audio**, then choose **Preview ahead**, **left**, **right**, **behind** or **above**. The settings dialog also accepts its configured controller navigation and confirm/back actions. **Mod sounds** and **HRTF** are independent and both default on. They persist in the NW profile. Turning sounds off prevents cues and previews and retains the HRTF preference. Returning to the root focuses **Audio** again. The separate speech master, soundscape and cave timing sounds remain open. [Route beacon](beacon.md) · [Feature register](feature-checkpoint.md)
 
 The preview status reports the output mode selected for the cue. A request that loses its dialog or scene drops its status. The fallback pans left and right relative to the listener and lowers pitch to 72% of the forward pitch across the rear half-plane. HRTF uses the same original cue with a three-dimensional bearing and the built-in OpenAL Soft dataset. The listener's axes are right, up and forward. The bridge reverses the forward axis for OpenAL's default listener orientation. Compare front, behind and above with headphones during final gameplay testing. Native game audio is owned by the game.
 
@@ -34,14 +34,16 @@ At final gameplay handoff, first compare the two wall previews with headphones. 
 
 The builder uses the approved FFPR SDK inputs by default and accepts `-AudioSdkRoot` for an equivalent local source. It verifies the key input hashes before staging the two runtime libraries and their notices in `audio-deps`. OpenAL Soft includes its MIT KEMAR measurements in the DLL. The matching corresponding-source URL and measurement attribution travel in `audio-deps/SOURCE.txt`. The Windows release must preserve those files and the SDL license. The current platform target is Windows x64. [SDL 3.4.4](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.4) · [OpenAL Soft 1.25.2 HRTF](https://github.com/kcat/openal-soft/blob/1.25.2/docs/hrtf.txt) · [MIT KEMAR measurements and terms](https://sound.media.mit.edu/resources/KEMAR.html)
 
-Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the extracted wall feedback development payload on November 12, 2026 at 06:29 UTC and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.257.0 updated at 05:18 UTC. The native files reported `NotSigned`. The final release still needs its own exact payload and installer checks, signing status and installed verification.
+Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the extracted route beacon development payload on November 12, 2026 at 06:53 UTC and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.257.0 updated at 05:18 UTC. The native files reported `NotSigned`. The final release still needs its own exact payload and installer checks, signing status and installed verification.
 
 | Scanned file | SHA-256 |
 | --- | --- |
-| `WendyQuestAudio.node` | `da86d0254b45e6b3a6dce6211058f86fb4e2e0a634dccdfc4069d7a6f8fea977` |
+| `WendyQuestAudio.node` | `6c972647f37accd857e9a6e916e4a9760116214791e002e8c13a45a8ce145f5f` |
 | `SDL3.dll` | `132e7f953951944f7628861227ecaea8c37a5a484f004c2072b7f3a1c343fa73` |
 | `soft_oal.dll` | `3963b06e319180700be0bcc0d027336664bb3a4975876b4a5442f10746fab5b4` |
-| `WendyQuestSpeech.exe` | `925652a80e57a12ed271d40fa5eb169d8c7566dba819a5b92f5881399dde1ead` |
+| `WendyQuestSpeech.exe` | `7f7de314db97ef47b85d048e9b88d795ab2d7e38a6ea32a19ac46ef8fa7d6ae7` |
 | `prism.dll` | `7c7d09c8c7306e8e1a0c46d603ccb2a391c194c77843400c11b746e7dd56a467` |
-| `WendyQuestAccess.js` | `6c7d41d832151bba72c2ad7177d440ebbcd835d3176aa5a6e56956f8a2df7932` |
+| `WendyQuestAccess.js` | `b2f89c61591810fdd7f828fe7b41d0449c2025d6c8c99c90d4804abd3dfac0b0` |
 | `audio-worker.cjs` | `0be8969b3433adf108a0f644b25695e07e9118b20dfec0901a61d4c64e47913b` |
+| `route-worker.cjs` | `09e8ae95ec035b28ce38dfcd67fc657f8e774965f817c0c24a5e0d14c81ecbf5` |
+| `speech-text.cjs` | `56659b5f29ab7ed503664245389f41c77e79f3b32de771513320f2a1781987fc` |

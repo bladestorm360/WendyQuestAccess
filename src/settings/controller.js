@@ -12,7 +12,8 @@ function modeAnnouncement(family, context, bindings) {
         const current = bindings.currentDestination === null ? '' : `${buttonName(family, bindings.currentDestination)} reads the destination. `;
         const start = context.puzzle && bindings.puzzleGuide != null ? `${buttonName(family, bindings.puzzleGuide)} reviews the puzzle. ` : '';
         const stop = context.puzzleActive && bindings.puzzleStop != null ? `${buttonName(family, bindings.puzzleStop)} stops the guide. ` : '';
-        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${current}${start}${stop}${buttonName(family, bindings.mode)} cancels.`;
+        const beacon = context.beaconActive && bindings.beaconStop != null ? `${buttonName(family, bindings.beaconStop)} stops the beacon. ` : '';
+        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${current}${start}${stop}${beacon}${buttonName(family, bindings.mode)} cancels.`;
     }
     const next = context.kind === 'front' ? 'opens settings' : 'repeats dialogue';
     const input = context.kind === 'front' ? bindings.settings : bindings.repeat;
@@ -138,7 +139,8 @@ function createController(host) {
         if (!(pressed & modeBit) && !(previous & modeBit)) {
             const actions = context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE : DIALOGUE_MODE;
             for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
-                (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive)) {
+                (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive) &&
+                (action !== 'beaconStop' || context.beaconActive)) {
                 mode = null;
                 queue(index, device, action);
                 break;

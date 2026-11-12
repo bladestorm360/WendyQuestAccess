@@ -3,18 +3,20 @@
 const CONTROLLER_DEFAULTS = Object.freeze({ enabled: true, mode: 8, settings: 9, repeat: 0,
     previous: 12, next: 13, confirm: 0, back: 1, recovery: Object.freeze([10, 11]),
     previousDestination: 20, nextDestination: 21, previousCategory: 22, nextCategory: 23, directions: 6,
-    currentDestination: 0, puzzleGuide: 4, puzzleStop: 5 });
+    currentDestination: 0, puzzleGuide: 4, puzzleStop: 5, beaconToggle: 6, wallToggle: 21, beaconStop: 20 });
 const MODE_ACTIONS = ['mode', 'settings', 'repeat'];
 const MENU_ACTIONS = ['previous', 'next', 'confirm', 'back'];
 const FIELD_ACTIONS = ['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory', 'directions'];
-const FIELD_MODE_ACTIONS = ['currentDestination', 'puzzleGuide', 'puzzleStop'];
+const FIELD_MODE_ACTIONS = ['currentDestination', 'puzzleGuide', 'puzzleStop', 'beaconToggle', 'wallToggle', 'beaconStop'];
 const RECOVERY_CONFLICTS = [...MODE_ACTIONS, ...FIELD_MODE_ACTIONS, ...FIELD_ACTIONS];
 const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mod settings', repeat: 'Repeat dialogue',
     previous: 'Previous settings item', next: 'Next settings item', confirm: 'Activate settings item',
     back: 'Back in settings', recovery: 'Toggle controller support', previousDestination: 'Previous destination',
     nextDestination: 'Next destination', previousCategory: 'Previous category', nextCategory: 'Next category',
     directions: 'Directions', currentDestination: 'Read selected destination in mod mode',
-    puzzleGuide: 'Start or review puzzle guidance in mod mode', puzzleStop: 'Stop puzzle guidance in mod mode' });
+    puzzleGuide: 'Start or review puzzle guidance in mod mode', puzzleStop: 'Stop puzzle guidance in mod mode',
+    beaconToggle: 'Toggle navigation beacon in mod mode', wallToggle: 'Toggle wall sounds in mod mode',
+    beaconStop: 'Stop the current beacon in mod mode' });
 const BUTTONS = ['South button', 'East button', 'West button', 'North button', 'Left bumper', 'Right bumper',
     'Left trigger', 'Right trigger', 'Left center button', 'Right center button', 'Left stick click', 'Right stick click',
     'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', null, null, null, null,

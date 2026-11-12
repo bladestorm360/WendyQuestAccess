@@ -81,13 +81,14 @@ function formatSpeech(message) {
             for (const leg of message.legs) {
                 const heading = HEADINGS[leg.direction];
                 if (!heading || !Number.isInteger(leg.tiles) || leg.tiles < 1 || leg.tiles > 16384) return '';
-                directions.push(`${heading}, ${leg.tiles} ${leg.tiles === 1 ? 'step' : 'steps'}`);
+                directions.push(`${leg.tiles} ${heading}`);
             }
+            const parts = directions.length ? [directions.join(', ')] : [];
             const facing = HEADINGS[message.facing];
-            if (message.more) directions.push('Request directions again after these steps');
-            else if (facing) directions.push(`face ${facing}`);
-            if (!directions.length) directions.push('you are here');
-            text = `${name}. ${directions.join('. ')}.`;
+            if (message.more) parts.push('More directions available');
+            else if (facing) parts.push(`face ${facing}`);
+            if (!parts.length) parts.push('you are here');
+            text = `${name}. ${parts.join('. ')}.`;
             limit = 512;
             break;
         }

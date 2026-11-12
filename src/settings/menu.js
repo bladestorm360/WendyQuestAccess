@@ -17,8 +17,11 @@ const AUDIO_PREVIEWS = [
 
 function normalizeAudio(value) {
     const volume = value?.wallVolume;
+    const beaconVolume = value?.beaconVolume;
     return { enabled: value?.enabled !== false, hrtf: value?.hrtf !== false, wall: value?.wall === true,
-        wallVolume: Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : 65 };
+        wallVolume: Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : 65,
+        beacon: value?.beacon === true,
+        beaconVolume: Number.isInteger(beaconVolume) && beaconVolume >= 0 && beaconVolume <= 100 ? beaconVolume : 65 };
 }
 
 function createSettingsMenu(root, host) {
@@ -43,7 +46,7 @@ function createSettingsMenu(root, host) {
             database.read(), database.read('controller'), database.read('navigation'), database.read('audio')]);
         keys = normalizeKeys(keyboard);
         pad = normalizeController(controller);
-        navigation = normalizeNavigation(savedNavigation);
+        navigation = normalizeNavigation(savedNavigation, [keys.puzzleGuide, keys.puzzleStop]);
         audio = normalizeAudio(savedAudio);
         host.controllerChanged();
         host.audioChanged(audio);
@@ -97,7 +100,7 @@ function createSettingsMenu(root, host) {
             } else if (isNavigation) navigation = value;
             else if (isAudio) {
                 audio = value;
-                host.audioStop(owner.scene);
+                if (owner) host.audioStop(owner.scene);
                 host.audioChanged(audio);
             }
             else keys = value;
@@ -157,17 +160,26 @@ function createSettingsMenu(root, host) {
             lower: button(owner, `Decrease wall volume, ${audio.wallVolume} percent`, () =>
                 update('lower', { ...audio, wallVolume: Math.max(0, audio.wallVolume - 10) })),
             raise: button(owner, `Increase wall volume, ${audio.wallVolume} percent`, () =>
-                update('raise', { ...audio, wallVolume: Math.min(100, audio.wallVolume + 10) }))
+                update('raise', { ...audio, wallVolume: Math.min(100, audio.wallVolume + 10) })),
+            beacon: button(owner, `Navigation beacon, ${audio.beacon ? 'on' : 'off'}`, () =>
+                update('beacon', { ...audio, beacon: !audio.beacon })),
+            beaconLower: button(owner, `Decrease beacon volume, ${audio.beaconVolume} percent`, () =>
+                update('beaconLower', { ...audio, beaconVolume: Math.max(0, audio.beaconVolume - 10) })),
+            beaconRaise: button(owner, `Increase beacon volume, ${audio.beaconVolume} percent`, () =>
+                update('beaconRaise', { ...audio, beaconVolume: Math.min(100, audio.beaconVolume + 10) }))
         };
         function preview(bearing, cue, gain) {
             if (loading || saving) return;
             if (!audio.enabled) return status(owner, 'Mod sounds are off.');
-            if (gain === 0) return status(owner, 'Wall volume is zero.');
+            if (gain === 0) return status(owner, 'This cue’s volume is zero.');
             status(owner, 'Preparing audio preview.');
             if (!host.previewAudio(owner, audio.hrtf, bearing, text => status(owner, text), cue, gain)) status(owner, '');
         }
         button(owner, 'Preview wall bump ahead', () => preview([0, 0, 1], 'wallBump', audio.wallVolume / 100));
         button(owner, 'Preview wall brush on the left', () => preview([-1, 0, 0], 'wallBrush', audio.wallVolume / 100));
+        button(owner, 'Preview beacon ahead', () => preview([0, 0, 1], 'beaconPulse', audio.beaconVolume / 100));
+        button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconTurn', audio.beaconVolume / 100));
+        button(owner, 'Preview beacon arrival', () => preview([0, 0, 1], 'beaconArrival', audio.beaconVolume / 100));
         for (const [direction, bearing] of AUDIO_PREVIEWS) {
             button(owner, `Preview ${direction}`, () => preview(bearing));
         }
@@ -196,7 +208,8 @@ function createSettingsMenu(root, host) {
             if (selection === action) focused = item;
         }
         button(owner, 'Reset this navigation keymap', () => change(owner,
-            { ...navigation, bindings: { ...bindings, [layout]: { ...NAVIGATION_DEFAULTS[layout] } } }, selection, 'navigation'));
+            normalizeNavigation({ ...navigation, bindings: { ...bindings, [layout]: { ...NAVIGATION_DEFAULTS[layout] } } },
+                [keys.puzzleGuide, keys.puzzleStop]), selection, 'navigation'));
         button(owner, 'Back', () => showRoot(owner, 'navigation'));
         focused.focus();
     }
@@ -292,6 +305,15 @@ function createSettingsMenu(root, host) {
     function toggleController(owner, failure) {
         const accepted = change(owner, { ...pad, enabled: !pad.enabled }, 'enabled', 'controller', failure);
         return accepted ? (pad.enabled ? 'Controller support on' : 'Controller support off') : '';
+    }
+
+    function toggleFieldAudio(action, failure) {
+        const key = action === 'beaconToggle' ? 'beacon' : 'wall';
+        if (!change(null, { ...audio, [key]: !audio[key] }, key, 'audio', failure)) return '';
+        if (!audio[key]) return key === 'beacon' ? 'Navigation beacon off.' : 'Wall sounds off.';
+        const label = key === 'beacon' ? 'Navigation beacon on.' : 'Wall sounds on.';
+        if (!audio.enabled) return `${label} Mod sounds are off.`;
+        return key === 'beacon' ? `${label} Request directions.` : label;
     }
 
     function back(owner) {
@@ -503,6 +525,7 @@ function createSettingsMenu(root, host) {
         controllerOwner: () => session,
         controllerBindings: () => pad,
         toggleController,
+        toggleFieldAudio,
         controllerInput(owner, action, family, mask) {
             if (session !== owner) return;
             if (action === 'capture') return captureController(owner, family, mask);

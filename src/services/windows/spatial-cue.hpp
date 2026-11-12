@@ -11,7 +11,7 @@ constexpr int cue_frames = 4320;
 constexpr int render_frames = cue_frames + 256;
 constexpr double rear_pitch = 0.72;
 constexpr double tau = 6.283185307179586;
-enum class Cue : int { preview, wall_bump, wall_brush, count };
+enum class Cue : int { preview, wall_bump, wall_brush, beacon_pulse, beacon_turn, beacon_arrival, count };
 
 struct Bearing {
     double right;
@@ -40,6 +40,13 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
     if (cue == Cue::wall_brush) {
         const auto phase = tau * 370.0 * pitch * time;
         return envelope * (0.24 * std::sin(phase) + 0.13 * std::sin(4.6 * phase));
+    }
+    if (cue == Cue::beacon_pulse || cue == Cue::beacon_turn || cue == Cue::beacon_arrival) {
+        const auto segment = cue == Cue::beacon_pulse ? time : std::fmod(time, 0.045);
+        const double frequency = cue == Cue::beacon_pulse ? 520.0 : cue == Cue::beacon_turn ? 830.0 :
+            time < 0.045 ? 630.0 : 940.0;
+        const auto note = std::min({1.0, segment / 0.004, std::max(0.0, (0.043 - segment) / 0.010)});
+        return envelope * note * 0.57 * std::sin(tau * frequency * pitch * segment);
     }
     const auto phase = tau * 660.0 * pitch * time;
     return envelope * (0.52 * std::sin(phase) + 0.17 * std::sin(2 * phase));

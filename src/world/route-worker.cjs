@@ -4,7 +4,7 @@ const { parentPort, workerData } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
 const { createHash } = require('crypto');
-const { decodeMap, HEADER, MAX_CELLS } = require('./geometry.cjs');
+const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS } = require('./geometry.cjs');
 const { solveRoute } = require('./routes.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
 
@@ -59,6 +59,21 @@ parentPort.on('message', message => {
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
             result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
+            if (result.status === 'ready' && request.beacon === true) {
+                // Two direction bits and the bounded distance to the next turn.
+                // The renderer advances one byte per accepted native step.
+                const course = new Uint8Array(result.distance);
+                let index = 0;
+                for (const leg of result.legs) {
+                    const heading = DIRECTIONS.indexOf(leg.direction);
+                    for (let left = leg.tiles; left > 0; left--) {
+                        if ((index & 63) === 0 && cancelled()) return parentPort.postMessage({ epoch, sequence, map,
+                            result: { status: 'cancelled' } });
+                        course[index++] = (Math.min(63, left) << 2) | heading;
+                    }
+                }
+                result.course = course;
+            }
             if (result.status === 'ready' && Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
                 result.legs.length > request.limit) {
                 result.more = true;
@@ -68,6 +83,6 @@ parentPort.on('message', message => {
     } catch {
         result = { status: 'unavailable' };
     }
-    parentPort.postMessage({ epoch, sequence, map,
-        result: cancelled() || !result ? { status: 'cancelled' } : result });
+    if (cancelled() || !result) result = { status: 'cancelled' };
+    parentPort.postMessage({ epoch, sequence, map, result }, result.course ? [result.course.buffer] : []);
 });

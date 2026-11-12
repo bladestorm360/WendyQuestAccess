@@ -65,9 +65,10 @@ SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentatio
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
                  b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
-                 b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio)')
+                 b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
+                 b'SceneManager._scene?._wqaBeaconActive)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
-               b'SceneManager._scene?._wqaWallAudio)'
+               b'SceneManager._scene?._wqaWallAudio||SceneManager._scene?._wqaBeaconActive)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||this._eventId!==undefined||'
                b'this._type==="boat"||this._type==="ship")||'
@@ -83,6 +84,13 @@ DIALOGUE_HOST = b'(SceneManager._scene?._wqaMapRestored||SceneManager._scene?._w
 AUTOSAVE_DONE = (b'if(wqaAutosave){wqaAutosave=false;SceneManager._wqaNativeAutosaves--;}')
 PLUGIN = {'name': 'WendyQuestAccess', 'status': True, 'description': 'WendyQuest accessibility support',
           'parameters': {}}
+
+
+def beacon_actor(direction=b'0', player_only=False):
+    actors = (b'this===$gamePlayer' if player_only else
+              b'(this===$gamePlayer||this._eventId!==undefined||this._type==="boat"||this._type==="ship")')
+    return (b'if(SceneManager._scene?._wqaBeaconActive&&' + actors + b')'
+            b'globalThis.WendyQuestAccessBeaconActor?.(SceneManager._scene,this,' + direction + b');')
 
 
 def title_notification(original):
@@ -173,22 +181,25 @@ def scenes_notification(original):
 def objects_notification(original):
     return insert(original, OBJECTS_SHA, {
         178811: b'\n    ' + ROUTE_DIRTY,  # Tileset replacement
-        185272: b'\n    if(this._priorityType!==priorityType){' + ACTOR_DIRTY + b'}',
-        188368: b'\n    ' + ACTOR_DIRTY,  # Position and copyPosition
-        188538: b'\n    if(this._x!==character._x||this._y!==character._y){' + ACTOR_DIRTY + b'}',
-        194431: b'\n    if(this._tileId){' + ACTOR_DIRTY + b'}',
-        194681: b'\n    if(this._tileId!==tileId){' + ACTOR_DIRTY + b'}',
+        185272: b'\n    if(this._priorityType!==priorityType){' + ACTOR_DIRTY + beacon_actor() + b'}',
+        188368: b'\n    ' + ACTOR_DIRTY + beacon_actor(),  # Position and copyPosition
+        188538: b'\n    if(this._x!==character._x||this._y!==character._y){' + ACTOR_DIRTY + beacon_actor() + b'}',
+        189047: b'if(this._direction!==d){' + beacon_actor(player_only=True) + b'}\n        ',
+        194431: b'\n    if(this._tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
+        194681: b'\n    if(this._tileId!==tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
+        195557: beacon_actor(b'd') + b'\n        ',  # Native accepted step, before destination assignment
         195829: ACTOR_DIRTY + b'\n        ',  # Accepted straight/diagonal steps
-        196445: ACTOR_DIRTY + b'\n        ',
-        196721: b'\n    if(xPlus||yPlus){' + ACTOR_DIRTY + b'}',
-        197969: b'\n    if(this._through!==through){' + ACTOR_DIRTY + b'}',
+        196445: ACTOR_DIRTY + beacon_actor() + b'\n        ',
+        196721: b'\n    if(xPlus||yPlus){' + ACTOR_DIRTY + beacon_actor() + b'}',
+        197969: b'\n    if(this._through!==through){' + ACTOR_DIRTY + beacon_actor() + b'}',
         249865: ROUTE_DIRTY + b'\n        ',  # Active event page replacement
         21807: b'\n    ' + MAP_LEAVING,  # Game_Screen fade-out
         217381: b'\n    ' + MAP_LEAVING,  # Accepted transfer reservation
-        222850: b'\n            if(Graphics._wqaWallEnabled&&this===$gamePlayer&&SceneManager._scene?._wqaFieldReady)'
-                b'globalThis.WendyQuestAccessWallMove?.(SceneManager._scene,direction,this._movementSuccess);',
-        249454: b'if(Graphics._wqaWallEnabled&&SceneManager._scene?._wqaFieldReady)'
-                b'globalThis.WendyQuestAccessWallEvent?.(SceneManager._scene);\n        ',  # Accepted event start
+        222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
+                b'(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive))'
+                b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',
+        249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive))'
+                b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene);\n        ',  # Accepted event start
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING + b'}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
@@ -289,6 +300,8 @@ def map_notification(original):
     field_update = b'''
     if (this._wqaWallUntil && Graphics.frameCount >= this._wqaWallUntil)
         globalThis.WendyQuestAccessWallExpire?.(this);
+    if (this._wqaBeaconUntil && Graphics.frameCount >= this._wqaBeaconUntil)
+        globalThis.WendyQuestAccessBeaconExpire?.(this);
     if (this._wqaPreviewUntil && Graphics.frameCount >= this._wqaPreviewUntil)
         globalThis.WendyQuestAccessFieldChanged?.(this);
     const wqaWasFieldReady = this._wqaFieldReady;
@@ -303,7 +316,10 @@ def map_notification(original):
         if (!Graphics._wqaFrontEndObserved || (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||
             (!wqaWasFieldReady && Graphics._wqaWallEnabled))
             globalThis.WendyQuestAccessFieldReady?.(this);
-    } else if (wqaWasFieldReady || this._wqaRouteActive || this._wqaCaveReview || this._wqaWallAudio)
+        if (this._wqaBeaconDue && Graphics.frameCount >= this._wqaBeaconDue &&
+            $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY)
+            globalThis.WendyQuestAccessBeaconUpdate?.(this);
+    } else if (wqaWasFieldReady || this._wqaRouteActive || this._wqaCaveReview || this._wqaWallAudio || this._wqaBeaconActive)
         globalThis.WendyQuestAccessFieldControlLost?.(this);
 '''
     return insert(original, MAP_SHA, {
@@ -316,7 +332,7 @@ def map_notification(original):
         32557: b'try{',
         33719: b'}finally{wqaFloodDone();}',
         33722: b'}catch(wqaError){wqaFloodDone();throw wqaError;}',
-        47577: ACTOR_DIRTY,  # Runtime rectangle replacement
+        47577: ACTOR_DIRTY + beacon_actor(),  # Runtime rectangle replacement
         59596: b'this._wqaMapRestored=true;',
         62779: field_update + banner_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
                                                b'this.srcStones && $gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),

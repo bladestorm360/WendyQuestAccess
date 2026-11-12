@@ -82,6 +82,8 @@ async function main() {
     f.frame();
     assert.equal(formatSpeech(fieldSpeech()[2]), 'Wall clue. face south.');
     assert.deepEqual([player._x, player._y], [26, 12]);
+    assert.equal(formatSpeech({ kind: 'routeDirections', name: 'Example', legs: [{ direction: 8, tiles: 1 },
+        { direction: 6, tiles: 3 }, { direction: 8, tiles: 4 }], facing: 2 }), 'Example. 1 north, 3 east, 4 north. face south.');
 
     key('l', { shiftKey: true });
     f.frame();

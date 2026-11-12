@@ -1,18 +1,10 @@
 'use strict';
 
+const { CARDINAL, bearing } = require('./spatial-direction');
+
 const CONTACT_GAP = 7;
 const REPEAT_GAP = 18;
 const SAMPLE_LIFETIME = 12;
-const CARDINAL = Object.freeze({
-    2: { x: 0, y: 1, left: 6, right: 4 }, 4: { x: -1, y: 0, left: 2, right: 8 },
-    6: { x: 1, y: 0, left: 8, right: 2 }, 8: { x: 0, y: -1, left: 4, right: 6 }
-});
-
-function bearing(facing, direction) {
-    const view = CARDINAL[facing];
-    const wall = CARDINAL[direction];
-    return view && wall && [view.x * wall.y - view.y * wall.x, 0, view.x * wall.x + view.y * wall.y];
-}
 
 function sideWall(map, player, motion, side) {
     const x = player._x;
@@ -34,7 +26,7 @@ function createWallAudio(root, fieldReady, audio, preferences) {
     }
 
     function clear(current) {
-        if (current.scene._wqaWallAudio) audio.retire(current.scene);
+        if (current.scene._wqaWallAudio) audio.retire(current.scene, 'wall');
         current.scene._wqaWallAudio = false;
         current.scene._wqaWallUntil = 0;
     }
@@ -63,9 +55,9 @@ function createWallAudio(root, fieldReady, audio, preferences) {
         if (audio.isPrepared(hrtf)) return;
         const current = own(scene);
         if (current.tried) return;
-        current.tried = true;
         watch(scene);
-        if (!audio.prepare(scene, hrtf, () => owner === current && ready(scene), () => clear(current))) clear(current);
+        current.tried = audio.prepare(scene, hrtf, () => owner === current && ready(scene), () => clear(current), 'wall');
+        if (!current.tried) clear(current);
     }
 
     function move(scene, motion, succeeded) {
@@ -102,7 +94,7 @@ function createWallAudio(root, fieldReady, audio, preferences) {
         const until = time + SAMPLE_LIFETIME;
         const valid = () => owner === current && ready(scene) && frame() < until &&
             player === root.$gamePlayer && player._x === x && player._y === y && player._direction === facing;
-        if (!audio.play(scene, hrtf, cue, wallVolume / 100, source, valid)) return;
+        if (!audio.play(scene, hrtf, cue, wallVolume / 100, source, valid, null, 'wall')) return;
         Object.assign(current, { x, y, facing, lastFrame: time, cue, direction });
         watch(scene);
         scene._wqaWallUntil = until;

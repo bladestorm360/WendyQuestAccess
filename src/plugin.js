@@ -7,6 +7,7 @@ const { createFilesObserver, fileWindow, isReady } = require('./frontend/files')
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createField } = require('./world/field');
 const { createWallAudio } = require('./world/wall-audio');
+const { createBeacon } = require('./world/beacon');
 const { createDialogueObserver } = require('./dialogue/observer');
 const { createSettingsMenu } = require('./settings/menu');
 const { createController, modeAnnouncement } = require('./settings/controller');
@@ -18,6 +19,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let dialogue = null;
     let audio = null;
     let wall = null;
+    let beacon = null;
     let field = null;
     let settings = null;
     let settingsScene = null;
@@ -89,6 +91,7 @@ function boot(root, nodeRequire, nodeProcess) {
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
+        beacon = host.beacon = createBeacon(root, field.ready, audio, () => audioPreferences, field.report);
         function readyScene() {
             const scene = host.manager._scene;
             if (settingsScene !== scene || !scene?._wqaPresentation || !host.hasFocus() ||
@@ -117,6 +120,16 @@ function boot(root, nodeRequire, nodeProcess) {
             else if (context.scene instanceof root.Scene_Title) title.announce(context.scene, record);
             else files.announce(context.scene, record);
         }
+        function fieldAction(action) {
+            if (action !== 'beaconToggle' && action !== 'wallToggle') return field.command(action);
+            const scene = host.manager._scene;
+            if (!field.ready(scene)) return false;
+            const text = settings.toggleFieldAudio(action, () => {
+                if (host.manager._scene === scene) field.report('Could not save audio settings. Previous setting restored.');
+            });
+            if (text) field.report(text);
+            return !!text;
+        }
         const nativeButton = button => root.Input?.gamepadMapper?.[button];
         settings = createSettingsMenu(root, {
             readyScene() {
@@ -128,7 +141,9 @@ function boot(root, nodeRequire, nodeProcess) {
             controllerChanged: () => controller?.reset(),
             audioStop: audio.retire,
             audioChanged(value) {
-                wall.leave();
+                const master = value.enabled !== audioPreferences.enabled || value.hrtf !== audioPreferences.hrtf;
+                if (master || value.wall !== audioPreferences.wall || value.wallVolume !== audioPreferences.wallVolume) wall.leave();
+                if (master || value.beacon !== audioPreferences.beacon || value.beaconVolume !== audioPreferences.beaconVolume) beacon.stop();
                 audioPreferences = value;
                 root.Graphics._wqaWallEnabled = value.enabled && value.wall && value.wallVolume > 0;
                 const scene = host.manager._scene;
@@ -140,6 +155,7 @@ function boot(root, nodeRequire, nodeProcess) {
             },
             suspend(scene) {
                 wall.leave(scene);
+                beacon.stop(scene);
                 setSettingsScene(null);
                 title.suspend();
                 files.suspend();
@@ -151,7 +167,7 @@ function boot(root, nodeRequire, nodeProcess) {
             capturePads: () => root.Input?._pollGamepads?.(),
             resume(scene) { if (host.manager._scene === scene) root.WendyQuestAccessResizeReady(); },
             repeat() { try { return dialogue.repeatPage(); } catch { return false; } },
-            fieldCommand(key) { try { return field.command(key); } catch { return false; } }
+            fieldCommand(key) { try { return fieldAction(key); } catch { return false; } }
         });
         controller = createController({
             schedule: host.schedule, context: controlContext, bindings: settings.controllerBindings, nativeButton,
@@ -167,7 +183,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 else if (action === 'modeLeft') announce(context, 'Mod mode off');
                 else if (action === 'modeEntered') announce(context,
                     modeAnnouncement(family, context, settings.controllerBindings()));
-                else if (context.kind === 'field') field.command(action);
+                else if (context.kind === 'field') fieldAction(action);
             }
         });
         host.dialoguePresented = field.dialoguePresented;
@@ -180,6 +196,7 @@ function boot(root, nodeRequire, nodeProcess) {
         });
         for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
             wall.leave();
+            beacon.stop();
             audio.retire();
             controller.reset();
         });
@@ -289,25 +306,40 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessFieldChanged = function (scene) {
         wall?.leave(scene);
+        if (scene?._wqaTerrainWork) beacon?.stop(scene);
+        else beacon?.invalidate(scene);
         field?.changed(scene);
     };
     root.WendyQuestAccessFieldControlLost = function (scene) {
         wall?.leave(scene);
+        beacon?.stop(scene);
         field?.controlLost(scene);
         controller?.reset();
     };
 
-    root.WendyQuestAccessWallMove = function (scene, direction, succeeded) {
+    root.WendyQuestAccessFieldMove = function (scene, direction, succeeded) {
+        try { beacon?.moved(scene, direction, succeeded); } catch { beacon?.stop(scene); }
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
     };
-    root.WendyQuestAccessWallEvent = function (scene) { wall?.interrupt(scene); };
+    root.WendyQuestAccessFieldEvent = function (scene) {
+        beacon?.stop(scene);
+        wall?.interrupt(scene);
+    };
     root.WendyQuestAccessWallExpire = function (scene) { wall?.expire(scene); };
+    root.WendyQuestAccessBeaconUpdate = function (scene) {
+        try { beacon?.update(scene); } catch { beacon?.stop(scene); }
+    };
+    root.WendyQuestAccessBeaconExpire = function (scene) { beacon?.expire(scene); };
+    root.WendyQuestAccessBeaconActor = function (scene, actor, direction) {
+        try { beacon?.actor(scene, actor, direction); } catch { beacon?.stop(scene); }
+    };
 
     // Direct native scene changes and developer reload can bypass the active
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
     root.WendyQuestAccessSceneLeaving = function (scene) {
         wall?.leave(scene);
+        beacon?.stop(scene);
         audio?.retire(scene);
         if (settingsScene === scene) setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
@@ -329,6 +361,7 @@ function boot(root, nodeRequire, nodeProcess) {
         fieldWaiting = null;
         const scene = root.SceneManager._scene;
         wall?.leave(scene);
+        beacon?.stop(scene);
         audio?.retire(scene);
         setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
