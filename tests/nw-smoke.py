@@ -88,7 +88,8 @@ function Scene_Title() {
 }
 Scene_Title.prototype.update = function () { return 123; };
 var SceneManager = { _scene: new Scene_Title() };
-var Graphics = { app: { stage: SceneManager._scene, renderer: new (require('events').EventEmitter)() } };
+var Graphics = { width: 320, height: 200,
+    app: { stage: SceneManager._scene, renderer: new (require('events').EventEmitter)() } };
 const nativeSelect = SceneManager._scene._commandWindow.select;
 var DataManager = { savefileInfo: () => null };
 var $gameMap, $gamePlayer, $gameScreen, $gameTemp, $dataMap, $dataTilesets, $gameTileChanges;
@@ -131,6 +132,7 @@ let audioStarted = 0;
 let wallPreviewStarted = 0;
 let beaconStarted = 0;
 let caveCueStarted = 0;
+let soundscapeStarted = 0;
 let controllerStep = 0;
 let dialoguePadStep = 0;
 let nativeZ = 0;
@@ -261,6 +263,25 @@ function verifySettings() {
         choose('Mod sounds');
         settingsStep++;
     } else if (settingsStep === 19 && menuStatus() === 'Audio settings saved') {
+        choose('Soundscape');
+        if (document.activeElement.textContent !== 'Soundscape, off') throw Error('Soundscape default is not off');
+        choose('Soundscape, off');
+        settingsStep++;
+    } else if (settingsStep === 20 && menuStatus() === 'Audio settings saved') {
+        choose('Decrease volume');
+        settingsStep++;
+    } else if (settingsStep === 21 && menuStatus() === 'Audio settings saved') {
+        choose('Exits');
+        choose('Preview door');
+        settingsStep++;
+    } else if (settingsStep === 22 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        choose('Exits, on');
+        settingsStep++;
+    } else if (settingsStep === 23 && menuStatus() === 'Audio settings saved') {
+        tap('Escape');
+        if (document.activeElement.textContent !== 'Exits') throw Error('Soundscape category focus was lost');
+        tap('Escape');
+        if (document.activeElement.textContent !== 'Soundscape') throw Error('Soundscape parent focus was lost');
         tap('Escape');
         if (document.activeElement.textContent !== 'Audio') throw Error('Audio parent focus was lost');
         key('keydown', 'Escape', 'Escape');
@@ -338,14 +359,18 @@ const interval = setInterval(() => {
             tap('Escape');
             choose('Audio');
             const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 11).map(item => item.textContent);
-            write({ bindings, controller, navigation, audio });
+            choose('Soundscape');
+            const soundscape = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
+            choose('Exits');
+            soundscape.push(document.activeElement.textContent);
+            write({ bindings, controller, navigation, audio, soundscape });
             clearInterval(interval);
             nw.App.quit();
         }
         return;
     }
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
-        if (settingsStep < 20) return verifySettings();
+        if (settingsStep < 24) return verifySettings();
         if (!require('fs').existsSync(receipt + '.returned-title')) return;
         if (controllerStep < 13) return verifyController();
         if (!require('fs').existsSync(receipt + '.controller-returned-title')) return;
@@ -391,6 +416,24 @@ const interval = setInterval(() => {
         Graphics.app.renderer.emit('postrender');
     }
     if (fieldStep === 0 && require('fs').existsSync(receipt + '.map')) {
+        const scene = SceneManager._scene;
+        if (!soundscapeStarted) {
+            Object.assign($gameMap, { tileWidth: () => 32, deltaX: (x, y) => x - y, deltaY: (x, y) => x - y });
+            const actor = $gameMap._events[1];
+            Object.assign(actor, { _realX: 2, _realY: 0, _opacity: 255, _tileId: 0, _characterName: 'Fixture' });
+            $dataMap.events[1].pages[0].trigger = 0;
+            scene._spriteset = { _characterSprites: [{ _character: actor, _tileId: 0, _characterName: 'Fixture',
+                _frame: { width: 32, height: 32 }, renderable: true, worldVisible: true, worldAlpha: 1, texture: { valid: true },
+                worldTransform: { tx: 100, ty: 100, d: 1 } }] };
+            soundscapeStarted = performance.now();
+            WendyQuestAccessSoundscapeUpdate(scene);
+            Graphics.app.renderer.emit('postrender');
+            if (!scene._wqaSoundscapeSample) throw Error('Rendered ambient observation was rejected');
+        }
+        if (!require('fs').existsSync(receipt + '.soundscape')) return;
+        if (!scene._wqaSoundscapeSample) throw Error('Ambient sample lost its native scene ownership');
+        WendyQuestAccessFieldEvent(scene);
+        if (scene._wqaSoundscapeActive || scene._wqaSoundscapeSample) throw Error('Native event retained ambient audio');
         fieldStep++;
         tap('p', 'KeyP');
         Graphics.app.renderer.emit('postrender');
@@ -681,6 +724,9 @@ parentPort.postMessage = packet => {
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 6 && active.forward === -1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.cave-cue'), String(packet.status));
     }
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 12 && active.forward === 2) {
+        fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.soundscape'), String(packet.status));
+    }
     return post(packet);
 };
 require('./production-audio-worker.cjs');
@@ -757,6 +803,8 @@ def main():
         beacon_ms = float(receipt.with_suffix('.json.beacon-ms').read_text(encoding='utf8'))
         if receipt.with_suffix('.json.cave-cue').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL')
+        if receipt.with_suffix('.json.soundscape').read_text(encoding='utf8') != '1':
+            raise RuntimeError('NW ambient object cue did not publish stereo PCM to SDL')
         cave_cue_ms = float(receipt.with_suffix('.json.cave-cue-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
@@ -781,12 +829,14 @@ def main():
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
                     'Increase wall volume, 55 percent', 'Navigation beacon, on', 'Decrease beacon volume, 65 percent',
                     'Increase beacon volume, 65 percent', 'Cave timing cues, on', 'Decrease cave timing volume, 65 percent',
-                    'Increase cave timing volume, 65 percent']:
+                    'Increase cave timing volume, 65 percent'] or reloaded.get('soundscape') != [
+                    'Soundscape, on', 'Decrease volume, 35 percent', 'Exits, off']:
             raise RuntimeError('NW settings did not survive restart in the isolated profile')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic renderer command and cold worker submission: {submit_ms:.1f} ms.')
         print('Verified native autowalk dispatch, both narration settings, spoken arrival and explicit cancellation.')
+        print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '

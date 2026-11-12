@@ -194,5 +194,5 @@ function step(world, cell, heading) {
     return (world.cells[cell] & (1 << heading)) && (destination & (1 << (3 - heading))) ? next : -1;
 }
 
-module.exports = { DIRECTIONS, COUNTER, LAND, MAX_CELLS, CELL_BITS, HEADER, bakeMap, encodeMap, decodeMap, surface,
+module.exports = { DIRECTIONS, COUNTER, LAND, MAX_CELLS, MAX_EVENTS, CELL_BITS, HEADER, bakeMap, encodeMap, decodeMap, surface,
     composeWorld, indexOf, offset, step, clipRectangle };

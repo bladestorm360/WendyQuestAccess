@@ -1,13 +1,20 @@
 'use strict';
 
-const { surface, MAX_CELLS, CELL_BITS } = require('./geometry.cjs');
+const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination } = require('./destinations');
 const { localDestination } = require('./local-destinations');
 const { worldDestination, discoveryEntrance } = require('./world-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination } = require('./puzzles/cave');
 
-const MAX_EVENTS = 512;
+function eventTarget(root, mode, event, entry, page) {
+    let target = worldDestination(root, mode, event, entry, page);
+    if (target === undefined) target = localDestination(root, event, page);
+    if (target === undefined) target = checkpointTarget(root.$gameMap._mapId, event._eventId, event._pageIndex, event._trigger)
+        ? { name: 'Checkpoint', category: 'objects' }
+        : caveDestination(root.$gameMap._mapId, event, entry, page) || destination(entry, page, event._trigger);
+    return target && (mode !== 'airship' || target.category === 'exits') ? target : null;
+}
 
 function terrainDelta(changes, layers, flags, count) {
     // The tile editor has already restored these keys to the current map.
@@ -69,11 +76,8 @@ function captureWorld(root, routing = true, label) {
                 discoveryFor: mode === 'airship' ? discoveryEntrance(id, event) : undefined });
         }
         if (event._erased || !action) continue;
-        let target = worldDestination(root, mode, event, entry, page);
-        if (target === undefined) target = localDestination(root, event, page);
-        if (target === undefined) target = checkpointTarget(id, eventId, pageIndex, trigger)
-            ? { name: 'Checkpoint', category: 'objects' } : caveDestination(id, event, entry, page) || destination(entry, page, trigger);
-        if (target && (mode !== 'airship' || target.category === 'exits')) {
+        const target = eventTarget(root, mode, event, entry, page);
+        if (target) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
         }
@@ -91,4 +95,4 @@ function captureWorld(root, routing = true, label) {
     return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles, aircraft: aircraftAt(map) } };
 }
 
-module.exports = { captureWorld };
+module.exports = { captureWorld, eventTarget };

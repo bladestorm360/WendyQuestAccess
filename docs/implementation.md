@@ -24,7 +24,7 @@ A grant can be in transit when the gate closes, and an already-entered provider 
 
 ## Spatial audio
 
-The Audio settings group uses a separate worker and a small Windows Node-API addon, with SDL3 for output and OpenAL Soft loopback for HRTF. Its preview generations can be revoked directly by the renderer. [Controls, ABI, dependency inputs, cancellation and offline checks](audio.md).
+The Audio settings group uses a separate worker and a small Windows Node-API addon, with SDL3 for output and OpenAL Soft loopback for HRTF. The renderer revokes preview and field audio generations directly. The Soundscape submenu manages category output through the same worker and uses active navigation targets with additional native presentation checks. [Controls, ABI and output lifecycle](audio.md) · [Entity eligibility and verification](soundscape.md)
 
 ## Reproduction
 

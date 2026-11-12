@@ -69,11 +69,29 @@ audio.play(scene, true, CUE.wallBump, 0.5, [0, 0, 1], () => ready, null, 'wall')
 run();
 const wall = messages.at(-1);
 assert.equal(audio.play(scene, true, CUE.beaconPulse, 0.5, [1, 0, 0], () => ready, null, 'beacon'), false);
+const soundscape = () => audio.play(scene, true, CUE.entityPerson, 0.5, [1, 0, 0], () => ready, null, 'soundscape');
+assert.equal(soundscape(), false, 'an ambient request cannot replace wall audio');
 audio.retire(scene, 'beacon');
 assert.equal(Atomics.load(word, 0), wall.epoch);
 worker.emit('message', { epoch: wall.epoch, status: 2 });
 audio.retire(scene, 'wall');
 assert.equal(Atomics.load(word, 0), 0);
+
+assert(soundscape());
+run();
+const ambient = messages.at(-1);
+assert.equal(ambient.cue, CUE.entityPerson);
+assert(audio.play(scene, true, CUE.caveGo, 0.5, [0, 0, 1], () => ready, null, 'cave'));
+assert.notEqual(Atomics.load(word, 0), ambient.epoch);
+worker.emit('message', { epoch: ambient.epoch, status: 0 });
+run();
+const crossing = messages.at(-1);
+assert.equal(crossing.cue, CUE.caveGo);
+assert.equal(soundscape(), false, 'an ambient request cannot replace the crossing cue');
+audio.retire(scene, 'soundscape');
+assert.equal(Atomics.load(word, 0), crossing.epoch);
+worker.emit('message', { epoch: crossing.epoch, status: 2 });
+audio.retire(scene, 'cave');
 
 preview();
 run();

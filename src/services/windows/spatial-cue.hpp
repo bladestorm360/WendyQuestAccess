@@ -11,7 +11,10 @@ constexpr int cue_frames = 4320;
 constexpr int render_frames = cue_frames + 256;
 constexpr double rear_pitch = 0.72;
 constexpr double tau = 6.283185307179586;
-enum class Cue : int { preview, wall_bump, wall_brush, beacon_pulse, beacon_turn, beacon_arrival, cave_go, count };
+enum class Cue : int {
+    preview, wall_bump, wall_brush, beacon_pulse, beacon_turn, beacon_arrival, cave_go,
+    entity_person, entity_exit, entity_door, entity_stairs, entity_treasure, entity_object, entity_checkpoint, count
+};
 
 struct Bearing {
     double right;
@@ -53,6 +56,27 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
         const double frequency = time < 0.030 ? 690.0 : time < 0.060 ? 930.0 : 1240.0;
         const auto note = std::min({1.0, segment / 0.003, std::max(0.0, (0.028 - segment) / 0.006)});
         return envelope * note * 0.57 * std::sin(tau * frequency * pitch * segment);
+    }
+    if (cue >= Cue::entity_person && cue < Cue::count) {
+        // Three short slots permit category rhythms to stay distinct even
+        // when the stereo backend lowers every rear-facing cue's pitch.
+        constexpr std::array<std::array<double, 3>, 7> notes{{
+            {{405, 0, 525}},     // People
+            {{610, 460, 0}},     // Exit
+            {{205, 205, 0}},     // Door
+            {{380, 505, 670}},   // Stairs
+            {{1020, 0, 1350}},   // Treasure
+            {{360, 0, 0}},       // Interactible object
+            {{715, 520, 715}}    // Checkpoint
+        }};
+        const int slot = frame / (cue_frames / 3);
+        const auto segment = static_cast<double>(frame % (cue_frames / 3)) / rate;
+        const auto frequency = notes[static_cast<int>(cue) - static_cast<int>(Cue::entity_person)][slot];
+        if (frequency == 0.0) return 0.0;
+        const auto note = std::min({1.0, segment / 0.004, std::max(0.0, (0.029 - segment) / 0.008)});
+        const auto phase = tau * frequency * pitch * segment;
+        const auto harmonic = cue == Cue::entity_door ? 0.19 : 0.06;
+        return envelope * note * (0.48 * std::sin(phase) + harmonic * std::sin(2.0 * phase));
     }
     const auto phase = tau * 660.0 * pitch * time;
     return envelope * (0.52 * std::sin(phase) + 0.17 * std::sin(2 * phase));

@@ -24,7 +24,7 @@ function destination(entry, page, trigger) {
         return trigger === 0 ? { category: 'treasure', name: /chest/i.test(sprite) ? 'Chest' : 'Treasure' } : null;
     }
     if (shop && trigger === 0) return { category: 'merchants', name: !reward && name || 'Merchant' };
-    if (transfer && /^(?:to\s|exit\b)|\b(?:exit|door|stairs)\b/i.test(name)) {
+    if (transfer && /^(?:(?:go\s+)?to\s|exit\b)|\b(?:exit|door|stairs)\b/i.test(name)) {
         return { category: 'exits', name: name || 'Exit' };
     }
     if (battle && /enemy|patrol|guard|encounter/i.test(name + ' ' + sprite)) {

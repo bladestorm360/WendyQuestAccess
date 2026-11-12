@@ -6,6 +6,7 @@ const { ACTIONS, DEFAULTS: NAVIGATION_DEFAULTS, LAYOUT_NAMES, navigationGesture,
     normalizeNavigation, navigationAction, gestureName } = require('./navigation-keys');
 const { FIELD_ACTIONS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
     normalizeController, canUnassign } = require('./controller-bindings');
+const { SOUNDSCAPE, normalizeSoundscape } = require('./soundscape-preferences');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
     puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance' });
@@ -14,6 +15,7 @@ const AUDIO_PREVIEWS = [
     ['ahead', [0, 0, 1]], ['left', [-1, 0, 0]], ['right', [1, 0, 0]],
     ['behind', [0, 0, -1]], ['above', [0, 1, 0]]
 ];
+const audioGroup = group => group === 'audio' || group === 'soundscape' || group === 'soundscapeCategory';
 
 function normalizeAudio(value) {
     const volume = value?.wallVolume;
@@ -24,7 +26,8 @@ function normalizeAudio(value) {
         beacon: value?.beacon === true,
         beaconVolume: Number.isInteger(beaconVolume) && beaconVolume >= 0 && beaconVolume <= 100 ? beaconVolume : 65,
         caveTiming: value?.caveTiming === true,
-        caveVolume: Number.isInteger(caveVolume) && caveVolume >= 0 && caveVolume <= 100 ? caveVolume : 65 };
+        caveVolume: Number.isInteger(caveVolume) && caveVolume >= 0 && caveVolume <= 100 ? caveVolume : 65,
+        soundscape: normalizeSoundscape(value?.soundscape) };
 }
 
 function createSettingsMenu(root, host) {
@@ -70,7 +73,7 @@ function createSettingsMenu(root, host) {
     }
 
     function showRoot(owner, selection = 'keyboard') {
-        if (owner.group === 'audio') host.audioStop(owner.scene);
+        if (audioGroup(owner.group)) host.audioStop(owner.scene);
         owner.group = false;
         owner.capture = null;
         owner.heading.textContent = 'WendyQuest accessibility settings';
@@ -133,7 +136,8 @@ function createSettingsMenu(root, host) {
         }, () => {
             saving = false;
             apply(previous);
-            if (session?.group === key) showGroup(session, session.selected);
+            if (session && (session.group === key || (isAudio && audioGroup(session.group))))
+                showGroup(session, session.selected);
             if (owner && owner.group === origin) {
                 status(owner, `Could not save ${subject.toLowerCase()}. Previous settings restored.`);
             }
@@ -147,6 +151,57 @@ function createSettingsMenu(root, host) {
         else if (owner.group === 'keyboard') showKeyboard(owner, selection);
         else if (owner.group === 'navigation') showNavigation(owner, selection);
         else if (owner.group === 'audio') showAudio(owner, selection);
+        else if (owner.group === 'soundscape') showSoundscape(owner, selection);
+        else if (owner.group === 'soundscapeCategory') showSoundscape(owner, selection, owner.category);
+    }
+
+    function previewAudio(owner, bearing, cue, gain) {
+        if (loading || saving) return;
+        if (!audio.enabled) return status(owner, 'Mod sounds are off.');
+        if (gain === 0) return status(owner, 'This cue’s volume is zero.');
+        status(owner, 'Preparing audio preview.');
+        if (!host.previewAudio(owner, audio.hrtf, bearing, text => status(owner, text), cue, gain)) status(owner, '');
+    }
+
+    function showSoundscape(owner, selection = 'enabled', category = '') {
+        host.audioStop(owner.scene);
+        owner.group = category ? 'soundscapeCategory' : 'soundscape';
+        owner.category = category;
+        owner.selected = selection;
+        owner.capture = null;
+        owner.heading.textContent = category ? SOUNDSCAPE[category].label : 'Soundscape';
+        owner.status.textContent = loading ? 'Loading settings' : '';
+        owner.contents.textContent = '';
+        const prefs = audio.soundscape;
+        const value = category ? prefs.categories[category] : prefs;
+        const label = category ? SOUNDSCAPE[category].label : 'Soundscape';
+        function update(key, next) {
+            const soundscape = category ? { ...prefs, categories: { ...prefs.categories, [category]: next } } : next;
+            change(owner, { ...audio, soundscape }, key, 'audio');
+        }
+        const items = {
+            enabled: button(owner, `${label}, ${value.enabled ? 'on' : 'off'}`, () =>
+                update('enabled', { ...value, enabled: !value.enabled })),
+            lower: button(owner, `Decrease volume, ${value.volume} percent`, () =>
+                update('lower', { ...value, volume: Math.max(0, value.volume - 10) })),
+            raise: button(owner, `Increase volume, ${value.volume} percent`, () =>
+                update('raise', { ...value, volume: Math.min(100, value.volume + 10) }))
+        };
+        if (category) {
+            for (const [name, cue] of SOUNDSCAPE[category].previews) {
+                button(owner, 'Preview ' + name.toLowerCase(), () =>
+                    previewAudio(owner, [0, 0, 1], cue, prefs.volume * value.volume / 10000));
+            }
+            button(owner, 'Back', () => showSoundscape(owner, category));
+        } else {
+            for (const [id, { label: name }] of Object.entries(SOUNDSCAPE))
+                items[id] = button(owner, name, () => showSoundscape(owner, 'enabled', id));
+            button(owner, 'Back', () => {
+                host.audioStop(owner.scene);
+                showAudio(owner, 'soundscape');
+            });
+        }
+        (items[selection] || items.enabled).focus();
     }
 
     function showAudio(owner, selection = 'enabled') {
@@ -179,15 +234,10 @@ function createSettingsMenu(root, host) {
             caveLower: button(owner, `Decrease cave timing volume, ${audio.caveVolume} percent`, () =>
                 update('caveLower', { ...audio, caveVolume: Math.max(0, audio.caveVolume - 10) })),
             caveRaise: button(owner, `Increase cave timing volume, ${audio.caveVolume} percent`, () =>
-                update('caveRaise', { ...audio, caveVolume: Math.min(100, audio.caveVolume + 10) }))
+                update('caveRaise', { ...audio, caveVolume: Math.min(100, audio.caveVolume + 10) })),
+            soundscape: button(owner, 'Soundscape', () => showSoundscape(owner))
         };
-        function preview(bearing, cue, gain) {
-            if (loading || saving) return;
-            if (!audio.enabled) return status(owner, 'Mod sounds are off.');
-            if (gain === 0) return status(owner, 'This cue’s volume is zero.');
-            status(owner, 'Preparing audio preview.');
-            if (!host.previewAudio(owner, audio.hrtf, bearing, text => status(owner, text), cue, gain)) status(owner, '');
-        }
+        const preview = (bearing, cue, gain) => previewAudio(owner, bearing, cue, gain);
         button(owner, 'Preview wall bump ahead', () => preview([0, 0, 1], 'wallBump', audio.wallVolume / 100));
         button(owner, 'Preview wall brush on the left', () => preview([-1, 0, 0], 'wallBrush', audio.wallVolume / 100));
         button(owner, 'Preview beacon ahead', () => preview([0, 0, 1], 'beaconPulse', audio.beaconVolume / 100));
@@ -338,6 +388,11 @@ function createSettingsMenu(root, host) {
     function back(owner) {
         if (owner.capture) showGroup(owner, owner.selected);
         else if (owner.unbinding) showController(owner);
+        else if (owner.group === 'soundscapeCategory') showSoundscape(owner, owner.category);
+        else if (owner.group === 'soundscape') {
+            host.audioStop(owner.scene);
+            showAudio(owner, 'soundscape');
+        }
         else if (owner.group) showRoot(owner, owner.group);
         else close(owner.scene, true);
     }

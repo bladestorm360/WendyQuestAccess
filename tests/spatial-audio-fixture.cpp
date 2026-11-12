@@ -93,6 +93,19 @@ int wmain(int argc, wchar_t** argv) {
     assert(stereo_cue(behind_go, Cue::cave_go, {0, 0, -1}, 0.7, ready));
     assert(crossings(behind_go, 0) < crossings(go, 0));
 
+    std::array<Stereo, 7> entity_cues{};
+    for (size_t i = 0; i < entity_cues.size(); ++i) {
+        const auto cue = static_cast<Cue>(static_cast<int>(Cue::entity_person) + i);
+        Stereo back{}, spatial{};
+        auto& ahead = entity_cues[i];
+        assert(stereo_cue(ahead, cue, {0, 0, 1}, 0.5, ready));
+        assert(stereo_cue(back, cue, {0, 0, -1}, 0.5, ready));
+        assert(energy(ahead, 0) > 0 && crossings(back, 0) < crossings(ahead, 0));
+        for (size_t earlier = 0; earlier < i; ++earlier) assert(entity_cues[earlier] != ahead);
+        assert(hrtf.render(spatial, cue, {-1, 0, 0}, 0.5, ready));
+        assert(energy(spatial, 0) > energy(spatial, 1));
+    }
+
     // The build runner sets SDL_AUDIO_DRIVER=dummy for this process only.
     // The real SDL driver callback consumes the pre-rendered PCM.
     volatile LONG generation = 1;
