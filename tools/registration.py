@@ -27,6 +27,7 @@ OBJECTS_REL = Path('package.nw/js/rmmz_objects.js')
 CANVAS_REL = Path('package.nw/js/plugins/CanvasScaler.js')
 BATTLE_REL = Path('package.nw/js/plugins/BattleSceneArranger.js')
 QUEST_REL = Path('package.nw/js/plugins/Ayatam_HighQualityQuestSystem.js')
+BITMAP_FONT_REL = Path('package.nw/js/plugins/EliMZ_BitmapFontPro.js')
 STATS_REL = Path('package.nw/js/plugins/WendyQuest.js')
 MESSAGE_OWNER_REL = Path('package.nw/js/plugins/EliMZ_Book.js')
 SALT_REL = Path('package.nw/data/Map019.json')
@@ -49,8 +50,10 @@ OBJECTS_SHA = 'b9da176c2041866df643b7d62b36d99d67bf1b44216deb52568adbd08264848a'
 CANVAS_SHA = '713457886c5589be41d137d81b327947e37b19707c2f30c5da1b1ff43a9d8ccf'
 BATTLE_SHA = 'b6e5b59162e89c38e4d24c55ea622846509ac6d77e91ec0e24c0bb745fd0eab5'
 QUEST_SHA = '5a17621ec14791c85716cb13ced13b1ceb82a83d3d05df0e850f2f0059c8daf3'
+BITMAP_FONT_SHA = 'b24607bc939ea1f7cfa3972c1121d135550483ffe3ab6484f84c1f135046ae76'
 STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
 DEPENDENCIES = {
+    BITMAP_FONT_REL: BITMAP_FONT_SHA,
     STATS_REL: STATS_SHA,
     MESSAGE_OWNER_REL: '26e0230f7bcf8a425ad4c128c728cb0d74d8589d1a07d9d3026edbc2b09c7ce0',
     Path('package.nw/js/rmmz_sprites.js'): '33440ac9584344c4a9675d0b464f82eb49f5dcde0c23c485edbd385360475ba1',
@@ -206,8 +209,11 @@ def quest_notification(original):
     # stable paint and tag its title and objective draw scopes.
     return insert(original, QUEST_SHA, {
         157600: b'let wqaQuestEnd,wqaQuestComplete=false;'
-                b'if(this._needContentRefresh&&this._transitionState===this._targetTransitionState){'
-                b'this._wqaQuestDraft=null;wqaQuestEnd=globalThis.WendyQuestAccessQuestPaint?.(this);}'
+                b'if(this._needContentRefresh&&this._transitionState===this._targetTransitionState&&'
+                b'this===SceneManager._scene?._questNavWindow){'
+                b'if(this._wqaQuestDraft!==undefined)this._wqaQuestDraft=null;'
+                b'if((SceneManager._scene._wqaFieldReady||SceneManager._scene._wqaDialogue)&&this.offsetY===0)'
+                b'wqaQuestEnd=globalThis.WendyQuestAccessQuestPaint?.(this);}'
                 b'try{',
         158215: b'wqaQuestComplete=true;}finally{wqaQuestEnd?.(wqaQuestComplete);}',
         159810: b'if(this._wqaQuestCapture)this._wqaQuestCapture.title=true;',
@@ -216,9 +222,11 @@ def quest_notification(original):
         166031: b'this._wqaQuestCapture?.endRow();',
         166914: b'this._wqaQuestCapture?.beginRow();',
         167877: b'this._wqaQuestCapture?.endRow();',
-        369098: b'if(this._wqaQuestTracking||(this._questNavWindow?._wqaQuestDraft&&'
-                b'this._questNavWindow.visible&&this._questNavWindow.offsetY===0))'
-                b'globalThis.WendyQuestAccessQuestUpdate?.(this);',
+        369098: b'if(this._wqaQuestTracking||((this._wqaFieldReady||this._questNavWindow?._wqaQuestDraft)&&'
+                b'this._questNavWindow?._init&&this._questNavWindow.visible&&this._questNavWindow.offsetY===0&&'
+                b'this._questNavWindow._needContentRefresh===false&&'
+                b'this._questNavWindow._wqaQuestDraft!==false))'
+                b'globalThis.WendyQuestAccessQuestUpdate?.(this,this._wqaFieldReady?$gameQuest:null);',
         375124: b'if(this._questNavWindow){this._questNavWindow._wqaQuestRevision='
                 b'(this._questNavWindow._wqaQuestRevision||0)+1;'
                 b'if(this._wqaQuestTracking)globalThis.WendyQuestAccessQuestUpdate?.(this);}',

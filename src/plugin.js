@@ -335,8 +335,8 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessQuestPaint = function (window) {
         try { return quests?.paint(window); } catch { return null; }
     };
-    root.WendyQuestAccessQuestUpdate = function (scene) {
-        try { quests?.observe(scene); } catch { quests?.leave(scene); }
+    root.WendyQuestAccessQuestUpdate = function (scene, gameQuest) {
+        try { quests?.observe(scene, gameQuest); } catch { quests?.leave(scene); }
     };
 
     root.WendyQuestAccessMapBannerReady = function (scene, revision) {

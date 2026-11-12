@@ -22,10 +22,19 @@ function captureQuestPaint(window) {
             !Number.isFinite(x) || !Number.isFinite(y) || !(width > 0) || !(height > 0) ||
             !(this.paintOpacity > 0)) return result;
         let measured;
-        try { measured = Math.min(width, this.measureTextWidth(text)); }
+        let left;
+        try {
+            measured = this.measureTextWidth(text);
+            // The installed bitmap font aligns by glyph width without
+            // scaling to maxWidth, unlike the stock canvas text path.
+            if (typeof this.getTextX === 'function') left = this.getTextX(text, x, width, align);
+            else {
+                measured = Math.min(width, measured);
+                left = align === 'right' ? x + width - measured : align === 'center' ? x + (width - measured) / 2 : x;
+            }
+        }
         catch { return result; }
-        const left = align === 'right' ? x + width - measured : align === 'center' ? x + (width - measured) / 2 : x;
-        if (Number.isFinite(measured) && measured > 0) {
+        if (Number.isFinite(left) && Number.isFinite(measured) && measured > 0) {
             draws.push({ text, left, right: left + measured, top: y, bottom: y + height,
                 title: capture.title, row: capture.row, count: align === 'right' && /^\d+\/\d+$/.test(text) });
         }

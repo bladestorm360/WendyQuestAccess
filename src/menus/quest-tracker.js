@@ -1,6 +1,7 @@
 'use strict';
 
 const { captureQuestPaint, drawnQuestPage } = require('./quest-paint');
+const { restoreQuestPaint } = require('./quest-restore');
 const { reviewLines, moveReview } = require('./review');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
@@ -28,14 +29,23 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
 
     function settled(window) { return window._transitionState === window._targetTransitionState; }
 
-    function drawable(scene, window, draft) {
+    function renderedWindow(scene, window) {
         const sprite = window?._contentsSprite;
-        return safeMap(scene) && liveWindow(scene, window) && settled(window) &&
-            draft && window._wqaQuestDraft === draft && sprite?.bitmap === draft.bitmap &&
-            window._questData === draft.quest && window._questId === draft.id &&
-            window._wqaQuestRevision === draft.revision && window.contents === draft.bitmap &&
-            sprite.worldVisible && sprite.worldAlpha > 0 && window.worldVisible && window.worldAlpha > 0 &&
-            window.offsetY === 0;
+        return safeMap(scene) && liveWindow(scene, window) && settled(window) && window._needContentRefresh === false &&
+            sprite?.bitmap && sprite.bitmap === window.contents && sprite.worldVisible && sprite.worldAlpha > 0 &&
+            window.worldVisible && window.worldAlpha > 0 && window.offsetY === 0;
+    }
+
+    function drawable(scene, window, draft) {
+        return draft && window._wqaQuestDraft === draft && window._questData === draft.quest &&
+            window._questId === draft.id && window._wqaQuestRevision === draft.revision &&
+            window.contents === draft.bitmap && renderedWindow(scene, window);
+    }
+
+    function restoreReady(scene, window, gameQuest) {
+        return window && window._wqaQuestDraft == null && renderedWindow(scene, window) &&
+            fieldReady(scene, true) && window.contents.isReady?.() &&
+            root.$gameParty?.getNav?.() === window._questId && gameQuest.questInNavi();
     }
 
     function paint(window) {
@@ -115,7 +125,7 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
         announce(current);
     }
 
-    function observe(scene) {
+    function observe(scene, gameQuest) {
         const window = scene._questNavWindow;
         const draft = window?._wqaQuestDraft;
         // The same native quest keeps its review position across a fold.
@@ -126,22 +136,33 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
             retireSpeech(current);
             return;
         }
-        if (!drawable(scene, window, draft)) return leave(scene);
-        if (current?.draft === draft) {
+        const restoring = !!gameQuest && !!restoreReady(scene, window, gameQuest);
+        if (!restoring && !drawable(scene, window, draft)) return leave(scene);
+        if (current && current.draft === draft) {
             if (!fieldReady(scene, true)) retireSpeech(current);
             else announce(current);
             return;
         }
-        if (waiting?.draft === draft) return;
+        if (waiting && waiting.window === window && waiting.draft === draft && waiting.restoring === restoring) return;
         if (waiting) cancelRender(waiting.scene);
         retireSpeech(current);
         const renderer = host.graphics.app?.renderer;
         if (typeof renderer?.once !== 'function' || typeof renderer.off !== 'function') return;
-        const task = { scene, draft, renderer, complete };
+        const task = { scene, window, draft, renderer, restoring, complete };
         function complete() {
             if (waiting !== task) return;
             waiting = null;
-            try { confirm(scene, window, draft); } catch { leave(scene); }
+            try {
+                if (!restoring) return confirm(scene, window, draft);
+                if (!restoreReady(scene, window, gameQuest)) return leave(scene);
+                // A failed recovery can retry after the next native paint,
+                // which clears this marker. An unchanged frame cannot retry.
+                window._wqaQuestDraft = false;
+                const restored = restoreQuestPaint(window, gameQuest);
+                if (!restored) return leave(scene);
+                window._wqaQuestDraft = restored;
+                confirm(scene, window, restored);
+            } catch { leave(scene); }
         }
         waiting = task;
         scene._wqaQuestTracking = scene._wqaPresentation = true;

@@ -734,7 +734,8 @@ const interval = setInterval(() => {
             const bitmap = { width: 200, height: 80, paintOpacity: 255, drawText() {},
                 measureTextWidth: text => text.length * 5, isReady: () => true };
             const tracker = scene._questNavWindow = {
-                _init: true, _questData: {}, _questId: 'fixture', _transitionState: 'full', _targetTransitionState: 'full',
+                _init: true, _questData: {}, _questId: 'fixture', _needContentRefresh: false,
+                _transitionState: 'full', _targetTransitionState: 'full',
                 parent: scene._windowLayer, visible: true, worldVisible: true, worldAlpha: 1, openness: 255, offsetY: 0,
                 contents: bitmap, contentsOpacity: 255, innerWidth: 200, innerHeight: 80,
                 _contentsSprite: { bitmap, worldVisible: true, worldAlpha: 1,
@@ -772,6 +773,41 @@ const interval = setInterval(() => {
             scene._questNavWindow.visible = false;
             WendyQuestAccessQuestUpdate(scene);
             if (scene._wqaQuestTracking || padTap(3) !== 0) throw Error('A hidden tracker retained field ownership');
+            fs.writeFileSync(receipt + '.quest-restore-stage', '');
+            WendyQuestAccessSceneLeaving(scene);
+            const next = SceneManager._scene = Graphics.app.stage = {
+                _wqaFieldReady: false, _wqaMapRestored: true, _mapLoaded: true, _started: true, _active: true,
+                _fadeOpacity: 1, _fadeDuration: 1, _windowLayer: {}
+            };
+            const noop = () => {};
+            const tracker = next._questNavWindow = {
+                ...scene._questNavWindow, _wqaQuestDraft: undefined, parent: next._windowLayer, visible: true,
+                _questData: { _questClearContent: '' }, _transitionState: 'small', _targetTransitionState: 'small',
+                _transitionTimer: 0, _transitionTime: 0.2, _bgMargin: 12,
+                drawNavContents() {
+                    this._wqaQuestCapture.beginRow();
+                    this.contents.drawText('Recovered clue', 4, 4, 160, 16);
+                    this.contents.drawText('0/1', 4, 4, 160, 16, 'right');
+                    this._wqaQuestCapture.endRow();
+                },
+                drawQuestTitle: noop, drawQuestObjectives: noop, drawTextLines: noop, drawText: noop, drawTextEx: noop,
+                drawQuestIcon: noop, drawIconWithSpacing: noop, lineHeight: noop, convertEscapeCharacters: noop,
+                calcTextHeight: noop, maxFontSizeInLine: noop, createTextState: noop, createTextBuffer: noop,
+                processAllText: noop, processCharacter: noop, processControlCharacter: noop, processNewLine: noop,
+                flushTextState: noop, textWidth: noop, changePaintOpacity: noop, translucentOpacity: noop
+            };
+            Object.assign(tracker.contents, { bitmapFontSize: 1, fontSize: 16, fontBitmap: () => ({ bitmaps: {} }),
+                getTextX: (_text, x) => x, drawText() { throw Error('Quest restoration touched the live bitmap'); } });
+            $gameParty = { getNav: () => 'fixture' };
+            const gameQuest = { getAllObjectives: () => [], questInNavi: () => true };
+            WendyQuestAccessQuestUpdate(next, gameQuest);
+            Graphics.app.renderer.emit('postrender');
+            if (tracker._wqaQuestDraft !== undefined) throw Error('Quest restored during native loading');
+            Object.assign(next, { _wqaFieldReady: true, _fadeOpacity: 0, _fadeDuration: 0 });
+            WendyQuestAccessQuestUpdate(next, gameQuest);
+            Graphics.app.renderer.emit('postrender');
+            endingStep++;
+        } else if (endingStep === 13 && fs.existsSync(receipt + '.quest-restore-focus')) {
             fs.unlinkSync(receipt + '.quest-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
@@ -781,13 +817,13 @@ const interval = setInterval(() => {
             choose('Speech');
             choose('Speech enabled, on');
             endingStep++;
-        } else if (endingStep === 13 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
+        } else if (endingStep === 14 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
             if (document.activeElement.textContent !== 'Speech enabled, off') throw Error('The mute switch did not retain focus');
             tap('Escape');
             choose('Audio');
             choose('Preview right');
             endingStep++;
-        } else if (endingStep === 14 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        } else if (endingStep === 15 && menuStatus() === 'Preview uses stereo and rear pitch.') {
             fs.writeFileSync(receipt + '.muted-preview', '');
             clearInterval(interval);
             nw.App.quit();
@@ -833,6 +869,11 @@ parentPort.on('message', message => {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
         if (fs.existsSync(receipt + '.quest-stage')) {
+            if (fs.existsSync(receipt + '.quest-restore-stage')) {
+                if (message.kind === 'questFocus') fs.writeFileSync(receipt + '.quest-restore-focus', speech);
+                parentPort.postMessage('ack');
+                return;
+            }
             if (message.kind === 'questFocus') fs.writeFileSync(receipt + '.quest-focus', speech);
             if (message.kind === 'menuDetails')
                 fs.writeFileSync(receipt + (message.append ? '.quest-detail-auto' : '.quest-detail'), speech);
@@ -1014,6 +1055,7 @@ def main():
             'quest-detail-auto': 'A shown clue. 1 of 2',
             'quest-detail-key': 'Synthetic quest. A shown clue. 1 of 2',
             'quest-detail': 'Synthetic quest. A shown clue. 1 of 2',
+            'quest-restore-focus': 'Quest objective. Recovered clue. 0 of 1',
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:
@@ -1051,7 +1093,7 @@ def main():
         print('Verified native autowalk dispatch, both narration settings, spoken arrival and explicit cancellation.')
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
-        print('Verified menu and quest focus, keyboard and controller review, Autodetail and indexing persistence.')
+        print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '
