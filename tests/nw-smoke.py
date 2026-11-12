@@ -83,6 +83,7 @@ var Graphics = { app: { stage: SceneManager._scene, renderer: new (require('even
 const nativeSelect = SceneManager._scene._commandWindow.select;
 var DataManager = { savefileInfo: () => null };
 var $gameMap, $gamePlayer, $gameScreen, $dataMap, $dataTilesets, $gameTileChanges;
+var $dataSystem = { tileSize: 32 };
 var Input = { keyMapper: { 90: 'ok' }, clear() {} };
 Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 3: 'menu', 9: 'menu', 12: 'up', 13: 'down' };
 ''', encoding='utf8')
@@ -109,6 +110,7 @@ Graphics._wqaFinishResize(transition, true, 440, 320);
 let fileShown = false;
 let mapShown = false;
 let caveShown = false;
+let caveRoute = false;
 let dialogueShown = false;
 let routeRequested = false;
 let fieldStep = 0;
@@ -130,7 +132,7 @@ if (!restart) {
     }
     const geometry = path.join(profile, 'wendyquest-access-geometry');
     fs.mkdirSync(geometry);
-    for (const name of ['1.wqg', 'manifest.json']) fs.copyFileSync(path.join(root, 'geometry', name), path.join(geometry, name));
+    for (const name of ['1.wqg', '196.wqg', 'manifest.json']) fs.copyFileSync(path.join(root, 'geometry', name), path.join(geometry, name));
 }
 document.addEventListener('keydown', event => { if (event.code === 'KeyZ') nativeZ++; });
 function key(type, key, code, repeat = false, modifiers = {}) {
@@ -369,23 +371,37 @@ const interval = setInterval(() => {
         tilemap.updateTransform();
         tilemap.disableTempParent(parent);
         const patrol = { _eventId: 4, _x: 5, _realX: 4.5, _y: 24, _realY: 24, _pageIndex: 0, _trigger: 2,
-            _priorityType: 1, getMapSprite: () => sprite };
+            _priorityType: 1, _moveType: 0, _moveSpeed: 4, _moveFrequency: 5, _direction: 6,
+            _stopCount: 0, _waitCount: 0, _jumpCount: 0, _moveRouteIndex: 0, _moveRoute: { list: [{ code: 0 }] },
+            getMapSprite: () => sprite };
         sprite._character = patrol;
-        const events = [null, null, null, null, patrol];
+        const control = { _eventId: 2, _x: 6, _realX: 6, _y: 29, _realY: 29, _pageIndex: 0, _trigger: 0,
+            _priorityType: 1, _moveType: 0 };
+        const events = [null, null, control, null, patrol];
         const scene = { _active: true, _wqaMapRestored: true, _wqaFieldReady: true, _fadeDuration: 0, _fadeOpacity: 0,
             _spriteset: { _tilemap: tilemap } };
-        $gameMap = { _mapId: 196, _tilesetId: 1, inactiveTime: 0, _events: events };
-        $dataMap = { width: 23, height: 52, scrollType: 0,
-            events: [null, null, null, null, { name: 'Synthetic patrol', pages: [{ list: [{}, {}] }] }] };
-        $gamePlayer = { _x: 6, _y: 26, _realX: 6, _realY: 26, _vehicleType: 'walk' };
+        $gameMap = { _mapId: 196, _tilesetId: 1, inactiveTime: 0, _events: events, _displayX: 0, _displayY: 20,
+            _tileEvents: [], _vehicles: [], _commonEvents: [] };
+        $dataMap = { width: 23, height: 52, scrollType: 0, tilesetId: 1, data: new Array(23 * 52 * 6).fill(0),
+            events: [null, null, { name: 'Synthetic cave switch', pages: [{ list: [{}, {}] }] },
+                null, { name: 'Synthetic patrol', pages: [{ list: [{}, {}] }] }] };
+        $gamePlayer = { _x: 6, _y: 26, _realX: 6, _realY: 26, _vehicleType: 'walk', _moveSpeed: 4 };
         SceneManager._scene = Graphics.app.stage = scene;
+        Object.assign(Graphics, { width: 640, height: 360, frameCount: 400 });
         Graphics.app.renderer.screen = new PIXI.Rectangle(0, 0, 320, 200);
         const started = performance.now();
         tap('U', 'KeyU', { shiftKey: true });
         Graphics.app.renderer.emit('postrender');
         require('fs').writeFileSync(receipt + '.cave-review-ms', String(performance.now() - started));
     }
-    if (!dialogueShown && require('fs').existsSync(receipt + '.cave')) {
+    if (!caveRoute && require('fs').existsSync(receipt + '.cave')) {
+        caveRoute = true;
+        const started = performance.now();
+        tap(String.fromCharCode(92), 'Backslash');
+        Graphics.app.renderer.emit('postrender');
+        require('fs').writeFileSync(receipt + '.timed-submit-ms', String(performance.now() - started));
+    }
+    if (!dialogueShown && require('fs').existsSync(receipt + '.timed')) {
         dialogueShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         const layer = {};
@@ -470,6 +486,7 @@ parentPort.on('message', message => {
         fs.writeFileSync(receipt + '.route-' + count, '');
     }
     if (message.kind === 'fieldStatus' && message.name.startsWith('Secret cave.')) fs.writeFileSync(receipt + '.cave', '');
+    if (message.kind === 'timedDirections') fs.writeFileSync(receipt + '.timed', '');
     if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
     if (message.kind === 'dialoguePage' && fs.existsSync(receipt + '.choice')) {
         fs.writeFileSync(receipt + (fs.existsSync(receipt + '.repeat') ? '.controller-repeat' : '.repeat'), '');
@@ -486,12 +503,16 @@ parentPort.on('message', message => {
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
     for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
+    shutil.copytree(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'puzzles', service / 'puzzles')
     geometry = app / 'geometry'
     geometry.mkdir()
     synthetic = struct.pack('<4sHHHBBI', b'WQG1', 1, 3, 2, 0, 0, 0) + bytes([15] * 6)
     (geometry / '1.wqg').write_bytes(synthetic)
+    cave = struct.pack('<4sHHHBBI', b'WQG1', 196, 23, 52, 0, 0, 0) + bytes([15] * 23 * 52)
+    (geometry / '196.wqg').write_bytes(cave)
     (geometry / 'manifest.json').write_text(json.dumps({
-        'build': '26578620', 'maps': {'1': {'geometry': hashlib.sha256(synthetic).hexdigest()}}
+        'build': '26578620', 'maps': {key: {'geometry': hashlib.sha256(data).hexdigest()}
+                                    for key, data in [('1', synthetic), ('196', cave)]}
     }), encoding='utf8')
     return app / 'receipt.json'
 
@@ -517,15 +538,15 @@ def main():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 18 or not all(r.get('sameEpoch') for r in records):
+        if result.returncode or data.get('error') or len(records) != 19 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, cave, page, choice, repeat, dialogue_mode, pad_repeat, number = records
+        title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, cave, timed, page, choice, repeat, dialogue_mode, pad_repeat, number = records
         if any(item['name'] != title['name'] for item in (returned_title, controller_title)) or \
                 len({title['epoch'], returned_title['epoch'], controller_title['epoch']}) != 3:
             raise RuntimeError(f'NW fixture did not restore the title focus: {data}')
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
-                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:13]}) != 12:
+                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:14]}) != 13:
             raise RuntimeError(f'NW fixture did not deliver distinct presentation epochs: {data}')
         if [item.get('name') for item in (first, second, third)] != ['Synthetic wall', 'Synthetic switch', 'Synthetic wall'] or \
                 any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
@@ -536,7 +557,10 @@ def main():
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
             raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
+        if timed['kind'] != 'timedDirections' or timed.get('speech') != 'Preview. 2 steps south. Recheck if you wait.':
+            raise RuntimeError(f'NW fixture did not publish the timed route preview: {data}')
         cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
+        timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
@@ -561,6 +585,7 @@ def main():
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic renderer command and cold worker submission: {submit_ms:.1f} ms.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
+        print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
 
 
 if __name__ == '__main__':

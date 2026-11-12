@@ -1,5 +1,7 @@
 'use strict';
 
+const { copyPatrol } = require('./patrol-motion.cjs');
+
 const ROOMS = Object.freeze({
     196: { patrols: [4, 5, 6, 7, 12, 13, 14, 15, 17, 18], checkpoints: [21], sign: 2 },
     199: { patrols: [4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21], checkpoints: [] },
@@ -62,6 +64,36 @@ function warningApproach(map, x, y, target) {
         if (!separatedFromApproach(event)) return null;
     }
     return WARNING_APPROACH;
+}
+
+function captureMotion(root, graphics) {
+    const map = root.$gameMap;
+    const room = ROOMS[map?._mapId];
+    const player = root.$gamePlayer;
+    const data = root.$dataMap;
+    const tileSize = root.$dataSystem?.tileSize;
+    const speed = player._moveSpeed;
+    const frame = graphics.frameCount;
+    if (!room || data?.scrollType !== 0 || !Number.isInteger(frame) || frame < 0 ||
+        !Number.isInteger(speed) || speed < 3 || speed > 6 || player._moveRouteForcing || map._scrollRest > 0 ||
+        map._commonEvents?.length || !(tileSize > 0) || !Array.isArray(map._events)) return null;
+    const view = { x: map._displayX, y: map._displayY, width: graphics.width / tileSize, height: graphics.height / tileSize };
+    if (![view.x, view.y, view.width, view.height].every(Number.isFinite) || view.width <= 0 || view.height <= 0) return null;
+    const patrols = [];
+    for (const event of map._events) {
+        if (!event || event._erased || event._pageIndex < 0) continue;
+        const id = event._eventId;
+        const page = data.events[id]?.pages?.[event._pageIndex];
+        if (!page || ((event._trigger === 3 || event._trigger === 4) && page.list.length > 1)) return null;
+        const mobile = event._moveType > 0 || event._moveRouteForcing || event._jumpCount > 0 ||
+            event._x !== event._realX || event._y !== event._realY;
+        if (!mobile && event._trigger !== 2) continue;
+        if (!room.patrols.includes(id) || event._tileId > 0 || event.blockerProperties) return null;
+        const actor = copyPatrol(event);
+        if (!actor) return null;
+        patrols.push(actor);
+    }
+    return { frame, speed, view, patrols };
 }
 
 function offsetLabel(delta, negative, positive) {
@@ -243,4 +275,4 @@ function createCaveGuide(root, graphics) {
     };
 }
 
-module.exports = { createCaveGuide, timedCave, checkpointTarget, warningApproach };
+module.exports = { createCaveGuide, timedCave, checkpointTarget, warningApproach, captureMotion };

@@ -3,7 +3,7 @@
 const { captureWorld } = require('./snapshot');
 const { browse, createDestinationBrowser } = require('./destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
-const { createCaveGuide, timedCave, warningApproach } = require('./puzzles/cave');
+const { createCaveGuide, timedCave, warningApproach, captureMotion } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 
 function createField(root, host, notifications) {
@@ -44,13 +44,15 @@ function createField(root, host, notifications) {
         active = null;
         scene._wqaRouteActive = false;
         scene._wqaCaveReview = false;
+        scene._wqaPreviewUntil = 0;
         if (speech) notifications.close(speech);
         speech = 0;
     }
 
     function present(job, record) {
         if (active !== job || !ready(job.scene)) return;
-        speech = notifications.open(record, () => active === job && ready(job.scene));
+        speech = notifications.open(record, () => active === job && ready(job.scene) &&
+            (!job.scene._wqaPreviewUntil || host.graphics.frameCount < job.scene._wqaPreviewUntil));
     }
 
     function status(job, name) { present(job, { kind: 'fieldStatus', name }); }
@@ -65,14 +67,24 @@ function createField(root, host, notifications) {
             if (job.area && !warningApproach(root.$gameMap, player._x, player._y, job.target))
                 return status(job, 'Warning sign directions are no longer available');
             const result = packet.result;
-            if (result?.status === 'ready') present(job, { kind: 'routeDirections', name: job.label,
+            if (result?.status === 'timed') {
+                const age = host.graphics.frameCount - job.motionFrame;
+                if (!Number.isInteger(age) || age < 0 || !Number.isInteger(result.startWindow) ||
+                    result.startWindow > 60 || result.startWindow - age < 30)
+                    return status(job, 'Patrol timing changed. Request directions again');
+                job.scene._wqaPreviewUntil = job.motionFrame + result.startWindow;
+                return present(job, { kind: 'timedDirections', direction: result.direction, tiles: result.tiles,
+                    terminal: result.terminal === true });
+            }
+            if (result?.status === 'timedWait') status(job, 'No crossing preview ready. Check the patrols and request again');
+            else if (result?.status === 'ready') present(job, { kind: 'routeDirections', name: job.label,
                 legs: result.legs, facing: result.arrival.facing, more: result.more === true });
             else if (result?.status === 'unreachable') status(job, 'No walkable route to ' + job.label);
             else if (result?.status === 'unavailable') status(job, 'Directions unavailable for ' + job.label);
         } else if (active?.action === 'directions' && ready(active.scene)) afterRender();
     }
 
-    function route(job, snapshot, target, area) {
+    function route(job, snapshot, target, area, motion) {
         try {
             if (!worker) {
                 admission = host.makeWord();
@@ -96,10 +108,11 @@ function createField(root, host, notifications) {
             job.label = target.name;
             job.area = area;
             job.target = target.id;
+            job.motionFrame = motion?.frame;
             Atomics.store(admission, 0, job.sequence);
             inFlight = job;
             worker.postMessage({ map: snapshot.map, sequence: job.sequence, epoch: job.sequence, live: snapshot.live,
-                request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area } }, [snapshot.live.terrain.buffer]);
+                request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area, motion } }, [snapshot.live.terrain.buffer]);
         } catch {
             if (admission) Atomics.store(admission, 0, 0);
             inFlight = null;
@@ -133,10 +146,11 @@ function createField(root, host, notifications) {
             dx: target.x - snapshot.x, dy: target.y - snapshot.y });
         if (!timed) return route(job, snapshot, target);
         const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.id);
-        if (!area) return status(job, 'Ordinary directions unavailable in this timed area');
+        const motion = area ? null : captureMotion(root, host.graphics);
+        if (!area && !motion) return status(job, 'Patrol timing is unavailable here');
         const terrain = captureWorld(root);
         if (!terrain) return status(job, 'Map information unavailable');
-        route(job, terrain, target, area);
+        route(job, terrain, target, area, motion);
     }
 
     function afterRender() {

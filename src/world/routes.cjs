@@ -94,10 +94,7 @@ function route(world, start, goals, cancelled, area) {
     return { status: 'unreachable' };
 }
 
-function solveRoute(geometry, snapshot, request, cancelled = () => false) {
-    if (cancelled()) return { status: 'cancelled' };
-    const world = composeWorld(geometry, snapshot, cancelled);
-    if (!world) return { status: 'cancelled' };
+function solveWorldRoute(world, request, cancelled = () => false) {
     const start = indexOf(world, request.x, request.y);
     if (start < 0) return { status: 'unavailable' };
     const area = request.area && clipRectangle(world, request.area);
@@ -114,4 +111,10 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     return goals ? route(world, start, goals, cancelled, area) : { status: 'unavailable' };
 }
 
-module.exports = { solveRoute };
+function solveRoute(geometry, snapshot, request, cancelled = () => false) {
+    if (cancelled()) return { status: 'cancelled' };
+    const world = composeWorld(geometry, snapshot, cancelled);
+    return world ? solveWorldRoute(world, request, cancelled) : { status: 'cancelled' };
+}
+
+module.exports = { solveRoute, solveWorldRoute };

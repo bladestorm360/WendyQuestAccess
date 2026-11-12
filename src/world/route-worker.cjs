@@ -6,6 +6,7 @@ const path = require('path');
 const { createHash } = require('crypto');
 const { decodeMap, HEADER, MAX_CELLS } = require('./geometry.cjs');
 const { solveRoute } = require('./routes.cjs');
+const { previewCrossing } = require('./puzzles/crossing.cjs');
 
 const BUILD = '26578620';
 const admission = new Int32Array(workerData.admission);
@@ -57,7 +58,7 @@ parentPort.on('message', message => {
             const base = geometry(map);
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
-            result = solveRoute(base, live, request, cancelled);
+            result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
             if (result.status === 'ready' && Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
                 result.legs.length > request.limit) {
                 result.more = true;

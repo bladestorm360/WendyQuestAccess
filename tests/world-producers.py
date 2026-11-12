@@ -21,19 +21,32 @@ def methods(installed):
                      'yWithDirection', 'roundX', 'roundY', 'roundXWithDirection', 'roundYWithDirection', 'checkPassage',
                      'tileset', 'tilesetFlags', 'tileId', 'layeredTiles', 'tileEventsXy', 'allTiles', 'isPassable',
                      'terrainTag', 'regionId', 'checkLayeredTilesFlags', 'isCounter', 'events', 'eventsXyNt',
-                     'refreshTileEvents', 'vehicle', 'boat', 'ship', 'airship', 'isAnyEventStarting'],
+                     'refreshTileEvents', 'vehicle', 'boat', 'ship', 'airship', 'isAnyEventStarting', 'updateEvents',
+                     'tileWidth', 'tileHeight', 'screenTileX', 'screenTileY', 'adjustX', 'adjustY',
+                     'scrollUp', 'scrollDown', 'scrollLeft', 'scrollRight', 'deltaX', 'deltaY', 'isLadder'],
         'Game_CharacterBase': ['pos', 'posNt', 'isNormalPriority', 'tileId', 'isTile', 'reverseDir', 'isThrough',
                                'isMapPassable', 'isCollidedWithCharacters', 'isCollidedWithEvents', 'isCollidedWithVehicles',
                                'moveStraight', 'setMovementSuccess', 'isMovementSucceeded', 'checkEventTriggerTouchFront',
-                               'isDebugThrough', 'isJumping', 'setDirection', 'isDirectionFixed', 'resetStopCount'],
+                               'isDebugThrough', 'isJumping', 'setDirection', 'isDirectionFixed', 'resetStopCount',
+                               'isStopping', 'isMoving', 'checkStop', 'moveFrequency', 'realMoveSpeed', 'distancePerFrame',
+                               'isDashing', 'update', 'updateStop', 'updateMove', 'updateJump', 'jump', 'increaseSteps',
+                               'isOnLadder', 'straighten', 'hasWalkAnime', 'hasStepAnime', 'isNearTheScreen',
+                               'setStepAnime', 'setMoveSpeed', 'scrolledX', 'scrolledY'],
+        'Game_Character': ['updateStop', 'updateRoutineMove', 'processMoveCommand', 'processRouteEnd',
+                           'advanceMoveRouteIndex', 'forceMoveRoute', 'memorizeMoveRoute', 'restoreMoveRoute',
+                           'isMoveRouteForcing', 'turnTowardPlayer', 'turnTowardCharacter', 'deltaXFrom', 'deltaYFrom'],
         'Game_Player': ['isMapPassable', 'vehicle', 'isInAirship', 'canStartLocalEvents',
-                        'checkEventTriggerHere', 'checkEventTriggerThere', 'checkEventTriggerTouch', 'isCollided'],
+                        'checkEventTriggerHere', 'checkEventTriggerThere', 'checkEventTriggerTouch', 'isCollided',
+                        'updateScroll', 'centerX', 'centerY'],
         'Game_Vehicle': ['pos', 'isBoat', 'isShip', 'isAirship', 'isMapPassable'],
         'Game_Event': ['findProperPageIndex', 'meetsConditions', 'event', 'page', 'list', 'isTriggerIn', 'start', 'isStarting',
-                       'checkEventTriggerTouch', 'isCollidedWithCharacters', 'isCollidedWithPlayerCharacters', 'isCollidedWithEvents'],
+                       'checkEventTriggerTouch', 'isCollidedWithCharacters', 'isCollidedWithPlayerCharacters', 'isCollidedWithEvents',
+                       'update', 'updateStop', 'updateSelfMovement', 'stopCountThreshold', 'moveTypeCustom',
+                       'checkEventTriggerAuto', 'updateParallel', 'forceMoveRoute'],
     }.items():
         for name in names:
             output.append(between(stock, f'\n{group}.prototype.{name} = function(', '\n};') + '\n};')
+    output.append(between(stock, 'Game_Character.ROUTE_END =', 'Game_Character.prototype.initialize ='))
     core = core_notification((installed / CORE_REL).read_bytes()).decode('utf8')
     output.append(between(core, 'Tilemap.TILE_ID_B =', 'Tilemap.isVisibleTile ='))
     for name in ('Number.prototype.mod', 'Array.prototype.contains', 'Tilemap.prototype._readMapData',

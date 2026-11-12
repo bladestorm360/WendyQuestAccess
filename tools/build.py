@@ -29,6 +29,7 @@ def bundle():
         './destinations': 'world/destinations.js',
         './puzzles/salt-caverns': 'world/puzzles/salt-caverns.js',
         './puzzles/cave': 'world/puzzles/cave.js',
+        './patrol-motion.cjs': 'world/puzzles/patrol-motion.cjs',
         './geometry.cjs': 'world/geometry.cjs',
         './dialogue/observer': 'dialogue/observer.js',
         './number-entry': 'dialogue/number-entry.js',
@@ -143,6 +144,10 @@ def main():
     compile_speech(args.prism_archive.resolve(strict=True), args.vcvars.resolve(strict=True), args.verify_speech_pipe)
     for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs'):
         shutil.copyfile(ROOT / 'src' / 'world' / name, OUT / 'wendyquest-access' / name)
+    puzzles = OUT / 'wendyquest-access' / 'puzzles'
+    puzzles.mkdir(exist_ok=True)
+    for name in ('crossing.cjs', 'motion-world.cjs', 'patrol-motion.cjs'):
+        shutil.copyfile(ROOT / 'src' / 'world' / 'puzzles' / name, puzzles / name)
     print('Development payload staged at', OUT)
 
 

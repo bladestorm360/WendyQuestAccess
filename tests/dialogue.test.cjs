@@ -442,7 +442,9 @@ async function verifyCaveGuide() {
             const page = entry.pages[0];
             return Object.assign(new c.Game_Event(), { _eventId: entry.id, _x: entry.x, _realX: entry.x,
                 _y: entry.y, _realY: entry.y, _pageIndex: 0, _trigger: page.trigger,
-                _priorityType: page.priorityType, _through: page.through, _moveRoute: page.moveRoute });
+                _priorityType: page.priorityType, _through: page.through, _moveRoute: page.moveRoute, _moveRouteIndex: 0,
+                _moveSpeed: page.moveSpeed, _moveFrequency: page.moveFrequency, _direction: page.image.direction,
+                _moveType: page.moveType, _stopCount: 0, _waitCount: 0, _jumpCount: 0 });
         });
         c.$gamePlayer._vehicleType = 'walk';
         c.$gamePlayer.setPosition(x, y);
@@ -530,6 +532,34 @@ async function verifyCaveGuide() {
             patrol._moveRouteForcing = false;
             player.setPosition(6, 26);
             f.tick();
+            Object.assign(c.Graphics, { width: 640, height: 360, frameCount: 100 });
+            Object.assign(map, { _displayX: 0, _displayY: 20, _commonEvents: [] });
+            player._moveSpeed = 4;
+            tapPuzzleKey(f, 'p');
+            f.frame();
+            assert.equal(f.routePackets.length, 1, 'a native parallel event leaves timing unavailable');
+            assert.match(describe(f).at(-1), /Patrol timing is unavailable/);
+            for (const event of map._events) if (event?._trigger === 4) event._erased = true;
+            const timedReply = age => {
+                tapPuzzleKey(f, 'p');
+                f.frame();
+                const queued = f.routePackets.at(-1);
+                assert(queued.request.motion?.patrols.length > 0);
+                assert.equal(queued.request.motion.frame, c.Graphics.frameCount);
+                c.Graphics.frameCount += age;
+                f.routeReply({ sequence: queued.sequence, epoch: queued.epoch, map: queued.map,
+                    result: { status: 'timed', tiles: 2, direction: 2, startWindow: 60 } });
+                f.frame();
+                return queued.request.motion.frame;
+            };
+            timedReply(45);
+            assert.match(describe(f).at(-1), /Patrol timing changed/);
+            const started = timedReply(2);
+            assert.equal(formatSpeech(f.records.at(-1)), 'Preview. 2 steps south. Recheck if you wait.');
+            assert(f.epoch());
+            c.Graphics.frameCount = started + 60;
+            f.tick();
+            assert.equal(f.epoch(), 0, 'native clock expiration closes preview speech admission');
             const sprite = paintPatrol(c, scene, patrol, -1);
             assert.match(review(f), /No patrol in view/);
             sprite.worldTransform.tx = 75;

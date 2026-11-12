@@ -11,6 +11,9 @@ const { bake } = require('../tools/bake-world.cjs');
 const { bakeMap, decodeMap, composeWorld, indexOf, DIRECTIONS, step, surface } = require('../src/world/geometry.cjs');
 const { solveRoute } = require('../src/world/routes.cjs');
 const { warningApproach } = require('../src/world/puzzles/cave');
+const { copyPatrol } = require('../src/world/puzzles/patrol-motion.cjs');
+const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../src/world/puzzles/motion-world.cjs');
+const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
 
 const game = path.resolve(process.argv[2]);
 const derived = path.resolve(process.argv[3]);
@@ -18,7 +21,7 @@ const data = path.join(game, 'package.nw', 'data');
 const read = name => JSON.parse(fs.readFileSync(path.join(data, name), 'utf8'));
 const tilesets = read('Tilesets.json');
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning', path.join(__dirname, 'world-producers.py'), game],
-    { encoding: 'utf8', timeout: 7000, maxBuffer: 64000 }));
+    { encoding: 'utf8', timeout: 7000, maxBuffer: 96000 }));
 const c = vm.createContext({
     a15_0x363c12() { throw new Error('Unresolved movement property'); },
     _0x34cc1b() { throw new Error('Unresolved tile property'); },
@@ -26,7 +29,8 @@ const c = vm.createContext({
     Game_Player: function () {}, Game_Event: function () {}, Game_Vehicle: function () {}, Tilemap: function () {},
     Game_Followers: function () {},
     TileEditor: {}, SceneManager: { _scene: { _spriteset: {} } }, Point: function (x, y) { this.x = x; this.y = y; },
-    Time: { GetDeltaTime: () => 1 / 60 }, $dataTilesets: tilesets, $dataItems: read('Items.json'),
+    Time: { GetDeltaTime: () => 1 / 60 }, $dataTilesets: tilesets, $dataItems: read('Items.json'), $dataSystem: read('System.json'),
+    Graphics: { width: 480, height: 336 },
     $gameSwitches: { value: () => false }, $gameSelfSwitches: { value: () => false },
     $gameVariables: { value: () => 0 }, $gameActors: { actor: id => id }, $gameParty: { hasItem: () => false, members: () => [] },
     $gameTileChanges: {}, Tyruswoo: { TileControl: { tileIdExists: (set, id) => Number.isInteger(tilesets[set].flags[id]) } }
@@ -36,6 +40,8 @@ for (const cls of [c.Game_Player, c.Game_Event, c.Game_Vehicle]) Object.setProto
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 c.Game_Player.prototype.isDebugThrough = () => false;
 c.Game_Event.prototype.lock = () => {};
+c.Game_CharacterBase.prototype.updateAnimation = () => {};
+c.Game_CharacterBase.prototype.refreshBushDepth = () => {};
 c.Game_Map.prototype.isEventRunning = () => false;
 c.Game_Map.prototype.mapToEdit = () => c.$dataMap;
 c.Game_Map.prototype.linkedTilesetId = () => c.$dataMap.tilesetId;
@@ -188,6 +194,152 @@ function verifyPatrolContact() {
     assert(!stopped.isStarting(), 'the native caught page disables repeat contact');
 }
 
+function configureMotion(fixture, x, y, displayX = 0, displayY = 0) {
+    const { gameMap, player } = fixture;
+    Object.assign(gameMap, { _displayX: displayX, _displayY: displayY, _parallaxX: 0, _parallaxY: 0, _commonEvents: [] });
+    Object.assign(player, { _x: x, _y: y, _realX: x, _realY: y, _moveSpeed: 4, _jumpCount: 0, _stopCount: 0,
+        _followers: new c.Game_Followers() });
+    const actors = [];
+    for (const event of gameMap.events()) {
+        if (event._trigger !== 2) {
+            event.update = () => {};
+            continue;
+        }
+        const page = event.page();
+        Object.assign(event, { _realX: event.x, _realY: event.y, _moveType: page.moveType, _moveSpeed: page.moveSpeed,
+            _moveFrequency: page.moveFrequency, _direction: page.image.direction, _directionFix: page.directionFix,
+            _stopCount: 0, _waitCount: 0, _jumpCount: 0, _moveRoute: page.moveRoute, _moveRouteIndex: 0 });
+        actors.push(event);
+    }
+    return actors;
+}
+
+function verifyMotion(fixture, actors, frames, directions = [], startAt = 0) {
+    const { geometry, gameMap, player } = fixture;
+    const patrols = actors.map(copyPatrol);
+    assert(patrols.every(Boolean));
+    const world = motionWorld(geometry, snapshot(fixture), patrols);
+    const view = { x: gameMap._displayX, y: gameMap._displayY,
+        width: c.Graphics.width / gameMap.tileWidth(), height: c.Graphics.height / gameMap.tileHeight() };
+    const state = startMotion(world, patrols, { x: player.x, y: player.y, rx: player._realX, ry: player._realY,
+        speed: player._moveSpeed, jump: 0 }, view);
+    let next = 0;
+    for (let tick = 0; tick < frames; tick++) {
+        const heading = tick >= startAt && !player.isMoving() && next < directions.length ? directions[next++] : null;
+        const result = advancePatrols(state);
+        assert.notEqual(result, 'boundary', `unsupported route in Map ${fixture.id}, tick ${tick}`);
+        gameMap.updateEvents();
+        assert.equal(result, actors.some(event => event.isStarting()) ? 'contact' : 'settled',
+            `native patrol contact differs in Map ${fixture.id}, tick ${tick}`);
+        if (result === 'contact') return tick + 1;
+        for (let index = 0; index < actors.length; index++) {
+            assert.deepEqual(state.patrols[index], copyPatrol(actors[index]), `Map ${fixture.id}, patrol ${actors[index]._eventId}, tick ${tick}`);
+        }
+        const fromX = player.scrolledX();
+        const fromY = player.scrolledY();
+        if (heading !== null) c.Game_CharacterBase.prototype.moveStraight.call(player, DIRECTIONS[heading]);
+        c.Game_CharacterBase.prototype.update.call(player);
+        player.updateScroll(fromX, fromY);
+        assert.equal(advancePlayer(state, heading), 'settled');
+        assert.deepEqual([state.player.x, state.player.y, state.player.rx, state.player.ry, state.view.x, state.view.y],
+            [player.x, player.y, player._realX, player._realY, gameMap._displayX, gameMap._displayY]);
+    }
+    return frames;
+}
+
+function verifyNativePatrolMotion() {
+    const first = load(196);
+    const actors = configureMotion(first, 11, 49, 4, 40);
+    const approach = solveRoute(first.geometry, snapshot(first), { x: 11, y: 49, event: 2 });
+    assert.equal(approach.status, 'ready');
+    let frames = verifyMotion(first, actors, 400,
+        approach.legs.flatMap(leg => new Array(leg.tiles).fill(DIRECTIONS.indexOf(leg.direction))));
+
+    const contact = load(196);
+    frames += verifyMotion(contact, configureMotion(contact, 4, 25, 0, 20), 1);
+    assert(contact.gameMap._events[4].isStarting());
+    const blocked = load(196);
+    const blockedActors = configureMotion(blocked, 11, 33, 0, 21);
+    Object.assign(blocked.gameMap._events[2], { _x: 4, _y: 25, _priorityType: 0 });
+    Object.assign(blocked.gameMap._events[10], { _x: 15, _y: 15, _priorityType: 0 });
+    frames += verifyMotion(blocked, blockedActors, 1);
+    assert.equal(blocked.gameMap._events[4]._moveRouteIndex, 1);
+    assert.equal(blocked.gameMap._events[6]._moveRouteIndex, 0);
+
+    for (const [mapId, sourceId, actorId, count] of [[199, 24, 9, 180], [200, 5, 4, 90], [201, 4, 3, 240]]) {
+        const forced = load(mapId);
+        const current = configureMotion(forced, 0, 0);
+        const route = forced.map.events[sourceId].pages[0].list.find(command =>
+            command.code === 205 && command.parameters[0] === actorId).parameters[1];
+        if (mapId === 200) forced.gameMap._events[actorId]._moveRouteIndex = 1;
+        forced.gameMap._events[actorId].forceMoveRoute(route);
+        frames += verifyMotion(forced, current, count);
+    }
+    const distraction = load(200);
+    const changing = configureMotion(distraction, 0, 0);
+    const commands = distraction.map.events[5].pages[0].list;
+    const route = commands.findLast(command => command.code === 205 && command.parameters[0] === 4).parameters[1];
+    const mech = distraction.gameMap._events[4];
+    mech.forceMoveRoute(route);
+    mech._moveRouteIndex = route.list.findIndex(command => command.code === 27 || command.code === 28);
+    assert(mech._moveRouteIndex >= 0);
+    const patrols = changing.map(copyPatrol);
+    const physics = motionWorld(distraction.geometry, snapshot(distraction), patrols);
+    const state = startMotion(physics, patrols, { x: 0, y: 0 }, { x: 0, y: 0, width: 20, height: 11.25 });
+    assert.equal(advancePatrols(state), 'boundary', 'switch mutations must be observed after native settlement');
+    console.log(`Compared ${frames} native patrol updates, including screen range, blocked moves, forced routes and jumps.`);
+}
+
+function motionRequest(fixture, actors) {
+    const { gameMap, player } = fixture;
+    return { x: player.x, y: player.y, motion: { speed: player._moveSpeed,
+        view: { x: gameMap._displayX, y: gameMap._displayY,
+            width: c.Graphics.width / gameMap.tileWidth(), height: c.Graphics.height / gameMap.tileHeight() },
+        patrols: actors.map(copyPatrol) } };
+}
+
+async function verifyCrossingPreview() {
+    const cave = load(196);
+    // The fourth and fifth patrols both move south along this crossing.
+    const actors = configureMotion(cave, 4, 30, 0, 20);
+    const request = { ...motionRequest(cave, actors), targetX: 7, targetY: 30 };
+    const live = snapshot(cave);
+    const expected = previewCrossing(cave.geometry, live, request);
+    assert.equal(expected.status, 'timed');
+    assert.equal(expected.direction, 6);
+    assert.equal(expected.tiles, 3);
+    assert(expected.startWindow >= 45);
+    await verifyWorker(cave, request, live, result => assert.deepEqual(result, expected));
+    for (const delay of [0, 15, 45, expected.startWindow]) {
+        const run = load(196);
+        const current = configureMotion(run, request.x, request.y, 0, 20);
+        const heading = DIRECTIONS.indexOf(expected.direction);
+        const directions = new Array(expected.tiles).fill(heading);
+        const frames = delay + (expected.tiles + 1) * 16;
+        assert.equal(verifyMotion(run, current, frames, directions, delay), frames);
+        const { player } = run;
+        assert.equal(Math.abs(player.x - request.x) + Math.abs(player.y - request.y), expected.tiles);
+    }
+    const later = load(196);
+    const laterActors = configureMotion(later, request.x, request.y, 0, 20);
+    for (let tick = 0; tick < 35; tick++) later.gameMap.updateEvents();
+    assert(laterActors.every(event => !event.isStarting()));
+    assert.equal(previewCrossing(later.geometry, snapshot(later),
+        { ...motionRequest(later, laterActors), targetX: request.targetX, targetY: request.targetY }).status,
+    'timedWait', 'the same crossing loses its preview as the patrol approaches');
+
+    const contact = load(196);
+    const patrolling = configureMotion(contact, 4, 25, 0, 20);
+    assert.equal(previewCrossing(contact.geometry, snapshot(contact),
+        { ...motionRequest(contact, patrolling), targetX: 4, targetY: 26 }).status, 'timedWait');
+
+    const checkpoint = load(196);
+    const target = checkpoint.gameMap._events[21];
+    const prior = configureMotion(checkpoint, target.x, target.y + 1, 4, 0);
+    const at = previewCrossing(checkpoint.geometry, snapshot(checkpoint), { ...motionRequest(checkpoint, prior), event: 21 });
+    assert.deepEqual([at.status, at.direction, at.tiles, at.terminal], ['timed', 8, 1, true]);
+}
+
 async function verifyWarningApproach() {
     const cave = load(196);
     const { gameMap, geometry } = cave;
@@ -217,7 +369,7 @@ async function verifyWarningApproach() {
     await verifyWorker(cave, request, state);
 }
 
-async function verifyWorker(fixture, request, live) {
+async function verifyWorker(fixture, request, live, verify = result => verifyRoute(fixture, request, result)) {
     const admission = new Int32Array(new SharedArrayBuffer(4));
     const worker = new Worker(path.join(__dirname, '..', '.build', 'payload', 'wendyquest-access', 'route-worker.cjs'),
         { workerData: { geometryDirectory: derived, admission: admission.buffer } });
@@ -232,7 +384,7 @@ async function verifyWorker(fixture, request, live) {
         const result = await deliver(1);
         const cold = performance.now() - start;
         assert.equal(result.sequence, 1);
-        verifyRoute(fixture, request, result.result);
+        verify(result.result);
         const warmStart = performance.now();
         const warm = await deliver(2);
         assert.deepEqual(warm.result, result.result);
@@ -318,6 +470,8 @@ async function main() {
     compare(world);
     for (const id of [195, 196, 199, 200, 201, 202, 206]) compare(load(id));
     verifyPatrolContact();
+    verifyNativePatrolMotion();
+    await verifyCrossingPreview();
     await verifyWarningApproach();
     const entry = read('Map199.json').events[26].pages.flatMap(page => page.list).find(command =>
         command.code === 201 && command.parameters[1] === 200).parameters;

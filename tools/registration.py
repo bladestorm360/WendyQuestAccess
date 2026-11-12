@@ -282,6 +282,8 @@ def map_notification(original):
     }
 '''
     field_update = b'''
+    if (this._wqaPreviewUntil && Graphics.frameCount >= this._wqaPreviewUntil)
+        globalThis.WendyQuestAccessFieldChanged?.(this);
     const wqaWasFieldReady = this._wqaFieldReady;
     this._wqaFieldReady = !!(this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
         this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true && this.srcWendy &&

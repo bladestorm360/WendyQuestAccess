@@ -67,6 +67,13 @@ function formatSpeech(message) {
             text = name && [category, name, ...offsets].filter(Boolean).join(', ');
             break;
         }
+        case 'timedDirections': {
+            const heading = HEADINGS[message.direction];
+            const steps = message.tiles;
+            if (!heading || !Number.isInteger(steps) || steps < 1 || steps > 3) return '';
+            text = `Preview. ${steps} ${steps === 1 ? 'step' : 'steps'} ${heading}${message.terminal ? ' to an event' : ''}. Recheck if you wait.`;
+            break;
+        }
         case 'routeDirections': {
             const name = label(message);
             if (!name || !Array.isArray(message.legs) || message.legs.length > 8) return '';
