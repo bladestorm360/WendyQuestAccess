@@ -30,6 +30,7 @@ vm.runInNewContext(fs.readFileSync(serviceSource, 'utf8'), {
         if (name === 'worker_threads') return { parentPort: port, workerData: word.buffer };
         if (name === 'child_process') return { spawn() { spawnCount++; return child; } };
         if (name === 'path') return path;
+        if (name === './speech-text.cjs') return require('../src/services/speech-text.cjs');
         throw Error('Unexpected service dependency: ' + name);
     }
 }, { timeout: 150 });

@@ -66,12 +66,14 @@ function Scene_Title() {
     this.spr_ui_start = { alpha: 1 };
     this.spr_black_rect = { alpha: 0 };
     this._commandWindow = { active: true, visible: true, openness: 255, _index: 0,
-        _list: [{ name: 'Synthetic title command', enabled: true }], select() {}, callHandler() {}, isHandled() {} };
+        _list: [{ name: 'Synthetic title command', enabled: true }], select() {}, callHandler() {},
+        isHandled(symbol) { return symbol === 'continue'; } };
 }
 Scene_Title.prototype.update = function () { return 123; };
 var SceneManager = { _scene: new Scene_Title() };
 var Graphics = { app: { stage: SceneManager._scene, renderer: new (require('events').EventEmitter)() } };
 const nativeSelect = SceneManager._scene._commandWindow.select;
+var DataManager = { savefileInfo: () => null };
 ''', encoding='utf8')
     (app / 'run.js').write_text('''
 if (SceneManager._scene.update() !== 123) throw Error('Native result changed');
@@ -81,8 +83,19 @@ if (SceneManager._scene._commandWindow.select !== nativeSelect) throw Error('Hoo
 Graphics.app.renderer.emit('postrender');
 if (SceneManager._scene._commandWindow.select === nativeSelect) throw Error('No hook after render');
 const interval = setInterval(() => {
+    if (!fileShown && require('fs').existsSync(receipt + '.title')) {
+        fileShown = true;
+        SceneManager._scene._commandWindow.callHandler('continue');
+        const scene = { _wqaFileKind: 1, _started: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0,
+            _listWindow: { active: true, visible: true, openness: 255, _index: 1, _wqaCards: true,
+                select() {}, callHandler() {}, isHandled() {} } };
+        SceneManager._scene = Graphics.app.stage = scene;
+        WendyQuestAccessFilesReady(scene);
+        Graphics.app.renderer.emit('postrender');
+    }
     if (require('fs').existsSync(receipt)) { clearInterval(interval); nw.App.quit(); }
 }, 40);
+let fileShown = false;
 setTimeout(() => {
     write({ error: 'No worker receipt', versions: process.versions, shared: typeof SharedArrayBuffer });
     nw.App.quit();
@@ -92,13 +105,19 @@ setTimeout(() => {
     service.mkdir()
     (service / 'speech-worker.cjs').write_text('''
 const { parentPort, workerData } = require('worker_threads');
+const fs = require('fs');
+const records = [];
 parentPort.on('message', message => {
     const receipt = require('path').join(__dirname, '..', 'receipt.json');
-    require('fs').writeFileSync(receipt, JSON.stringify({
-        versions: process.versions, sameEpoch: Atomics.load(new Int32Array(workerData), 0) === message.epoch,
-        name: message.name, kind: message.kind
-    }));
+    if (message.kind === 'cancel') return;
+    records.push({ sameEpoch: Atomics.load(new Int32Array(workerData), 0) === message.epoch,
+        epoch: message.epoch, name: message.name, kind: message.kind, slot: message.slot, empty: message.empty });
     parentPort.postMessage('ack');
+    if (message.kind === 'title') fs.writeFileSync(receipt + '.title', '');
+    if (message.kind === 'saveSlot') {
+        fs.writeFileSync(receipt + '.tmp', JSON.stringify({ versions: process.versions, records }));
+        fs.renameSync(receipt + '.tmp', receipt);
+    }
 });
 ''', encoding='utf8')
     shutil.copyfile(ROOT / '.build' / 'payload' / 'js' / 'plugins' / 'WendyQuestAccess.js', app / 'plugin.js')
@@ -125,12 +144,16 @@ def main():
         if not receipt.exists():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
-        if result.returncode or data.get('error') or not data.get('sameEpoch') or data.get('kind') != 'title' or \
-                data.get('name') != 'Synthetic title command':
+        records = data.get('records', [])
+        if result.returncode or data.get('error') or len(records) != 2 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
+        title, slot = records
+        if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
+                slot.get('slot') != 2 or not slot.get('empty') or title['epoch'] == slot['epoch']:
+            raise RuntimeError(f'NW fixture did not deliver distinct title and slot packets: {data}')
         versions = data['versions']
-        print(f"Delivered title packet in NW {versions.get('nw', VERSION)}, Node {versions['node']}, "
-              f"modules ABI {versions['modules']}. Shared epoch verified.")
+        print(f"Delivered title and save slot packets in NW {versions.get('nw', VERSION)}, Node {versions['node']}, "
+              f"modules ABI {versions['modules']}. Distinct shared epochs verified.")
 
 
 if __name__ == '__main__':

@@ -5,6 +5,7 @@
 const { parentPort, workerData } = require('worker_threads');
 const { spawn } = require('child_process');
 const { join } = require('path');
+const { formatSpeech } = require('./speech-text.cjs');
 
 const word = new Int32Array(workerData);
 const queue = [];
@@ -38,10 +39,7 @@ function pump() {
             parentPort.postMessage('ack');
             continue;
         }
-        const text = message.enabled ? message.name : `${message.name}, unavailable`;
-        // Pipe payload is UTF-8 without delimiter characters. Game text is
-        // inert data and cannot be interpreted as a service command.
-        const payload = text.replace(/[\x00-\x1f\x7f]/g, ' ').trim();
+        const payload = formatSpeech(message);
         if (!payload) {
             parentPort.postMessage('ack');
             continue;
@@ -85,8 +83,7 @@ parentPort.on('message', message => {
             parentPort.postMessage('ack');
         }
         if (child) cancel = true;
-    } else if (message.kind === 'title' && typeof message.name === 'string' &&
-        message.name.length <= 256 && queue.length < 8 &&
+    } else if (queue.length < 8 &&
         Number.isInteger(message.epoch) && message.epoch > 0 && Atomics.load(word, 0) === message.epoch) {
         queue.push(message);
         if (!child) begin();

@@ -32,8 +32,9 @@ function createTitleObserver(host, notifications) {
 
     function close() {
         if (!generation) return;
+        const retiring = generation;
         generation = 0;
-        notifications.close();
+        notifications.close(retiring);
     }
 
     function openIfPresented() {

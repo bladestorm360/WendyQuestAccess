@@ -1,6 +1,6 @@
 # WendyQuest project memory
 
-Reviewed November 11, 2026. Full mod implementation is active. The first internal checkpoint has source and offline fixtures for title integration and speech transport. Deployment and gameplay confirmation remain open.
+Reviewed November 11, 2026. Full mod implementation is active. The title and file selector now have build-matched native producer fixtures. Deployment and gameplay confirmation remain open.
 
 - [Feasibility, recommendation and work estimates](docs/feasibility.md)
 - [Exact installed build, loader, lifecycle, input and offline evidence](docs/engine-evidence.md)
@@ -15,3 +15,5 @@ Git checkpoint destination: [private WendyQuestAccess repository](https://github
 November 11 checkpoint: remote `refs/heads/main` was verified at feasibility commit `cf987839896841a4f0e9a1c6ca7aae138e11f877`. The six documents passed link, estimate and installed-file hash checks. Stock loader, tile and event-page fixtures passed within their stated limits; no implementation or gameplay confirmation.
 
 November 11 implementation checkpoint: remote `refs/heads/main` was verified at `10fe45072af7067e980494a862611cdc0e04b4a4`. The bounded Windows build, exact registration candidates, matching NW worker bridge, extracted title acceptance and silent PRISM initialization passed offline. The transport fault fixture and file-menu lifecycle notes extend this checkpoint. Continue at [implementation and verification](docs/implementation.md). The Steam install remains unmodified during this incomplete checkpoint.
+
+The private remote was also verified at `2b6396919f84c1631dc0667f0a0f32631a8f90dc` for the transport fault fixture. The following file-selector work covers both readiness orders, visible slot and detail data, load failure and native deletion with stand-in storage. Continue with the retry draw path, native Options and external speech quiescence in the same active checkpoint.

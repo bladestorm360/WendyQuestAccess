@@ -12,6 +12,7 @@ function createRenderer(host) {
     let scheduled = false;
     let inFlight = 0;
     let nextSequence = 0;
+    let isPresented = null;
     const pending = [];
     const counters = { dropped: 0, submitted: 0, workerFailures: 0 };
 
@@ -21,6 +22,7 @@ function createRenderer(host) {
         counters.workerFailures++;
         pending.length = 0;
         if (gate) gate.close();
+        isPresented = null;
     }
 
     function drain() {
@@ -38,7 +40,7 @@ function createRenderer(host) {
 
     function start() {
         scheduled = false;
-        if (failed || worker || !gate.epoch || !host.titleStillReady()) return;
+        if (failed || worker || !gate.epoch || !isPresented()) return;
         try {
             worker = host.createWorker(word.buffer);
             worker.on('message', message => {
@@ -65,8 +67,7 @@ function createRenderer(host) {
             counters.dropped++;
             return;
         }
-        pending.push({ epoch, sequence: ++nextSequence, kind: 'title', name: focused.name,
-            enabled: focused.enabled, index: focused.index });
+        pending.push({ kind: 'title', ...focused, epoch, sequence: ++nextSequence });
         drain();
         if (!worker && !scheduled) {
             scheduled = true;
@@ -75,7 +76,7 @@ function createRenderer(host) {
     }
 
     const notifications = {
-        open(focused) {
+        open(focused, ready = host.titleStillReady) {
             if (failed) return 0;
             if (!gate) {
                 try {
@@ -86,12 +87,15 @@ function createRenderer(host) {
                     return 0;
                 }
             }
-            const epoch = gate.open('title');
+            if (gate.epoch) notifications.close(gate.epoch);
+            const epoch = gate.open('frontend');
+            isPresented = ready;
             submit(epoch, focused);
             return epoch;
         },
-        close() {
-            if (!gate || !gate.close()) return;
+        close(epoch = gate && gate.epoch) {
+            if (!gate || !gate.accepts(epoch) || !gate.close()) return;
+            isPresented = null;
             pending.length = 0;
             // Invalidation is visible to the worker before this message can
             // run. The message requests interruption of previously posted speech.

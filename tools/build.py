@@ -19,7 +19,8 @@ def bundle():
         './plugin': 'plugin.js',
         './runtime/renderer': 'runtime/renderer.js',
         './gate': 'runtime/gate.js',
-        '../frontend/title': 'frontend/title.js',
+        './frontend/title': 'frontend/title.js',
+        './frontend/files': 'frontend/files.js',
     }
     target = OUT / 'js' / 'plugins' / 'WendyQuestAccess.js'
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -104,6 +105,7 @@ exit /b %errorlevel%
 ''', encoding='ascii')
     subprocess.run(['cmd.exe', '/d', '/c', str(script)], cwd=OUT.parent, check=True, timeout=90)
     shutil.copyfile(ROOT / 'src' / 'services' / 'speech-worker.cjs', services / 'speech-worker.cjs')
+    shutil.copyfile(ROOT / 'src' / 'services' / 'speech-text.cjs', services / 'speech-text.cjs')
 
 
 def main():

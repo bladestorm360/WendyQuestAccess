@@ -1,11 +1,17 @@
 'use strict';
 
 const { createRenderer } = require('./runtime/renderer');
-const { createTitleObserver, presented } = require('../frontend/title');
+const { createTitleObserver, presented } = require('./frontend/title');
+const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
 
 function boot(root, nodeRequire, nodeProcess) {
     let title = null;
-    let waiting = null;
+    let files = null;
+    let titleWaiting = null;
+    let filesWaiting = null;
+
+    const view = () => ({ manager: root.SceneManager, graphics: root.Graphics });
+    const supported = () => root.Utils?.RPGMAKER_NAME === 'MZ' && root.Utils.RPGMAKER_VERSION === '1.8.0';
 
     function initialize() {
         const host = {
@@ -13,6 +19,9 @@ function boot(root, nodeRequire, nodeProcess) {
             graphics: root.Graphics,
             window: root,
             hasFocus: () => root.document.hasFocus(),
+            saveInfo: index => root.DataManager.savefileInfo(index),
+            actor: id => root.$dataActors?.[id],
+            variable: id => root.$gameVariables?.value(id),
             makeWord() { return new Int32Array(new SharedArrayBuffer(4)); },
             schedule(task) { root.setTimeout(task, 0); },
             titleStillReady() {
@@ -28,7 +37,9 @@ function boot(root, nodeRequire, nodeProcess) {
                 return new Worker(script, { workerData: admission });
             }
         };
-        title = createTitleObserver(host, createRenderer(host).notifications);
+        const { notifications } = createRenderer(host);
+        title = createTitleObserver(host, notifications);
+        files = createFilesObserver(host, notifications);
     }
 
     // The installer's source-checked notification invokes this after the
@@ -36,16 +47,15 @@ function boot(root, nodeRequire, nodeProcess) {
     // only registers the callback. No game functions are wrapped at startup.
     root.WendyQuestAccessTitleReady = function (scene) {
         try {
-            if (!root.Utils || root.Utils.RPGMAKER_NAME !== 'MZ' ||
-                root.Utils.RPGMAKER_VERSION !== '1.8.0' || !(scene instanceof root.Scene_Title) ||
-                scene === waiting || root.SceneManager._scene !== scene || root.SceneManager._nextScene) return;
+            if (!supported() || !(scene instanceof root.Scene_Title) || scene === titleWaiting ||
+                root.SceneManager._scene !== scene || root.SceneManager._nextScene) return;
             const app = root.Graphics.app;
             if (!app || app.stage !== scene || !app.renderer || typeof app.renderer.once !== 'function') return;
-            waiting = scene;
+            titleWaiting = scene;
             app.renderer.once('postrender', () => {
-                waiting = null;
+                if (titleWaiting === scene) titleWaiting = null;
                 try {
-                    if (!presented({ manager: root.SceneManager, graphics: root.Graphics }, scene, scene._commandWindow)) return;
+                    if (!presented(view(), scene, scene._commandWindow)) return;
                     if (!title) initialize();
                     title(scene);
                 } catch {
@@ -53,8 +63,33 @@ function boot(root, nodeRequire, nodeProcess) {
                 }
             });
         } catch {
-            waiting = null;
+            titleWaiting = null;
         }
+    };
+
+    root.WendyQuestAccessFilesReady = function (scene) {
+        try {
+            if (!supported() || !scene || scene === filesWaiting || !isReady(view(), scene, fileWindow(scene))) return;
+            const renderer = root.Graphics.app.renderer;
+            if (typeof renderer?.once !== 'function') return;
+            filesWaiting = scene;
+            renderer.once('postrender', () => {
+                if (filesWaiting !== scene) return;
+                filesWaiting = null;
+                try {
+                    if (!isReady(view(), scene, fileWindow(scene))) return;
+                    if (!files) initialize();
+                    files.observe(scene);
+                } catch { /* Leave native file controls in charge. */ }
+            });
+        } catch {
+            filesWaiting = null;
+        }
+    };
+
+    root.WendyQuestAccessFilesLeaving = function (scene) {
+        if (filesWaiting === scene) filesWaiting = null;
+        files?.leave(scene);
     };
 }
 
