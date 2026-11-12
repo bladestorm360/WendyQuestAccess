@@ -68,6 +68,8 @@ Multi-area walking and both conditional house stair routes are implemented and o
 
 The pathfinder's **Bookmarks** category now lists every saved bookmark, with the existing menu shortcut and management controls. The same increment connected first Caffeine discovery, Cauldron layout and return states, and the authored Map 032 arrival walk. It took about 35 minutes elapsed through installed methods, the matching NW fixture, its timeout repair and the staged payload scan. World routing remains **in progress**. Allow 3–6 engineering hours within the existing estimate for the first vehicle-to-area bookmark handback, followed by the remaining vehicle combinations and exact gameplay timing. [Bookmark controls](bookmarks.md#find-a-bookmark) · [Special transfer verification](cross-map-routing.md#caffeine-caverns-and-cauldron-transfers)
 
+November 12 relocation checkpoint. The user paused development to move the repository. The vehicle trace identifies the port reservations and same-map landing boundaries. Resume at that checkpoint once the relocated checkout is available. The 3–6 hour estimate still covers the first connected vehicle handback. [Vehicle findings](cross-map-routing.md#vehicle-bookmark-checkpoint)
+
 ## Initial feature inventory
 
 The launch/front-end and speech transport rows are **in progress**. Native Options, the map banner, dialogue pages, choices and number entry have implemented and offline-verified slices. The dialogue row remains **in progress** while text review, actual audio confirmation and remaining input reachability are open. Troop dialogue has a fixture. The other combat producers are **not started**. A missing producer is an investigation item before declaring a feature inapplicable.
