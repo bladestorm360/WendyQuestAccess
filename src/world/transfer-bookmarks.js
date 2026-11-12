@@ -42,9 +42,8 @@ function createTransferBookmarks(root, host) {
         pending = null;
     }
 
-    function current(edge) {
+    function current(edge, mode = travelMode(root.$gameMap, root.$gamePlayer)) {
         const map = root.$gameMap;
-        const mode = travelMode(map, root.$gamePlayer);
         if (mode !== edge.mode) return false;
         const entrance = liveEntrance(root, map?._events?.[edge.event], transferState(root), mode);
         return !!entrance && entrance.craft === edge.craft && entrance.list === edge.list && entrance.map === edge.map &&
@@ -137,7 +136,14 @@ function createTransferBookmarks(root, host) {
                 const edge = liveEntrance(root, event, state, mode);
                 if (edge) entrances.push(edge);
             }
-            return { entrances, state };
+            const ground = [];
+            if (mode === 'ship' || mode === 'airship') {
+                for (const event of map._events) {
+                    const edge = liveEntrance(root, event, state, 'walk');
+                    if (edge) ground.push(edge);
+                }
+            }
+            return { entrances, ground, state };
         },
         arm(scene, bookmark, edge) {
             clear();

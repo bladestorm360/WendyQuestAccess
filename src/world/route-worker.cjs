@@ -73,9 +73,14 @@ parentPort.on('message', message => {
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
             if (request.candidates !== undefined) result = findReachable(base, live, request, cancelled);
-            else if (request.transfer !== undefined) result = solveRoute(base, live,
-                { ...request, entrances: rankEntrances(walkingCatalog(), map, request.transfer, manifest.maps, cancelled,
-                    live.mode === 'walk') }, cancelled);
+            else if (request.transfer !== undefined) {
+                const catalog = walkingCatalog();
+                const { transfer } = request;
+                const entrances = rankEntrances(catalog, map, transfer, manifest.maps, cancelled, live.mode === 'walk');
+                const groundEntrances = transfer.ground && rankEntrances(catalog, map,
+                    { ...transfer, candidates: transfer.ground }, manifest.maps, cancelled, false);
+                result = solveRoute(base, live, { ...request, entrances, groundEntrances }, cancelled);
+            }
             else result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
             const follows = result.status === 'ready' && !result.reenter && (request.beacon === true || request.autowalk === true);
             if (follows || (result.status === 'interrupted' && request.autowalk === true)) {

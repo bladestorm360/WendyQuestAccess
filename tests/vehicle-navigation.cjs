@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { captureWorld } = require('../src/world/snapshot');
 const { solveRoute } = require('../src/world/routes.cjs');
-const { composeWorld, LAND } = require('../src/world/geometry.cjs');
+const { composeWorld, LAND, DIRECTIONS } = require('../src/world/geometry.cjs');
 const { travelMode } = require('../src/world/vehicle-navigation');
 const { worldBoundaryName } = require('../src/world/world-destinations');
 const { createBeacon } = require('../src/world/beacon');
@@ -84,7 +84,11 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     }
     function follow(fixture, result, expectedEvent) {
         const { source, player } = fixture;
-        for (const leg of result.legs) for (let tile = 0; tile < leg.tiles; tile++) {
+        // Spoken directions are capped at eight turns. The beacon course
+        // carries every step when the fixture follows a longer route.
+        const legs = result.more && result.course
+            ? Array.from(result.course, value => ({ direction: DIRECTIONS[value & 3], tiles: 1 })) : result.legs;
+        for (const leg of legs) for (let tile = 0; tile < leg.tiles; tile++) {
             assert(!source._list, 'a native event must end the route');
             player.moveStraight(leg.direction);
             assert(player.isMovementSucceeded());
@@ -373,8 +377,13 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         const listen = c.addEventListener;
         c.addEventListener = () => {};
         c.$gameScreen = { _brightness: 255 };
-        for (const [mode, start, target] of [['ship', [43, 2], [46, 2]], ['airship', [44, 29], [43, 28]]]) {
-            const landing = begin(113, [221]);
+        for (const [mode, start, target, area, entrance] of [
+            ['ship', [43, 2], [46, 2], 113],
+            ['airship', [44, 29], [43, 28], 113],
+            ['ship', [43, 2], [9, 16], 206, 13],
+            ['airship', [3, 29], [7, 2], 161, 76]
+        ]) {
+            const landing = begin(113, [221], ['113,75,A', '113,90,A']);
             const { player, gameMap, source } = landing;
             const aircraft = mode === 'airship';
             const craft = gameMap.vehicle(mode);
@@ -389,34 +398,43 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             const frames = new EventEmitter();
             c.Graphics.app = { stage: scene, renderer: frames };
             const bookmark = { id: 1, revision: 1, kind: 'point', name: 'Walking marker', mode: 'walk',
-                map: 113, x: target[0], y: target[1] };
+                map: area, x: target[0], y: target[1] };
+            const beacon = { enabled: () => true, start() {}, stop() {} };
             const records = [];
             const packets = [];
             const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
             const field = createField(c, { graphics: c.Graphics, manager: c.SceneManager, hasFocus: () => true,
-                screenFading: () => false, bookmarks: () => [bookmark], navigationPreferences: () => ({}),
+                screenFading: () => false, bookmarks: () => [bookmark], navigationPreferences: () => ({}), beacon,
                 makeWord: () => new Int32Array(new SharedArrayBuffer(4)), createRouteWorker: () => worker },
             { open(record) { records.push(record); return records.length; }, close() {} });
             c.WendyQuestAccessSceneLeaving = owner => { leave(owner); field.leave(owner); };
             c.WendyQuestAccessBookmarkEntranceAccepted = field.bookmarkEntranceAccepted;
             c.WendyQuestAccessBookmarkLandingAccepted = field.bookmarkLandingAccepted;
+            c.WendyQuestAccessBookmarkTransferReserved = field.bookmarkTransferReserved;
             assert(field.bookmarkContext(scene).canSelect(bookmark));
             scene._wqaSettingsActive = true;
             assert(field.selectBookmark(scene, bookmark));
             scene._wqaSettingsActive = false;
+            const started = performance.now();
             assert(field.command('directions'));
             frames.emit('postrender');
+            const submitMs = performance.now() - started;
             const packet = packets.pop();
             assert.equal(packet.live.mode, mode);
             let result;
             await verifyWorker(landing, packet.request, packet.live, output => {
                 assert.equal(output.status, 'ready');
-                if (aircraft) assert(output.land);
-                else assert.equal(output.entrance, 51);
+                if (aircraft) {
+                    assert(output.land);
+                    assert.equal(output.entrance, entrance);
+                } else {
+                    assert.equal(output.entrance, 51);
+                    assert.equal(output.groundEntrance, entrance);
+                }
                 result = output;
             });
             worker.emit('message', { ...packet, result });
-            assert.match(formatSpeech(records.at(-1)), aircraft ? /Landing for Walking marker.*action button to land/ :
+            assert.match(formatSpeech(records.at(-1)), aircraft ? /Landing (?:for|toward) Walking marker.*action button to land/ :
                 /^Secret Island boat landing toward Walking marker/);
             follow(landing, result, aircraft ? undefined : 51);
             if (aircraft) assert(player.triggerButtonAction());
@@ -426,7 +444,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             field.observeReady(scene);
             assert(c.Graphics._wqaBookmarkTransferPending, 'landing cannot restore selection during native get-off');
             if (aircraft) {
-                while (craft._altitude > 0) {
+                for (let update = 0; update < craft.maxAltitude(); update++) {
                     craft.updateAirship();
                     settle(player);
                 }
@@ -438,14 +456,33 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
                 assert.deepEqual([player._x, player._y], [46, 2]);
             }
             source._list = null;
+            const readyAt = performance.now();
             field.observeReady(scene);
+            const handbackMs = performance.now() - readyAt;
+            console.log(mode, entrance ? 'area bookmark' : 'same-map bookmark', 'throttled renderer submission',
+                submitMs.toFixed(2), 'ms, settled handback', handbackMs.toFixed(2), 'ms.');
             assert(!c.Graphics._wqaBookmarkTransferPending);
             assert(field.command('directions'));
             frames.emit('postrender');
             const walking = packets.pop();
             assert.equal(walking.live.mode, 'walk');
-            assert.deepEqual([walking.request.targetX, walking.request.targetY], target);
+            if (entrance) {
+                assert.equal(walking.request.transfer.map, area);
+                let onFoot;
+                await verifyWorker(landing, walking.request, walking.live, output => {
+                    assert.equal(output.status, 'ready');
+                    assert.equal(output.entrance, entrance);
+                    onFoot = output;
+                });
+                worker.emit('message', { ...walking, result: onFoot });
+                follow(landing, onFoot, entrance);
+                assert(c.Graphics._wqaBookmarkTransferPending);
+                for (let command = 0; !player.isTransferring() && command < 10; command++) assert(source.executeCommand());
+                assert.deepEqual([player._newMapId, player._newX, player._newY], [area, ...target]);
+                assert(c.Graphics._wqaBookmarkTransferPending);
+            } else assert.deepEqual([walking.request.targetX, walking.request.targetY], target);
             field.leave(scene);
+            c.Graphics._wqaBookmarkTransferPending = false;
         }
         c.Graphics.app = app;
         c.$gameScreen = screen;
@@ -453,7 +490,8 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         c.WendyQuestAccessSceneLeaving = leave;
         delete c.WendyQuestAccessBookmarkEntranceAccepted;
         delete c.WendyQuestAccessBookmarkLandingAccepted;
-        console.log('Verified same-map ship and airship landings restore the selected walking bookmark after native settlement.');
+        delete c.WendyQuestAccessBookmarkTransferReserved;
+        console.log('Verified ship and airship landings restore walking bookmarks and continue through the Island and Ruins entrances.');
     }
 
     async function verifyAirship() {

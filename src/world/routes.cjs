@@ -169,6 +169,10 @@ function landingRoute(world, start, request, area, cancelled) {
             }
         }
     }
+    return flyToLanding(world, start, site, area, cancelled, discovery);
+}
+
+function flyToLanding(world, start, site, area, cancelled, discovery) {
     if (cancelled()) return { status: 'cancelled' };
     if (!site) return { status: 'unreachable' };
     const goals = new Uint8Array(world.cells.length);
@@ -178,6 +182,32 @@ function landingRoute(world, start, request, area, cancelled) {
         result.land = true;
         if (discovery) result.discovery = discovery;
     }
+    return result;
+}
+
+function airshipEntranceRoute(world, start, request, area, cancelled) {
+    if (world.mode !== 'airship' || !world.hasLandings || !request.entrances.length ||
+        request.entrances.length > MAX_EVENTS) return { status: 'unavailable' };
+    const tiles = interactionTiles(world, cancelled);
+    let best = null;
+    let chosen = null;
+    let rank = Infinity;
+    // Search ranked walking entrances using the current floor events and
+    // landing flags. Once a rank can be reached, compare only its approaches.
+    for (const entrance of request.entrances.slice().sort((a, b) => a.rank - b.rank)) {
+        if (cancelled()) return { status: 'cancelled' };
+        if (entrance.rank > rank) break;
+        const target = { x: request.x, y: request.y, event: entrance.event };
+        const ground = groundDistances(world, target, cancelled, tiles);
+        const site = ground && nearestLanding(world, target, ground, cancelled);
+        if (site && (!best || site.cost < best.cost)) {
+            best = site;
+            chosen = entrance.event;
+            rank = entrance.rank;
+        }
+    }
+    const result = flyToLanding(world, start, best, area, cancelled);
+    if (result.status === 'ready') result.entrance = chosen;
     return result;
 }
 
@@ -486,7 +516,10 @@ function shipLandingRoute(world, request, cancelled) {
     if (walking.status !== 'ready') return walking.status === 'cancelled' ? walking : { status: 'unreachable' };
     const sailing = solveWorldRoute(world, { x: request.x, y: request.y, event, entryDirection: facing,
         surface: true, field: true }, cancelled);
-    if (sailing.status === 'ready') sailing.entrance = event;
+    if (sailing.status === 'ready') {
+        sailing.entrance = event;
+        if (walking.entrance) sailing.groundEntrance = walking.entrance;
+    }
     return sailing;
 }
 
@@ -495,10 +528,16 @@ function solveWorldRoute(world, request, cancelled = () => false) {
     if (start < 0) return { status: 'unavailable' };
     const area = request.area && clipRectangle(world, request.area);
     if (request.area && (!area || !inside(world, start, area))) return { status: 'unavailable' };
-    if (request.landing === true) return landingRoute(world, start, request, area, cancelled);
-    if (request.shipLanding) return shipLandingRoute(world, request, cancelled);
+    if (request.landing === true) return request.entrances !== undefined
+        ? airshipEntranceRoute(world, start, request, area, cancelled) : landingRoute(world, start, request, area, cancelled);
+    if (request.shipLanding && request.entrances === undefined) return shipLandingRoute(world, request, cancelled);
     const tiles = interactionTiles(world, cancelled);
-    if (request.entrances !== undefined) return entranceRoute(world, start, request.entrances, tiles, cancelled);
+    if (request.entrances !== undefined) {
+        const result = entranceRoute(world, start, request.entrances, tiles, cancelled);
+        if (request.shipLanding && request.groundEntrances?.length && ['unavailable', 'unreachable'].includes(result.status))
+            return shipLandingRoute(world, { ...request, entrances: request.groundEntrances }, cancelled);
+        return result;
+    }
     const goals = routeGoals(world, request, cancelled, tiles);
     if (cancelled()) return { status: 'cancelled' };
     if (!goals) return { status: 'unavailable' };

@@ -15,7 +15,7 @@ const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCateg
 
 function remoteBookmarkAvailable(map, mode, bookmark) {
     return bookmark.mode === 'walk' && bookmark.map !== map &&
-        ((mode === 'walk' && !timedCave(map)) || (mode === 'ship' && map === 113));
+        ((mode === 'walk' && !timedCave(map)) || (map === 113 && (mode === 'ship' || mode === 'airship')));
 }
 
 function localLandingAvailable(map, mode, bookmark) {
@@ -79,6 +79,7 @@ function createField(root, host, notifications) {
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
             (!job.entrance || transfers.current(job.entrance)) &&
+            (!job.groundEntrance || transfers.current(job.groundEntrance, 'walk')) &&
             (!job.scene._wqaPreviewUntil || host.graphics.frameCount < job.scene._wqaPreviewUntil));
     }
 
@@ -146,16 +147,8 @@ function createField(root, host, notifications) {
             if (job.area && !warningApproach(root.$gameMap, player._x, player._y, job.target))
                 return status(job, 'Warning sign directions are no longer available');
             const result = packet.result;
-            if (job.remote && result?.status === 'ready') {
-                const entrance = job.remote.entrances.find(edge => edge.event === result.entrance);
-                if (!entrance || !transfers.current(entrance) || !transfers.matchesState(job.remote.state))
-                    return status(job, 'The entrance changed. Request directions again.');
-                job.target = entrance.event;
-                job.entrance = entrance;
-                if (entrance.name) job.label = entrance.name + ' toward ' + job.remote.bookmark.name;
-                else if (entrance.map !== job.remote.bookmark.map) job.label = 'Next entrance toward ' + job.remote.bookmark.name;
-                transfers.arm(job.scene, job.remote.selection, entrance);
-            }
+            if (job.remote && result?.status === 'ready' && !admitRemoteRoute(job, result))
+                return status(job, 'The entrance changed. Request directions again.');
             if (result?.status === 'timedCue') {
                 if (!job.cueRetried && host.graphics.frameCount > job.motionFrame + result.opening?.through - TIMING_CUE.lead) {
                     // One fresh native sample after a cold/late worker result.
@@ -192,6 +185,7 @@ function createField(root, host, notifications) {
                         transfers.arm(job.scene, selection, edge);
                     } else if (result.land) transfers.armAirship(job.scene, selection, result.arrival);
                 }
+                if (result.land && job.remote) transfers.armAirship(job.scene, job.remote.selection, result.arrival);
                 if (!result.reenter) host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
                     warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type,
                     { quest: job.quest, point: job.point });
@@ -362,18 +356,48 @@ function createField(root, host, notifications) {
             beacon: host.beacon?.enabled() === true, autowalk: job.autowalk });
     }
 
+    function admitRemoteRoute(job, result) {
+        const { bookmark, entrances, ground, island, state, selection } = job.remote;
+        const entrance = island?.event === result.entrance ? island : entrances.find(edge => edge.event === result.entrance);
+        if (!entrance || !transfers.matchesState(state)) return false;
+        job.target = entrance.event;
+        if (result.land) {
+            if (!transfers.current(entrance, 'walk')) return false;
+            job.groundEntrance = entrance;
+            job.label = 'Landing toward ' + bookmark.name;
+            return true;
+        }
+        if (!transfers.current(entrance)) return false;
+        if (entrance === island) {
+            const walking = ground.find(edge => edge.event === result.groundEntrance);
+            if (!walking || !transfers.current(walking, 'walk')) return false;
+            job.groundEntrance = walking;
+        }
+        job.entrance = entrance;
+        if (entrance.name) job.label = entrance.name + ' toward ' + bookmark.name;
+        else if (entrance.map !== bookmark.map) job.label = 'Next entrance toward ' + bookmark.name;
+        transfers.arm(job.scene, selection, entrance);
+        return true;
+    }
+
     function remoteDirections(job, snapshot, bookmark) {
         transfers.clear();
         const selection = owner.remoteBookmark;
-        const { entrances, state } = transfers.candidates();
-        if (!entrances.length) return status(job, 'No verified reachable entrance for ' + bookmark.name);
+        const { entrances, ground, state } = transfers.candidates();
+        const landing = snapshot.mode === 'airship';
+        const current = landing ? ground : entrances;
+        const island = snapshot.mode === 'ship' && ground.length ? transfers.islandLanding() : null;
+        if (!current.length && !island) return status(job, 'No verified reachable entrance for ' + bookmark.name);
         job.label = 'Entrance for ' + bookmark.name;
         const trail = [...new Set([...selection.trail, tileKey(snapshot.map, snapshot.x, snapshot.y)])];
-        job.remote = { bookmark, entrances, state, selection: { ...selection, trail } };
+        job.remote = { bookmark, entrances: current, ground, island, state, selection: { ...selection, trail } };
         job.autowalk = preferences().autowalk;
         const point = bookmark.kind === 'point' ? { x: bookmark.x, y: bookmark.y } : undefined;
-        submit(job, snapshot, { limit: 8, field: true, autowalk: job.autowalk, beacon: host.beacon?.enabled() === true,
-            transfer: { map: bookmark.map, point, state, trail, candidates: entrances.map(({ event, map, x, y }) => ({ event, map, x, y })) } });
+        const copy = ({ event, map, x, y }) => ({ event, map, x, y });
+        const shipLanding = island && { event: island.event, x: island.x, y: island.y, facing: island.facing };
+        submit(job, snapshot, { limit: 8, field: true, landing, shipLanding, autowalk: job.autowalk,
+            beacon: host.beacon?.enabled() === true, transfer: { map: bookmark.map, point, state, trail,
+                candidates: current.map(copy), ground: island ? ground.map(copy) : undefined } });
     }
 
     function perform(job) {
