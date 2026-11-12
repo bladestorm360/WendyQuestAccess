@@ -10,11 +10,11 @@ ROOT = Path(__file__).resolve().parents[1]
 producer_tools = runpy.run_path(str(ROOT / 'tests' / 'file-producers.py'))
 between = producer_tools['between']
 decode = producer_tools['load_decoder']()
+from registration import INPUT_REL, WINDOW_REL, input_notification, window_notification
 
 
 def input_methods(installed):
-    plugins = installed / 'package.nw/js/plugins'
-    custom, _ = decode((plugins / 'InputAdjustments.js').read_text(encoding='utf-8-sig'))
+    custom, _ = decode(input_notification((installed / INPUT_REL).read_bytes()).decode('utf-8-sig'))
     return [between(custom, start, end) + '};' for start, end in (
         ("Input['keyMapper']={", "},Input['gamepadMapper']"),
         ("Input['gamepadMapper']={", "},Input['initialize']"),
@@ -28,7 +28,7 @@ def main():
     js = installed / 'package.nw/js'
     core = (js / 'rmmz_core.js').read_text(encoding='utf8')
     manager = (js / 'rmmz_managers.js').read_text(encoding='utf8')
-    custom, _ = decode((js / 'plugins/MonkeyWrenchMZ.js').read_text(encoding='utf-8-sig'))
+    custom, _ = decode(window_notification((installed / WINDOW_REL).read_bytes()).decode('utf-8-sig'))
     methods = input_methods(installed)
     for source, names in ((core, ['Input.clear', 'Input.update', 'Input._pollGamepads', 'Utils.isOptionValid']),
                           (manager, ['SceneManager.showDevTools'])):

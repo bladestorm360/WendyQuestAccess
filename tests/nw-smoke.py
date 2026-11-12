@@ -76,6 +76,7 @@ var SceneManager = { _scene: new Scene_Title() };
 var Graphics = { app: { stage: SceneManager._scene, renderer: new (require('events').EventEmitter)() } };
 const nativeSelect = SceneManager._scene._commandWindow.select;
 var DataManager = { savefileInfo: () => null };
+var Input = { keyMapper: { 90: 'ok' }, clear() {} };
 ''', encoding='utf8')
     (app / 'run.js').write_text('''
 if (SceneManager._scene.update() !== 123) throw Error('Native result changed');
@@ -102,9 +103,85 @@ let mapShown = false;
 let dialogueShown = false;
 let repeated = false;
 let numberShown = false;
+let settingsStep = 0;
+let nativeZ = 0;
+const restart = require('fs').existsSync(receipt + '.restart');
+document.addEventListener('keydown', event => { if (event.code === 'KeyZ') nativeZ++; });
+function key(type, key, code, repeat = false) {
+    document.dispatchEvent(new KeyboardEvent(type, { key, code, repeat, bubbles: true, cancelable: true }));
+}
+function tap(keyValue, code = keyValue) {
+    key('keydown', keyValue, code);
+    key('keyup', keyValue, code);
+}
+function choose(label) {
+    const button = Array.from(document.querySelectorAll('dialog button')).find(item => item.textContent.startsWith(label));
+    if (!button) throw Error('Missing settings control ' + label);
+    button.click();
+}
+function menuStatus() { return document.querySelector('dialog [role=status]')?.textContent; }
+function verifySettings() {
+    if (settingsStep === 0) {
+        key('keydown', 'z', 'KeyZ');
+        tap('F8');
+        if (!SceneManager._scene._wqaSettingsActive || document.activeElement.textContent !== 'Keyboard bindings') {
+            throw Error(`F8 did not focus settings: modal ${!!document.querySelector('dialog')}, ` +
+                `focused ${document.activeElement.tagName}, Chromium ${process.versions.chromium}`);
+        }
+        choose('Keyboard bindings');
+        settingsStep++;
+    } else if (settingsStep === 1 && menuStatus() !== 'Loading settings') {
+        choose('Repeat dialogue');
+        tap('w', 'KeyW'); // W is given a native action before capture.
+        if (menuStatus() !== 'W is already in use. Choose another key.') throw Error('Native conflict was accepted');
+        tap('t', 'KeyT');
+        settingsStep++;
+    } else if (settingsStep === 2 && menuStatus() === 'Keyboard bindings saved') {
+        if (document.activeElement.textContent !== 'Repeat dialogue, T') throw Error('Focus lost on binding change');
+        choose('Open mod settings');
+        tap('j', 'KeyJ');
+        settingsStep++;
+    } else if (settingsStep === 3 && menuStatus() === 'Keyboard bindings saved') {
+        tap('Escape');
+        if (document.activeElement.textContent !== 'Keyboard bindings') throw Error('Parent focus not restored');
+        key('keydown', 'Escape', 'Escape');
+        if (document.querySelector('dialog') || SceneManager._scene._wqaSettingsActive) throw Error('Modal did not close');
+        key('keydown', 'z', 'KeyZ', true);
+        key('keyup', 'Escape', 'Escape');
+        key('keyup', 'z', 'KeyZ');
+        tap('z', 'KeyZ');
+        if (nativeZ !== 2) throw Error('A held key replayed or the next press did not return to native input');
+        tap('F8');
+        if (document.querySelector('dialog')) throw Error('Old settings key still opens the menu');
+        Graphics.app.renderer.emit('postrender');
+        settingsStep++;
+    }
+}
+Input.keyMapper[87] = 'up';
 const interval = setInterval(() => {
+    if (restart) {
+        if (!document.querySelector('dialog')) {
+            tap('j', 'KeyJ');
+            if (document.querySelector('dialog')) choose('Keyboard bindings');
+        }
+        if (document.querySelector('dialog') && menuStatus() !== 'Loading settings') {
+            const bindings = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
+            write({ bindings });
+            clearInterval(interval);
+            nw.App.quit();
+        }
+        return;
+    }
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
+        if (settingsStep < 4) return verifySettings();
+        if (!require('fs').existsSync(receipt + '.returned-title')) return;
         fileShown = true;
+        tap('j', 'KeyJ');
+        if (!document.querySelector('dialog')) throw Error('Remapped settings key is inactive');
+        WendyQuestAccessSceneLeaving(SceneManager._scene);
+        if (document.querySelector('dialog') || SceneManager._scene._wqaSettingsActive) {
+            throw Error('Native scene entry retained the settings modal');
+        }
         SceneManager._scene._commandWindow.callHandler('continue');
         const scene = { _wqaFileKind: 1, _started: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0,
             _listWindow: { active: true, visible: true, openness: 255, _index: 1, _wqaCards: true,
@@ -140,8 +217,9 @@ const interval = setInterval(() => {
     }
     if (!repeated && require('fs').existsSync(receipt + '.choice')) {
         repeated = true;
-        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', ctrlKey: true, bubbles: true }));
-        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 't', ctrlKey: true, bubbles: true }));
+        tap('r', 'KeyR');
+        tap('t', 'KeyT');
     }
     if (!numberShown && require('fs').existsSync(receipt + '.repeat')) {
         numberShown = true;
@@ -176,7 +254,9 @@ parentPort.on('message', message => {
         epoch: message.epoch, name: message.name, kind: message.kind, slot: message.slot, empty: message.empty,
         text: message.text, append: message.append, speech: formatSpeech(message) });
     parentPort.postMessage('ack');
-    if (message.kind === 'title') fs.writeFileSync(receipt + '.title', '');
+    if (message.kind === 'title') {
+        fs.writeFileSync(fs.existsSync(receipt + '.title') ? receipt + '.returned-title' : receipt + '.title', '');
+    }
     if (message.kind === 'saveSlot') fs.writeFileSync(receipt + '.slot', '');
     if (message.kind === 'mapBanner') fs.writeFileSync(receipt + '.map', '');
     if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
@@ -209,18 +289,20 @@ def main():
             print(module, 'matches installed' if sha(runtime / module) == sha(args.installed / module)
                   else 'differs from installed', flush=True)
         receipt = fixture(runtime)
-        result = subprocess.run([str(runtime / 'nw.exe'), f'--user-data-dir={runtime / "profile"}'],
-                                cwd=runtime, capture_output=True, timeout=25)
+        launch = [str(runtime / 'nw.exe'), f'--user-data-dir={runtime / "profile"}']
+        result = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25)
         if not receipt.exists():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 7 or not all(r.get('sameEpoch') for r in records):
+        if result.returncode or data.get('error') or len(records) != 8 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, slot, banner, page, choice, repeat, number = records
+        title, returned_title, slot, banner, page, choice, repeat, number = records
+        if returned_title['name'] != title['name'] or returned_title['epoch'] == title['epoch']:
+            raise RuntimeError(f'NW fixture did not restore the title focus: {data}')
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
-                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:4]}) != 4:
+                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:5]}) != 5:
             raise RuntimeError(f'NW fixture did not deliver distinct presentation epochs: {data}')
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
@@ -231,7 +313,13 @@ def main():
                 number['epoch'] in {record['epoch'] for record in records[:-1]}:
             raise RuntimeError(f'NW fixture did not deliver the padded number in a fresh epoch: {data}')
         versions = data['versions']
-        print(f"Verified hidden window resize, title, save slot, map banner, dialogue repeat and number entry in NW {versions.get('nw', VERSION)}, "
+        receipt.unlink()
+        receipt.with_suffix('.json.restart').touch()
+        restarted = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25)
+        if restarted.returncode or not receipt.exists() or json.loads(receipt.read_text(encoding='utf8')).get('bindings') != \
+                ['Open mod settings, J', 'Repeat dialogue, T']:
+            raise RuntimeError('NW settings did not survive restart in the isolated profile')
+        print(f"Verified hidden window resize, title, persistent settings and remapped dialogue repeat in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
 
 

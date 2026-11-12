@@ -22,7 +22,8 @@ function fileWindow(scene) {
 }
 
 function isReady(host, scene, window) {
-    if (!scene || !window || host.graphics._wqaResize || fileWindow(scene) !== window || host.manager._scene !== scene ||
+    if (!scene || !window || scene._wqaSettingsActive || host.graphics._wqaResize ||
+        fileWindow(scene) !== window || host.manager._scene !== scene ||
         host.manager._nextScene || host.manager._exiting || !scene._started || !scene._active ||
         scene._fadeDuration !== 0 || scene._fadeOpacity !== 0 || host.graphics.app?.stage !== scene ||
         !window.visible || !window.active || window.openness !== 255) return false;

@@ -5,12 +5,15 @@ const { createTitleObserver, presented } = require('./frontend/title');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createDialogueObserver } = require('./dialogue/observer');
+const { createSettingsMenu } = require('./settings/menu');
 
 function boot(root, nodeRequire, nodeProcess) {
     let title = null;
     let files = null;
     let mapBanner = null;
     let dialogue = null;
+    let settings = null;
+    let settingsScene = null;
     let titleWaiting = null;
     let filesWaiting = null;
 
@@ -24,7 +27,6 @@ function boot(root, nodeRequire, nodeProcess) {
             window: root,
             hasFocus: () => root.document.hasFocus(),
             screenFading: () => root.$gameScreen?._fadeOutDuration > 0,
-            nativeKey: code => root.Input?.keyMapper?.[code],
             battleDialogueIdle: () => root.BattleManager?._wqaDialogueBusy === false,
             saveInfo: index => root.DataManager.savefileInfo(index),
             actor: id => root.$dataActors?.[id],
@@ -49,14 +51,30 @@ function boot(root, nodeRequire, nodeProcess) {
         files = createFilesObserver(host, notifications);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
-        root.addEventListener('keydown', event => {
-            if (event.key !== 'r' && event.key !== 'R') return;
-            if (event.ctrlKey || event.altKey || event.shiftKey || event.metaKey || event.repeat ||
-                event.isComposing || event.defaultPrevented || host.nativeKey(event.keyCode || 82) ||
-                event.target?.closest?.('input, textarea, select, [contenteditable]')) return;
-            // The key is unused natively. Other listeners and device state
-            // retain their ordinary behavior even when the mod reads a page.
-            try { dialogue.repeatPage(); } catch { /* Preserve native key dispatch. */ }
+        settings = createSettingsMenu(root, {
+            readyScene() {
+                const scene = host.manager._scene;
+                if (settingsScene !== scene || !scene?._wqaPresentation || !host.hasFocus() ||
+                    host.manager._wqaNativeAutosaves) return null;
+                if (scene instanceof root.Scene_Title) return presented(host, scene, scene._commandWindow) ? scene : null;
+                if ((scene._wqaFileKind === 1 || scene._wqaFileKind === 4) && isReady(host, scene, fileWindow(scene))) {
+                    return scene;
+                }
+                return null;
+            },
+            suspend() {
+                settingsScene = null;
+                title.suspend();
+                files.suspend();
+                root.Input?.clear();
+                root.TouchInput?.clear();
+            },
+            capturePads: () => root.Input?._pollGamepads?.(),
+            resume(scene) { if (host.manager._scene === scene) root.WendyQuestAccessResizeReady(); },
+            repeat() { try { dialogue.repeatPage(); } catch { /* Leave native input in charge. */ } }
+        });
+        root.addEventListener('gamepaddisconnected', event => {
+            if (root.Input?._wqaSettingsPads) delete root.Input._wqaSettingsPads[event.gamepad.index];
         });
         root.Graphics._wqaFrontEndObserved = true;
     }
@@ -79,7 +97,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 try {
                     if (!presented(view(), scene, scene._commandWindow)) return;
                     if (!title) initialize();
-                    title.observe(scene);
+                    if (title.observe(scene)) settingsScene = scene;
                 } catch {
                     // Fail closed. The original title and native input stay live.
                 }
@@ -102,7 +120,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 try {
                     if (!isReady(view(), scene, fileWindow(scene))) return;
                     if (!files) initialize();
-                    files.observe(scene);
+                    if (files.observe(scene)) settingsScene = scene;
                 } catch { /* Leave native file controls in charge. */ }
             });
         } catch {
@@ -111,6 +129,8 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFilesLeaving = function (scene) {
+        if (settingsScene === scene) settingsScene = null;
+        settings?.retire(scene);
         if (filesWaiting === scene) filesWaiting = null;
         if (scene?._wqaFileKind) scene._wqaPresentation = false;
         files?.leave(scene);
@@ -136,6 +156,8 @@ function boot(root, nodeRequire, nodeProcess) {
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
     root.WendyQuestAccessSceneLeaving = function (scene) {
+        if (settingsScene === scene) settingsScene = null;
+        settings?.retire(scene);
         if (titleWaiting === scene) titleWaiting = null;
         if (filesWaiting === scene) filesWaiting = null;
         title?.leave(scene);
@@ -148,6 +170,8 @@ function boot(root, nodeRequire, nodeProcess) {
         titleWaiting = null;
         filesWaiting = null;
         const scene = root.SceneManager._scene;
+        settingsScene = null;
+        settings?.retire(scene);
         if (scene?._wqaPresentation) scene._wqaPresentation = false;
         mapBanner?.leave(scene);
         dialogue?.leave(scene);

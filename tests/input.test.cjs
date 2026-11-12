@@ -39,12 +39,21 @@ SceneManager.onKeyDown(settingsKey);
 assert.equal(trace.pop(), 'devtools', 'explicit engine test mode retains native F8');
 c.nw.App.argv.length = 0;
 
-SceneManager._scene = { isStarted: () => true, update: () => trace.push('scene update') };
+SceneManager._scene = { _started: true, isStarted: () => true, update: () => trace.push('scene update') };
 SceneManager.updateScene();
 assert.deepEqual(trace.splice(0), ['time', 'scene update', 'coroutines']);
-SceneManager._scene = { isStarted: () => false, isReady: () => true, start: () => trace.push('scene start') };
+SceneManager._scene._wqaSettingsActive = true;
+SceneManager.updateScene();
+assert.deepEqual(trace.splice(0), [], 'settings hold an already-started scene and its clock/coroutines');
+SceneManager._nextScene = {};
+SceneManager.updateScene();
+assert.deepEqual(trace.splice(0), ['time', 'scene update', 'coroutines'], 'settings cannot block a native scene change');
+SceneManager._nextScene = null;
+SceneManager._scene = { _wqaSettingsActive: true, isStarted: () => false, isReady: () => true,
+    start: () => trace.push('scene start') };
 SceneManager.updateScene();
 assert.deepEqual(trace.splice(0), ['before start', 'scene start', 'scene stage']);
+SceneManager._scene._wqaSettingsActive = false;
 
 function press(index, pressed) {
     pad.buttons[index].pressed = pressed;
@@ -78,4 +87,24 @@ assert.equal(Input._latestButton, 'ok');
 pad.connected = false;
 Input.update();
 assert.equal(Input._gamepadStates[0][0], true, 'native polling skips disconnected pads without retiring their state');
-console.log('Verified retail/test F8, custom scene update ownership, and native controller physical/action boundaries.');
+
+pad.connected = true;
+SceneManager._scene._wqaSettingsActive = true;
+Input.update();
+assert.equal(Input._currentState.ok, false, 'a pad press held on entry is released from the game action');
+assert.equal(Input._gamepadStates[0][0], false);
+SceneManager._scene._wqaSettingsActive = false;
+Input.update();
+assert.equal(Input._currentState.ok, false, 'a held press cannot be replayed into the game');
+press(0, false);
+press(0, true);
+assert.equal(Input._latestButton, 'ok', 'the next physical press is native after release');
+
+press(0, false);
+SceneManager._scene._wqaSettingsActive = true;
+pad.buttons[0].pressed = true;
+Input._pollGamepads(); // The close sample runs even if no regular frame polled during the modal.
+SceneManager._scene._wqaSettingsActive = false;
+Input.update();
+assert.equal(Input._currentState.ok, false, 'rapid settings close still captures the current physical press');
+console.log('Verified retail/test F8, modal scene hold, controller action boundaries, and release-before-handback.');

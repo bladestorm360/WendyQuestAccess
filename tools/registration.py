@@ -19,6 +19,7 @@ MANAGERS_REL = Path('package.nw/js/rmmz_managers.js')
 SCENES_REL = Path('package.nw/js/rmmz_scenes.js')
 CORE_REL = Path('package.nw/js/rmmz_core.js')
 WINDOW_REL = Path('package.nw/js/plugins/MonkeyWrenchMZ.js')
+INPUT_REL = Path('package.nw/js/plugins/InputAdjustments.js')
 WINDOWS_REL = Path('package.nw/js/rmmz_windows.js')
 MAP_REL = Path('package.nw/js/plugins/MapScene.js')
 OBJECTS_REL = Path('package.nw/js/rmmz_objects.js')
@@ -35,6 +36,7 @@ MANAGERS_SHA = 'e87efc29229a80c903c1651a78bbeafa8b9ffb925227b31cfa7f4741875140bd
 SCENES_SHA = '0f69c04d51b9ce17410e952ceafa31527a1b6c94663a12e11ca7d0e30cf2913a'
 CORE_SHA = 'f7f807a8329b6996577771dd5b65b84dac072117b6f24e4f2fc0a6068ccd61e0'
 WINDOW_SHA = '37dfb71367496ca5f96a86156c3ea9fb4f813a3d6323280e342848d3bfd9cd42'
+INPUT_SHA = 'dac572e3107d47693277fa7565b5c49145fbed73003471e54cb7e64390092d77'
 WINDOWS_SHA = '7bd37af5d4d55d2aedad4d2cb1e14d2ff3ff8eefa261f865ef805b7e8981fd59'
 MAP_SHA = 'aff25c073cffce32857bb654d0ae30938f10ddfa534cfc0cb80ebb078a4aaf64'
 OBJECTS_SHA = 'b9da176c2041866df643b7d62b36d99d67bf1b44216deb52568adbd08264848a'
@@ -298,6 +300,9 @@ def window_notification(original):
     # Use the ticket belonging to each native async callback, including
     # overlapping requests, and the size issued by the native scale path.
     return insert(original, WINDOW_SHA, {
+        # The modal owns a settled scene only. Never suppress native start or
+        # a scene change. The stock update is replaced by this custom method.
+        4001: b'if(this._scene?._wqaSettingsActive&&this._scene._started&&!this._nextScene&&!this._exiting)return;',
         30441: b'Graphics._wqaFrontEndObserved&&globalThis.WendyQuestAccessResizeStarting?.(),',
         33274: b'{const wqaResize=Graphics._wqaBeginResize();',
         33367: b',wqaResize',
@@ -317,10 +322,17 @@ def window_notification(original):
     })
 
 
+def input_notification(original):
+    marker = (Path(__file__).resolve().parents[1] / 'src/settings/native-pad.js').read_bytes()
+    return insert(original, INPUT_SHA, {
+        7428: b'\n' + marker.replace(b'WQA_PAD', b'_0x2ef8a9').replace(b'WQA_STATE', b'_0x27bf26') + b'\n',
+    })
+
+
 def canvas_notification(original):
     # CanvasScaler has its own resize listener and can rebuild the scene.
     return insert(original, CANVAS_SHA, {
-        7221: AUTO_DISCARD + b',' + FIELD_WATCHED + b'&&'
+        7221: AUTO_DISCARD + b',(' + FIELD_WATCHED + b'||SceneManager._scene?._wqaSettingsActive)&&'
               b'globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene),',
     })
 
@@ -354,6 +366,7 @@ def main():
     for relative, transform in ((TITLE_REL, title_notification), (MENU_REL, menu_notifications),
                                 (MANAGERS_REL, managers_notification), (SCENES_REL, scenes_notification),
                                 (CORE_REL, core_notification), (WINDOW_REL, window_notification),
+                                (INPUT_REL, input_notification),
                                 (OBJECTS_REL, objects_notification), (MAP_REL, map_notification),
                                 (CANVAS_REL, canvas_notification), (WINDOWS_REL, windows_notification),
                                 (BATTLE_REL, battle_notification),

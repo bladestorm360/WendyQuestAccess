@@ -3,7 +3,7 @@
 const LIMIT_TITLE_LABEL = 256;
 
 function presented(host, scene, window) {
-    return !host.graphics._wqaResize && host.manager._scene === scene && !host.manager._nextScene &&
+    return !scene._wqaSettingsActive && !host.graphics._wqaResize && host.manager._scene === scene && !host.manager._nextScene &&
         !host.manager._exiting && scene._started === true && scene._active === true &&
         scene._fadeDuration === 0 && host.graphics.app && host.graphics.app.stage === scene &&
         window && window.visible === true && window.active === true && window.openness === 255 &&

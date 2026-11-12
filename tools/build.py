@@ -26,6 +26,9 @@ def bundle():
         './world/map-banner': 'world/map-banner.js',
         './dialogue/observer': 'dialogue/observer.js',
         './number-entry': 'dialogue/number-entry.js',
+        './settings/menu': 'settings/menu.js',
+        './keyboard': 'settings/keyboard.js',
+        './storage': 'settings/storage.js',
     }
     target = OUT / 'js' / 'plugins' / 'WendyQuestAccess.js'
     target.parent.mkdir(parents=True, exist_ok=True)
