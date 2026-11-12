@@ -14,6 +14,9 @@ async function enter(map, mapId = 19, battle = false) {
     const f = fixture(map);
     const { c } = f;
     c.a2_0x990531 = () => { throw Error('Unresolved battle property'); };
+    c.a9_0x3a9886 = () => { throw Error('Unresolved message owner property'); };
+    c.Alias = {};
+    c.Game_Message = function () {};
     c.Window_Message = function () {};
     c.Window_Selectable = function () {};
     c.Window_ChoiceList = function () {};
@@ -46,6 +49,7 @@ async function enter(map, mapId = 19, battle = false) {
         choiceCancelType: () => -2, onChoice(index) { assert.equal(f.epoch(), 0); this.result = index; },
         clear() { this.text = ''; this.choices = []; this.number = null; }
     };
+    Object.setPrototypeOf(settings, c.Game_Message.prototype);
     // Stock accessors return the native data. Keep the fixture's editable copy
     // separate from the accessor so choices are handled by the real command builder.
     c.$gameMessage = Object.create(settings);
@@ -177,7 +181,8 @@ async function enter(map, mapId = 19, battle = false) {
         repeated = '';
     }
     const packets = () => f.packets.filter(packet => ['dialoguePage', 'dialogueChoice', 'numberEntry'].includes(packet.kind));
-    return { ...f, scene, window, choice, number, settings, speaker, shown, iconDraws, tick, until, advance, pressDigit, packets };
+    return { ...f, scene, window, choice, number, settings, speaker, shown, iconDraws, tick, until, advance, pressDigit,
+        records: f.packets, packets };
 }
 
 function authoredPage(commands, first = commands.findIndex(command => command.code === 101)) {
@@ -232,6 +237,181 @@ async function verifyNumberEntry() {
     assert.equal(standalone.number.drawn, '999');
     assert.equal(formatSpeech(standalone.packets()[0]), 'Number entry. 9, 9, 9. Digit 1 of 3, 9');
     assert.equal(standalone.packets()[0].append, false);
+}
+
+async function verifySaltGuide() {
+    const data = mapData(19);
+    const f = await enter(data);
+    const { c, settings, scene, window, speaker } = f;
+    const map = c.$gameMap;
+    const interpreter = map._interpreter;
+    const player = c.$gamePlayer;
+    Object.assign(map, { _mapId: 19, _events: [] });
+    for (const id of [19, 20, 21, 22, 35, 36, 49, 68, 97, 114, 115, 120]) {
+        const entry = data.events[id];
+        const page = entry.pages[0];
+        map._events[id] = Object.assign(f.event(id, 0), { _x: entry.x, _y: entry.y, _pageIndex: 0, _trigger: page.trigger });
+    }
+    player._vehicleType = 'walk';
+    player.setPosition(26, 12);
+    settings.faceReady = true;
+    c.$gameMessage.setFaceImage = c.$gameMessage.setBackground = c.$gameMessage.setPositionType = () => {};
+    c.$gameMessage.setSpeakerName = name => { settings.speaker = name; };
+    c.$gameMessage.add = text => { settings.text += (settings.text ? '\n' : '') + text; };
+    interpreter._list = null;
+    const key = (key, modifiers = {}) => {
+        let prevented = false;
+        const code = 'Key' + key.toUpperCase();
+        f.dispatchWindowEvent('keydown', { key, code, keyCode: key.toUpperCase().charCodeAt(0), ...modifiers,
+            preventDefault() { prevented = true; }, stopPropagation() {} });
+        f.dispatchWindowEvent('keyup', { key, code });
+        return prevented;
+    };
+    const status = () => f.records.filter(packet => packet.kind === 'fieldStatus').map(formatSpeech);
+    const review = () => {
+        f.tick();
+        assert(scene._wqaFieldReady);
+        assert(key('g', { shiftKey: true }));
+        f.frame();
+        return status().at(-1);
+    };
+    function play(id, page, index, source = interpreter) {
+        const count = f.packets().length;
+        Object.assign(source, { _eventId: id, _mapId: 19, _index: index, _list: data.events[id].pages[page].list });
+        assert(source.executeCommand());
+        assert.equal(c.$gameMessage.interpreter, source);
+        assert.equal(source._waitMode, 'message');
+        f.until(() => window.pause);
+        speaker._animationRunning = false;
+        f.tick();
+        if (window.worldAlpha > 0) assert(f.packets().length > count, `No native paint for ${id} at ${source._index}`);
+    }
+    function advance(source = interpreter) {
+        f.advance();
+        source._list = interpreter._list = null;
+    }
+    assert.equal(c.Input.keyMapper[71], undefined);
+    assert.equal(key('g'), false, 'bare G remains available to native or currency controls');
+    assert.equal(key('g', { ctrlKey: true }), false, 'inactive stop passes through');
+    assert.equal(key('g', { shiftKey: true, ctrlKey: true }), false, 'mixed modifiers pass through');
+    c.Input.keyMapper[71] = 'fixtureNative';
+    assert.equal(key('g', { shiftKey: true }), false);
+    delete c.Input.keyMapper[71];
+    assert.match(review(), /Wall clue selected/);
+    key('k');
+    f.frame();
+    assert.equal(formatSpeech(f.records.filter(packet => packet.kind === 'fieldTarget').at(-1)), 'Wall clue, 1 south');
+
+    window.worldAlpha = 0;
+    play(114, 0, 4);
+    advance();
+    window.worldAlpha = 1;
+    assert.match(review(), /Wall clue selected/, 'a clue with no rendered page cannot reveal its order');
+    play(115, 0, 4);
+    assert(key('g', { ctrlKey: true }), 'stop works while the game dialogue owns the screen');
+    assert.equal(key('g', { ctrlKey: true }), false);
+    advance();
+    const order = /Wall clue order: ([^.]+)\./.exec(review())[1].split(', ');
+    assert.equal(order.length, 4);
+    assert.equal(new Set(order).size, 4);
+
+    play(19, 0, 22);
+    advance();
+    assert.match(review(), new RegExp('Lights observed this visit: ' + order[0]));
+    play(97, 0, 49);
+    assert.equal(interpreter._index, 51);
+    assert(window._wqaDialoguePaint, 'reset line remains visibly waiting');
+    assert.equal(window._wqaDialoguePaint.end, window._wqaDialoguePaint.text.length);
+    assert.equal(f.packets().at(-1).text, window._wqaDialoguePaint.text);
+    assert(!scene._wqaTerrainWork);
+    advance();
+    assert.match(review(), /The crystals were reset/);
+    assert.doesNotMatch(status().at(-1), /Lights observed/);
+
+    interpreter._childInterpreter = null;
+    interpreter.setupChild = (list, id) => {
+        interpreter._childInterpreter = Object.assign(new c.Game_Interpreter(), { _eventId: id, _list: list });
+    };
+    c.ExecuteEvent(97, 1);
+    const reset = interpreter._childInterpreter;
+    assert.equal(reset._list, data.events[97].pages[0].list);
+    play(97, 0, 49, reset);
+    advance(reset);
+    interpreter._childInterpreter = null;
+    assert.match(review(), /The crystal attempt reset/);
+
+    play(35, 1, 19);
+    advance();
+    assert.match(review(), /The ordered crystals opened a passage/);
+    play(68, 0, 81);
+    advance();
+    assert.match(review(), /A crystal changed the passage to the exit/);
+    assert(key('g', { ctrlKey: true }));
+    f.frame();
+    assert.equal(status().at(-1), 'Puzzle guidance stopped');
+    assert.equal(key('g', { ctrlKey: true }), false);
+    assert(key('g', { shiftKey: true }));
+    assert(key('g', { ctrlKey: true }), 'stop retires a guide request queued for rendering');
+    f.frame();
+    assert.equal(status().at(-1), 'Puzzle guidance stopped');
+
+    // Run the stock interpreter on the actual authored crystal interactions.
+    // Only native audio and graphics commands are stand-ins in this branch test.
+    const variables = new Map();
+    const switches = new Map();
+    c.$gameVariables.value = id => variables.get(id) || 0;
+    c.$gameVariables.setValue = (id, value) => variables.set(id, value);
+    c.$gameSwitches = { value: id => switches.get(id) === true, setValue: (id, value) => switches.set(id, value) };
+    delete interpreter.setupChild;
+    const prototype = c.Game_Interpreter.prototype;
+    c.Game_Interpreter = function (depth) { this.initialize(depth); };
+    c.Game_Interpreter.prototype = prototype;
+    interpreter.initialize();
+    c.Game_Interpreter.prototype.command357 = ([plugin, , , args]) => {
+        if (plugin === 'MonkeyWrenchMZ') c.ExecuteEvent(Number(args.eventID), Number(args.pageID));
+        return true;
+    };
+    function runAction(id) {
+        interpreter.setup(data.events[id].pages[0].list, id);
+        const stack = [interpreter];
+        for (let budget = 256; stack.length && budget > 0; budget--) {
+            const source = stack.at(-1);
+            if (!source.currentCommand()) {
+                stack.pop();
+                if (stack.length) stack.at(-1)._childInterpreter = null;
+                continue;
+            }
+            assert(source.executeCommand());
+            if (source._childInterpreter) stack.push(source._childInterpreter);
+            else if (source._waitMode === 'message') {
+                f.until(() => window.pause);
+                speaker._animationRunning = false;
+                f.tick();
+                f.advance();
+                assert.equal(source.updateWaitMode(), false);
+            }
+        }
+        assert.equal(stack.length, 0, 'crystal script completed within its fixture command budget');
+        interpreter._list = null;
+    }
+    const progress = id => data.events[id].pages[0].list.find(command =>
+        command.code === 111 && command.parameters[0] === 1 && command.parameters[4] === 0).parameters;
+    const crystals = [19, 20, 21, 22].sort((a, b) => progress(a)[3] - progress(b)[3]);
+    const variable = progress(crystals[0])[1];
+    runAction(crystals[1]);
+    assert.equal(c.$gameVariables.value(variable), 0);
+    assert.match(review(), /The crystal attempt reset/);
+    for (const [stage, id] of crystals.entries()) {
+        runAction(id);
+        assert.equal(c.$gameVariables.value(variable), stage + 1);
+    }
+    assert.match(review(), /Lights observed this visit: [^.]+, [^.]+, [^.]+, [^.]+\./);
+    runAction(97);
+    assert.equal(c.$gameVariables.value(variable), 0);
+    assert.match(review(), /The crystals were reset/);
+    assert.doesNotMatch(status().at(-1), /Lights observed/);
+    map._mapId = 196;
+    assert.equal(key('g', { shiftKey: true }), false);
 }
 
 async function verifyAutomaticClose() {
@@ -469,10 +649,11 @@ async function main() {
     assert.equal(intro.epoch(), 0);
     assert.equal(intro.settings.result, -2);
     await verifyNumberEntry();
+    await verifySaltGuide();
     await verifyAutomaticClose();
     await verifyBattleDialogue();
     await verifyRepeat();
-    console.log('Verified installed map and battle dialogue, puzzle clue, choices, number entry, automatic-close text, and current-page repeat.');
+    console.log('Verified installed map and battle dialogue, Salt Caverns guidance, choices, number entry, automatic-close text, and current-page repeat.');
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

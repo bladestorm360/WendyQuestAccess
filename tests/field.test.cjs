@@ -65,12 +65,12 @@ async function main() {
 
     key('k');
     f.frame();
-    assert.equal(formatSpeech(fieldSpeech()[0]), 'Wall, 1 south');
+    assert.equal(formatSpeech(fieldSpeech()[0]), 'Wall clue, 1 south');
     key('j');
     key('l');
     assert.equal(f.renderer.listenerCount('postrender'), 1);
     f.frame();
-    assert.equal(formatSpeech(fieldSpeech()[1]), 'Wall, 1 south');
+    assert.equal(formatSpeech(fieldSpeech()[1]), 'Wall clue, 1 south');
     key('p');
     f.frame();
     assert.equal(routePackets.length, 1);
@@ -80,7 +80,7 @@ async function main() {
     assert.equal(first.live.terrain[0] & (MAX_CELLS - 1), 0);
     reply(first);
     f.frame();
-    assert.equal(formatSpeech(fieldSpeech()[2]), 'Wall. face south.');
+    assert.equal(formatSpeech(fieldSpeech()[2]), 'Wall clue. face south.');
     assert.deepEqual([player._x, player._y], [26, 12]);
 
     key('l', { shiftKey: true });

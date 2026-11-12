@@ -27,6 +27,8 @@ OBJECTS_REL = Path('package.nw/js/rmmz_objects.js')
 CANVAS_REL = Path('package.nw/js/plugins/CanvasScaler.js')
 BATTLE_REL = Path('package.nw/js/plugins/BattleSceneArranger.js')
 STATS_REL = Path('package.nw/js/plugins/WendyQuest.js')
+MESSAGE_OWNER_REL = Path('package.nw/js/plugins/EliMZ_Book.js')
+SALT_REL = Path('package.nw/data/Map019.json')
 TITLE_SHA = 'a3c35f004b66a6d4e7a918e36b8bc7e48f2383875165ce1c00ae1a5a031e5634'
 REGISTRY_SHA = '083317d6b2ee7ba9655762dee7671564a64b0bba82bb33d8cbacd52a7e7b3ab7'
 TITLE_INSERTION = 17749
@@ -47,6 +49,8 @@ BATTLE_SHA = 'b6e5b59162e89c38e4d24c55ea622846509ac6d77e91ec0e24c0bb745fd0eab5'
 STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
 DEPENDENCIES = {
     STATS_REL: STATS_SHA,
+    MESSAGE_OWNER_REL: '26e0230f7bcf8a425ad4c128c728cb0d74d8589d1a07d9d3026edbc2b09c7ce0',
+    SALT_REL: '4d14b04a8980f4a4eb50dfa01d0ab61dd5507c62b65a1cd23b5df1621662e296',
     Path('package.nw/js/plugins/UIGeneral.js'): '9a282cc96ee2edb4777fc18228d4a5976e2ad7546d50df72a6d0429bc6af9b0e',
     Path('package.nw/img/system/IconSet.png'): '709b556b0c2b217436172d90d7d8af4c722ce421aa19f504261ee72607f5203e',
 }
@@ -411,7 +415,7 @@ def main():
     for relative, expected in DEPENDENCIES.items():
         dependency = args.game_root / relative
         if dependency.stat().st_size > 1024 * 1024 or hashlib.sha256(dependency.read_bytes()).hexdigest() != expected:
-            raise ValueError(f'Front-end dependency does not match the supported Steam build: {relative}')
+            raise ValueError(f'Game dependency does not match the supported Steam build: {relative}')
     for relative, transform in ((TITLE_REL, title_notification), (MENU_REL, menu_notifications),
                                 (MANAGERS_REL, managers_notification), (SCENES_REL, scenes_notification),
                                 (CORE_REL, core_notification), (WINDOW_REL, window_notification),

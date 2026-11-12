@@ -26,7 +26,7 @@ function terrainDelta(changes, layers, flags, count) {
     return terrain.subarray(0, changedCount);
 }
 
-function captureWorld(root, routing = true) {
+function captureWorld(root, routing = true, label) {
     const map = root.$gameMap;
     const player = root.$gamePlayer;
     const data = root.$dataMap;
@@ -62,7 +62,10 @@ function captureWorld(root, routing = true) {
                 tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action });
         }
         const target = action && destination(entry, page, trigger);
-        if (target) objects.push({ id: eventId, x, y, ...target });
+        if (target) {
+            if (label) target.name = label(eventId, target.name);
+            objects.push({ id: eventId, x, y, ...target });
+        }
     }
     const snapshot = { map: id, x: player._x, y: player._y, objects };
     if (!routing) return snapshot;

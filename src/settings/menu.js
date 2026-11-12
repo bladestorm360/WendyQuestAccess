@@ -1,13 +1,14 @@
 'use strict';
 
-const { DEFAULT_KEYS, keyName, nativeConflict, normalizeKeys } = require('./keyboard');
+const { DEFAULT_KEYS, PUZZLE_KEYS, keyName, nativeConflict, normalizeKeys, puzzleGesture } = require('./keyboard');
 const { openSettings } = require('./storage');
 const { ACTIONS, DEFAULTS: NAVIGATION_DEFAULTS, LAYOUT_NAMES, navigationGesture, nativeNavigationConflict,
     normalizeNavigation, navigationAction, gestureName } = require('./navigation-keys');
 const { FIELD_ACTIONS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
     normalizeController, canUnassign } = require('./controller-bindings');
 
-const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue' });
+const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
+    puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance' });
 const POINTER_EVENTS = ['mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
 
 function createSettingsMenu(root, host) {
@@ -144,7 +145,7 @@ function createSettingsMenu(root, host) {
         const { layout, bindings } = navigation;
         const action = owner.capture;
         const duplicate = navigationAction(navigation, gesture);
-        if (!unassign && (nativeNavigationConflict(root, gesture, eventCode) || gesture === keys.settings ||
+        if (!unassign && (nativeNavigationConflict(root, gesture, eventCode) || gesture === keys.settings || gesture === keys.puzzleGuide ||
             (duplicate && duplicate !== action))) {
             status(owner, `${gestureName(gesture)} is already in use. Choose another key.`);
             return;
@@ -161,11 +162,14 @@ function createSettingsMenu(root, host) {
         owner.status.textContent = loading ? 'Loading settings' : '';
         owner.contents.textContent = '';
         let focused = null;
-        for (const action of ['settings', 'repeat']) {
-            const item = button(owner, `${LABELS[action]}, ${keys[action] ?? 'unassigned'}`, () => {
+        for (const action of Object.keys(LABELS)) {
+            const binding = keys[action];
+            const occupied = PUZZLE_KEYS[action] && (nativeConflict(root, binding) || navigationAction(navigation, binding));
+            const item = button(owner, `${LABELS[action]}, ${binding ?? 'unassigned'}${occupied ? ', in use elsewhere' : ''}`, () => {
                 if (loading || saving) return;
                 owner.capture = owner.selected = action;
-                const available = action === 'settings' ? 'a letter or F8' : 'a letter';
+                const available = { settings: 'a letter or F8', puzzleGuide: 'Shift and a letter',
+                    puzzleStop: 'Ctrl and a letter' }[action] || 'a letter';
                 status(owner, `Press ${available} for ${LABELS[action].toLowerCase()}. Press Escape to cancel.`);
             });
             if (action === selection) focused = item;
@@ -300,8 +304,19 @@ function createSettingsMenu(root, host) {
         }
     }
 
-    function capture(key, event, owner) {
+    function capture(key, puzzleKey, event, owner) {
         const action = owner.capture;
+        if (PUZZLE_KEYS[action]) {
+            const gesture = puzzleKey;
+            if (!PUZZLE_KEYS[action].test(gesture)) return;
+            if (nativeConflict(root, gesture, event.keyCode) ||
+                Object.values(navigation.bindings).some(layout => Object.values(layout).includes(gesture))) {
+                status(owner, `${gesture} is already in use. Choose another key.`);
+                return;
+            }
+            change(owner, { ...keys, [action]: gesture }, action);
+            return;
+        }
         if (!key || (key === 'F8' && action !== 'settings')) return;
         const other = action === 'settings' ? 'repeat' : 'settings';
         if (nativeConflict(root, key, event.keyCode) || key === keys[other] ||
@@ -328,12 +343,13 @@ function createSettingsMenu(root, host) {
             if (goBack || owner.capture) {
                 const key = keyName(event);
                 const gesture = navigationGesture(event);
+                const puzzleKey = puzzleGesture(event);
                 const unassign = event.key === 'Delete' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
                 event.preventDefault();
                 if (!event.repeat && physical && held.size < 64) held.add(physical);
                 if (event.repeat) return;
                 if (goBack) back(owner);
-                else if (owner.group === 'keyboard') capture(key, event, owner);
+                else if (owner.group === 'keyboard') capture(key, puzzleKey, event, owner);
                 else if (owner.group === 'navigation') captureNavigation(owner, gesture, event.keyCode, unassign);
                 else if (owner.group === 'controller' && unassign && canUnassign(owner.capture?.action)) {
                     const action = owner.capture.action;
@@ -348,6 +364,14 @@ function createSettingsMenu(root, host) {
         const gesture = navigationGesture(event);
         const action = navigationAction(navigation, gesture);
         if (action && !nativeNavigationConflict(root, gesture, event.keyCode) && host.fieldCommand(action)) return;
+        const chord = puzzleGesture(event);
+        const puzzle = chord && (chord === keys.puzzleGuide ? 'puzzleGuide' : chord === keys.puzzleStop ? 'puzzleStop' : '');
+        if (!action && puzzle && !nativeConflict(root, chord, event.keyCode) && host.fieldCommand(puzzle)) {
+            if (physical && held.size < 64) held.add(physical);
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
         const key = keyName(event);
         if (!key || nativeConflict(root, key, event.keyCode)) return;
         if (key === keys.repeat && host.repeat()) return;

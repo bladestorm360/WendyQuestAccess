@@ -127,11 +127,11 @@ if (!restart) {
     for (const name of ['1.wqg', 'manifest.json']) fs.copyFileSync(path.join(root, 'geometry', name), path.join(geometry, name));
 }
 document.addEventListener('keydown', event => { if (event.code === 'KeyZ') nativeZ++; });
-function key(type, key, code, repeat = false) {
-    document.dispatchEvent(new KeyboardEvent(type, { key, code, repeat, bubbles: true, cancelable: true }));
+function key(type, key, code, repeat = false, modifiers = {}) {
+    document.dispatchEvent(new KeyboardEvent(type, { key, code, repeat, bubbles: true, cancelable: true, ...modifiers }));
 }
-function tap(keyValue, code = keyValue) {
-    key('keydown', keyValue, code);
+function tap(keyValue, code = keyValue, modifiers) {
+    key('keydown', keyValue, code, false, modifiers);
     key('keyup', keyValue, code);
 }
 function pad(...buttons) {
@@ -169,17 +169,28 @@ function verifySettings() {
         tap('v', 'KeyV');
         settingsStep++;
     } else if (settingsStep === 3 && menuStatus() === 'Keyboard bindings saved') {
+        choose('Start or review puzzle guidance');
+        tap('J', 'KeyJ', { shiftKey: true });
+        if (menuStatus() !== 'Shift+J is already in use. Choose another key.') throw Error('Puzzle chord collision was accepted');
+        tap('U', 'KeyU', { shiftKey: true });
+        settingsStep++;
+    } else if (settingsStep === 4 && menuStatus() === 'Keyboard bindings saved') {
+        choose('Stop puzzle guidance');
+        tap('u', 'KeyU', { ctrlKey: true });
+        settingsStep++;
+    } else if (settingsStep === 5 && menuStatus() === 'Keyboard bindings saved') {
+        if (document.activeElement.textContent !== 'Stop puzzle guidance, Ctrl+U') throw Error('Puzzle binding did not retain focus');
         tap('Escape');
         if (document.activeElement.textContent !== 'Keyboard bindings') throw Error('Parent focus not restored');
         choose('Navigation keyboard');
         choose('Navigation keymap');
         settingsStep++;
-    } else if (settingsStep === 4 && menuStatus() === 'Navigation keyboard saved') {
+    } else if (settingsStep === 6 && menuStatus() === 'Navigation keyboard saved') {
         if (document.activeElement.textContent !== 'Navigation keymap, Brackets and backslash') throw Error('Layout did not change');
         choose('Next destination');
         tap('n', 'KeyN');
         settingsStep++;
-    } else if (settingsStep === 5 && menuStatus() === 'Navigation keyboard saved') {
+    } else if (settingsStep === 7 && menuStatus() === 'Navigation keyboard saved') {
         tap('Escape');
         if (document.activeElement.textContent !== 'Navigation keyboard') throw Error('Navigation parent focus was lost');
         key('keydown', 'Escape', 'Escape');
@@ -246,7 +257,7 @@ const interval = setInterval(() => {
             if (document.querySelector('dialog')) choose('Keyboard bindings');
         }
         if (document.querySelector('dialog') && menuStatus() !== 'Loading settings') {
-            const bindings = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
+            const bindings = Array.from(document.querySelectorAll('dialog button')).slice(0, 4).map(item => item.textContent);
             tap('Escape');
             choose('Controller bindings');
             const buttons = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
@@ -261,7 +272,7 @@ const interval = setInterval(() => {
         return;
     }
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
-        if (settingsStep < 6) return verifySettings();
+        if (settingsStep < 8) return verifySettings();
         if (!require('fs').existsSync(receipt + '.returned-title')) return;
         if (controllerStep < 13) return verifyController();
         if (!require('fs').existsSync(receipt + '.controller-returned-title')) return;
@@ -500,7 +511,8 @@ def main():
         receipt.with_suffix('.json.restart').touch()
         restarted = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25)
         reloaded = json.loads(receipt.read_text(encoding='utf8')) if receipt.exists() else {}
-        if restarted.returncode or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T'] or \
+        if restarted.returncode or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T',
+                'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Right trigger', 'Next category, Unassigned'] or \
                 reloaded.get('navigation') != ['Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
                                                'Next destination, N']:

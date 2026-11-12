@@ -2,10 +2,12 @@
 
 const { captureWorld } = require('./snapshot');
 const { browse, createDestinationBrowser } = require('./destinations');
+const { createSaltGuide } = require('./puzzles/salt-caverns');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const TIMED_MAPS = new Set([196, 199, 200, 201]);
 
 function createField(root, host, notifications) {
+    const guide = createSaltGuide(root);
     let owner = null;
     let active = null;
     let worker = null;
@@ -100,8 +102,18 @@ function createField(root, host, notifications) {
         if (job.action === 'status') return status(job, job.text);
         const routing = job.action === 'directions';
         if (routing && TIMED_MAPS.has(root.$gameMap._mapId)) return status(job, 'Ordinary directions unavailable in this timed area');
-        const snapshot = captureWorld(root, routing);
+        const label = guide.available(job.scene) ? (id, fallback) => guide.label(job.scene, id, fallback) : undefined;
+        const snapshot = captureWorld(root, routing, label);
         if (!snapshot) return status(job, 'Map information unavailable');
+        if (job.action === 'puzzleGuide') {
+            const result = guide.review(job.scene, snapshot.objects, snapshot.x, snapshot.y);
+            if (!result) return;
+            if (result.target) {
+                owner.browser.category = result.target.category;
+                owner.browser.selections[result.target.category] = result.target.id;
+            }
+            return status(job, result.text);
+        }
         const result = browse(owner.browser, snapshot, job.changes);
         if (!result.target) return status(job, result.status);
         const { target, category } = result;
@@ -126,7 +138,17 @@ function createField(root, host, notifications) {
     for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => { if (owner) retire(owner.scene); });
     function command(action, text) {
         const scene = host.manager._scene;
-        if ((!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' && action !== 'status') ||
+        if (action === 'puzzleStop') {
+            if (!host.hasFocus()) return false;
+            const pending = active?.scene === scene && active.action === 'puzzleGuide';
+            const stopped = guide.stop(scene);
+            if (!pending && !stopped) return false;
+            if (pending) retire(scene);
+            if (!active && ready(scene)) command('status', 'Puzzle guidance stopped');
+            return true;
+        }
+        const puzzle = action === 'puzzleGuide' && guide.available(scene);
+        if ((!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' && action !== 'status' && !puzzle) ||
             !ready(scene) || sequence >= 0x7ffffffe) return false;
         const changes = active?.scene === scene && !active.performed ? active.changes : [];
         if (BROWSE.has(action) && changes.length < 16) changes.push(action);
@@ -142,8 +164,12 @@ function createField(root, host, notifications) {
         controlOwner(scene) {
             if (!ready(scene)) return null;
             if (control?.scene !== scene) control = { kind: 'field', scene };
+            control.puzzle = guide.available(scene);
+            control.puzzleActive = guide.active(scene);
             return control;
         },
+        dialoguePresented: guide.presented,
+        puzzleActive: guide.active,
         command,
         report(text) { return command('status', text); },
         changed: retire,

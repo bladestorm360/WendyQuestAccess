@@ -90,7 +90,10 @@ function boot(root, nodeRequire, nodeProcess) {
             const panel = settings?.controllerOwner();
             if (panel?.scene === scene && scene._wqaSettingsActive) return panel;
             if (readyScene()) return frontendControl;
-            return dialogue.controllerOwner(scene) || field.controlOwner(scene);
+            const speaking = dialogue.controllerOwner(scene);
+            if (!speaking) return field.controlOwner(scene);
+            speaking.puzzleActive = field.puzzleActive(scene);
+            return speaking;
         }
         function announce(context, text) {
             if (controlContext() !== context) return;
@@ -133,12 +136,14 @@ function boot(root, nodeRequire, nodeProcess) {
                 } else if (context.kind === 'settings') settings.controllerInput(context, action, family, buttons);
                 else if (action === 'settings') settings.open(context.scene, family);
                 else if (action === 'repeat') dialogue.repeatPage();
+                else if (action === 'puzzleStop') field.command(action);
                 else if (action === 'modeLeft') announce(context, 'Mod mode off');
                 else if (action === 'modeEntered') announce(context,
                     modeAnnouncement(family, context, settings.controllerBindings()));
                 else if (context.kind === 'field') field.command(action);
             }
         });
+        host.dialoguePresented = field.dialoguePresented;
         root.WendyQuestAccessPadSample = function (index, mapping, id, pressed, axisX, axisY) {
             try { return controller.sample(index, mapping, id, pressed, axisX, axisY); } catch { return 0; }
         };

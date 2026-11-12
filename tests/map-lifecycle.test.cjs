@@ -172,7 +172,13 @@ function fixture(data, failSave = false) {
                     routeAdmission = new Int32Array(options.workerData.admission);
                 } else admission = new Int32Array(options.workerData);
             }
-            postMessage(packet) { (routeWorker === this ? routePackets : packets).push(packet); }
+            postMessage(packet) {
+                if (routeWorker === this) routePackets.push(packet);
+                else {
+                    packets.push(packet);
+                    if (packet.kind !== 'cancel') timers.push(() => this.emit('message', 'ack'));
+                }
+            }
             unref() {}
         } };
     }

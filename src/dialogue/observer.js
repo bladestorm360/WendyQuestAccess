@@ -63,6 +63,7 @@ function createDialogueObserver(host, notifications) {
             context.page = { paint, end: paint.end, automatic: !!autoPaint };
             if (!autoPaint) scene._wqaControllerReady = true;
             window._wqaAutoPaint = null;
+            host.dialoguePresented?.(scene, paint);
             submit(context, { kind: 'dialoguePage', text, speaker });
         }
 

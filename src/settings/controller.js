@@ -1,17 +1,24 @@
 'use strict';
 
-const { MENU_ACTIONS, FIELD_ACTIONS, BINDABLE_MASK, buttonBit, controllerFamily, buttonName, recoveryMask } = require('./controller-bindings');
+const { MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, BINDABLE_MASK, buttonBit, controllerFamily, buttonName,
+    recoveryMask } = require('./controller-bindings');
 const QUEUE_LIMIT = 4;
+const FIELD_MODE = ['settings', ...FIELD_MODE_ACTIONS];
+const FRONT_MODE = ['settings'];
+const DIALOGUE_MODE = ['repeat', 'puzzleStop'];
 
 function modeAnnouncement(family, context, bindings) {
     if (context.kind === 'field') {
         const current = bindings.currentDestination === null ? '' : `${buttonName(family, bindings.currentDestination)} reads the destination. `;
-        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${current}${buttonName(family, bindings.mode)} cancels.`;
+        const start = context.puzzle && bindings.puzzleGuide != null ? `${buttonName(family, bindings.puzzleGuide)} reviews the puzzle. ` : '';
+        const stop = context.puzzleActive && bindings.puzzleStop != null ? `${buttonName(family, bindings.puzzleStop)} stops the guide. ` : '';
+        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${current}${start}${stop}${buttonName(family, bindings.mode)} cancels.`;
     }
     const next = context.kind === 'front' ? 'opens settings' : 'repeats dialogue';
     const input = context.kind === 'front' ? bindings.settings : bindings.repeat;
     const hint = input === null ? '' : `${buttonName(family, input)} ${next}. `;
-    return `Mod mode. ${hint}${buttonName(family, bindings.mode)} cancels.`;
+    const stop = context.puzzleActive && bindings.puzzleStop != null ? `${buttonName(family, bindings.puzzleStop)} stops the guide. ` : '';
+    return `Mod mode. ${hint}${stop}${buttonName(family, bindings.mode)} cancels.`;
 }
 
 function rightStick(x, y, previous) {
@@ -106,7 +113,8 @@ function createController(host) {
             }
             return 0; // The modal owns and masks native input separately.
         }
-        if (!bindings.enabled || (mode && mode !== device) || (context.kind === 'dialogue' && bindings.repeat === null)) return 0;
+        if (!bindings.enabled || (mode && mode !== device) || (context.kind === 'dialogue' && bindings.repeat === null &&
+            (!context.puzzleActive || bindings.puzzleStop == null))) return 0;
         const modeBit = buttonBit(bindings.mode);
         if (rising & modeBit && !host.nativeButton(bindings.mode)) {
             const entering = mode !== device;
@@ -128,9 +136,9 @@ function createController(host) {
         // A second command requires releasing the mode button first. Keep
         // all native controls neutral while the deliberate mode is active.
         if (!(pressed & modeBit) && !(previous & modeBit)) {
-            const actions = context.kind === 'field' ? ['settings', 'currentDestination'] :
-                context.kind === 'front' ? ['settings'] : ['repeat'];
-            for (const action of actions) if (rising & buttonBit(bindings[action])) {
+            const actions = context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE : DIALOGUE_MODE;
+            for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
+                (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive)) {
                 mode = null;
                 queue(index, device, action);
                 break;
