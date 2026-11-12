@@ -127,4 +127,10 @@ At 2:13:22 p.m. PST Microsoft Defender completed custom scans of the exact stage
 
 The C: Steam copy and recovery plan verified 16 native script patches, 38 mod payload files and 240 geometry entries. The three save-directory files, including one numbered playthrough, retained their hashes. The game stayed closed.
 
-On Crispy Beach, stand still and tap **K** once to hear the current selection. Use **Shift+J/L** to reach **All** or **People**, and **P** once for directions. While Follow Elder Tater is active and his approach is reachable, People should offer Elder Tater. Allow about two minutes to try the controls and open **F8 → Help**. Gameplay confirmation remains pending. [Technical evidence](navigation.md#cached-portrait-requests-and-the-all-category) · [ReadMe](../README.md)
+On Crispy Beach, stand still and tap **K** once to hear the current selection. Use **Shift+J/L** to reach **All** or **NPC**, and **P** once for directions. While Follow Elder Tater is active and his approach is reachable, NPC should offer Elder Tater. Allow about two minutes to try the controls and open **F8 → Help**. Gameplay confirmation remains pending. [Technical evidence](navigation.md#cached-portrait-requests-and-the-all-category) · [ReadMe](../README.md)
+
+## NPC label update
+
+November 12, 2026. Plan SHA-256 `d537731139ccc9f298b744d65d6fc02988a0103669cfca24f68178826836f40e`. The focused build rebuilt the main JavaScript bundle and verified the 16 existing native script transforms, 37 remaining payload files, and all 240 local geometry entries. The native field fixture spoke “NPC, Elder Tater” and the matching NW fixture verified the Help wording. The exact installer mirror passed installation and recovery.
+
+At 2:24:28 p.m. PST Microsoft Defender completed scans of the exact payload, geometry and plan, and build and installer scripts. It found no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.267.0. Build and installer source hashes and unsigned native dependencies match the prior update. The C: Steam installation and recovery plan verified. All three save-directory files, including the numbered playthrough, retained their hashes. [Pathfinder controls](navigation.md#destination-controls-in-the-development-build)

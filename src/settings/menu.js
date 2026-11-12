@@ -214,7 +214,7 @@ function createSettingsMenu(root, host) {
             'Pathfinder. Previous destination ' + binding('previousDestination') + '. Next destination ' +
                 binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
                 binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
-            'All combines destinations and saved bookmarks. People lists reachable characters. Save or load a bookmark under Navigation, Bookmarks.',
+            'All combines destinations and saved bookmarks. NPC lists reachable characters. Save or load a bookmark under Navigation, Bookmarks.',
             'Review. Repeat dialogue ' + gestureName(keys.repeat) + '. Read details ' + gestureName(keys.details) +
                 '. Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
             'Controller. Press and release ' + padName('mode') + ' for mod mode, then ' + padName('settings') +

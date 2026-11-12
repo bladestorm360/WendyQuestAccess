@@ -1,6 +1,6 @@
 'use strict';
 
-const CATEGORY_LABELS = Object.freeze({ all: 'All', objects: 'Objects', people: 'People', merchants: 'Merchants', exits: 'Exits',
+const CATEGORY_LABELS = Object.freeze({ all: 'All', objects: 'Objects', people: 'NPC', merchants: 'Merchants', exits: 'Exits',
     treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
 
 function eventName(entry) {

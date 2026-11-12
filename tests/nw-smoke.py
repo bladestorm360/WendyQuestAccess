@@ -239,6 +239,9 @@ function verifySettings() {
         if (!document.activeElement.textContent.includes('Directions P')) throw Error('Help did not show the current directions key');
         tap('Enter');
         if (!menuStatus()?.includes('Previous category Shift+J')) throw Error('Help did not expose the pathfinder instructions');
+        tap('ArrowDown');
+        if (!document.activeElement.textContent.includes('NPC lists reachable characters'))
+            throw Error('Help did not use the NPC category label');
         tap('Escape');
         if (document.activeElement.textContent !== 'Help') throw Error('Help did not return to its parent');
         tap('ArrowDown');

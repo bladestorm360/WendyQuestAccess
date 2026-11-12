@@ -439,7 +439,7 @@ async function verifyOpeningField(tilesets) {
         submit(packet, result);
         f.frame();
         if (letter === 'l' && shift)
-            assert.match(formatSpeech(f.packets.filter(record => record.kind === 'fieldTarget').at(-1)), /^People, Elder Tater/);
+            assert.match(formatSpeech(f.packets.filter(record => record.kind === 'fieldTarget').at(-1)), /^NPC, Elder Tater/);
         if (letter === 'p') {
             assert.equal(packet.request.event, 5);
             assert.equal(packet.request.waypoint, true);
