@@ -491,9 +491,25 @@ function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () 
     const approaches = reachableApproaches(world, start, tiles, cancelled);
     if (!approaches) return { status: 'cancelled' };
     const available = new Uint8Array(candidates.length);
+    let handoffRoutes;
     for (let index = 0; index < candidates.length; index++) {
         if (cancelled()) return { status: 'cancelled' };
-        if (approachAvailable(world, start, candidates[index], tiles, approaches, cancelled)) available[index] = 1;
+        const candidate = candidates[index];
+        if (approachAvailable(world, start, candidate, tiles, approaches, cancelled)) {
+            available[index] = 1;
+        } else if (world.mode === 'walk' && Number.isInteger(candidate.event) &&
+            Array.isArray(candidate.handoffs) && candidate.handoffs.length <= 16) {
+            // The qualified beach targets share at most two event IDs,
+            // including aliases in Quests and saved bookmarks.
+            handoffRoutes ??= new Map();
+            if (!handoffRoutes.has(candidate.event) && handoffRoutes.size < 2) {
+                const prefix = solveWorldRoute(world, { ...candidate, x, y, field: true }, cancelled, tiles);
+                if (prefix.status === 'cancelled') return prefix;
+                handoffRoutes.set(candidate.event, prefix.status === 'interrupted' ? prefix.boundaryEvent : 0);
+            }
+            const handoff = handoffRoutes.get(candidate.event);
+            if (handoff && candidate.handoffs.includes(handoff)) available[index] = 2;
+        }
     }
     return { status: 'reachable', available };
 }
@@ -601,7 +617,7 @@ function shipLandingRoute(world, request, cancelled) {
     return sailing;
 }
 
-function solveWorldRoute(world, request, cancelled = () => false) {
+function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
     const start = indexOf(world, request.x, request.y);
     if (start < 0) return { status: 'unavailable' };
     const area = request.area && clipRectangle(world, request.area);
@@ -609,7 +625,7 @@ function solveWorldRoute(world, request, cancelled = () => false) {
     if (request.landing === true) return request.entrances !== undefined
         ? airshipEntranceRoute(world, start, request, area, cancelled) : landingRoute(world, start, request, area, cancelled);
     if (request.shipLanding && request.entrances === undefined) return shipLandingRoute(world, request, cancelled);
-    const tiles = interactionTiles(world, cancelled);
+    const tiles = readyTiles || interactionTiles(world, cancelled);
     if (request.entrances !== undefined) {
         const result = transferEntranceRoute(world, start, request, tiles, cancelled);
         if (request.shipLanding && request.groundEntrances?.length && ['unavailable', 'unreachable'].includes(result.status))

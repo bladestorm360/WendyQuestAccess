@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { captureWorld } = require('../src/world/snapshot');
-const { solveRoute } = require('../src/world/routes.cjs');
+const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker) {
@@ -44,6 +44,66 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker) {
         assert.equal(player._newMapId, destination);
         assert.deepEqual([player._newX, player._newY], landing);
     }
+
+    const beach = load(13, { switches: [31, 321], self: ['13,5,C', '13,8,A', '13,14,A', '13,20,A'] });
+    const beachMap = beach.gameMap;
+    const elder = beachMap.event(5);
+    elder.setPosition(beachMap.event(21).x + 2, elder.y);
+    elder.setThrough(true);
+    beachMap.event(8).SetBlocker(-1, -1, 1, 0);
+    beach.player.setPosition(beachMap.event(20).x, beachMap.event(20).y + 1);
+    const beachView = captureWorld(c);
+    const destination = id => {
+        const target = beachView.objects.find(item => item.id === id);
+        assert(target);
+        return { event: id, waypoint: !!target.waypoint, handoffs: target.handoffs };
+    };
+    const fromBeach = { x: beachView.x, y: beachView.y };
+    const candidates = [destination(1), destination(5), destination(7)];
+    assert(!beachView.objects.some(item => item.id === 16), 'the current Russetwood dialogue page is not an exit');
+    const directCandidates = candidates.map(({ handoffs, ...candidate }) => candidate);
+    const availability = entries => findReachable(beach.geometry, beachView.live, { ...fromBeach, candidates: entries });
+    assert.deepEqual([...availability(directCandidates).available], [0, 0, 0]);
+    assert.deepEqual([...availability(candidates).available], [0, 2, 2]);
+    assert.equal(availability([{ ...candidates[1], handoffs: [35] }]).available[0], 0,
+        'an unqualified first floor event cannot admit the target');
+    function measure(entries) {
+        const started = performance.now();
+        for (let run = 0; run < 60; run++) availability(entries);
+        return performance.now() - started;
+    }
+    console.log('Throttled 60 matched beach availability requests: %s ms direct, %s ms with floor events.',
+        measure(directCandidates).toFixed(2), measure(candidates).toFixed(2));
+    const elderRequest = { ...fromBeach, ...candidates[1], field: true };
+    const prefix = solveRoute(beach.geometry, beachView.live, elderRequest);
+    assert.equal(prefix.status, 'interrupted');
+    assert.equal(prefix.boundaryEvent, 30);
+    const { x: beachX, y: beachY } = prefix.arrival;
+    verifyRoute(beach, { ...fromBeach, targetX: beachX, targetY: beachY }, { ...prefix, status: 'ready' });
+    await verifyWorker(beach, elderRequest, beachView.live, result => assert.deepEqual(result, prefix));
+    assert(beach.player.canPass(beachX, beachY, prefix.boundary));
+    beach.player.setPosition(beachMap.roundXWithDirection(beachX, prefix.boundary),
+        beachMap.roundYWithDirection(beachY, prefix.boundary));
+    beach.player.checkEventTriggerHere([1, 2]);
+    assert.equal(beachMap.events().find(event => event.isStarting()).eventId(), 30);
+    const pathEvent = beachMap.event(30);
+    pathEvent.setupPage = () => {}; // Only the erased flag affects the next route.
+    const interpreter = Object.assign(new c.Game_Interpreter(), { _mapId: 13, _eventId: 30, _list: pathEvent.list(), _index: 0 });
+    assert(interpreter.executeCommand());
+    assert.equal(pathEvent._erased, true);
+    const nextView = captureWorld(c);
+    const next = solveRoute(beach.geometry, nextView.live, { ...elderRequest, x: nextView.x, y: nextView.y });
+    assert.equal(next.status, 'interrupted');
+    assert.equal(next.boundaryEvent, 35);
+    beach.player.setPosition(beachMap.event(21).x + 1, beachMap.event(21).y);
+    const eastern = captureWorld(c);
+    const reached = findReachable(beach.geometry, eastern.live, { x: eastern.x, y: eastern.y, candidates });
+    assert.deepEqual([...reached.available], [0, 1, 1]);
+    const road = load(13, { switches: [11] });
+    const roadEvent = road.gameMap.event(16);
+    road.player.setPosition(roadEvent.x - 1, roadEvent.y);
+    assert(captureWorld(c).objects.some(item => item.id === roadEvent.eventId() && item.name === 'Road to Russetwood'));
+    console.log('Verified native Crispy Beach gate activation, next checkpoint, and direct access on the far side.');
 
     transfer(load(127), 2, [6, 2], 'Third floor', 128, [6, 11]);
     transfer(load(127, { switches: [503] }), 2, [6, 2], 'Secret room stairs', 195, [6, 11]);

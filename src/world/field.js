@@ -5,6 +5,7 @@ const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
+const { localHandoffName } = require('./local-destinations');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { tileKey } = require('./geometry.cjs');
@@ -192,8 +193,12 @@ function createField(root, host, notifications) {
                     return status(job, 'Reachable destinations unavailable');
                 }
                 snapshot.eligibleObjects = snapshot.objects;
-                snapshot.objects = snapshot.objects.filter((target, index) => result.available[index] === 1 &&
-                    (!target.quest || questDestinationCurrent(root, job.scene, target.quest)));
+                snapshot.objects = snapshot.objects.filter((target, index) => {
+                    const available = result.available[index];
+                    if (available === 2) target.handoff = true;
+                    return (available === 1 || available === 2) &&
+                        (!target.quest || questDestinationCurrent(root, job.scene, target.quest));
+                });
                 job.performed = true;
                 return select(job, snapshot);
             }
@@ -258,9 +263,12 @@ function createField(root, host, notifications) {
                     board: !!job.vehicle, land: result.land === true,
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
             }
-            else if (result?.status === 'interrupted') follow(job, result, { kind: 'routeDirections', name: job.label,
-                legs: result.legs, boundary: result.boundary, boundaryName: worldBoundaryName(root, result.boundaryEvent),
-                more: result.more === true });
+            else if (result?.status === 'interrupted') {
+                const handoff = localHandoffName(job.map, result.boundaryEvent);
+                follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
+                    boundaryName: handoff || worldBoundaryName(root, result.boundaryEvent),
+                    manualHandoff: !!handoff, more: result.more === true });
+            }
             else if (result?.status === 'approachBlocked') status(job, 'A floor event blocks the approach to ' + job.label);
             else if (job.remote && ['unreachable', 'unavailable'].includes(result?.status))
                 status(job, 'No verified reachable entrance for ' + job.remote.bookmark.name);
@@ -324,7 +332,8 @@ function createField(root, host, notifications) {
         return { event: target.nearestLanding ? undefined : (target.event ?? target.id),
             vehicle: target.vehicle, entryDirection: target.entryDirection,
             waypoint: target.waypoint === true || target.quest?.waypoint === true,
-            nearestLanding: target.nearestLanding === true };
+            nearestLanding: target.nearestLanding === true,
+            ...(target.handoffs ? { handoffs: target.handoffs } : {}) };
     }
 
     function route(job, snapshot, target, area, motion) {
@@ -358,7 +367,7 @@ function createField(root, host, notifications) {
         if (target.saved) return selectSavedBookmark(job, snapshot, target.saved, category);
         owner.remoteBookmark = null;
         if (job.action !== 'directions') return present(job, { kind: 'fieldTarget', name: target.name, category,
-            dx: target.x - snapshot.x, dy: target.y - snapshot.y, outOfReach: target.outOfReach });
+            dx: target.x - snapshot.x, dy: target.y - snapshot.y, outOfReach: target.outOfReach, handoff: target.handoff });
         if (!timedCave(snapshot.map)) return route(job, snapshot, target);
         const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.event ?? target.id);
         const motion = area ? null : captureMotion(root, host.graphics);

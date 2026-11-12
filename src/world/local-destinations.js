@@ -5,6 +5,8 @@ const { houseStair, houseBranches } = require('./transfer-events.cjs');
 // Each locator describes the active page's native destination. The worker
 // still derives the interaction approach from live collision and priority.
 const EXITS = {
+    13: { 1: ['Crispy Ruins', 16], 2: ['Crispy Ruins', 16],
+        7: ["Elder Tater's house", 116], 16: ['Road to Russetwood', 113] },
     28: { 6: ['Cauldron exterior', 57], 7: ['Third pull room', 55],
         8: ['First pull room', 51], 9: ['Second pull room', 53] },
     32: { 6: ['Cauldron exterior', 57], 7: ['First pull room', 51], 8: ['Second pull room', 53] },
@@ -27,6 +29,19 @@ const EXITS = {
 
 const PULLS = { 51: [2], 53: [3, 4], 55: [4] };
 
+// Only these authored Crispy Beach floor events can qualify a route up to
+// its first native interruption. The route still ends before the event.
+const BEACH_HANDOFF_NAMES = Object.freeze({
+    12: 'Beach path', 30: 'Beach path', 34: 'Beach checkpoint', 35: 'Beach checkpoint',
+    10: 'Story event', 11: 'Story event', 13: 'Story event', 21: 'Story event', 22: 'Story event',
+    23: 'Story event', 24: 'Story event', 25: 'Story event', 26: 'Story event', 27: 'Story event'
+});
+const BEACH_HANDOFFS = Object.freeze(Object.keys(BEACH_HANDOFF_NAMES).map(Number));
+
+function localHandoffName(map, event) {
+    return map === 13 ? BEACH_HANDOFF_NAMES[event] : undefined;
+}
+
 function localDestination(root, event, page) {
     const map = root.$gameMap._mapId;
     const id = event._eventId;
@@ -46,12 +61,14 @@ function localDestination(root, event, page) {
         if ((trigger !== 0 && trigger !== 1) ||
             !list.some(command => command.code === 201 && command.parameters[0] === 0 &&
                 exit.includes(command.parameters[1], 1))) return null;
-        return { name: exit[0], category: 'exits' };
+        const target = { name: exit[0], category: 'exits' };
+        if (map === 13 && id === 7) target.handoffs = BEACH_HANDOFFS;
+        return target;
     }
     // Follow Elder Tater is a live parallel NPC page. A route approaches
     // the person without trying to start the background interpreter.
     if (map === 13 && id === 5 && event._pageIndex === 1 && trigger === 4 && page.image?.characterName === '~ElderTater')
-        return { name: 'Elder Tater', category: 'people', waypoint: true };
+        return { name: 'Elder Tater', category: 'people', waypoint: true, handoffs: BEACH_HANDOFFS };
     if (trigger !== 0) return undefined;
     if (PULLS[map]?.includes(id)) return event._pageIndex === 0 ? { name: 'Pull handle', category: 'objects' } : null;
     if (map === 15 && id >= 31 && id <= 33) return { name: 'Gate switch', category: 'objects' };
@@ -62,4 +79,4 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { localDestination };
+module.exports = { localDestination, localHandoffName };

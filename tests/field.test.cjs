@@ -201,6 +201,7 @@ async function main() {
     }
     profileSnapshot(flags);
     await verifyOpeningField(flags);
+    await verifyBeachHandoffs(flags);
     await verifySurfaceField(flags);
     console.log('Verified native field admission, spoken object selection and route, restored tiles, and stale-route retirement.');
 }
@@ -531,6 +532,62 @@ async function verifyOpeningField(tilesets) {
     console.log('Verified the native Crispy Beach lightning timer, F8, destination cycling, directions and unrelated refresh retirement.');
     console.log('Throttled Crispy Beach update series,', samples, 'frames:', baseline.toFixed(2), 'ms before,',
         withMark.toFixed(2), 'ms with refresh qualification.');
+}
+
+async function verifyBeachHandoffs(tilesets) {
+    const data = mapData(13);
+    const f = fixture(data);
+    const { c, routePackets } = f;
+    const map = c.$gameMap;
+    const player = c.$gamePlayer;
+    const pages = { 5: 1, 8: 1, 12: 1, 14: 1, 20: 1, 30: 1 };
+    c.$dataTilesets = tilesets;
+    Object.assign(map, { _mapId: 13, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
+        _vehicles: [], _nameDisplay: false });
+    for (const entry of data.events.filter(Boolean)) {
+        const pageIndex = pages[entry.id] || 0;
+        const page = entry.pages[pageIndex];
+        const actor = f.event(entry.id, pageIndex);
+        Object.assign(actor, { _x: entry.x, _y: entry.y, _pageIndex: pageIndex, _trigger: page.trigger,
+            _priorityType: page.priorityType, _through: page.through });
+        map._events[entry.id] = actor;
+        map.fixtureEvents.push(actor);
+    }
+    const elder = map._events[5];
+    elder.setPosition(map._events[21]._x + 2, elder._y);
+    elder._through = true;
+    map._events[8].SetBlocker(-1, -1, 1, 0);
+    player._vehicleType = 'walk';
+    player.setPosition(data.events[20].x, data.events[20].y + 1);
+    player.reserveTransfer(13, player._x, player._y, 8, 0);
+    c.SceneManager.goto(c.Scene_Map);
+    c.SceneManager.changeScene();
+    c.DataManager.ready = c.ImageManager.ready = true;
+    c.SceneManager.updateScene();
+    await new Promise(setImmediate);
+    const scene = c.Graphics.app.stage;
+    scene._fadeDuration = scene._fadeOpacity = 0;
+    c.SceneManager.updateScene();
+    f.idleCallbacks.shift()();
+    c.SceneManager.updateScene();
+    f.frame();
+    const geometry = bakeMap(data, tilesets[data.tilesetId].flags);
+    const key = (letter, code, shiftKey) => {
+        f.dispatchWindowEvent('keydown', { key: letter, keyCode: code, shiftKey });
+        f.dispatchWindowEvent('keyup', { key: letter });
+        f.frame();
+        const packet = routePackets.at(-1);
+        const solve = packet.request.candidates ? findReachable : solveRoute;
+        f.routeReply({ epoch: packet.epoch, sequence: packet.sequence, map: packet.map,
+            result: solve(geometry, packet.live, packet.request) });
+        f.frame();
+        return formatSpeech(f.packets.filter(record => ['fieldTarget', 'routeDirections'].includes(record.kind)).at(-1));
+    };
+    assert.match(key('k', 75), /^Elder Tater, .*route stops at a floor event/);
+    assert.match(key('l', 76, true), /^Exits, Elder Tater's house, .*route stops at a floor event/);
+    assert.match(key('j', 74, true), /^NPC, Elder Tater, .*route stops at a floor event/);
+    assert.equal(key('p', 80), 'Elder Tater. 2 south, 2 east. Beach path one tile east. Move east to continue, then request directions again.');
+    console.log('Verified Crispy Beach browse and directions speech when an authored floor event separates the player from Elder Tater.');
 }
 
 async function verifySurfaceField(tilesets) {

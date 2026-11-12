@@ -118,6 +118,7 @@ function formatSpeech(message) {
             if (Number.isInteger(message.dy) && message.dy && Math.abs(message.dy) < 256) {
                 offsets.push(`${Math.abs(message.dy)} ${message.dy < 0 ? 'north' : 'south'}`);
             }
+            if (message.handoff === true) offsets.push('route stops at a floor event');
             if (message.outOfReach === true) offsets.push('out of reach');
             text = name && [category, name, ...offsets].filter(Boolean).join(', ');
             break;
@@ -150,7 +151,10 @@ function formatSpeech(message) {
             const activate = HEADINGS[message.activate];
             if (message.more) parts.push('More directions available');
             else if (activate) parts.push(`Move ${activate} to activate`);
-            else if (boundary) parts.push(`${label({ name: message.boundaryName }) || 'Floor event'} one tile ${boundary}`);
+            else if (boundary) {
+                parts.push(`${label({ name: message.boundaryName }) || 'Floor event'} one tile ${boundary}`);
+                if (message.manualHandoff === true) parts.push(`Move ${boundary} to continue, then request directions again`);
+            }
             else if (message.reenter === true)
                 parts.push(message.sailing ? 'Sail off this tile and back to activate' : 'Walk off this tile and back to activate');
             else if (message.enter === true && facing) parts.push(`face ${facing} and press the action button to enter`);

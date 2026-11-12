@@ -105,7 +105,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
         const quest = quests?.get(eventId);
         if (quest && target !== null && (mode !== 'airship' || target?.category === 'exits')) {
             objects.push({ id: eventId, x, y, name: questDestinationLabel(entry, quest, target), category: 'quests',
-                entryDirection: target?.entryDirection, quest });
+                entryDirection: target?.entryDirection, handoffs: target?.handoffs, quest });
         }
     }
     if (mode === 'walk') objects.push(...boardingTargets(map));
