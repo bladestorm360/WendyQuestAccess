@@ -47,9 +47,7 @@ core = (installed / CORE_REL).read_text(encoding='utf8')
 for name in ('Number.prototype.clamp', 'Number.prototype.padZero', 'String.prototype.padZero',
              'Window.prototype.isOpen', 'Window.prototype.isClosed'):
     methods.append(between(core, f'{name} = function(', '\n};') + '\n};')
-inputs, _ = decode((installed / 'package.nw/js/plugins/InputAdjustments.js').read_text(encoding='utf-8-sig'))
-methods.append(between(inputs, "Input['keyMapper']={", "},Input['gamepadMapper']") + '};')
-methods.append(between(inputs, "Input['_onKeyDown']=function(", "},Input['_updateGamepadState']") + '};')
+methods.extend(runpy.run_path(str(ROOT / 'tests' / 'input-producers.py'))['input_methods'](installed))
 battle, _ = decode(battle_notification((installed / BATTLE_REL).read_bytes()).decode('utf8'))
 for name, tail in [
     ("Scene_Battle['prototype']['start']", "},Scene_Battle['prototype']['update']"),
