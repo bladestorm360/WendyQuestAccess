@@ -36,14 +36,14 @@ def mirror(source, target):
     shutil.copyfile(installer.manifest_path(source), installer.manifest_path(target))
 
 
-def verify_fixture(steam, workspace):
+def verify_fixture(steam, workspace, prepared=None):
     game = workspace / 'steamapps/common/Wendy Quest'
-    stage = workspace / 'candidate'
+    stage = prepared[0] if prepared else workspace / 'candidate'
     mirror(steam, game)
     save = game / 'package.nw/save/fixture-save'
     save.parent.mkdir()
     save.write_bytes(b'isolated save witness')
-    expected = installer.prepare(game, stage)
+    expected = prepared[1] if prepared else installer.prepare(game, stage)
     receipt = (stage / installer.PLAN).read_bytes()
     plan = installer.validate_plan(receipt)
     originals, patched = installer.game_scripts(game)
@@ -111,4 +111,7 @@ if __name__ == '__main__':
         target = installer.check_path(Path(folder))
         if target.parent != scratch:
             raise SystemExit('Installer fixture escaped its scratch directory.')
-        verify_fixture(source, target)
+        if len(sys.argv) not in (3, 5):
+            raise SystemExit('Pass a stock fixture root and scratch root, optionally followed by a candidate and plan hash.')
+        prepared = (installer.local_candidate(Path(sys.argv[3])), sys.argv[4]) if len(sys.argv) == 5 else None
+        verify_fixture(source, target, prepared)

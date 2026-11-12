@@ -68,12 +68,16 @@ function fixture(data, failSave = false) {
             setStage(scene) { this.app.stage = scene; if (scene) trace.push('stage'); }
         },
         ImageManager: {
-            ready: false, isReady() { return this.ready; }, clear: () => trace.push('image clear'),
-            loadFace: () => trace.push('event face'), loadPicture: () => trace.push('event picture')
+            _cache: {}, _system: {}, ready: false, isReady() { return this.ready; },
+            clear() { this._cache = {}; trace.push('image clear'); }
         },
         EffectManager: { isReady: () => true, clear: () => trace.push('effect clear') },
         FontManager: { isReady: () => true },
-        Bitmap: { load: () => ({ addLoadListener(callback) { bitmapCallbacks.push(callback); } }) },
+        Bitmap: { load(url) {
+            if (url.startsWith('img/faces/')) trace.push('event face');
+            if (url.startsWith('img/pictures/')) trace.push('event picture');
+            return { isReady: () => true, addLoadListener(callback) { bitmapCallbacks.push(callback); } };
+        } },
         ImageLoader: function (_names, callback) { idleCallbacks.push(() => callback({ GetImage: () => ({}) })); },
         Window_Base: { prototype: { update() {} } },
         DataManager: {
@@ -254,7 +258,11 @@ async function main() {
         assert.deepEqual(speech(), [data.displayName]);
 
         const pendingEvent = c.$gameMap.fixtureEvents[0];
-        c.ImageManager.loadFace = () => { assert.equal(epoch(), 0); trace.push('event face'); };
+        const load = c.Bitmap.load;
+        c.Bitmap.load = url => {
+            if (url.startsWith('img/faces/')) assert.equal(epoch(), 0);
+            return load(url);
+        };
         pendingEvent.start();
         assert.equal(c.$gamePlayer.canMove(), false, 'a queued main event already blocks native movement');
         assert(c.$gameMap.setupStartingEvent());
@@ -298,8 +306,12 @@ async function main() {
         c.WendyQuestAccessSceneLeaving = sceneLeaving;
 
         const parallel = new c.Game_Interpreter();
+        const warmEpoch = epoch();
         parallel.setup(pendingEvent.list(), 16);
-        assert.equal(epoch(), 0, 'a parallel face preload retires the existing banner');
+        assert.equal(epoch(), warmEpoch, 'a ready cached face leaves the banner admitted');
+        c.ImageManager._cache = {};
+        parallel.setup(pendingEvent.list(), 16);
+        assert.equal(epoch(), 0, 'a real parallel face load still retires the existing banner');
         replay();
         c.$gameMap.inactiveTime = 29;
         c.$gameTemp.requestBalloon = () => assert.equal(epoch(), 0);

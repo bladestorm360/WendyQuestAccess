@@ -232,6 +232,16 @@ function verifySettings() {
         }
         tap('ArrowUp');
         if (document.activeElement.textContent !== 'Close settings') throw Error('Up did not wrap mod-menu focus');
+        tap('ArrowUp');
+        if (document.activeElement.textContent !== 'Help') throw Error('Settings Help is missing');
+        tap('Enter');
+        tap('ArrowDown');
+        if (!document.activeElement.textContent.includes('Directions P')) throw Error('Help did not show the current directions key');
+        tap('Enter');
+        if (!menuStatus()?.includes('Previous category Shift+J')) throw Error('Help did not expose the pathfinder instructions');
+        tap('Escape');
+        if (document.activeElement.textContent !== 'Help') throw Error('Help did not return to its parent');
+        tap('ArrowDown');
         tap('ArrowRight');
         tap('ArrowDown');
         if (document.activeElement.textContent !== 'Controller bindings') throw Error('Down did not move mod-menu focus');
@@ -1050,7 +1060,7 @@ const interval = setInterval(() => {
                 ] }] }] };
             $dataTilesets = [null, { flags: [0] }];
             $gameTileChanges = {};
-            tap('[', 'BracketLeft', { shiftKey: true });
+            tap(']', 'BracketRight', { shiftKey: true });
             Graphics.app.renderer.emit('postrender');
             if (!scene._wqaQuestNavigation) throw Error('The published quest marker did not own the selection');
             endingStep++;
@@ -1167,6 +1177,7 @@ const interval = setInterval(() => {
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             SceneManager._scene = Graphics.app.stage = { _wqaFieldReady: true, _active: true, _fadeOpacity: 0, _fadeDuration: 0 };
             installTransferPage(3, 2);
+            tap('[', 'BracketLeft', { shiftKey: true });
             tap('[', 'BracketLeft', { shiftKey: true });
             Graphics.app.renderer.emit('postrender');
             endingStep++;

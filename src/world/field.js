@@ -91,6 +91,7 @@ function createField(root, host, notifications) {
             scene === host.manager._scene && host.graphics.app?.stage === scene &&
             !host.manager._nextScene && !host.manager._exiting && !host.manager._wqaNativeAutosaves &&
             !host.graphics._wqaResize && !host.screenFading() && host.hasFocus() && !scene._wqaTerrainWork &&
+            !scene._wqaPreloads?.size && !scene._wqaPreloadOverflow &&
             scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 && root.$gameScreen?._brightness === 255 &&
             (waking || map?.inactiveTime < 30) && (!map?._needsRefresh || (map._mapId === 13 && scene._wqaLightningRefreshOnly)) &&
             map && !map._needsTilemapRefresh && !player?._transferring &&
@@ -321,7 +322,8 @@ function createField(root, host, notifications) {
     function destinationRequest(target) {
         if (target.point) return { targetX: target.x, targetY: target.y };
         return { event: target.nearestLanding ? undefined : (target.event ?? target.id),
-            vehicle: target.vehicle, entryDirection: target.entryDirection, waypoint: target.quest?.waypoint === true,
+            vehicle: target.vehicle, entryDirection: target.entryDirection,
+            waypoint: target.waypoint === true || target.quest?.waypoint === true,
             nearestLanding: target.nearestLanding === true };
     }
 

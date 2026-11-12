@@ -15,7 +15,7 @@ Routing geometry is generated from the verified local game and placed in `packag
 3. Run the applicable native, world, matching NW.js and installer fixtures. Scan the exact staged payload and installer scripts with the current local scanner. Record the plan hash, file hashes, scan definitions, result and signing status.
 4. When the complete candidate passes the release gates, close the game and run `python tools/install.py install <candidate-directory> <plan-hash>`. Run `python tools/install.py status` to confirm the result. Launch through Steam for gameplay confirmation.
 
-The installer fixture runs under the bounded runner as `python tools/run-build.py --memory-mb 384 -- python tests/install.test.py <Steam-game-root> <analysis-root>`. It builds a temporary mirror outside Git and exercises the real installer against it. It verifies rollback after activation, detection of an occupied install path, launcher leasing, reapplication after a partial Steam restore, protection of unknown edits, byte-for-byte removal and an untouched save witness. The fixture removes its copy at completion.
+The installer fixture runs under the bounded runner as `python tools/run-build.py --memory-mb 384 -- python tests/install.test.py <stock-game-root> <analysis-root>`. Optionally supply a prepared candidate folder and its plan hash after the two paths to exercise that exact candidate without another geometry bake. It builds a temporary mirror outside Git and exercises the real installer against it. It verifies rollback after activation, detection of an occupied install path, launcher leasing, reapplication after a partial Steam restore, protection of unknown edits, byte-for-byte removal and an untouched save witness. The fixture removes its copy at completion.
 
 ## Recover and reapply
 
@@ -116,3 +116,15 @@ At 1:38:20 p.m. PST Microsoft Defender completed custom scans of the exact paylo
 The installed C: copy and recovery plan verified 16 native script patches, 38 payload files and 240 local geometry entries. All three files in the save directory retained their hashes, including the numbered playthrough. The game stayed closed during deployment.
 
 On launch, listen for Wendy's Studios, 81monkeys and the title. At the first beach chest, listen for “Interact” with the original cue. Select a destination, stand still for about 30 seconds, then press the directions key once. Expect directions from the same selection. Also try a single press during ordinary play without waiting for idle. [Pathfinder evidence](navigation.md#single-press-directions-after-native-idle) · [Interaction prompt](navigation.md#interaction-prompt) · [Splash and title](implementation.md#splash-and-title-artwork)
+
+## Pathfinder cache and category update
+
+November 12, 2026. Plan SHA-256 `38f6a965a9b342caf130d1226e181287367b933d0184f7dd857bd4804c8f42b5`. The focused build used `tools/build.py`'s bundle stage and syntax-checked its output. It derived and checked all 16 native candidates from the installed recovery originals. The three changed native scripts were the map scene, interpreter and image manager. It reused 37 payload files and the 240 local geometry files by their previous verified hashes and rechecked all geometry inputs. No native binaries or map data needed rebuilding for deployment.
+
+The native field, image lifecycle, dialogue, prompts, quest and controller checks passed. The matching NW fixture verified the Help focus and default bindings, route worker, quest marker retirement, bookmark handling and settings handback. The world fixture passed 120,972 movement comparisons. The prepared-candidate installer mirror passed the launcher lease, interruption rollback, install, reapply, unknown-file protection and removal.
+
+At 2:13:22 p.m. PST Microsoft Defender completed custom scans of the exact staged payload, geometry and plan, and the build and installer scripts. It reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.267.0. The unchanged native binaries remained unsigned. The scanned `registration.py` SHA-256 was `b233a0086b07096b974548677e6c0867074aea23fa147fd5ba35017cca7fac5a`. The other build and installer script hashes match the preceding update.
+
+The C: Steam copy and recovery plan verified 16 native script patches, 38 mod payload files and 240 geometry entries. The three save-directory files, including one numbered playthrough, retained their hashes. The game stayed closed.
+
+On Crispy Beach, stand still and tap **K** once to hear the current selection. Use **Shift+J/L** to reach **All** or **People**, and **P** once for directions. While Follow Elder Tater is active and his approach is reachable, People should offer Elder Tater. Allow about two minutes to try the controls and open **F8 → Help**. Gameplay confirmation remains pending. [Technical evidence](navigation.md#cached-portrait-requests-and-the-all-category) · [ReadMe](../README.md)

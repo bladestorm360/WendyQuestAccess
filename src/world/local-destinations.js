@@ -48,6 +48,10 @@ function localDestination(root, event, page) {
                 exit.includes(command.parameters[1], 1))) return null;
         return { name: exit[0], category: 'exits' };
     }
+    // Follow Elder Tater is a live parallel NPC page. A route approaches
+    // the person without trying to start the background interpreter.
+    if (map === 13 && id === 5 && event._pageIndex === 1 && trigger === 4 && page.image?.characterName === '~ElderTater')
+        return { name: 'Elder Tater', category: 'people', waypoint: true };
     if (trigger !== 0) return undefined;
     if (PULLS[map]?.includes(id)) return event._pageIndex === 0 ? { name: 'Pull handle', category: 'objects' } : null;
     if (map === 15 && id >= 31 && id <= 33) return { name: 'Gate switch', category: 'objects' };

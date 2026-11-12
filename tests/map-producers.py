@@ -73,8 +73,10 @@ methods += read_methods(WINDOW_REL.name, window_notification, [
     ('Scene_Base', 'onAutosaveSuccess', "},Scene_Base['prototype']['playAutoSaveAnimation']"),
 ])
 for relative, transform, names in [
-    (MANAGERS_REL, managers_notification, ['SceneManager.goto', 'BattleManager.setup']),
-    (CORE_REL, core_notification, ['Graphics._onWindowResize']),
+    (MANAGERS_REL, managers_notification, ['SceneManager.goto', 'BattleManager.setup', 'ImageManager.loadFace',
+                                            'ImageManager.loadPicture', 'ImageManager.loadBitmap',
+                                            'ImageManager.loadBitmapFromUrl']),
+    (CORE_REL, core_notification, ['Graphics._onWindowResize', 'Utils.encodeURI']),
     (SCENES_REL, scenes_notification, ['Scene_Base.prototype.startFadeOut']),
     (OBJECTS_REL, objects_notification, ['Game_Player.prototype.reserveTransfer', 'Game_Screen.prototype.startFadeOut',
                                         'Game_Event.prototype.start', 'Game_Interpreter.prototype.setup', 'Game_Interpreter.prototype.loadImages',

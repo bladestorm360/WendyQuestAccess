@@ -1,6 +1,6 @@
 'use strict';
 
-const CATEGORY_LABELS = Object.freeze({ objects: 'Objects', people: 'People', merchants: 'Merchants', exits: 'Exits',
+const CATEGORY_LABELS = Object.freeze({ all: 'All', objects: 'Objects', people: 'People', merchants: 'Merchants', exits: 'Exits',
     treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
 
 function eventName(entry) {
@@ -52,10 +52,17 @@ function createDestinationBrowser() { return { category: null, selections: Objec
 
 function browse(state, snapshot, changes) {
     const groups = new Map();
+    const all = new Map();
     for (const target of snapshot.objects) {
         if (!groups.has(target.category)) groups.set(target.category, []);
         groups.get(target.category).push(target);
+        // A quest marker may describe an already-listed event. Prefer the
+        // ordinary entry in All, while retaining both typed lists and saved
+        // bookmarks, whose IDs belong to their own namespace.
+        const previous = all.get(target.id);
+        if (!previous || (previous.category === 'quests' && target.category !== 'quests')) all.set(target.id, target);
     }
+    if (all.size) groups.set('all', [...all.values()]);
     const categories = Object.keys(CATEGORY_LABELS).filter(category => groups.has(category));
     const selectionMissing = !changes.length && state.selections[state.category] !== undefined &&
         !groups.get(state.category)?.some(item => item.id === state.selections[state.category]);
@@ -63,7 +70,8 @@ function browse(state, snapshot, changes) {
         const selected = state.selections[state.category];
         // Keep the selected live target so Directions can still explain the
         // closed approach or the native event at the end of its safe prefix.
-        if (snapshot.eligibleObjects?.some(item => item.category === state.category && item.id === selected))
+        if (snapshot.eligibleObjects?.some(item => item.id === selected &&
+            (state.category === 'all' || item.category === state.category)))
             return { status: 'Selected destination is out of reach' };
         delete state.selections[state.category];
         return { status: 'Selected destination is unavailable' };
@@ -77,7 +85,7 @@ function browse(state, snapshot, changes) {
     };
     const relative = (length, index, offset) => (length + index + offset) % length;
     const previousCategory = state.category;
-    if (!state.category) state.category = categories[0];
+    if (!state.category) state.category = categories.find(category => category !== 'all') || 'all';
     for (const action of changes) {
         if (action === 'previousCategory' || action === 'nextCategory') {
             const index = categories.indexOf(state.category);

@@ -337,6 +337,14 @@ def quest_notification(original):
 
 def managers_notification(original):
     return insert(original, MANAGERS_SHA, {
+        # Use the cache selected by the native loader. The opening Elder's
+        # parallel interpreter re-requests the same loaded face every update.
+        25496: b'    const wqaScene=this._wqaInterpreterPreload?SceneManager._scene:null;\n'
+               b'    const wqaCold=wqaScene&&!cache[url]?.isReady();\n'
+               b'    if(wqaCold){if(wqaScene._wqaMapRestored)wqaScene._wqaFieldReady=false;'
+               + MAP_LEAVING + b'}\n',
+        25564: b'    if(wqaCold&&wqaScene._wqaMapRestored&&!cache[url].isReady())'
+               b'globalThis.WendyQuestAccessTrackPreload?.(wqaScene,cache[url]);\n',
         # These entry sites precede Chromium reload or the next scene constructor.
         54263: SCENE_LEAVING + b'\n        ',
         57606: b'\n' + files_ready('this._scene'),
@@ -368,6 +376,9 @@ def scenes_notification(original):
 
 
 def objects_notification(original):
+    preload = (b'{const wqaPrior=ImageManager._wqaInterpreterPreload;'
+               b'ImageManager._wqaInterpreterPreload=true;try{')
+    restore_preload = b'}finally{ImageManager._wqaInterpreterPreload=wqaPrior;}}'
     return insert(original, OBJECTS_SHA, {
         2915: b'        if(SceneManager._scene?._wqaBattleStarted){BattleManager._wqaBattleSpritesBusy=undefined;'
               + BATTLE_LOG_LEAVING + b';}\n',
@@ -441,8 +452,10 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);' +
                 BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
                 BATTLE_CUE_LEAVING + b';' + BATTLE_LOG_LEAVING + b';' + BATTLE_RADIAL_LEAVING + b';}',
-        255573: MAP_LEAVING + b'\n                ',  # Face preload
-        255696: MAP_LEAVING + b'\n                ',  # Picture preload
+        255573: preload,  # Interpreter face preload
+        255618: restore_preload,
+        255696: preload,  # Interpreter picture preload
+        255744: restore_preload,
         257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
                 + MAP_LEAVING + b'SceneManager._scene._wqaBattleInterpreter=null;}',
         258782: b'\n    if(waitMode==="message"&&SceneManager._scene?._wqaBattleStarted)'
@@ -550,6 +563,7 @@ def map_notification(original):
             const wqaReady = wqaRevision && wqaWindow._showCount > 0 &&
                 wqaWindow.visible && wqaWindow.openness === 255 && wqaWindow.contentsOpacity > 0 &&
                 this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
+                !this._wqaPreloads?.size && !this._wqaPreloadOverflow &&
                 this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true &&
                 this.srcWendy && this.srcStones && $gameMap._nameDisplay && $gameMap.inactiveTime < 30 &&
                 !$gamePlayer._transferring && $gameScreen._brightness === 255 && !($gameScreen._fadeOutDuration > 0) &&
@@ -576,7 +590,7 @@ def map_notification(original):
         this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true && this.srcWendy &&
         this.srcStones && $gameMap.inactiveTime < 30 &&
         (!$gameMap._needsRefresh || ($gameMap._mapId === 13 && this._wqaLightningRefreshOnly)) &&
-        !$gameMap._needsTilemapRefresh &&
+        !$gameMap._needsTilemapRefresh && !this._wqaPreloads?.size && !this._wqaPreloadOverflow &&
         !$gamePlayer._transferring && !$gamePlayer._vehicleGettingOn && !$gamePlayer._vehicleGettingOff &&
         $gameScreen._brightness === 255 && !$gameScreen._fadeOutDuration && !this._wqaTerrainWork &&
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
@@ -614,6 +628,7 @@ def map_notification(original):
         if ((wqaMap === 188 || wqaMap === 189 || (wqaMap >= 210 && wqaMap <= 239)) &&
             wqaSlots && !this._wqaCreditsPending && this._wqaMapRestored && this._mapLoaded &&
             this._started && this._active && this._fadeDuration === 0 && this._fadeOpacity === 0 &&
+            !this._wqaPreloads?.size && !this._wqaPreloadOverflow &&
             $gameScreen._brightness === 255 && !$gameScreen._fadeOutDuration && !this._wqaTerrainWork &&
             !$gamePlayer._transferring && $gameMap._interpreter?._list && !$gameMessage.isBusy() &&
             this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
@@ -649,7 +664,8 @@ def map_notification(original):
         47577: ACTOR_DIRTY + beacon_actor(),  # Runtime rectangle replacement
         59596: b'this._wqaMapRestored=true;',
         62779: field_update + banner_update + credits_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
-                                               b'this.srcStones && $gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),
+                                               b'this.srcStones && !this._wqaPreloads?.size && !this._wqaPreloadOverflow && '
+                                               b'$gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),
         67386: b'||(this._wqaNavigationWake&&globalThis.WendyQuestAccessIdleInput?.(this))',
         69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
         86279: b'if(SceneManager._scene?._mapNameWindow===this&&SceneManager._scene._wqaMapAnnouncement)'

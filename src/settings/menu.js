@@ -118,7 +118,8 @@ function createSettingsMenu(root, host) {
             controller: button(owner, 'Controller bindings', () => showController(owner)),
             speech: button(owner, 'Speech', () => showSpeech(owner)),
             navigation: button(owner, 'Navigation', () => showNavigation(owner)),
-            audio: button(owner, 'Audio', () => showAudio(owner))
+            audio: button(owner, 'Audio', () => showAudio(owner)),
+            help: button(owner, 'Help', () => showHelp(owner))
         };
         button(owner, 'Close settings', () => close(owner.scene, true));
         (groups[selection] || groups.keyboard).focus();
@@ -193,6 +194,41 @@ function createSettingsMenu(root, host) {
         else if (owner.group === 'audio') showAudio(owner, selection);
         else if (owner.group === 'soundscape') showSoundscape(owner, selection);
         else if (owner.group === 'soundscapeCategory') showSoundscape(owner, selection, owner.category);
+        else if (owner.group === 'help') showHelp(owner, selection);
+    }
+
+    function showHelp(owner, selection = 0) {
+        owner.group = 'help';
+        owner.selected = selection;
+        owner.capture = null;
+        owner.heading.textContent = 'Help';
+        owner.status.textContent = '';
+        owner.contents.textContent = '';
+
+        const field = navigation.bindings[navigation.layout];
+        const binding = action => gestureName(field[action]);
+        const padName = action => buttonName(owner.family, pad[action]);
+        const instructions = [
+            'Settings. Use the arrows to move, Enter to activate and Escape to go back. Your settings key is ' +
+                gestureName(keys.settings) + '.',
+            'Pathfinder. Previous destination ' + binding('previousDestination') + '. Next destination ' +
+                binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
+                binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
+            'All combines destinations and saved bookmarks. People lists reachable characters. Save or load a bookmark under Navigation, Bookmarks.',
+            'Review. Repeat dialogue ' + gestureName(keys.repeat) + '. Read details ' + gestureName(keys.details) +
+                '. Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
+            'Controller. Press and release ' + padName('mode') + ' for mod mode, then ' + padName('settings') +
+                ' for settings or ' + padName('currentDestination') + ' to read the selected destination on the field.',
+            'Controller pathfinder. Previous and next destination ' + padName('previousDestination') + ' and ' +
+                padName('nextDestination') + '. Previous and next category ' + padName('previousCategory') + ' and ' +
+                padName('nextCategory') + '. Directions ' + padName('directions') + '.'
+        ];
+        const items = instructions.map((line, index) => button(owner, line, () => {
+            owner.selected = index;
+            status(owner, line);
+        }));
+        button(owner, 'Back', () => showRoot(owner, 'help'));
+        (items[selection] || items[0]).focus();
     }
 
     function showSpeech(owner, selection = 'enabled') {

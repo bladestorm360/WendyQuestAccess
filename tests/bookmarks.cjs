@@ -75,7 +75,7 @@ async function verifyBookmarks(c, load, verifyRoute, verifyWorker) {
     assert.deepEqual(listed.slice(1).map(item => [item.saved.kind, item.saved.map, item.saved.mode]),
         [['entity', 19, 'walk'], ['point', 13, 'walk'], ['point', 19, 'airship']]);
     const browser = createDestinationBrowser();
-    assert.equal(browse(browser, observed, ['previousCategory']).target.id, 'bookmark-1');
+    assert.equal(browse(browser, observed, ['previousCategory', 'previousCategory']).target.id, 'bookmark-1');
     for (const id of ['bookmark-2', 'bookmark-3', 'bookmark-4', 'bookmark-1'])
         assert.equal(browse(browser, observed, ['nextDestination']).target.id, id);
     event._erased = false;

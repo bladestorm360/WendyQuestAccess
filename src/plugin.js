@@ -603,6 +603,21 @@ function boot(root, nodeRequire, nodeProcess) {
         try { field?.bookmarkTransferReserved(scene, player, map, x, y, direction); } catch { /* Preserve the native transfer. */ }
     };
 
+    root.WendyQuestAccessTrackPreload = function (scene, bitmap) {
+        if (scene._wqaPreloadOverflow) return;
+        // Only an uncached or still-loading interpreter bitmap reaches here.
+        // The native completion callback releases the renderer-owned gate.
+        const pending = scene._wqaPreloads ??= new Set();
+        if (pending.has(bitmap)) return;
+        if (pending.size >= 64) {
+            scene._wqaPreloadOverflow = true;
+            return;
+        }
+        pending.add(bitmap);
+        try { bitmap.addLoadListener(() => { pending.delete(bitmap); }); }
+        catch { scene._wqaPreloadOverflow = true; }
+    };
+
     root.WendyQuestAccessStepNavigationReady = function (scene) { field?.stepReady(scene); };
     root.WendyQuestAccessIdleInput = function (scene) { return field?.idleInput(scene); };
 

@@ -99,7 +99,7 @@ async function main() {
 
     key('l', { shiftKey: true });
     const filtered = publishBrowse();
-    assert.match(formatSpeech(fieldSpeech()[3]), /^Objects, Wall clue/);
+    assert.match(formatSpeech(fieldSpeech()[3]), /^All, Wall clue/);
     for (const id of [2, 3]) {
         const index = filtered.packet.request.candidates.findIndex(target => target.event === id);
         assert(index >= 0, 'the native destination still exists');
@@ -368,17 +368,24 @@ async function verifyOpeningField(tilesets) {
     assert.equal(retry.live.events.find(entry => entry.id === 5).x, elder._x);
     submit(retry, findReachable(base, retry.live, retry.request));
     f.frame();
+    assert.match(formatSpeech(f.packets.filter(packet => packet.kind === 'fieldTarget').at(-1)), /^All, /);
+
+    key('l', 76, true);
+    f.frame();
+    const objects = routePackets.at(-1);
+    submit(objects, findReachable(base, objects.live, objects.request));
+    f.frame();
     assert.match(formatSpeech(f.packets.filter(packet => packet.kind === 'fieldTarget').at(-1)), /^Objects, /);
 
     player._realX = player._x - 0.5;
     key('p', 80);
     f.frame();
-    assert.equal(routePackets.at(-1), retry, 'no directions snapshot is taken in the middle of a step');
+    assert.equal(routePackets.at(-1), objects, 'no directions snapshot is taken in the middle of a step');
     player._realX = player._x;
     c.SceneManager.updateScene();
     f.frame();
     const settled = routePackets.at(-1);
-    assert.notEqual(settled.sequence, retry.sequence, 'a directions key during the step uses its settled landing');
+    assert.notEqual(settled.sequence, objects.sequence, 'a directions key during the step uses its settled landing');
     assert.equal(settled.request.event, 20);
     submit(settled, solveRoute(base, settled.live, settled.request));
     const directionEpoch = f.epoch();
@@ -399,6 +406,80 @@ async function verifyOpeningField(tilesets) {
     assert.equal(f.packets.filter(packet => packet.kind === 'fieldStatus').at(-1).name,
         'The map is changing. Try the pathfinder again.');
     assert.equal(f.routeEpoch(), 0, 'the actor retry cap leaves no worker request');
+    // The real Elder Tater parallel page loops after its dialogue branch.
+    // Native setup still visits the cached faces on every restart.
+    assert.equal(data.events[5].pages[1].list[0].code, 111);
+    elder._interpreter = Object.assign(new c.Game_Interpreter(), { update() { this.clear(); } });
+    c.ImageManager.loadFace('ElderTater');
+    c.SceneManager.updateScene();
+    const beforeWarmPreload = routePackets.length;
+    key('p', 80);
+    elder.updateParallel();
+    f.frame();
+    assert.equal(routePackets.length, beforeWarmPreload + 1,
+        'a repeated warm Elder Tater portrait must not discard the accepted directions key');
+    const warmRoute = routePackets.at(-1);
+    elder.updateParallel();
+    assert.equal(f.routeEpoch(), warmRoute.epoch, 'the repeated cache hit preserves in-flight directions');
+    submit(warmRoute, solveRoute(base, warmRoute.live, warmRoute.request));
+    f.frame();
+
+    elder.setPosition(elderData.x, elderData.y);
+    for (const [letter, code, shift] of [['j', 74], ['l', 76], ['k', 75], ['l', 76, true], ['p', 80], ['j', 74, true]]) {
+        const before = routePackets.length;
+        key(letter, code, shift);
+        elder.updateParallel();
+        f.frame();
+        assert.equal(routePackets.length, before + 1, 'each pathfinder key survives a warm native update');
+        const packet = routePackets.at(-1);
+        elder.updateParallel();
+        assert.equal(f.routeEpoch(), packet.epoch);
+        const result = packet.request.candidates ? findReachable(base, packet.live, packet.request) :
+            solveRoute(base, packet.live, packet.request);
+        submit(packet, result);
+        f.frame();
+        if (letter === 'l' && shift)
+            assert.match(formatSpeech(f.packets.filter(record => record.kind === 'fieldTarget').at(-1)), /^People, Elder Tater/);
+        if (letter === 'p') {
+            assert.equal(packet.request.event, 5);
+            assert.equal(packet.request.waypoint, true);
+            assert.equal(result.status, 'ready');
+        }
+    }
+
+    const url = 'img/faces/ElderTater.png';
+    delete c.ImageManager._cache[url];
+    const loadBitmap = c.Bitmap.load;
+    const callbacks = [];
+    let portraitReady = false;
+    c.Bitmap.load = path => {
+        if (path !== url) return loadBitmap(path);
+        assert.equal(f.routeEpoch(), 0, 'the route closes before native decoding begins');
+        return { isReady: () => portraitReady, addLoadListener: callback => callbacks.push(callback) };
+    };
+    key('p', 80);
+    f.frame();
+    const waitingForPortrait = routePackets.at(-1);
+    elder.updateParallel();
+    elder.updateParallel();
+    assert.equal(callbacks.length, 1, 'only one completion listener for two face lines and repeated setup');
+    c.SceneManager.updateScene();
+    assert.equal(scene._wqaFieldReady, false, 'the native field remains gated across asynchronous resource loading');
+    key('p', 80);
+    submit(waitingForPortrait, { status: 'cancelled' });
+    f.frame();
+    assert.equal(routePackets.at(-1), waitingForPortrait);
+    portraitReady = true;
+    callbacks.shift()();
+    c.SceneManager.updateScene();
+    assert.equal(scene._wqaFieldReady, true, 'native field readiness resumes after actual bitmap completion');
+    key('p', 80);
+    f.frame();
+    const loaded = routePackets.at(-1);
+    assert.notEqual(loaded.sequence, waitingForPortrait.sequence);
+    submit(loaded, solveRoute(base, loaded.live, loaded.request));
+    f.frame();
+
     const beforeBoundary = routePackets.length;
     player._realX = player._x - 0.5;
     key('p', 80);
@@ -410,6 +491,24 @@ async function verifyOpeningField(tilesets) {
     assert.equal(routePackets.length, beforeBoundary, 'a native transfer cancels a pending step request');
 
     const samples = 240;
+    function measurePreloads() {
+        const started = performance.now();
+        for (let frame = 0; frame < samples; frame++) elder.updateParallel();
+        return performance.now() - started;
+    }
+    const packageScripts = path.join(packageRoot, 'js');
+    function stockMethod(file, name) {
+        const source = fs.readFileSync(path.join(packageScripts, file), 'utf8');
+        const start = source.indexOf(name + ' = function(');
+        assert(start >= 0);
+        f.run(source.slice(start, source.indexOf('\n};', start) + 3));
+    }
+    const connected = measurePreloads();
+    stockMethod('rmmz_managers.js', 'ImageManager.loadBitmapFromUrl');
+    stockMethod('rmmz_objects.js', 'Game_Interpreter.prototype.loadImages');
+    const native = measurePreloads();
+    console.log('Throttled warm Elder face preload,', samples, 'native restarts:',
+        native.toFixed(2), 'ms stock,', connected.toFixed(2), 'ms observed.');
     c.Time.GetDeltaTime = () => 1 / 60;
     function measureFrames() {
         map.inactiveTime = 0;

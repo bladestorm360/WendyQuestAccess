@@ -96,6 +96,18 @@ async function verifyReachability(c, load, verifyWorker) {
     assert.equal(browse(browser, { ...origin, objects: [selected] }, []).target, selected,
         'the independent directions request can still explain the selected approach');
 
+    const elder = { id: 5, category: 'people', name: 'Elder Tater', x: 0, y: 1, waypoint: true };
+    const marker = { ...elder, category: 'quests', name: 'Quest marker near Elder Tater' };
+    const bookmark = { id: 'bookmark-1', category: 'bookmarks', name: 'Beach stop', saved: true };
+    const all = createDestinationBrowser();
+    all.category = 'all';
+    const mixed = { ...origin, objects: [marker, elder, bookmark] };
+    assert.equal(browse(all, mixed, []).target, elder, 'All prefers the ordinary identity for the same event');
+    assert.equal(browse(all, mixed, ['nextDestination']).target, bookmark, 'All keeps the separate saved bookmark');
+    assert.equal(browse(all, mixed, ['nextDestination']).target, elder, 'All has no duplicate quest alias');
+    assert.equal(browse(all, { ...mixed, objects: [], eligibleObjects: [elder, marker] }, []).status,
+        'Selected destination is out of reach');
+
     const dense = { width: 44, height: 32, scrollType: 0, cells: new Uint8Array(44 * 32).fill(PASSAGE) };
     const events = Array.from({ length: 48 }, (_, index) => ({ id: index + 1, x: 2 + (index % 12) * 3,
         y: 2 + Math.floor(index / 12) * 5, normal: true, trigger: 0, action: true }));
