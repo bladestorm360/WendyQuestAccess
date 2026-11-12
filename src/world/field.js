@@ -1,6 +1,8 @@
 'use strict';
 
 const { captureWorld } = require('./snapshot');
+const { travelMode, parkedVehicle } = require('./vehicle-navigation');
+const { worldBoundaryName } = require('./world-destinations');
 const { browse, createDestinationBrowser } = require('./destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
@@ -34,8 +36,9 @@ function createField(root, host, notifications) {
             scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 && root.$gameScreen?._brightness === 255 &&
             map?.inactiveTime < 30 && !map._needsRefresh && !map._needsTilemapRefresh && !player?._transferring &&
             !player?._vehicleGettingOn && !player?._vehicleGettingOff &&
-            !root.$gameMessage?.isBusy() && !map?._interpreter?._list && player?._vehicleType === 'walk' &&
-            !player._through && (moving || player._x === player._realX && player._y === player._realY) && !(player._jumpCount > 0));
+            !root.$gameMessage?.isBusy() && !map?._interpreter?._list && travelMode(map, player) &&
+            !player._moveRouteForcing && (moving || player._x === player._realX && player._y === player._realY) &&
+            !(player._jumpCount > 0));
     }
 
     function retire(scene) {
@@ -62,8 +65,14 @@ function createField(root, host, notifications) {
         if (!job || packet?.sequence !== job.sequence || packet.epoch !== job.sequence || packet.map !== job.map) return;
         inFlight = null;
         if (admission && Atomics.load(admission, 0) === job.sequence) Atomics.store(admission, 0, 0);
-        if (active === job && ready(job.scene) && root.$gameMap._mapId === job.map) {
+        if (active === job && ready(job.scene) && root.$gameMap._mapId === job.map &&
+            travelMode(root.$gameMap, root.$gamePlayer) === job.mode) {
             const player = root.$gamePlayer;
+            if (job.vehicle) {
+                const vehicle = parkedVehicle(root.$gameMap, job.vehicle.type);
+                if (vehicle?._x !== job.vehicle.x || vehicle._y !== job.vehicle.y)
+                    return status(job, 'The boat moved. Request directions again.');
+            }
             if (job.area && !warningApproach(root.$gameMap, player._x, player._y, job.target))
                 return status(job, 'Warning sign directions are no longer available');
             const result = packet.result;
@@ -92,14 +101,17 @@ function createField(root, host, notifications) {
             if (result?.status === 'timedWait') status(job, 'No crossing preview ready. Check the patrols and request again');
             else if (result?.status === 'ready') {
                 if (!result.reenter) host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
-                    warningApproach(root.$gameMap, player._x, player._y, job.target) : null);
+                    warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type);
                 present(job, { kind: 'routeDirections', name: job.label,
-                    legs: result.legs, facing: result.arrival.facing, more: result.more === true, reenter: result.reenter === true });
+                    legs: result.legs, facing: result.arrival.facing, more: result.more === true,
+                    reenter: result.reenter === true, board: !!job.vehicle });
             }
             else if (result?.status === 'interrupted') present(job, { kind: 'routeDirections', name: job.label,
-                legs: result.legs, boundary: result.boundary, more: result.more === true });
+                legs: result.legs, boundary: result.boundary, boundaryName: worldBoundaryName(root, result.boundaryEvent),
+                more: result.more === true });
             else if (result?.status === 'approachBlocked') status(job, 'A floor event blocks the approach to ' + job.label);
-            else if (result?.status === 'unreachable') status(job, 'No walkable route to ' + job.label);
+            else if (result?.status === 'unreachable')
+                status(job, (job.mode === 'walk' ? 'No walkable route to ' : 'No sailing route to ') + job.label);
             else if (result?.status === 'unavailable') status(job, 'Directions unavailable for ' + job.label);
         } else if (active?.action === 'directions' && ready(active.scene)) afterRender();
     }
@@ -125,11 +137,13 @@ function createField(root, host, notifications) {
                 created.unref();
             }
             job.map = snapshot.map;
+            job.mode = snapshot.mode;
             job.label = target.name;
             job.area = area;
             job.target = target.id;
             job.x = snapshot.x;
             job.y = snapshot.y;
+            job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
             job.motionFrame = motion?.frame;
             if (motion) {
                 host.caveTiming?.warm(job.scene);
@@ -139,6 +153,7 @@ function createField(root, host, notifications) {
             inFlight = job;
             worker.postMessage({ map: snapshot.map, sequence: job.sequence, epoch: job.sequence, live: snapshot.live,
                 request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area, motion, field: true,
+                    surface: snapshot.mode !== 'walk', vehicle: target.vehicle, entryDirection: target.entryDirection,
                     beacon: !motion && host.beacon?.enabled() === true, timingCue: !!job.timing } }, [snapshot.live.terrain.buffer]);
         } catch {
             if (admission) Atomics.store(admission, 0, 0);

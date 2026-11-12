@@ -165,7 +165,70 @@ async function main() {
         assert.deepEqual(destination(entry, entry.pages[0], entry.pages[0].trigger), { category, name });
     }
     profileSnapshot(flags);
+    await verifySurfaceField(flags);
     console.log('Verified native field admission, spoken object selection and route, restored tiles, and stale-route retirement.');
+}
+
+async function verifySurfaceField(tilesets) {
+    const data = mapData(113);
+    const f = fixture(data);
+    const { c, routePackets } = f;
+    const map = c.$gameMap;
+    const player = c.$gamePlayer;
+    c.$dataTilesets = tilesets;
+    c.$gameTileChanges = {};
+    c.$gameSwitches = { value: () => false };
+    const ship = { _type: 'ship', _mapId: 113, _x: 43, _y: 2, _driving: true, isLandOk: () => true };
+    Object.assign(map, { _mapId: 113, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
+        _vehicles: [null, ship], _nameDisplay: false });
+    for (const id of [13, 30, 31, 51, 90]) {
+        const entry = data.events[id];
+        const page = entry.pages[0];
+        const event = Object.assign(f.event(id, 0), { _x: entry.x, _y: entry.y, _pageIndex: 0,
+            _trigger: page.trigger, _priorityType: page.priorityType });
+        map._events[id] = event;
+        map.fixtureEvents.push(event);
+    }
+    player._vehicleType = 'ship';
+    player.setPosition(43, 2);
+    player.reserveTransfer(113, 43, 2, 6, 0);
+    c.SceneManager.goto(c.Scene_Map);
+    c.SceneManager.changeScene();
+    c.DataManager.ready = c.ImageManager.ready = true;
+    c.SceneManager.updateScene();
+    await new Promise(setImmediate);
+    const scene = c.Graphics.app.stage;
+    scene._fadeDuration = scene._fadeOpacity = 0;
+    c.SceneManager.updateScene();
+    f.idleCallbacks.shift()?.();
+    c.SceneManager.updateScene();
+    f.frame();
+    function request() {
+        f.dispatchWindowEvent('keydown', { key: 'p', keyCode: 80 });
+        f.dispatchWindowEvent('keyup', { key: 'p', keyCode: 80 });
+        f.frame();
+        return routePackets.at(-1);
+    }
+    const directions = () => f.packets.filter(packet => packet.kind === 'routeDirections');
+    const first = request();
+    assert.equal(first.request.event, 51);
+    assert.equal(first.request.entryDirection, 6);
+    assert.equal(first.live.mode, 'ship');
+    const geometry = bakeMap(data, tilesets[data.tilesetId].flags);
+    function reply(packet) {
+        const result = solveRoute(geometry, packet.live, packet.request);
+        f.routeReply({ sequence: packet.sequence, epoch: packet.epoch, map: packet.map, result });
+        f.frame();
+    }
+    reply(first);
+    assert.equal(formatSpeech(directions().at(-1)), 'Secret Island boat landing. 1 east.');
+    const pending = request();
+    player._vehicleGettingOff = true;
+    c.SceneManager.updateScene();
+    assert.equal(f.routeEpoch(), 0);
+    reply(pending);
+    assert.equal(directions().length, 1, 'the native getting-off state retires the old directions');
+    console.log('Verified field input and spoken sailing directions through native admission and getting-off retirement.');
 }
 
 function profileSnapshot(tilesets) {

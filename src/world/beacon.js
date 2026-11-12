@@ -2,6 +2,7 @@
 
 const { DIRECTIONS, MAX_CELLS } = require('./geometry.cjs');
 const { CARDINAL, bearing } = require('./spatial-direction');
+const { parkedVehicle } = require('./vehicle-navigation');
 
 const MAX_EVENTS = 513;
 const PULSE_LIFETIME = 12;
@@ -18,12 +19,10 @@ function firstStartable(player, x, y, triggers, normal) {
 
 function atApproach(map, player, target, { x, y, facing }) {
     if (!player.canStartLocalEvents()) return false;
+    if (facing === null && target._trigger !== 0) return firstStartable(player, x, y, [1, 2], false) === target;
     const forward = nextTile(map, x, y, facing ?? player._direction);
     if (map.airship?.()?.pos(x, y) || map.ship?.()?.pos(...forward) || map.boat?.()?.pos(...forward)) return false;
-    if (facing === null) {
-        const triggers = target._trigger === 0 ? [0] : [1, 2];
-        return firstStartable(player, x, y, triggers, false) === target;
-    }
+    if (facing === null) return firstStartable(player, x, y, [0], false) === target;
     // Native OK checks the player's tile before looking in front. A startable
     // event there or before a counter changes which interaction will win.
     if (firstStartable(player, x, y, [0], false)) return false;
@@ -31,6 +30,13 @@ function atApproach(map, player, target, { x, y, facing }) {
     if (next) return next === target;
     return map.isCounter(...forward) &&
         firstStartable(player, ...nextTile(map, ...forward, facing), NORMAL_TRIGGERS, true) === target;
+}
+
+function atBoardingApproach(map, type, target, { x, y, facing }) {
+    if (!CARDINAL[facing] || map.airship?.()?.pos(x, y)) return false;
+    const [a, b] = nextTile(map, x, y, facing);
+    if (!target.pos(a, b)) return false;
+    return type !== 'boat' || !map.ship?.()?.pos(a, b);
 }
 
 function covers(actor, x, y, dx = 0, dy = 0) {
@@ -76,11 +82,11 @@ function createBeacon(root, fieldReady, audio, preferences, report) {
         return step ? DIRECTIONS[step & 3] : state.arrival.facing;
     }
 
-    function start(scene, id, x, y, result, approachReady) {
+    function start(scene, id, x, y, result, approachReady, vehicle) {
         if (!enabled() || !fieldReady(scene)) return false;
         const map = root.$gameMap;
         const player = root.$gamePlayer;
-        const target = map._events?.[id];
+        const target = vehicle ? parkedVehicle(map, vehicle) : map._events?.[id];
         const { course, arrival } = result;
         if (!target || target._erased || player._x !== x || player._y !== y ||
             Object.prototype.toString.call(course) !== '[object Uint8Array]' ||
@@ -88,7 +94,7 @@ function createBeacon(root, fieldReady, audio, preferences, report) {
             !arrival || !Number.isInteger(arrival.x) || !Number.isInteger(arrival.y) ||
             (arrival.facing !== null && !CARDINAL[arrival.facing])) return false;
         stop();
-        route = { scene, map, player, id, target, targetX: target._x, targetY: target._y, page: target._pageIndex,
+        route = { scene, map, player, id, vehicle, target, targetX: target._x, targetY: target._y, page: target._pageIndex,
             x, y, course, arrival, approachReady, index: 0, facing: player._direction, queued: false, preparing: false, arriving: false };
         scene._wqaBeaconActive = scene._wqaPresentation = true;
         wake(route);
@@ -96,8 +102,9 @@ function createBeacon(root, fieldReady, audio, preferences, report) {
     }
 
     function validTarget(state) {
-        const { map, id, target, page, targetX, targetY } = state;
-        return map === root.$gameMap && map._events?.[id] === target && !target._erased &&
+        const { map, id, target, page, targetX, targetY, vehicle } = state;
+        const current = vehicle ? parkedVehicle(map, vehicle) : map._events?.[id];
+        return map === root.$gameMap && current === target && !target._erased &&
             target._pageIndex === page && target._x === targetX && target._y === targetY;
     }
 
@@ -188,7 +195,9 @@ function createBeacon(root, fieldReady, audio, preferences, report) {
             gain *= distance <= 3 ? 1 : distance <= 10 ? 0.8 : 0.65;
             cue = direction === facing ? cue : cues.beaconTurn;
         } else {
-            if (x !== state.arrival.x || y !== state.arrival.y || !atApproach(map, player, state.target, state.arrival))
+            const matches = state.vehicle ? atBoardingApproach(map, state.vehicle, state.target, state.arrival) :
+                atApproach(map, player, state.target, state.arrival);
+            if (x !== state.arrival.x || y !== state.arrival.y || !matches)
                 return fail(state, 'Approach changed. Request directions again.');
             cue = direction === null || direction === facing ? cues.beaconArrival : cues.beaconTurn;
         }

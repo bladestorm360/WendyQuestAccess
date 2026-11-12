@@ -3,6 +3,8 @@
 const { surface, MAX_CELLS, CELL_BITS } = require('./geometry.cjs');
 const { destination } = require('./destinations');
 const { localDestination } = require('./local-destinations');
+const { worldDestination } = require('./world-destinations');
+const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination } = require('./puzzles/cave');
 
 const MAX_EVENTS = 512;
@@ -33,12 +35,13 @@ function captureWorld(root, routing = true, label) {
     const player = root.$gamePlayer;
     const data = root.$dataMap;
     const id = map._mapId;
+    const mode = travelMode(map, player);
     const { width, height, scrollType } = data;
     const count = width * height;
     if (!Number.isInteger(id) || id < 1 || id > 999 || !Number.isInteger(width) || !Number.isInteger(height) ||
         width < 1 || height < 1 || count > MAX_CELLS || !Number.isInteger(scrollType) || scrollType < 0 || scrollType > 3 ||
-        !Array.isArray(map._events) || map._events.length > MAX_EVENTS + 1 || player._vehicleType !== 'walk' ||
-        player._through || !Number.isInteger(player._x) || !Number.isInteger(player._y)) return null;
+        !Array.isArray(map._events) || map._events.length > MAX_EVENTS + 1 || !mode ||
+        !Number.isInteger(player._x) || !Number.isInteger(player._y)) return null;
 
     const flags = routing ? root.$dataTilesets?.[map._tilesetId]?.flags : null;
     if (routing && (data.tilesetId !== map._tilesetId || !Array.isArray(flags) || !Array.isArray(data.data) ||
@@ -64,21 +67,24 @@ function captureWorld(root, routing = true, label) {
                 tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action });
         }
         if (!action) continue;
-        const local = localDestination(root, event, page);
-        const target = local !== undefined ? local : checkpointTarget(id, eventId, pageIndex, trigger)
+        let target = worldDestination(root, mode, event, entry, page);
+        if (target === undefined) target = localDestination(root, event, page);
+        if (target === undefined) target = checkpointTarget(id, eventId, pageIndex, trigger)
             ? { name: 'Checkpoint', category: 'objects' } : caveDestination(id, event, entry, page) || destination(entry, page, trigger);
         if (target) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
         }
     }
-    const snapshot = { map: id, x: player._x, y: player._y, objects };
+    if (mode === 'walk') objects.push(...boardingTargets(map));
+    const snapshot = { map: id, mode, x: player._x, y: player._y, objects };
     if (!routing) return snapshot;
     const vehicles = [];
     for (const vehicle of map._vehicles.slice(0, 2)) {
-        if (vehicle?._mapId === id) vehicles.push({ x: vehicle._x, y: vehicle._y, through: vehicle._through === true });
+        if (vehicle?._mapId === id && vehicle._type !== mode) vehicles.push({ x: vehicle._x, y: vehicle._y,
+            type: vehicle._type, through: vehicle._through === true });
     }
-    return { ...snapshot, live: { width, height, scrollType, mode: 'walk', terrain, events, vehicles } };
+    return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles, aircraft: aircraftAt(map) } };
 }
 
 module.exports = { captureWorld };

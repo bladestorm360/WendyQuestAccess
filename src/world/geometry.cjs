@@ -104,7 +104,8 @@ function composeWorld(geometry, live, cancelled = () => false) {
         !['walk', 'boat', 'ship', 'airship'].includes(live.mode)) throw new Error('Incomplete world state');
     const cells = geometry.cells.slice();
     const blocked = new Uint8Array(count);
-    const world = { width, height, scrollType, cells, blocked, events: live.events, mode: live.mode, through: live.through === true };
+    const world = { width, height, scrollType, cells, blocked, events: live.events, mode: live.mode,
+        vehicles: live.vehicles, aircraft: live.aircraft, through: live.through === true };
     for (let n = 0; n < live.terrain.length; n++) {
         if ((n & 63) === 0 && cancelled()) return null;
         const entry = live.terrain[n];

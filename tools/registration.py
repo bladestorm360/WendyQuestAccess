@@ -66,6 +66,7 @@ DEPENDENCIES = {
     Path('package.nw/data/Map057.json'): '013ca80bda617519cb775255abb7f50199dbe7f7f82b646499dd7d5fc0beee2e',
     Path('package.nw/data/Map058.json'): '87468a017df640e89983ba5f73a2b14a464fda43d2a2e5645751fc261548f999',
     Path('package.nw/data/Map063.json'): '0764431236c1c0c672b3041d2b7e1aedf81fef229164e0d1f90ea29fd0a943f0',
+    Path('package.nw/data/Map113.json'): '9e5a91e26e8907e97fd829ae7aa4603145a92922e4d64c5b47251090aa4c6ab6',
     Path('package.nw/data/Map127.json'): 'ae459a57d039d2d469cb570dc1a9a61a0eec2c54b8f17c7b941f98726874b58e',
     Path('package.nw/data/Map128.json'): 'd906119d7cafeb5b332fd302296aa31221b1efe25b958731d869bbc8a0adfa75',
     Path('package.nw/data/Map132.json'): 'aa18adc96ab3994b94f0a3983b85eb8cfa9ce3bda773414bd604ad3f68880591',
@@ -230,6 +231,10 @@ def objects_notification(original):
         249865: ROUTE_DIRTY + b'\n        ',  # Active event page replacement
         21807: b'\n    ' + MAP_LEAVING,  # Game_Screen fade-out
         217381: b'\n    ' + MAP_LEAVING,  # Accepted transfer reservation
+        231501: MAP_LEAVING + b'\n        ',  # Native aircraft boarding
+        231586: MAP_LEAVING + b'\n        ',  # Native ship boarding
+        231668: MAP_LEAVING + b'\n        ',  # Native boat boarding
+        232058: MAP_LEAVING + b'\n        ',  # Native landing after isLandOk
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
                 b'(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive))'
                 b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',

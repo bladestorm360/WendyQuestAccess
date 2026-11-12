@@ -1,7 +1,7 @@
 'use strict';
 
 const CATEGORY_LABELS = Object.freeze({ objects: 'Objects', people: 'People', merchants: 'Merchants', exits: 'Exits',
-    treasure: 'Treasure', enemies: 'Enemies' });
+    treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles' });
 
 function destination(entry, page, trigger) {
     if (!page || page.list.length < 2 || trigger < 0 || trigger > 2 || !Number.isInteger(trigger)) return null;

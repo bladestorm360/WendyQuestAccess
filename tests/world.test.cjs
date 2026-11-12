@@ -14,6 +14,7 @@ const { solveRoute } = require('../src/world/routes.cjs');
 const { warningApproach, captureMotion } = require('../src/world/puzzles/cave');
 const { verifyCaveProgression } = require('./cave-progression.cjs');
 const { verifyLocalDestinations } = require('./local-destinations.cjs');
+const { verifyVehicleNavigation } = require('./vehicle-navigation.cjs');
 const { copyPatrol } = require('../src/world/puzzles/patrol-motion.cjs');
 const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../src/world/puzzles/motion-world.cjs');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
@@ -28,18 +29,19 @@ const data = path.join(game, 'package.nw', 'data');
 const read = name => JSON.parse(fs.readFileSync(path.join(data, name), 'utf8'));
 const tilesets = read('Tilesets.json');
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning', path.join(__dirname, 'world-producers.py'), game],
-    { encoding: 'utf8', timeout: 7000, maxBuffer: 128000 }));
+    { encoding: 'utf8', timeout: 7000, maxBuffer: 160000 }));
 const c = vm.createContext({
     a15_0x363c12() { throw new Error('Unresolved movement property'); },
     _0x34cc1b() { throw new Error('Unresolved tile property'); },
     Game_Map: function () {}, Game_CharacterBase: function () {}, Game_Character: function () {},
     Game_Player: function () {}, Game_Event: function () {}, Game_Vehicle: function () {}, Tilemap: function () {},
-    Game_Followers: function () {}, Game_Interpreter: function () {},
+    Game_Followers: function () {}, Game_Interpreter: function () {}, Scene_Map: function () {},
     TileEditor: {}, SceneManager: { _scene: { _spriteset: {} } }, Point: function (x, y) { this.x = x; this.y = y; },
     Time: { GetDeltaTime: () => 1 / 60 }, $dataTilesets: tilesets, $dataItems: read('Items.json'), $dataSystem: read('System.json'),
     Graphics: { width: 480, height: 336 },
     $gameSwitches: { value: () => false }, $gameSelfSwitches: { value: () => false },
     $gameVariables: { value: () => 0 }, $gameActors: { actor: id => id }, $gameParty: { hasItem: () => false, members: () => [] },
+    $dataCommonEvents: [],
     $gameTileChanges: {}, Tyruswoo: { TileControl: { tileIdExists: (set, id) => Number.isInteger(tilesets[set].flags[id]) } }
 });
 Object.setPrototypeOf(c.Game_Character.prototype, c.Game_CharacterBase.prototype);
@@ -904,6 +906,7 @@ async function main() {
     verifyNativePatrolMotion();
     verifyCaveProgression(c, load, snapshot, verifyRoute);
     await verifyLocalDestinations(c, load, verifyRoute, verifyWorker);
+    await verifyVehicleNavigation(c, load, read, verifyWorker);
     await verifyCrossingPreview();
     await verifyLiveCrossing();
     await verifyWarningApproach();
