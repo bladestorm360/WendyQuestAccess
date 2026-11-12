@@ -73,7 +73,8 @@ def main():
     ]:
         anchor = f"{target}['prototype']['{name}']=function("
         result[f'{target}.{name}'] = between(menu, anchor, tail) + '};'
-    result['SceneManager.onSceneStart'] = between(manager, 'SceneManager.onSceneStart = function(', '\n};') + '\n};'
+    for name in ('onSceneStart', 'goto', 'reloadGame'):
+        result[f'SceneManager.{name}'] = between(manager, f'SceneManager.{name} = function(', '\n};') + '\n};'
     result['Scene_Base.updateFade'] = between(scenes, 'Scene_Base.prototype.updateFade = function(', '\n};') + '\n};'
     for name in ('_onWindowResize', '_updateAllElements', '_switchFullScreen'):
         result[f'Graphics.{name}'] = between(core, f'Graphics.{name} = function(', '\n};') + '\n};'

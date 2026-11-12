@@ -54,6 +54,7 @@ function boot(root, nodeRequire, nodeProcess) {
             if (root.Graphics._wqaResize || !app || app.stage !== scene ||
                 !app.renderer || typeof app.renderer.once !== 'function') return;
             titleWaiting = scene;
+            scene._wqaPresentation = true;
             app.renderer.once('postrender', () => {
                 if (titleWaiting !== scene) return;
                 titleWaiting = null;
@@ -76,6 +77,7 @@ function boot(root, nodeRequire, nodeProcess) {
             const renderer = root.Graphics.app.renderer;
             if (typeof renderer?.once !== 'function') return;
             filesWaiting = scene;
+            scene._wqaPresentation = true;
             renderer.once('postrender', () => {
                 if (filesWaiting !== scene) return;
                 filesWaiting = null;
@@ -92,12 +94,25 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessFilesLeaving = function (scene) {
         if (filesWaiting === scene) filesWaiting = null;
+        if (scene?._wqaFileKind) scene._wqaPresentation = false;
+        files?.leave(scene);
+    };
+
+    // Direct native scene changes and developer reload can bypass the active
+    // window's accepted actions. Their entry marker invokes this once before
+    // any new scene is constructed or Chromium reload begins.
+    root.WendyQuestAccessSceneLeaving = function (scene) {
+        if (titleWaiting === scene) titleWaiting = null;
+        if (filesWaiting === scene) filesWaiting = null;
+        title?.leave(scene);
         files?.leave(scene);
     };
 
     root.WendyQuestAccessResizeStarting = function () {
         titleWaiting = null;
         filesWaiting = null;
+        const scene = root.SceneManager._scene;
+        if (scene?._wqaPresentation) scene._wqaPresentation = false;
         title?.suspend();
         files?.suspend();
     };

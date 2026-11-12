@@ -91,7 +91,10 @@ function fixture() {
         }
     });
     function run(source) { vm.runInContext(source, context, { timeout: 100 }); }
+    const fixtureGoto = context.SceneManager.goto;
     for (const method of Object.values(native)) run(method);
+    const nativeGoto = context.SceneManager.goto;
+    context.SceneManager.goto = fixtureGoto;
     for (const [type, names] of Object.entries({
         Window_Selectable: ['select', 'forceSelect', 'isHandled', 'callHandler', 'processOk', 'callOkHandler', 'setHandler'],
         Window_Command: ['callOkHandler'],
@@ -138,7 +141,7 @@ function fixture() {
         context.SceneManager._scene = scene;
         return scene;
     }
-    return { context, renderer, timers, images, messages, show, coroutines, nwWindow, windowTimers,
+    return { context, renderer, timers, images, messages, show, coroutines, nwWindow, windowTimers, nativeGoto,
         saveReads: () => saveReads,
         deleted: () => deleted, nativeClose: () => nativeClose, epoch: () => word && Atomics.load(word, 0) };
 }
@@ -150,6 +153,38 @@ function readyFrame(f) {
 
 function displayed(f) {
     return f.messages.filter(packet => packet.kind !== 'cancel').map(formatSpeech);
+}
+
+for (const action of ['pending goto', 'goto', 'reload']) {
+    const f = fixture();
+    const c = f.context;
+    const window = new c.Window_Selectable();
+    const scene = f.show(new c.Scene_Load(), window);
+    scene._wqaFileKind = 1;
+    scene.stop = () => { scene._active = false; };
+    window._wqaCards = true;
+    c.SceneManager.onSceneStart();
+    assert.equal(scene._wqaPresentation, true);
+    const pending = action === 'pending goto';
+    if (!pending) {
+        readyFrame(f);
+        assert(f.epoch());
+    }
+    let nativeEntry = false;
+    function enter() {
+        assert.equal(f.epoch(), pending ? undefined : 0);
+        assert.equal(scene._wqaPresentation, false);
+        nativeEntry = true;
+    }
+    if (action === 'reload') {
+        c.chrome = { runtime: { reload: enter } };
+        c.SceneManager.reloadGame();
+    } else {
+        f.nativeGoto.call(c.SceneManager, enter);
+    }
+    assert(nativeEntry);
+    readyFrame(f);
+    assert.equal(displayed(f).length, pending ? 0 : 1);
 }
 
 {

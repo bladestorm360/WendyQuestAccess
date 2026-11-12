@@ -104,7 +104,11 @@ function createTitleObserver(host, notifications) {
         openIfPresented();
         return true;
     }
-    return { observe, suspend: close };
+    return {
+        observe,
+        suspend: close,
+        leave(scene) { if (observedScene === scene) leave(); }
+    };
 }
 
 module.exports = { createTitleObserver, presented };

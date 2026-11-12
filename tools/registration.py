@@ -36,6 +36,8 @@ DEPENDENCIES = {
     Path('package.nw/js/plugins/UIGeneral.js'): '9a282cc96ee2edb4777fc18228d4a5976e2ad7546d50df72a6d0429bc6af9b0e',
 }
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
+SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
+                 b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 PLUGIN = {'name': 'WendyQuestAccess', 'status': True, 'description': 'WendyQuest accessibility support',
           'parameters': {}}
 
@@ -108,7 +110,12 @@ def menu_notifications(original):
 
 
 def managers_notification(original):
-    return insert(original, MANAGERS_SHA, {57606: b'\n' + files_ready('this._scene')})
+    return insert(original, MANAGERS_SHA, {
+        # These entry sites precede Chromium reload or the next scene constructor.
+        54263: SCENE_LEAVING + b'\n        ',
+        57606: b'\n' + files_ready('this._scene'),
+        58080: b'\n    ' + SCENE_LEAVING,
+    })
 
 
 def scenes_notification(original):
