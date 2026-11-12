@@ -228,7 +228,17 @@ function verifySettings() {
             throw Error(`F8 did not focus settings: modal ${!!document.querySelector('dialog')}, ` +
                 `focused ${document.activeElement.tagName}, Chromium ${process.versions.chromium}`);
         }
-        choose('Keyboard bindings');
+        tap('ArrowUp');
+        if (document.activeElement.textContent !== 'Close settings') throw Error('Up did not wrap mod-menu focus');
+        tap('ArrowRight');
+        tap('ArrowDown');
+        if (document.activeElement.textContent !== 'Controller bindings') throw Error('Down did not move mod-menu focus');
+        tap('ArrowLeft');
+        tap('Enter');
+        if (document.activeElement.textContent !== 'Open mod settings, F8') throw Error('Enter did not activate the focused group');
+        tap('Escape');
+        if (document.activeElement.textContent !== 'Keyboard bindings') throw Error('Escape did not restore parent focus');
+        tap('Enter');
         settingsStep++;
     } else if (settingsStep === 1 && menuStatus() !== 'Loading settings') {
         choose('Repeat dialogue');

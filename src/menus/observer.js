@@ -24,8 +24,23 @@ function focusWindow(scene, screen) {
     return scene._itemWindow?.isFocused ? scene._itemWindow : scene._categoryWindow;
 }
 
-function selectedItem(window) {
-    const index = window._index;
+function categoryWindow(scene, screen, window) {
+    return screen === 2 && window === scene._categoryWindow;
+}
+
+function focusedWindow(scene, screen, window) {
+    // Native category confirmation deactivates the window. Its custom
+    // focus still owns horizontal selection and the visible highlight.
+    return !!window && (categoryWindow(scene, screen, window) ? window.isFocused === true : window.active);
+}
+
+function highlightedIndex(scene, screen, window) {
+    const hover = window.hoverIndex;
+    return categoryWindow(scene, screen, window) && Number.isInteger(hover) && hover >= 0 &&
+        hover < window._list?.length ? hover : window._index;
+}
+
+function selectedItem(window, index = window._index) {
     return Number.isInteger(index) && index >= 0 ? (window._list || window._data)?.[index] : null;
 }
 
@@ -40,8 +55,8 @@ function label(value) {
     return typeof value === 'string' && value.trim() && value.length <= 96 ? value : '';
 }
 
-function presentedRow(window) {
-    const rect = window.itemRect?.(window._index);
+function presentedRow(window, index = window._index) {
+    const rect = window.itemRect?.(index);
     return rect && rect.width > 0 && rect.height > 0 && rect.x + rect.width > 0 && rect.y + rect.height > 0 &&
         rect.x < window.innerWidth && rect.y < window.innerHeight;
 }
@@ -112,8 +127,9 @@ function createMenuObserver(root, host, notifications, preferences) {
         }
         if (page.screen === 3) return window === page.window && window.active && visible(page.scene, window) &&
             window._index === page.index && battleBagRow(window) === page.bagRow && presentedRow(window);
-        return window === page.window && window.active && visible(page.scene, window) && window._index === page.index &&
-            selectedItem(window) === page.item && window._wqaMenuRowPaint === page.rowPaint &&
+        return window === page.window && focusedWindow(page.scene, page.screen, window) && visible(page.scene, window) &&
+            highlightedIndex(page.scene, page.screen, window) === page.index &&
+            selectedItem(window, page.index) === page.item && window._wqaMenuRowPaint === page.rowPaint &&
             (!page.inventory || (page.scene._helpWindow?._wqaMenuHelpPaint === page.helpPaint &&
                 page.scene._equipStatusWindow?._tempActor === page.compareTarget &&
                 page.scene._equipStatusWindow?._actor === page.compareOwner &&
@@ -281,14 +297,15 @@ function createMenuObserver(root, host, notifications, preferences) {
     function publish(scene, screen) {
         if (!ready(scene, screen)) return retire(scene);
         const window = focusWindow(scene, screen);
-        if (!window?.active || !visible(scene, window)) return;
+        if (!focusedWindow(scene, screen, window) || !visible(scene, window)) return;
         if (screen === 7) return publishCouponResponse(scene, window);
+        const index = highlightedIndex(scene, screen, window);
         const rowRequired = screen !== 5 && !(screen === 6 && window._index === -1);
-        if (rowRequired && !presentedRow(window)) return;
+        if (rowRequired && !presentedRow(window, index)) return;
         if (screen === 6) return publishCouponList(scene, window);
         if (screen === 3) return publishBag(scene, window);
         if (screen >= 4) return publishShop(scene, window, screen);
-        const item = selectedItem(window);
+        const item = selectedItem(window, index);
         if (!item || !label(item.name)) return;
         const inventory = screen === 2 && window === scene._itemWindow;
         const help = scene._helpWindow;
@@ -303,7 +320,7 @@ function createMenuObserver(root, host, notifications, preferences) {
         ]);
         const list = window._list || window._data;
         const choices = window._list ? list.filter(row => label(row?.name)) : null;
-        const page = { kind: 'menu', scene, screen, window, index: window._index, item, inventory, lines,
+        const page = { kind: 'menu', scene, screen, window, index, item, inventory, lines,
             position: 0, epoch: 0, rowPaint: window._wqaMenuRowPaint, helpPaint: help?._wqaMenuHelpPaint,
             comparePaint: status?._wqaMenuCompareActor, helpVisible: !!visible(scene, help),
             compareTarget: status?._tempActor, compareOwner: status?._actor, compareVisible: !!visible(scene, status),
@@ -327,10 +344,11 @@ function createMenuObserver(root, host, notifications, preferences) {
         }
         if (waiting?.scene === scene) return;
         const window = focusWindow(scene, screen);
-        if (!window?.active) return retire(scene);
+        if (!focusedWindow(scene, screen, window)) return retire(scene);
         const row = screen === 7 ? couponResponseItem(window) : screen === 6 ? couponListItem(window) :
             screen === 5 ? shopQuantity(window) :
-            screen === 4 ? shopRow(window) : screen === 3 ? battleBagRow(window) : selectedItem(window);
+            screen === 4 ? shopRow(window) : screen === 3 ? battleBagRow(window) :
+                selectedItem(window, highlightedIndex(scene, screen, window));
         if (!row) return retire(scene);
         // Close stale output immediately. Keep the old cursor until the next
         // painted selection settles so a refresh of the same row can clamp it.

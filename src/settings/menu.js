@@ -16,6 +16,8 @@ const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat di
     battleSlot2: 'Read party slot 2 in battle', reviewPrevious: 'Previous review line', reviewNext: 'Next review line',
     reviewFirst: 'First review line', reviewLast: 'Last review line' });
 const BATTLE_ACTIONS = Object.keys(BATTLE_KEYS);
+const MENU_KEYS = Object.freeze({ ArrowUp: 'previous', ArrowLeft: 'previous',
+    ArrowDown: 'next', ArrowRight: 'next', Enter: 'confirm' });
 const POINTER_EVENTS = ['mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
 const AUDIO_PREVIEWS = [
     ['ahead', [0, 0, 1]], ['left', [-1, 0, 0]], ['right', [1, 0, 0]],
@@ -474,6 +476,19 @@ function createSettingsMenu(root, host) {
         else close(owner.scene, true);
     }
 
+    function navigate(owner, action) {
+        const active = root.document.activeElement;
+        if (action === 'confirm') {
+            if (owner.contents.contains(active)) active.click();
+            return;
+        }
+        const items = owner.contents.children;
+        const index = Array.prototype.indexOf.call(items, active);
+        const offset = action === 'previous' ? -1 : 1;
+        const next = index === -1 ? 0 : (index + offset + items.length) % items.length;
+        items[next]?.focus();
+    }
+
     function captureController(owner, family, mask) {
         const action = owner.capture?.action;
         if (!action) return;
@@ -594,7 +609,8 @@ function createSettingsMenu(root, host) {
         if (physical && (owner || ready) && down.size < 64) down.add(physical);
         if (owner) {
             event.stopPropagation();
-            const goBack = event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+            const unmodified = !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+            const goBack = event.key === 'Escape' && unmodified;
             if (!goBack && bookmarks.textInput(owner, event)) return;
             if (goBack || owner.capture) {
                 const key = keyName(event);
@@ -611,8 +627,13 @@ function createSettingsMenu(root, host) {
                     const action = owner.capture.action;
                     change(owner, { ...pad, [action]: null }, action, 'controller');
                 }
-            } else if (physical && held.size < 64 && !event.repeat) {
-                held.add(physical);
+            } else {
+                if (physical && held.size < 64 && !event.repeat) held.add(physical);
+                const action = unmodified && !event.isComposing && MENU_KEYS[event.key];
+                if (action) {
+                    event.preventDefault();
+                    if (!event.repeat) navigate(owner, action);
+                }
             }
             return;
         }
@@ -722,16 +743,7 @@ function createSettingsMenu(root, host) {
             if (owner.capture) return;
             if (action === 'back') return back(owner);
             owner.family = family;
-            const active = root.document.activeElement;
-            if (action === 'confirm') {
-                if (owner.contents.contains(active)) active.click();
-                return;
-            }
-            const items = owner.contents.children;
-            const index = Array.prototype.indexOf.call(items, active);
-            const offset = action === 'previous' ? -1 : 1;
-            const next = index === -1 ? 0 : (index + offset + items.length) % items.length;
-            items[next]?.focus();
+            navigate(owner, action);
         },
         retire(scene) {
             if (resumeOnFocus === scene) resumeOnFocus = null;

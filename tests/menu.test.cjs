@@ -23,12 +23,14 @@ let sequence = 0;
 const actor = { param: index => [12, 3, 5, 9][index], equipSlots: () => [armor.etypeId] };
 const root = vm.createContext({
     Scene_Menu: function () {}, Scene_Item: function () {}, Window_Item_Help: function () {},
-    Window_ItemList: function () {}, Window_EquipStatus: function () {},
+    Window_ItemList: function () {}, Window_ItemCategory: function () {}, Window_EquipStatus: function () {},
     Scene_Menu_prototype_update() {}, Scene_Item_prototype_update() {},
     Window_ItemList_prototype_updateHelp() {},
     Point: function () {},
     TouchInput: { isClicked: () => false },
-    TextManager: { param: id => terms[id] },
+    TextManager: { param: id => terms[id], item: data('System').terms.commands[4],
+        armor: data('System').terms.commands[13], keyItem: data('System').terms.commands[14] },
+    $dataSystem: data('System'),
     $gameParty: { numItems: () => 3, leader: () => actor },
     JsonEx: { makeDeepCopy: () => ({ ...actor, param: index => [12, 3, 7, 10][index],
         isEquipChangeOk: () => true, forceChangeEquip() {} }) },
@@ -147,6 +149,40 @@ page = menu.controlOwner(inventory);
 assert(menu.command(page, 'reviewNext'));
 assert.equal(spoken(), atLast, 'returning from the native actor overlay restores the current cursor');
 
+const categories = inventory._categoryWindow = Object.assign(new root.Window_ItemCategory(), windowFor(inventory), {
+    _list: [], isFocused: true, hoverIndex: -1,
+    addCommand(name, symbol) { this._list.push({ name, symbol, enabled: true }); },
+    maxItems() { return this._list.length; },
+    smoothSelect(index) { this._index = index; this.hoverIndex = -1; },
+    isCurrentItemEnabled: () => true,
+    updateInputData() {},
+    deactivate() { this.active = false; },
+    callOkHandler() { list.active = true; }
+});
+categories.makeCommandList();
+list.isFocused = false;
+assert.equal(categories._list.length, 3);
+categories.processOk();
+assert.equal(categories.active, false, 'the native category still has visual focus after deactivation');
+frame(inventory);
+assert.equal(records.at(-1).name, categories._list[0].name);
+for (let index = 1; index < categories._list.length; index++) {
+    categories.cursorPagedown();
+    frame(inventory);
+    assert.equal(records.at(-1).name, categories._list[index].name);
+    assert.equal(records.at(-1).position, index + 1);
+}
+categories.hoverIndex = 0;
+frame(inventory);
+assert.equal(records.at(-1).name, categories._list[0].name);
+categories.hoverIndex = -1;
+categories.isFocused = false;
+list.isFocused = true;
+frame(inventory);
+assert.equal(menu.controlOwner(inventory).window, list);
+assert(menu.command(menu.controlOwner(inventory), 'reviewLast'));
+const countBeforeStableFrames = records.length;
+
 function stableFrames() {
     const start = performance.now();
     for (let index = 0; index < 400; index++) frame(inventory);
@@ -159,5 +195,6 @@ root.WendyQuestAccessMenuReady = update;
 const enabled = stableFrames();
 assert.equal(renderer.listenerCount('postrender'), 0);
 assert.equal(records.at(-1).kind, 'menuReview');
-console.log(`Verified installed pause and inventory focus, manual and automatic review, and current comparison. ` +
+assert.equal(records.length, countBeforeStableFrames);
+console.log(`Verified installed pause, Inventory category and item focus, review, and equipment comparison. ` +
     `400 stable fixture frames ${baseline.toFixed(2)} ms baseline, ${enabled.toFixed(2)} ms enabled.`);

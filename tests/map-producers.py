@@ -15,6 +15,26 @@ from registration import (CANVAS_REL, CORE_REL, MANAGERS_REL, MAP_REL, OBJECTS_R
                           objects_notification, scenes_notification, tile_notification, window_notification)
 
 
+def variable_stack():
+    filters, _ = decode((PLUGINS / 'FilterControllerMZ.js').read_text(encoding='utf8'))
+    quests, _ = decode((PLUGINS / 'Ayatam_HighQualityQuestSystem.js').read_text(encoding='utf8'))
+    setter = "Game_Variables['prototype']['setValue']"
+    return [
+        "const _0x32fc97 = Game_Variables.prototype.setValue; const _0x5b5f5a = () => {};",
+        between(filters, setter + '=function(', ";}let _0x16da47=") + ';',
+        "const _HighQualityQuestSystem_Game_Variables_prototype_setValue = Game_Variables.prototype.setValue;"
+        "const a1_0x4e0759 = () => {};",
+        between(quests, setter + '=function(', "},Game_Variables['prototype']['checkQuestObjects']") + '};',
+        between(quests, "Game_Variables['prototype']['checkQuestObjects']=function(",
+                "},Sprite_Battler['prototype']['initialize']") + '};',
+    ]
+
+
+if sys.argv[2:] == ['variable-stack']:
+    print(json.dumps(variable_stack()))
+    sys.exit()
+
+
 def read_methods(file, transform, pairs):
     text, _ = decode(transform((PLUGINS / file).read_bytes()).decode('utf8'))
     return [between(text, f"{target}['prototype']['{name}']=function(", tail) + '};'

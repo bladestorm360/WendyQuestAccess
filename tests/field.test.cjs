@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { performance } = require('node:perf_hooks');
@@ -212,8 +213,19 @@ async function verifyOpeningField(tilesets) {
     const player = c.$gamePlayer;
     c.$dataTilesets = tilesets;
     c.$gameSwitches = { value: id => id === 31 };
+    const packageRoot = path.join(process.argv[2], 'package.nw');
+    const variables = JSON.parse(execFileSync('python', ['-B', '-W', 'ignore::SyntaxWarning',
+        path.join(__dirname, 'map-producers.py'), packageRoot, 'variable-stack'],
+        { encoding: 'utf8', timeout: 6000, maxBuffer: 10000 }));
+    for (const method of variables) f.run(method);
+    let otherChange = '';
+    c.$gameQuest = { getAllAssentedQuests() {
+        if (otherChange === 'quest') map.requestRefresh();
+        return null;
+    } };
     c.$gameVariables = new c.Game_Variables();
-    c.$gameVariables.setValue(2, 60);
+    c.$gameVariables.setValue(2, 60.125);
+    assert.equal(c.$gameVariables.value(2), 60.125, 'the active filter setter replaces integer rounding');
     Object.assign(map, { _mapId: 13, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
         _vehicles: [], _nameDisplay: false, updateInterpreter() {}, updateScroll() {},
         updateVehicles() {}, updateParallax() {}, refresh() { this._needsRefresh = false; } });
@@ -230,8 +242,7 @@ async function verifyOpeningField(tilesets) {
         !page.conditions.variableValid || page.conditions.variableId !== 2)));
     const decrement = timer.list.find(command => command.code === 122 && command.parameters[2] === 2);
     assert(decrement);
-    const parallel = new c.Game_Interpreter();
-    let otherChange = '';
+    const parallel = Object.assign(new c.Game_Interpreter(), { _mapId: 13, _eventId: 9 });
     map.updateEvents = function () {
         if (otherChange === 'before') c.$gameVariables.setValue(3, 1);
         parallel.command122(decrement.parameters);
@@ -282,7 +293,7 @@ async function verifyOpeningField(tilesets) {
     f.frame();
     assert(f.packets.some(packet => packet.kind === 'routeDirections'));
 
-    for (const phase of ['before', 'after']) {
+    for (const phase of ['before', 'after', 'quest']) {
         otherChange = phase;
         c.SceneManager.updateScene();
         assert(map._needsRefresh);
@@ -314,7 +325,8 @@ async function verifyOpeningField(tilesets) {
     }
     const withMark = measureFrames();
     const originals = fs.readFileSync(path.join(process.argv[2], 'package.nw/js/rmmz_objects.js'), 'utf8');
-    for (const name of ['Game_Variables.prototype.setValue', 'Game_Map.prototype.requestRefresh']) {
+    for (const name of ['Game_Variables.prototype.onChange', 'Game_Map.prototype.requestRefresh',
+        'Game_Interpreter.prototype.operateVariable']) {
         const start = originals.indexOf(name + ' = function(');
         assert(start >= 0);
         f.run(originals.slice(start, originals.indexOf('\n};', start) + 3));

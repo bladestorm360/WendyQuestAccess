@@ -75,6 +75,7 @@ DEPENDENCIES = {
     Path('package.nw/img/system/MapMarkers/Map Markers3.png'): '0083bd47f5830550603f80c93e9c6adc19ab140776cebd929c0b2aee368b1811',
     Path('package.nw/img/system/MapMarkers/Map Quest Marker.png'): '70565af90ad1765c1df5b70c5305fe9c3940d9e303f6703f9b0fa065095ed0e7',
     BITMAP_FONT_REL: BITMAP_FONT_SHA,
+    Path('package.nw/js/plugins/FilterControllerMZ.js'): '44eaddf9fd7253024a0c4dc0c14a7a0ecb8890105dc878c2807b4ed904c6ba77',
     STATS_REL: STATS_SHA,
     MESSAGE_OWNER_REL: '26e0230f7bcf8a425ad4c128c728cb0d74d8589d1a07d9d3026edbc2b09c7ce0',
     Path('package.nw/js/rmmz_sprites.js'): '33440ac9584344c4a9675d0b464f82eb49f5dcde0c23c485edbd385360475ba1',
@@ -355,16 +356,22 @@ def objects_notification(original):
     return insert(original, OBJECTS_SHA, {
         2915: b'        if(SceneManager._scene?._wqaBattleStarted){BattleManager._wqaBattleSpritesBusy=undefined;'
               + BATTLE_LOG_LEAVING + b';}\n',
-        # Crispy Beach variable 2 is its parallel lightning countdown. No
-        # page on the pinned map uses it as a condition. Preserve the native
-        # refresh, while a transient scene flag identifies its sole producer.
-        17935: b'const wqaLightningScene=variableId===2&&$gameMap?._mapId===13&&'
-               b'SceneManager._scene?._wqaMapRestored?SceneManager._scene:null;'
-               b'const wqaLightningOnly=wqaLightningScene&&'
-               b'(!$gameMap._needsRefresh||wqaLightningScene._wqaLightningRefreshOnly);',
-        17951: b'if(wqaLightningOnly)wqaLightningScene._wqaLightningRefreshOnly=true;',
+        # FilterController replaces the numeric setter. Both setters still
+        # call onChange. Consume the authored timer's mark once, before the
+        # quest plugin can make a separate request after the numeric write.
+        18015: b'const wqaScene=SceneManager._scene;'
+               b'const wqaLightningOnly=wqaScene?._wqaLightningVariableWrite&&'
+               b'(!$gameMap._needsRefresh||wqaScene._wqaLightningRefreshOnly);'
+               b'if(wqaScene?._wqaLightningVariableWrite)wqaScene._wqaLightningVariableWrite=false;',
+        18041: b'if(wqaLightningOnly)wqaScene._wqaLightningRefreshOnly=true;',
         162252: b'if(this===$gameMap&&SceneManager._scene?._wqaLightningRefreshOnly)'
                 b'SceneManager._scene._wqaLightningRefreshOnly=false;',
+        # Pin the request to the authored parallel lightning event and
+        # retire its one-use mark even if the native variable write throws.
+        278919: b'const wqaLightningScene=variableId===2&&this._mapId===13&&this._eventId===9&&'
+                b'$gameMap?._mapId===13&&SceneManager._scene?._wqaMapRestored?SceneManager._scene:null;'
+                b'if(wqaLightningScene)wqaLightningScene._wqaLightningVariableWrite=true;',
+        279818: b'finally{if(wqaLightningScene)wqaLightningScene._wqaLightningVariableWrite=false;}',
         178811: b'\n    ' + ROUTE_DIRTY,  # Tileset replacement
         180829: b'if(this===$gameMap&&SceneManager._scene?._wqaCaveGuideActive&&SceneManager._scene._wqaFieldReady&&'
                 b'!SceneManager._nextScene&&Graphics.app?.stage===SceneManager._scene&&!$gamePlayer._transferring)'
