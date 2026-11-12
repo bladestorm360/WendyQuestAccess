@@ -6,7 +6,7 @@ const { captureWorld } = require('../src/world/snapshot');
 const { solveRoute } = require('../src/world/routes.cjs');
 
 
-function verifyCaveProgression(c, load, snapshot, verifyRoute) {
+function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
     const originalScene = c.SceneManager._scene;
     const originalInBattle = c.$gameParty.inBattle;
     c.$gameParty.inBattle = () => false;
@@ -146,13 +146,72 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute) {
         const request = { x, y, event };
         verifyRoute(fixture, request, solveRoute(fixture.geometry, view.live, request));
     }
+    const chestIds = [2, 3, 4, 5, 6, 12, 13, 14, 15, 16, 17];
+    const checkedChamber = load(197, { self: ['197,18,A'], variables: { 92: 0 } });
+    checkedChamber.player.setPosition(14, 16);
+    const treasure = captureWorld(c);
+    const chests = treasure.objects.filter(item => item.category === 'treasure');
+    assert.deepEqual(chests.map(item => item.id), chestIds);
+    for (const chest of chests) {
+        assert.equal(chest.name, 'Chest');
+        const request = { x: 14, y: 16, event: chest.id };
+        verifyRoute(checkedChamber, request, solveRoute(checkedChamber.geometry, treasure.live, request));
+    }
+
+    const alreadyOpened = load(197, { self: ['197,2,A', '197,18,A'], variables: { 92: 0 } });
+    alreadyOpened.player.setPosition(14, 16);
+    assert.equal(alreadyOpened.gameMap._events[2]._pageIndex, 2);
+    assert(!captureWorld(c, false).objects.some(item => item.id === 2));
+    const recheck = load(197, { switches: [644], self: ['197,18,A'], variables: { 92: 1 } });
+    recheck.player.setPosition(14, 16);
+    assert.equal(recheck.gameMap._events[2]._pageIndex, 1);
+    assert(!captureWorld(c, false).objects.some(item => item.id === 2));
+
+    for (const [count, latch, expected] of [[0, [], 0], [10, ['A'], 1], [11, ['A'], 2], [11, ['A', 'B'], 3]]) {
+        const chamber = load(197, { self: ['197,18,A', ...latch.map(key => '197,11,' + key)],
+            variables: { 92: 0, 195: count } });
+        assert.equal(chamber.gameMap._events[11]._pageIndex, expected);
+        chamber.player.setPosition(14, 16);
+        assert.equal(captureWorld(c, false).objects.find(item => item.id === 11).name, 'Statue');
+    }
+
+    const common = read('CommonEvents.json');
+    const variables = new Map();
+    const opened = [];
+    c.$gameVariables.value = key => variables.get(key) ?? 0;
+    c.$gameVariables.setValue = (key, value) => variables.set(key, value);
+    c.$gameSelfSwitches.setValue = (key, value) => opened.push([Array.from(key), value]);
+    const requirements = Object.assign(new c.Game_Interpreter(), { _mapId: 197, _list: common[110].list, _branch: {} });
+    for (let index = 0; index < requirements._list.length - 1; index++) run(requirements, index, 122);
+    const check = Object.assign(new c.Game_Interpreter(), { _mapId: 197, _eventId: 2,
+        _list: common[42].list, _branch: {} });
+    variables.set(53, 43); // The selected chest supplies its own stat and requirement IDs.
+    variables.set(54, variables.get(143));
+    variables.set(43, variables.get(143) - 1);
+    run(check, 0, 122);
+    run(check, 1, 122);
+    run(check, 11, 111);
+    assert.equal(check._branch[0], false);
+    assert(check._index > 15);
+    assert.deepEqual(opened, []);
+    variables.set(43, variables.get(143));
+    run(check, 0, 122);
+    run(check, 1, 122);
+    run(check, 11, 111);
+    assert.equal(check._branch[0], true);
+    assert.equal(check._index, 12);
+    run(check, 15, 123);
+    assert.deepEqual(opened, [[[197, 2, 'A'], true]]);
+    delete c.$gameVariables.setValue;
+    delete c.$gameSelfSwitches.setValue;
+
     delete c.Graphics.app;
     delete c.WendyQuestAccessCaveEventAccepted;
     delete c.$gameMessage;
     delete c.$gameSwitches.setValue;
     c.$gameParty.inBattle = originalInBattle;
     c.SceneManager._scene = originalScene;
-    console.log('Verified both native patrol-line starts, nine chase triggers, all three crystal gates, the staircase, island choice and chamber routes.');
+    console.log('Verified the patrols, staircase, island choice, eleven chamber chest approaches, native stat gate and four statue pages.');
 }
 
 module.exports = { verifyCaveProgression };

@@ -911,7 +911,7 @@ async function main() {
     verifyWallFeedback();
     await verifyNativeBeacon();
     verifyNativePatrolMotion();
-    verifyCaveProgression(c, load, snapshot, verifyRoute);
+    verifyCaveProgression(c, load, snapshot, verifyRoute, read);
     await verifyLocalDestinations(c, load, verifyRoute, verifyWorker);
     await verifyVehicleNavigation(c, load, read, verifyWorker);
     await verifyAutowalk(c, load, verifyWorker);

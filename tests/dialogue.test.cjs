@@ -271,6 +271,38 @@ async function verifyNumberEntry() {
     assert.equal(standalone.packets()[0].append, false);
 }
 
+async function verifyChamberChestHint() {
+    const map = mapData(197);
+    const f = await enter(map, 197);
+    const { c, window, speaker } = f;
+    c.$dataCommonEvents = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', 'CommonEvents.json'), 'utf8'));
+    enableNativeMessage(f);
+    installInterpreterConstructor(c);
+    const root = c.$gameMap._interpreter;
+    Object.assign(root, { _mapId: 197, _eventId: 2, _index: 2, _list: map.events[2].pages[0].list });
+    assert(root.executeCommand());
+    const source = root._childInterpreter;
+    const hint = c.$dataCommonEvents[42].list;
+    assert.equal(source._list, hint);
+    c.$gameVariables.value = id => ({ 54: 25, 55: 24, 57: 'Fixture stat' })[id] ?? 0;
+    source._index = hint.findIndex(command => command.code === 101);
+    assert(source.executeCommand());
+    assert.equal(c.$gameMessage.interpreter, source);
+    window.worldAlpha = 0;
+    f.until(() => window.pause);
+    speaker._animationRunning = false;
+    f.tick();
+    assert.equal(f.packets().length, 0);
+    window.worldAlpha = 1;
+    f.tick();
+    assert.equal(f.packets().length, 1);
+    const lines = f.packets()[0].text.trim().split('\n');
+    assert.equal(lines.join(''), f.shown.join('').trim());
+    assert.equal(lines.length, 2);
+    assert.match(lines[0], /Fixture stat.*24/i);
+    assert.match(lines[1], /25/);
+}
+
 async function verifySaltGuide() {
     const data = mapData(19);
     const f = await enter(data);
@@ -939,11 +971,12 @@ async function main() {
     await verifyNumberEntry();
     await verifySaltGuide();
     await verifyCaveGuide();
+    await verifyChamberChestHint();
     await verifyAutomaticClose();
     await verifyBattleDialogue();
 
     await verifyRepeat();
-    console.log('Verified installed dialogue, Salt Caverns guidance, visible cave patrols and all four native recovery branches.');
+    console.log('Verified installed dialogue, the chamber chest hint, Salt Caverns guidance, cave patrols and four recovery branches.');
 }
 
 if (require.main === module)
