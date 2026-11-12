@@ -14,6 +14,7 @@ const { createRadialResult } = require('./battle/radial-result');
 const { partyVitals, menuVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
+const { createAutosaveNotice } = require('./world/autosave-notice');
 const { createField } = require('./world/field');
 const { createWallAudio } = require('./world/wall-audio');
 const { createBeacon } = require('./world/beacon');
@@ -38,6 +39,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let radialResult = null;
     let quests = null;
     let mapBanner = null;
+    let autosaveNotice = null;
     let dialogue = null;
     let audio = null;
     let wall = null;
@@ -139,6 +141,7 @@ function boot(root, nodeRequire, nodeProcess) {
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
+        autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
         quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
         beacon = host.beacon = createBeacon(root, field.ready, audio, () => audioPreferences, field.report);
@@ -346,6 +349,7 @@ function boot(root, nodeRequire, nodeProcess) {
             battleLog.retire(host.manager._scene);
             radialResult.retire(host.manager._scene);
             quests.leave(host.manager._scene);
+            autosaveNotice.leave(host.manager._scene);
             controller.reset();
         });
         root.addEventListener('focus', () => {
@@ -468,6 +472,11 @@ function boot(root, nodeRequire, nodeProcess) {
         try { field?.questRefresh(scene); } catch { /* Preserve the native marker rebuild. */ }
     };
 
+    root.WendyQuestAccessAutosaveNotice = function (scene, sprite) {
+        try { autosaveNotice?.observe(scene, sprite); } catch { autosaveNotice?.leave(scene); }
+    };
+    root.WendyQuestAccessAutosaveNoticeEnd = function (scene, sprite) { autosaveNotice?.removed(scene, sprite); };
+
     root.WendyQuestAccessMapBannerReady = function (scene, revision) {
         try {
             if (!supported() || root.SceneManager._scene !== scene || !root.document.hasFocus()) return;
@@ -539,6 +548,7 @@ function boot(root, nodeRequire, nodeProcess) {
         caveTiming?.stop(scene);
         beacon?.stop(scene);
         field?.controlLost(scene);
+        autosaveNotice?.leave(scene);
         controller?.reset();
     };
 
@@ -548,6 +558,7 @@ function boot(root, nodeRequire, nodeProcess) {
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
     };
     root.WendyQuestAccessFieldEvent = function (scene) {
+        autosaveNotice?.leave(scene);
         quests?.suspend(scene);
         soundscape?.leave(scene);
         caveTiming?.stop(scene);
@@ -608,6 +619,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleLog?.leave(scene);
         radialResult?.retire(scene);
         mapBanner?.leave(scene);
+        autosaveNotice?.leave(scene);
         dialogue?.leave(scene);
         field?.leave(scene);
     };
@@ -629,6 +641,7 @@ function boot(root, nodeRequire, nodeProcess) {
         settings?.retire(scene);
         if (scene?._wqaPresentation) scene._wqaPresentation = false;
         mapBanner?.leave(scene);
+        autosaveNotice?.leave(scene);
         dialogue?.leave(scene);
         field?.leave(scene);
         title?.suspend();

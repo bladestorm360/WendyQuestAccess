@@ -105,13 +105,14 @@ function createRenderer(host, waitForSpeechPreference = false) {
     }
 
     function submit(token, focused) {
-        if (failed || !context || token !== context || (speechEnabled === false && !brailleAvailable)) return;
+        if (failed || !context || token !== context || (speechEnabled === false && !brailleAvailable)) return false;
         if (pending.length + inFlight >= MAX_PENDING) {
             counters.dropped++;
-            return;
+            return false;
         }
         pending.push({ kind: 'title', ...focused, sequence: ++nextSequence });
         readyOutput();
+        return true;
     }
 
     function retireOutput() {

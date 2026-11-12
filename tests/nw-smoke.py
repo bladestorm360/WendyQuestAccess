@@ -560,7 +560,38 @@ const interval = setInterval(() => {
             delete scene._statusWindow;
             mapVitalsStep++;
         }
-        if (mapVitalsStep < 4) return;
+        if (mapVitalsStep === 4) {
+            fs.writeFileSync(receipt + '.autosave-notice-stage', '');
+            const banner = scene.fixtureSaveBanner = battleText(scene, 'GAME SAVED');
+            SceneManager._wqaNativeAutosaves = 1;
+            WendyQuestAccessAutosaveNotice(scene, banner);
+            Graphics.app.renderer.emit('postrender');
+            if (scene._wqaAutosaveNotice) throw Error('Map autosave admitted a pending native write');
+            SceneManager._wqaNativeAutosaves = 0;
+            WendyQuestAccessAutosaveNotice(scene, banner);
+            WendyQuestAccessAutosaveNotice(scene, banner);
+            Graphics.app.renderer.emit('postrender');
+            WendyQuestAccessAutosaveNotice(scene, banner);
+            Graphics.app.renderer.emit('postrender');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 5 && fs.existsSync(receipt + '.autosave-notice')) {
+            WendyQuestAccessAutosaveNoticeEnd(scene, scene.fixtureSaveBanner);
+            const next = scene.fixtureSaveBanner = battleText(scene, 'GAME SAVED');
+            WendyQuestAccessAutosaveNotice(scene, next);
+            Graphics.app.renderer.emit('postrender');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 6) {
+            if (fs.readFileSync(receipt + '.autosave-notice', 'utf8').split('\\n').length < 3) return;
+            WendyQuestAccessAutosaveNoticeEnd(scene, scene.fixtureSaveBanner);
+            delete scene.fixtureSaveBanner;
+            fs.unlinkSync(receipt + '.autosave-notice-stage');
+            mapVitalsStep++;
+        }
+        if (mapVitalsStep < 7) return;
         if (!soundscapeStarted) {
             Object.assign($gameMap, { tileWidth: () => 32, deltaX: (x, y) => x - y, deltaY: (x, y) => x - y });
             const actor = $gameMap._events[1];
@@ -1544,6 +1575,11 @@ parentPort.on('message', message => {
         parentPort.postMessage('ack');
         return;
     }
+    if (fs.existsSync(receipt + '.autosave-notice-stage')) {
+        if (message.kind === 'mapBanner') fs.appendFileSync(receipt + '.autosave-notice', formatSpeech(message) + '\\n');
+        parentPort.postMessage('ack');
+        return;
+    }
     if (fs.existsSync(receipt + '.field-vitals-stage')) {
         const speech = formatSpeech(message);
         if (message.kind === 'menuDetails')
@@ -1970,7 +2006,9 @@ def main():
         }.items():
             if receipt.with_suffix('.json.' + suffix).read_text(encoding='utf8') != expected:
                 raise AssertionError(f'Unexpected {suffix} receipt')
-        print('Verified map HUD from keyboard and controller, battle commands, targets, vitals and rendered Bag items.')
+        if receipt.with_suffix('.json.autosave-notice').read_text(encoding='utf8').splitlines() != ['GAME SAVED', 'GAME SAVED']:
+            raise AssertionError('The packaged map save notifications did not follow two distinct completed presentations')
+        print('Verified map HUD, map save notifications, battle commands, targets, vitals and rendered Bag items.')
         print('Verified the Battle timing setting, preview and action retirement. '
               f'Throttled warm battle cue reached silent SDL submission in {battle_cue_ms:.0f} ms.')
         print('Verified the Quests category, packaged route and marker replacement handback.')

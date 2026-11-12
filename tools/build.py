@@ -55,6 +55,7 @@ def bundle():
         '../battle/party-vitals': 'battle/party-vitals.js',
         './options': 'frontend/options.js',
         './world/map-banner': 'world/map-banner.js',
+        './world/autosave-notice': 'world/autosave-notice.js',
         './world/field': 'world/field.js',
         './world/wall-audio': 'world/wall-audio.js',
         './world/beacon': 'world/beacon.js',

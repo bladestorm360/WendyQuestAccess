@@ -7,6 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { nativeTextHost } = require('./native-text-host.cjs');
 const { createMenuObserver } = require('../src/menus/observer');
+const { createAutosaveNotice } = require('../src/world/autosave-notice');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning', path.join(__dirname, 'menu-producers.py'),
@@ -121,12 +122,102 @@ async function check({ count = 0, late = false, failed = false, brokenAnimation 
     return receipt;
 }
 
+async function checkMapAutosave() {
+    const renderer = new EventEmitter();
+    const host = nativeTextHost();
+    const { Sprite, Sprite_Text } = host;
+    function Scene_Base() { this.initialize(); }
+    Scene_Base.prototype = Object.create(Sprite.prototype);
+    function Scene_Menu() {}
+    const routines = [];
+    const writes = [];
+    const packets = [];
+    const notices = [];
+    for (const name of ['setBitmapFont', 'setDrawColour', 'setOutline', 'setAlignment', 'setShadow', 'setShadowDraw'])
+        Sprite_Text.prototype[name] = function () { return this; };
+    Sprite_Text.prototype.delete = function () { this.parent?.removeChild(this); };
+    const c = vm.createContext({
+        ...host, Scene_Base, Scene_Menu, SceneManager: {}, Graphics: { app: { renderer }, width: 640, height: 360 },
+        Time: { GetDeltaTime: () => 1 / 60 },
+        CoroutineManager: { StartAnonymousCoroutine(task) { routines.push(task()); } },
+        console: { log() {} },
+        DataManager: { GetLastLoadedFile: () => 2, saveGame() {
+            assert(c.SceneManager._wqaNativeAutosaves > 0);
+            return new Promise((resolve, reject) => { writes.push({ resolve, reject }); });
+        } },
+        $gameSystem: { ...host.$gameSystem, onBeforeSave() {} },
+        a18_0x5c60() { throw Error('Unresolved autosave property'); },
+        SpriteTextAnimation: { Jump(glyph, progress) { glyph.alpha = progress > 0 ? 1 : 0; },
+            FadeOut(glyph, progress) { glyph.alpha = 1 - progress; } },
+        InverseLerp: (from, to, value) => (value - from) / (to - from),
+        Clamp1: value => Math.max(0, Math.min(1, value))
+    });
+    for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
+    const scene = c.SceneManager._scene = c.Graphics.app.stage = new Scene_Base();
+    scene.onAutosaveFailure = () => notices.push('native failure');
+    const ready = candidate => candidate === c.SceneManager._scene && candidate._wqaFieldReady &&
+        !c.SceneManager._wqaNativeAutosaves;
+    let epoch = 0;
+    const notice = createAutosaveNotice({ graphics: c.Graphics }, ready, {
+        open(record, live) { assert(live()); packets.push(record); return ++epoch; },
+        close(token) { notices.push('closed ' + token); },
+        focus(token, record) { assert.equal(token, epoch); packets.push(record); return true; }
+    }, () => false);
+    c.WendyQuestAccessAutosaveNotice = notice.observe;
+    c.WendyQuestAccessAutosaveNoticeEnd = notice.removed;
+    c.WendyQuestAccessSceneLeaving = notice.leave;
+
+    function frame(render = true) {
+        scene.update();
+        for (let index = 0; index < routines.length;) {
+            if (routines[index].next().done) routines.splice(index, 1);
+            else index++;
+        }
+        for (const sprite of scene.children)
+            for (const glyph of sprite.children) glyph.worldAlpha = glyph.alpha ?? 1;
+        if (render) renderer.emit('postrender');
+    }
+
+    scene._wqaFieldReady = false;
+    scene.executeAutosave();
+    for (let i = 0; i < 20; i++) frame();
+    assert.equal(scene.children.length, 0, 'the native popup waits for the write');
+    writes.shift().resolve();
+    await new Promise(setImmediate);
+    assert.equal(c.SceneManager._wqaNativeAutosaves, 0);
+    for (let i = 0; i < 35; i++) frame();
+    assert.equal(scene.children.length, 1);
+    assert.equal(packets.length, 0, 'loading blocks notice observation');
+    scene._wqaFieldReady = true;
+    frame(false);
+    assert.equal(packets.length, 0, 'a queued notice requires a rendered frame');
+    renderer.emit('postrender');
+    assert.equal(formatSpeech(packets[0]), 'GAME SAVED');
+
+    scene.executeAutosave();
+    assert.deepEqual(notices, ['closed 1'], 'a new native write retires the old notice');
+    writes.shift().resolve();
+    await new Promise(setImmediate);
+    for (let i = 0; i < 45; i++) frame();
+    assert.deepEqual(packets.map(formatSpeech), ['GAME SAVED', 'GAME SAVED']);
+    for (let i = 0; i < 150; i++) frame();
+    assert.deepEqual(notices, ['closed 1', 'closed 2']);
+    scene.executeAutosave();
+    writes.shift().reject(Error('Synthetic map save failure'));
+    await new Promise(setImmediate);
+    for (let i = 0; i < 30; i++) frame();
+    assert.equal(packets.length, 2);
+    assert.equal(notices.at(-1), 'native failure');
+}
+
 (async () => {
     const receipt = await check();
     await check({ late: true });
     await check({ failed: true });
     await check({ brokenAnimation: true });
     await check({ count: 209 });
+    await checkMapAutosave();
+    console.log('Verified actual native map autosave paint, phase retirement, repeated writes and failed-write exclusion.');
     console.log('Verified the native Save request, confirmed write, expired-banner fallback, failure, callback error and displayed multiline review.');
     console.log('Throttled Save handback through synthetic render and formatted receipt', receipt.toFixed(2), 'ms.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

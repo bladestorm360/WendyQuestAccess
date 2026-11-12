@@ -117,6 +117,7 @@ BATTLE_RADIAL_LEAVING = (b'SceneManager._scene?._wqaRadialActive&&'
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
+                 b'SceneManager._scene?._wqaAutosaveNotice||'
                  b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
@@ -849,6 +850,13 @@ def window_notification(original):
         65767: b'(wqaAutosave&&wqaManualSave?.status===0&&(wqaManualSave.status=-1),',
         65791: b')',
         65792: AUTOSAVE_DONE,
+        # The original success coroutine presents the popup after the save.
+        66622: b'{if(this._wqaFieldReady&&!SceneManager._wqaNativeAutosaves&&'
+               b'!_0x495fa1._wqaAutosaveRead)'
+               b'globalThis.WendyQuestAccessAutosaveNotice?.(this,_0x495fa1);',
+        66663: b'}',
+        66812: b'if(this._wqaAutosaveNotice)'
+               b'globalThis.WendyQuestAccessAutosaveNoticeEnd?.(this,_0x495fa1);',
 
     })
 

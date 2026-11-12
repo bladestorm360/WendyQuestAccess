@@ -53,7 +53,12 @@ function createMapBannerObserver(host, notifications) {
             host.window.addEventListener(event, () => { if (current) leave(current.scene); });
         }
     }
-    return { observe, leave };
+    return { observe, leave,
+        append(scene, record) {
+            if (current?.scene !== scene || !current.epoch || !ready(current)) return false;
+            return notifications.focus(current.epoch, { ...record, append: true });
+        }
+    };
 }
 
 module.exports = { createMapBannerObserver };
