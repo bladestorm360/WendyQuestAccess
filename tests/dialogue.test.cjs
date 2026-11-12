@@ -20,6 +20,7 @@ async function enter(map, mapId = 19, battle = false) {
     c.Alias = {};
     c.Eli = { Utils: { spriteCharacters: {} } };
     c.Game_Message = function () {};
+    c.Game_Actor = function () {};
     c.Sprite_Character = function () {};
     c.Tilemap = function () {};
     c.Game_Character = function () {};
@@ -137,7 +138,7 @@ async function enter(map, mapId = 19, battle = false) {
         c.$gameTimer = { update() {} };
         c.$gameScreen.update = () => {};
         Object.assign(c.BattleManager, {
-            _spriteset: { isBusy: () => settings.battleBusy }, _logWindow: { isBusy: () => false },
+            _spriteset: { isBusy: () => settings.battleBusy }, _logWindow: { isBusy: () => !!settings.battleLogBusy },
             playBattleBgm() {}, startBattle() {}, isTpb: () => false,
             updateEvent: () => settings.interpreter?.updateWaitMode(),
             updatePhase() { assert.equal(f.epoch(), 0); }
@@ -940,8 +941,12 @@ async function main() {
     await verifyCaveGuide();
     await verifyAutomaticClose();
     await verifyBattleDialogue();
+
     await verifyRepeat();
     console.log('Verified installed dialogue, Salt Caverns guidance, visible cave patrols and all four native recovery branches.');
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module)
+    main().catch(error => { console.error(error); process.exitCode = 1; });
+
+module.exports = { enter };

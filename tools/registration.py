@@ -504,10 +504,13 @@ def map_notification(original):
 
 
 def battle_notification(original):
-    # Use the busy result already queried by the native battle update. A
-    # message window can be visible before the battle interpreter is ready.
-    ready = (b'this._wqaBattleStarted && BattleManager._wqaDialogueBusy === false && '
-             b'this._wqaBattleInterpreter?._waitMode === "message" && this._wqaBattleInterpreter._list')
+    # Troop dialogue has a native interpreter owner. Direct outcome pages
+    # paint during battleEnd, while the legacy log is still counting its wait.
+    ready = (b'this._wqaBattleStarted && (BattleManager._phase === "battleEnd" ? '
+             b'BattleManager._wqaBattleSpritesBusy === false && !this._wqaBattleInterpreter?._list && '
+             b'!globalThis.$gameTroop?._interpreter?._list && !globalThis.$gameTemp?._animationQueue?.length && '
+             b'!this._spriteset?._animationSprites?.length : BattleManager._wqaDialogueBusy === false && '
+             b'this._wqaBattleInterpreter?._waitMode === "message" && this._wqaBattleInterpreter._list)')
     # Option.update already checked native activation and focus after the
     # sprite advanced. Observe that exact option before native OK dispatch.
     command_ready = (b'(!this._wqaBattleCommandSeen||this._wqaBattleCommandEnabled!=='

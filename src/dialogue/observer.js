@@ -28,8 +28,7 @@ function createDialogueObserver(host, notifications) {
             scene._active && !host.manager._nextScene && !host.manager._exiting &&
             !host.manager._wqaNativeAutosaves && !host.graphics._wqaResize &&
             scene._fadeDuration === 0 && scene._fadeOpacity === 0 && !host.screenFading() &&
-            (!scene._wqaBattleStarted || (host.battleDialogueIdle() &&
-                scene._wqaBattleInterpreter?._waitMode === 'message' && scene._wqaBattleInterpreter._list)) &&
+            (!scene._wqaBattleStarted || host.battleDialogueReady(scene)) &&
             host.graphics.app?.stage === scene && host.hasFocus();
     }
 

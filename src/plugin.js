@@ -73,7 +73,16 @@ function boot(root, nodeRequire, nodeProcess) {
             hasFocus: () => root.document.hasFocus(),
             now: () => root.performance.now(),
             screenFading: () => root.$gameScreen?._fadeOutDuration > 0,
-            battleDialogueIdle: () => root.BattleManager?._wqaDialogueBusy === false,
+            battleDialogueReady(scene) {
+                const battle = root.BattleManager;
+                if (battle?._phase === 'battleEnd') {
+                    return battle._wqaBattleSpritesBusy === false && !scene._wqaBattleInterpreter?._list &&
+                        !root.$gameTroop?._interpreter?._list && !root.$gameTemp?._animationQueue?.length &&
+                        !scene._spriteset?._animationSprites?.length;
+                }
+                return battle?._wqaDialogueBusy === false && scene._wqaBattleInterpreter?._waitMode === 'message' &&
+                    !!scene._wqaBattleInterpreter._list;
+            },
             saveInfo: index => root.DataManager.savefileInfo(index),
             actor: id => root.$dataActors?.[id],
             variable: id => root.$gameVariables?.value(id),

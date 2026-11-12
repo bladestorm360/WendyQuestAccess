@@ -1241,6 +1241,17 @@ const interval = setInterval(() => {
             endingStep = 41;
         } else if (endingStep === 41 && fs.existsSync(receipt + '.battle-bag-details')) {
             fs.unlinkSync(receipt + '.battle-bag-stage');
+            const scene = SceneManager._scene;
+            scene._itemWindow.active = false;
+            WendyQuestAccessMenuLeaving(scene);
+            Object.assign(BattleManager, { _phase: 'battleEnd', _wqaBattleSpritesBusy: false, _wqaDialogueBusy: true });
+            const text = 'Synthetic victory reward.';
+            scene._messageWindow = { parent: scene._windowLayer, worldVisible: true, worldAlpha: 1, openness: 255,
+                contentsOpacity: 255, _wqaDialoguePaint: { text, end: text.length, spoken: 0 } };
+            WendyQuestAccessDialogueReady(scene);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 48;
+        } else if (endingStep === 48 && fs.existsSync(receipt + '.battle-outcome')) {
             fs.unlinkSync(receipt + '.battle-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
@@ -1313,6 +1324,7 @@ parentPort.on('message', message => {
                 message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'hp') :
                     vitals === 'Synthetic companion' ? 'slot2' : message.append ? 'autodetail' : 'details') :
                 message.kind === 'menuReview' ? (target && message.append ? 'timing' : 'review') :
+                message.kind === 'dialoguePage' ? 'outcome' :
                 message.kind === 'controllerStatus' ? 'mode' : '';
             const prefix = target ? '.battle-target-' :
                 fs.existsSync(receipt + '.battle-bag-stage') ? '.battle-bag-' : '.battle-';
@@ -1604,6 +1616,7 @@ def main():
             'battle-log-repeat': 'Synthetic turn result.',
             'battle-radial': 'Power 81%. Accuracy 93%, NICE.',
             'battle-damage': 'Synthetic target, 17 HP damage, elemental resistance.',
+            'battle-outcome': 'Synthetic victory reward.',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',

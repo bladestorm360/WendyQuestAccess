@@ -8,7 +8,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from registration import (BATTLE_REL, CORE_REL, MANAGERS_REL, MAP_REL, MESSAGE_OWNER_REL, OBJECTS_REL, WINDOW_REL,
+from registration import (BATTLE_REL, CORE_REL, MANAGERS_REL, MAP_REL, MESSAGE_OWNER_REL, OBJECTS_REL, STATS_REL, WINDOW_REL,
                           WINDOWS_REL, battle_notification, managers_notification, map_notification,
                           objects_notification, windows_notification)
 
@@ -46,6 +46,7 @@ for kind, names in {
         methods.append(between(stock, f'{kind}.prototype.{name} = function(', '\n};') + '\n};')
 core = (installed / CORE_REL).read_text(encoding='utf8')
 for name in ('Math.randomInt', 'Number.prototype.clamp', 'Number.prototype.padZero', 'String.prototype.padZero',
+             'String.prototype.format',
              'Window.prototype.isOpen', 'Window.prototype.isClosed', 'Tilemap.prototype._readMapData',
              'Tilemap.prototype._isOverpassPosition', 'Tilemap.prototype._isHigherTile'):
     methods.append(between(core, f'{name} = function(', '\n};') + '\n};')
@@ -56,11 +57,17 @@ for name, tail in [
     ("Scene_Battle['prototype']['update']", "},Scene_Battle['prototype']['isTimeActive']"),
     ("Scene_Battle['prototype']['isTimeActive']", "},Scene_Battle['prototype']['itemWindowRect']"),
     ("BattleManager['isBusy']", "},BattleManager['showEnemySelectionArrows']"),
+    ("BattleManager['processDefeat']", "},BattleManager['processVictory']"),
+    ("BattleManager['processVictory']", "},BattleManager['displayExp']"),
+    ("BattleManager['displayExp']", "},Game_Unit['prototype']['makeActions']"),
 ]:
     methods.append(between(battle, f'{name}=function(', tail) + '};')
 for relative, transform, names in [
-    (MANAGERS_REL, managers_notification, ['BattleManager.update']),
-    (OBJECTS_REL, objects_notification, ['Game_Event.prototype.eventId', 'Game_Event.prototype.forceMoveRoute',
+    (MANAGERS_REL, managers_notification, ['BattleManager.update', 'BattleManager.endBattle',
+        *('BattleManager.' + name for name in ('displayVictoryMessage', 'displayDefeatMessage', 'displayRewards',
+                                             'displayGold', 'displayDropItems'))]),
+    (OBJECTS_REL, objects_notification, ['Game_Message.prototype.add', 'Game_Message.prototype.newPage',
+        'Game_Message.prototype.allText', 'Game_Event.prototype.eventId', 'Game_Event.prototype.forceMoveRoute',
         'Game_CharacterBase.prototype.setMovementSuccess', *('Game_Character.prototype.' + name for name in
         ('forceMoveRoute', 'memorizeMoveRoute', 'restoreMoveRoute', 'processRouteEnd')), *('Game_Interpreter.prototype.' + name for name in
         ('initialize', 'checkOverflow', 'setWaitMode', 'updateWaitMode', 'executeCommand', 'currentCommand', 'nextEventCode', 'skipBranch',
@@ -69,6 +76,9 @@ for relative, transform, names in [
 ]:
     source = transform((installed / relative).read_bytes()).decode('utf8')
     methods.extend(between(source, f'{name} = function(', '\n};') + '\n};' for name in names)
+stats, _ = decode((installed / STATS_REL).read_text(encoding='utf8'))
+methods.append(between(stats, "Game_Actor['prototype']['displayLevelUp']=function(",
+                       "},Game_Actor['prototype']['changeEquip']") + '};')
 eli, _ = decode((installed / MESSAGE_OWNER_REL).read_text(encoding='utf8'))
 for name, tail in [
     ('setInterpreter', "},Alias['Game_Message_clear']"),
