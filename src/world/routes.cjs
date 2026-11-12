@@ -1,6 +1,7 @@
 'use strict';
 
-const { DIRECTIONS, COUNTER, LAND, PASSAGE, composeWorld, indexOf, offset, step, clipRectangle } = require('./geometry.cjs');
+const { DIRECTIONS, COUNTER, LAND, PASSAGE, MAX_EVENTS, composeWorld, indexOf, offset, step, clipRectangle } =
+    require('./geometry.cjs');
 
 function bounds(world, event) {
     return clipRectangle(world, event.rectangle || [event.x, event.y, event.x, event.y]);
@@ -13,44 +14,63 @@ function inside(world, cell, [left, top, right, bottom]) {
     return x >= left && x <= right && y >= top && y <= bottom;
 }
 
-function actionGoals(world, id, cancelled, surface) {
-    const actions = [];
-    let target = null;
-    for (const event of world.events) {
-        if (event.erased || !event.action || ![0, 1, 2].includes(event.trigger)) continue;
-        const action = { id: event.id, normal: event.normal === true, trigger: event.trigger, bounds: bounds(world, event) };
-        if (action.id === id) target = action;
-        actions.push(action);
+function interactionTiles(world, cancelled) {
+    const normal = new Uint16Array(world.cells.length);
+    const here = new Uint16Array(world.cells.length);
+    const touch = new Uint16Array(world.cells.length);
+    const boats = new Uint8Array(world.cells.length);
+    for (const vehicle of world.vehicles || []) {
+        const cell = indexOf(world, vehicle.x, vehicle.y);
+        if (cell >= 0) boats[cell] = 1;
     }
+    const aircraft = world.aircraft ? indexOf(world, world.aircraft.x, world.aircraft.y) : -1;
+    // The native interpreter takes the first startable event in map order.
+    // Each layer preserves the priority and trigger accepted by one check.
+    for (const event of world.events) {
+        if (cancelled()) break;
+        if (event.erased || !event.action || ![0, 1, 2].includes(event.trigger) ||
+            !Number.isInteger(event.id) || event.id < 1 || event.id > MAX_EVENTS) continue;
+        const layer = event.normal ? normal : event.trigger === 0 ? here : touch;
+        const [left, top, right, bottom] = bounds(world, event);
+        for (let y = top; y <= bottom; y++) {
+            if (cancelled()) break;
+            for (let x = left; x <= right; x++) {
+                const cell = y * world.width + x;
+                if (!layer[cell]) layer[cell] = event.id;
+            }
+        }
+    }
+    return { normal, here, touch, boats, aircraft };
+}
+
+function buttonEvent(world, tiles, cell, heading) {
+    const front = offset(world, cell, heading);
+    // Native OK tries vehicles and the player's own tile first. A counter
+    // extends the check only when the nearer tile starts no event.
+    if (tiles.aircraft === cell || tiles.boats[front]) return 0;
+    if (tiles.here[cell] || front < 0) return tiles.here[cell];
+    return tiles.normal[front] || ((world.cells[front] & COUNTER) ? tiles.normal[offset(world, front, heading)] || 0 : 0);
+}
+
+function actionGoals(world, id, cancelled, surface, tiles = interactionTiles(world, cancelled)) {
+    const target = world.events.find(event => event.id === id && !event.erased && event.action &&
+        [0, 1, 2].includes(event.trigger));
     // Only qualified floor events take control while driving a surface craft.
     if (!target || (world.mode !== 'walk' &&
         (!surface || world.mode === 'airship' || target.normal || target.trigger === 0))) return null;
     const goals = new Uint8Array(world.cells.length);
-    function firstAt(cell, normal, trigger = null) {
-        return actions.find(event => event.normal === normal && (trigger === null ||
-            (trigger === 0 ? event.trigger === 0 : event.trigger !== 0)) &&
-            inside(world, cell, event.bounds));
-    }
     for (let cell = 0; cell < goals.length; cell++) {
         if ((cell & 63) === 0 && cancelled()) return goals;
-        if (!target.normal) {
-            // The on-tile Action Button and player-touch paths use the
-            // target's native priority and trigger, never event contents.
-            if (inside(world, cell, target.bounds) && firstAt(cell, false, target.trigger) === target) goals[cell] = 1;
+        if (!target.normal && target.trigger !== 0) {
+            if (tiles.touch[cell] === id) goals[cell] = 1;
             continue;
         }
+        if (!target.normal && tiles.here[cell] !== id) continue;
         for (let heading = 0; heading < DIRECTIONS.length; heading++) {
-            const front = offset(world, cell, heading);
-            if (front < 0) continue;
-            if (inside(world, front, target.bounds)) {
-                if (firstAt(front, true) === target) goals[cell] = DIRECTIONS[heading];
-            } else if (world.cells[front] & COUNTER) {
-                const across = offset(world, front, heading);
-                if (inside(world, across, target.bounds) && !firstAt(front, true) && firstAt(across, true) === target) {
-                    goals[cell] = DIRECTIONS[heading];
-                }
-            }
-            if (goals[cell]) break;
+            if (buttonEvent(world, tiles, cell, heading) !== id) continue;
+            const needsFacing = target.normal || DIRECTIONS.some((_, index) => tiles.boats[offset(world, cell, index)]);
+            goals[cell] = needsFacing ? DIRECTIONS[heading] : 1;
+            break;
         }
     }
     return goals;
@@ -75,11 +95,11 @@ function boardingGoals(world, type) {
     return goals;
 }
 
-function groundDistances(world, event, cancelled) {
+function groundDistances(world, event, cancelled, tiles = interactionTiles(world, cancelled)) {
     const ground = { ...world, mode: 'walk', through: false };
-    const goals = actionGoals(ground, event, cancelled);
+    const goals = actionGoals(ground, event, cancelled, false, tiles);
     if (!goals || cancelled()) return null;
-    const stops = automaticEvents(ground, cancelled);
+    const stops = tiles.touch;
     const distance = new Uint16Array(goals.length);
     const queue = new Uint16Array(goals.length);
     let count = 0;
@@ -129,7 +149,8 @@ function nearestLanding(world, request, ground, cancelled) {
 function landingRoute(world, start, request, area, cancelled) {
     if (world.mode !== 'airship' || !world.hasLandings) return { status: 'unavailable' };
     const linked = Number.isInteger(request.event);
-    const ground = linked ? groundDistances(world, request.event, cancelled) : null;
+    const tiles = linked ? interactionTiles(world, cancelled) : null;
+    const ground = linked ? groundDistances(world, request.event, cancelled, tiles) : null;
     if (cancelled()) return { status: 'cancelled' };
     if (linked && !ground) return { status: 'unavailable' };
     let site = nearestLanding(world, request, ground, cancelled);
@@ -138,7 +159,7 @@ function landingRoute(world, start, request, area, cancelled) {
         for (const event of world.events) {
             if (cancelled()) return { status: 'cancelled' };
             if (event.discoveryFor !== request.event) continue;
-            const approach = groundDistances(world, event.id, cancelled);
+            const approach = groundDistances(world, event.id, cancelled, tiles);
             const candidate = approach && nearestLanding(world, request, approach, cancelled);
             if (candidate && (!site || candidate.cost < site.cost)) {
                 site = candidate;
@@ -156,24 +177,6 @@ function landingRoute(world, start, request, area, cancelled) {
         if (discovery) result.discovery = discovery;
     }
     return result;
-}
-
-function automaticEvents(world, cancelled) {
-    const stops = new Uint16Array(world.cells.length);
-    // Native movement selects the first active non-normal touch event in
-    // map order. Through affects collision but leaves touch eligibility intact.
-    for (const event of world.events) {
-        if (event.erased || event.normal || !event.action || (event.trigger !== 1 && event.trigger !== 2)) continue;
-        const [left, top, right, bottom] = bounds(world, event);
-        for (let y = top; y <= bottom; y++) {
-            if (cancelled()) return stops;
-            for (let x = left; x <= right; x++) {
-                const cell = y * world.width + x;
-                if (!stops[cell]) stops[cell] = event.id;
-            }
-        }
-    }
-    return stops;
 }
 
 function trace(world, start, goal, facing, parents, cancelled, stops) {
@@ -268,10 +271,10 @@ function markerGoals(world, id) {
     return goals;
 }
 
-function routeGoals(world, request, cancelled) {
+function routeGoals(world, request, cancelled, tiles) {
     if (request.vehicle) return boardingGoals(world, request.vehicle);
     if (request.waypoint === true) return markerGoals(world, request.event);
-    if (Number.isInteger(request.event)) return actionGoals(world, request.event, cancelled, request.surface === true);
+    if (Number.isInteger(request.event)) return actionGoals(world, request.event, cancelled, request.surface === true, tiles);
     return pointGoal(world, request.targetX, request.targetY);
 }
 
@@ -298,33 +301,133 @@ function finishEntry(world, result, entry) {
     return result;
 }
 
+function canReenter(world, start, stops, area) {
+    return DIRECTIONS.some((_, heading) => {
+        const adjacent = step(world, start, heading);
+        return adjacent >= 0 && !stops[adjacent] && (!area || inside(world, adjacent, area)) &&
+            step(world, adjacent, 3 - heading) === start;
+    });
+}
+
+function reachableApproaches(world, start, tiles, cancelled) {
+    const reached = new Uint8Array(world.cells.length);
+    const events = new Uint8Array(MAX_EVENTS + 1);
+    const queue = new Uint16Array(reached.length);
+    let count = 1;
+    queue[0] = start;
+    reached[start] = 1;
+    for (let cursor = 0; cursor < count; cursor++) {
+        if ((cursor & 63) === 0 && cancelled()) return null;
+        const cell = queue[cursor];
+        const stop = tiles.touch[cell];
+        if (stop && (cell !== start || canReenter(world, start, tiles.touch))) events[stop] = 1;
+        // A floor event can be the destination, but cannot carry a route
+        // through the next room before native progression has occurred.
+        if (stop && cell !== start) continue;
+        for (let heading = 0; heading < DIRECTIONS.length; heading++) {
+            const action = world.mode === 'walk' && buttonEvent(world, tiles, cell, heading);
+            if (action) events[action] = 1;
+            const next = step(world, cell, heading);
+            if (next >= 0 && !reached[next]) {
+                reached[next] = 1;
+                queue[count++] = next;
+            }
+        }
+    }
+    return { reached, events };
+}
+
+function approachAvailable(world, start, candidate, tiles, approaches, cancelled) {
+    const { reached, events } = approaches;
+    const stops = tiles.touch;
+    if (candidate.vehicle || candidate.waypoint) {
+        const goals = routeGoals(world, candidate, cancelled, tiles);
+        return goals?.some((goal, cell) => goal && reached[cell] && (!stops[cell] || cell === start));
+    }
+    const id = candidate.event;
+    if (!events[id]) return false;
+    if (candidate.entryDirection === undefined) return true;
+    const target = world.events.find(event => event.id === id);
+    const heading = DIRECTIONS.indexOf(candidate.entryDirection);
+    const cell = indexOf(world, target.x, target.y);
+    if (heading < 0 || cell < 0 || stops[cell] !== id) return false;
+    const before = offset(world, cell, 3 - heading);
+    return before >= 0 && reached[before] && (!stops[before] || before === start) && step(world, before, heading) === cell;
+}
+
+function flightApproaches(world, tiles, candidates, cancelled) {
+    const available = new Uint8Array(candidates.length);
+    if (!world.hasLandings || !world.cells.some(value => value & LAND)) return available;
+    const connected = new Map();
+    const discoveries = new Map();
+    for (const event of world.events) {
+        if (!event.discoveryFor) continue;
+        if (!discoveries.has(event.discoveryFor)) discoveries.set(event.discoveryFor, []);
+        discoveries.get(event.discoveryFor).push(event.id);
+    }
+    const canReach = id => {
+        if (!connected.has(id)) {
+            const distance = groundDistances(world, id, cancelled, tiles);
+            connected.set(id, !!distance?.some((value, cell) => value > 1 && (world.cells[cell] & LAND)));
+        }
+        return connected.get(id);
+    };
+    for (let index = 0; index < candidates.length; index++) {
+        if (cancelled()) return null;
+        const candidate = candidates[index];
+        const id = candidate.event;
+        if (candidate.nearestLanding || (Number.isInteger(id) && !candidate.waypoint &&
+            (canReach(id) || discoveries.get(id)?.some(canReach)))) available[index] = 1;
+    }
+    return available;
+}
+
+function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () => false) {
+    if (!Array.isArray(candidates) || candidates.length > MAX_EVENTS * 2 + 4) return { status: 'unavailable' };
+    const world = composeWorld(geometry, snapshot, cancelled);
+    if (!world) return { status: 'cancelled' };
+    const start = indexOf(world, x, y);
+    if (start < 0) return { status: 'unavailable' };
+    const tiles = interactionTiles(world, cancelled);
+    if (world.mode === 'airship') {
+        const available = flightApproaches(world, tiles, candidates, cancelled);
+        return available && !cancelled() ? { status: 'reachable', available } : { status: 'cancelled' };
+    }
+    const approaches = reachableApproaches(world, start, tiles, cancelled);
+    if (!approaches) return { status: 'cancelled' };
+    const available = new Uint8Array(candidates.length);
+    for (let index = 0; index < candidates.length; index++) {
+        if (cancelled()) return { status: 'cancelled' };
+        if (approachAvailable(world, start, candidates[index], tiles, approaches, cancelled)) available[index] = 1;
+    }
+    return { status: 'reachable', available };
+}
+
 function solveWorldRoute(world, request, cancelled = () => false) {
     const start = indexOf(world, request.x, request.y);
     if (start < 0) return { status: 'unavailable' };
     const area = request.area && clipRectangle(world, request.area);
     if (request.area && (!area || !inside(world, start, area))) return { status: 'unavailable' };
     if (request.landing === true) return landingRoute(world, start, request, area, cancelled);
-    const goals = routeGoals(world, request, cancelled);
+    const tiles = interactionTiles(world, cancelled);
+    const goals = routeGoals(world, request, cancelled, tiles);
     if (cancelled()) return { status: 'cancelled' };
     if (!goals) return { status: 'unavailable' };
     const entry = request.entryDirection === undefined ? null : entryGoal(world, goals, request, area);
     if (request.entryDirection !== undefined && !entry) return { status: 'unreachable' };
     if (request.field !== true || world.mode === 'airship')
         return finishEntry(world, route(world, start, goals, cancelled, area), entry);
-    const stops = automaticEvents(world, cancelled);
+    const stops = tiles.touch;
     let blockedApproach = false;
+    const targetStop = request.waypoint === true ? undefined : request.event;
     for (let cell = 0; cell < stops.length; cell++) {
         if ((cell & 63) === 0 && cancelled()) return { status: 'cancelled' };
-        if (cell === start || !goals[cell] || !stops[cell] || stops[cell] === request.event) continue;
+        if (cell === start || !goals[cell] || !stops[cell] || stops[cell] === targetStop) continue;
         goals[cell] = 0;
         blockedApproach = true;
     }
-    if (!entry && goals[start] && stops[start] === request.event) {
-        const reenter = DIRECTIONS.some((_, heading) => {
-            const adjacent = step(world, start, heading);
-            return adjacent >= 0 && !stops[adjacent] && (!area || inside(world, adjacent, area)) &&
-                step(world, adjacent, 3 - heading) === start;
-        });
+    if (!entry && goals[start] && stops[start] === targetStop) {
+        const reenter = canReenter(world, start, stops, area);
         return reenter ? { ...trace(world, start, start, 1, null, cancelled), reenter: true } : { status: 'unreachable' };
     }
     const clear = route(world, start, goals, cancelled, area, stops);
@@ -339,4 +442,4 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     return world ? solveWorldRoute(world, request, cancelled) : { status: 'cancelled' };
 }
 
-module.exports = { solveRoute, solveWorldRoute, routeGoals, inside };
+module.exports = { solveRoute, solveWorldRoute, findReachable, routeGoals, inside };

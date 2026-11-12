@@ -414,7 +414,7 @@ function boot(root, nodeRequire, nodeProcess) {
         soundscape?.leave(scene);
         caveTiming?.stop(scene);
         const stopped = field?.autowalk.stop(scene);
-        if (stopped || scene?._wqaCaveReview || scene?._wqaQuestNavigation) field?.changed(scene);
+        if (stopped || scene?._wqaCaveReview || scene?._wqaQuestNavigation || scene?._wqaRouteActive) field?.changed(scene);
         beacon?.stop(scene);
         wall?.interrupt(scene);
     };

@@ -6,7 +6,7 @@ const path = require('node:path');
 const { performance } = require('node:perf_hooks');
 const { fixture, mapData } = require('./map-lifecycle.test.cjs');
 const { bakeMap, MAX_CELLS } = require('../src/world/geometry.cjs');
-const { solveRoute } = require('../src/world/routes.cjs');
+const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { captureWorld } = require('../src/world/snapshot');
 const { destination } = require('../src/world/destinations');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
@@ -21,8 +21,19 @@ async function main() {
     const key = (value, modifiers = {}) => f.dispatchWindowEvent('keydown',
         { key: value, keyCode: value.toUpperCase().charCodeAt(0), ...modifiers });
     const fieldSpeech = () => f.packets.filter(packet => ['fieldTarget', 'fieldStatus', 'routeDirections'].includes(packet.kind));
-    const reply = (request, result = solveRoute(base, request.live, request.request)) =>
+    const directionsPackets = () => routePackets.filter(packet => !packet.request.candidates);
+    const reply = (request, result = request.request.candidates ?
+        findReachable(base, request.live, request.request) : solveRoute(base, request.live, request.request)) =>
         f.routeReply({ epoch: request.epoch, sequence: request.sequence, map: request.map, result });
+    function publishBrowse() {
+        f.frame();
+        const packet = routePackets.at(-1);
+        assert(Array.isArray(packet.request.candidates));
+        const result = findReachable(base, packet.live, packet.request);
+        reply(packet, result);
+        f.frame();
+        return { packet, result };
+    }
     const map = c.$gameMap;
     const player = c.$gamePlayer;
     const restoredIndex = 3 * data.width * data.height;
@@ -64,17 +75,17 @@ async function main() {
     f.frame();
 
     key('k');
-    f.frame();
+    publishBrowse();
     assert.equal(formatSpeech(fieldSpeech()[0]), 'Wall clue, 1 south');
     key('j');
     key('l');
     assert.equal(f.renderer.listenerCount('postrender'), 1);
-    f.frame();
+    publishBrowse();
     assert.equal(formatSpeech(fieldSpeech()[1]), 'Wall clue, 1 south');
     key('p');
     f.frame();
-    assert.equal(routePackets.length, 1);
-    const first = routePackets[0];
+    assert.equal(directionsPackets().length, 1);
+    const first = directionsPackets()[0];
     assert.equal(first.request.event, 114);
     assert.equal(first.live.terrain.length, 1);
     assert.equal(first.live.terrain[0] & (MAX_CELLS - 1), 0);
@@ -86,20 +97,18 @@ async function main() {
         { direction: 6, tiles: 3 }, { direction: 8, tiles: 4 }], facing: 2 }), 'Example. 1 north, 3 east, 4 north. face south.');
 
     key('l', { shiftKey: true });
-    f.frame();
-    assert.match(formatSpeech(fieldSpeech()[3]), /^Exits, To Chilly North/);
-    key('l', { shiftKey: true });
-    f.frame();
-    assert.match(formatSpeech(fieldSpeech()[4]), /^Treasure, Chest|^Treasure, Treasure/);
-    assert.doesNotMatch(formatSpeech(fieldSpeech()[4]), /25 Gold/);
-    key('l', { shiftKey: true });
-    f.frame();
-    assert.match(formatSpeech(fieldSpeech()[5]), /^Objects, Wall/);
+    const filtered = publishBrowse();
+    assert.match(formatSpeech(fieldSpeech()[3]), /^Objects, Wall clue/);
+    for (const id of [2, 3]) {
+        const index = filtered.packet.request.candidates.findIndex(target => target.event === id);
+        assert(index >= 0, 'the native destination still exists');
+        assert.equal(filtered.result.available[index], 0, 'unreachable categories are skipped from the current side');
+    }
     const delivered = fieldSpeech().length;
 
     key('p');
     f.frame();
-    const pending = routePackets[1];
+    const pending = directionsPackets()[1];
     assert.equal(f.routeEpoch(), pending.epoch);
     const cell = 12 * data.width + 26;
     map.setExactTileId(26, 12, 3, data.data[3 * data.width * data.height + cell]);
@@ -108,21 +117,22 @@ async function main() {
     assert.equal(fieldSpeech().length, delivered);
     key('p');
     f.frame();
-    assert.equal(routePackets.length, 2, 'tilemap refresh owns the next request until settled');
+    assert.equal(directionsPackets().length, 2, 'tilemap refresh owns the next request until settled');
     map._needsTilemapRefresh = false; // Native tilemap repaint is a stand-in.
     c.SceneManager.updateScene();
     key('p');
     f.frame();
-    assert.equal(routePackets[2].live.terrain.length, 2);
-    assert.equal(routePackets[2].live.terrain[1] & (MAX_CELLS - 1), cell);
+    const changedTerrain = directionsPackets()[2];
+    assert.equal(changedTerrain.live.terrain.length, 2);
+    assert.equal(changedTerrain.live.terrain[1] & (MAX_CELLS - 1), cell);
     map._events[114].SetBlocker(0, 0, 1, 0);
     assert.equal(f.routeEpoch(), 0);
-    reply(routePackets[2]);
+    reply(changedTerrain);
     assert.equal(fieldSpeech().length, delivered);
 
     key('p');
     f.frame();
-    const moves = routePackets[3];
+    const moves = directionsPackets()[3];
     let steps = 0;
     Object.assign(map, { roundXWithDirection: x => x + 1, roundYWithDirection: (_x, y) => y,
         xWithDirection: x => x - 1, yWithDirection: y => y });
@@ -144,21 +154,45 @@ async function main() {
     c.TileEditor.FloodFillRegion(0, 3, 1, 26, 12, 0);
     assert.equal(scene._wqaTerrainWork, 1);
     assert.equal(f.routeEpoch(), 0);
-    reply(routePackets[4]);
+    reply(directionsPackets()[4]);
     key('p');
     f.frame();
-    assert.equal(routePackets.length, 5, 'a queued native flood closes admission before its first ring');
+    assert.equal(directionsPackets().length, 5, 'a queued native flood closes admission before its first ring');
     assert(flood.next().done);
     assert.equal(scene._wqaTerrainWork, 0);
     c.CoroutineManager.StartAnonymousCoroutine = () => { throw new Error('Synthetic flood scheduling failure'); };
     assert.throws(() => c.TileEditor.FloodFillRegion(0, 3, 1, 26, 12, 0), /Synthetic flood scheduling failure/);
     assert.equal(scene._wqaTerrainWork, 0, 'native scheduling failure releases the terrain mark');
     c.SceneManager.updateScene();
+
+    key('j');
+    f.frame();
+    const oldFilter = routePackets.at(-1);
+    assert(oldFilter.request.candidates);
+    key('l');
     key('p');
     f.frame();
+    assert.equal(routePackets.at(-1), oldFilter, 'the newest command waits for the one in-flight receipt');
+    assert.equal(f.routeEpoch(), 0);
+    reply(oldFilter, { status: 'cancelled' });
+    f.frame();
+    const latestFilter = routePackets.at(-1);
+    assert(latestFilter.request.candidates && latestFilter.sequence !== oldFilter.sequence);
+    reply(latestFilter);
+    const combined = directionsPackets().at(-1);
+    assert.equal(combined.request.event, 114, 'directions preserve queued browse changes and use the filtered snapshot');
+    assert.equal(combined.sequence, latestFilter.sequence);
+    c.WendyQuestAccessFieldEvent(scene);
+    assert.equal(f.routeEpoch(), 0, 'accepted native event start retires field work before entry');
+    reply(combined);
+    assert.equal(fieldSpeech().length, delivered);
+
+    key('p');
+    f.frame();
+    const transferred = directionsPackets().at(-1);
     player.reserveTransfer(196, 11, 49, 2, 0);
     assert.equal(f.routeEpoch(), 0);
-    reply(routePackets[5]);
+    reply(transferred);
     assert.equal(fieldSpeech().length, delivered, 'transfer rejects the old map result');
     for (const [mapId, id, category, name] of [[181, 5, 'merchants', 'Kathryn'], [14, 1, 'enemies', 'Enemy1']]) {
         const entry = mapData(mapId).events[id];
@@ -216,7 +250,8 @@ async function verifySurfaceField(tilesets) {
     assert.equal(first.live.mode, 'ship');
     const geometry = bakeMap(data, tilesets[data.tilesetId].flags);
     function reply(packet) {
-        const result = solveRoute(geometry, packet.live, packet.request);
+        const result = packet.request.candidates ? findReachable(geometry, packet.live, packet.request) :
+            solveRoute(geometry, packet.live, packet.request);
         f.routeReply({ sequence: packet.sequence, epoch: packet.epoch, map: packet.map, result });
         f.frame();
     }
@@ -245,6 +280,8 @@ async function verifySurfaceField(tilesets) {
     f.dispatchWindowEvent('keydown', { key: 'l', keyCode: 76, shiftKey: true });
     f.dispatchWindowEvent('keyup', { key: 'l', keyCode: 76, shiftKey: true });
     f.frame();
+    assert(routePackets.at(-1).request.candidates);
+    reply(routePackets.at(-1));
     const landing = request();
     assert.equal(landing.live.mode, 'airship');
     assert(landing.request.landing);

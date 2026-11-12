@@ -296,7 +296,8 @@ def objects_notification(original):
         249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive||'
                 b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||'
                 b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive||'
-                b'SceneManager._scene._wqaQuestTracking||SceneManager._scene._wqaQuestNavigation))'
+                b'SceneManager._scene._wqaQuestTracking||SceneManager._scene._wqaQuestNavigation||'
+                b'SceneManager._scene._wqaRouteActive))'
                 b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene);\n        ',  # Accepted event start
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING + b'}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload

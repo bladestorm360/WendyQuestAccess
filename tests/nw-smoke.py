@@ -124,6 +124,7 @@ let caveRoute = false;
 let dialogueShown = false;
 let routeRequested = false;
 let fieldStep = 0;
+let browseStarted = 0;
 let autowalkStep = 0;
 let repeated = false;
 let numberShown = false;
@@ -434,12 +435,14 @@ const interval = setInterval(() => {
             _wqaBannerDrawnRevision: 1, _wqaBannerText: 'Synthetic map banner' } };
         $gameMap = { _mapId: 1, _tilesetId: 1, inactiveTime: 0, _events: [null,
             { _eventId: 1, _x: 2, _y: 0, _pageIndex: 0, _trigger: 0, _priorityType: 1 },
-            { _eventId: 2, _x: 2, _y: 1, _pageIndex: 0, _trigger: 0, _priorityType: 1 }], _tileEvents: [], _vehicles: [],
+            { _eventId: 2, _x: 2, _y: 1, _pageIndex: 0, _trigger: 0, _priorityType: 1 },
+            { _eventId: 3, _x: 2, _y: 0, _pageIndex: 0, _trigger: 0, _priorityType: 1 }], _tileEvents: [], _vehicles: [],
             roundXWithDirection: (x, d) => x + (d === 6 ? 1 : d === 4 ? -1 : 0),
             roundYWithDirection: (y, d) => y + (d === 2 ? 1 : d === 8 ? -1 : 0) };
         $dataMap = { width: 3, height: 2, scrollType: 0, tilesetId: 1, data: new Array(36).fill(0),
             events: [null, { name: 'Synthetic wall', pages: [{ list: [{}, {}] }] },
-                { name: 'Synthetic switch', pages: [{ list: [{}, {}] }] }] };
+                { name: 'Synthetic switch', pages: [{ list: [{}, {}] }] },
+                { name: 'Synthetic covered event', pages: [{ list: [{}, {}] }] }] };
         $dataTilesets = [null, { flags: [0] }];
         $gameTileChanges = { 1: { 6: 0 } };
         $gamePlayer = { _x: 0, _y: 0, _realX: 0, _realY: 0, _vehicleType: 'walk', _direction: 6,
@@ -470,10 +473,13 @@ const interval = setInterval(() => {
         WendyQuestAccessFieldEvent(scene);
         if (scene._wqaSoundscapeActive || scene._wqaSoundscapeSample) throw Error('Native event retained ambient audio');
         fieldStep++;
+        browseStarted = performance.now();
         tap('p', 'KeyP');
         Graphics.app.renderer.emit('postrender');
+        require('fs').writeFileSync(receipt + '.browse-submit-ms', String(performance.now() - browseStarted));
     }
     if (fieldStep === 1 && require('fs').existsSync(receipt + '.field-target-1')) {
+        require('fs').writeFileSync(receipt + '.browse-receipt-ms', String(performance.now() - browseStarted));
         fieldStep++;
         tap(']', 'BracketRight');
         Graphics.app.renderer.emit('postrender');
@@ -1073,6 +1079,8 @@ def main():
                for item in (route, pad_route)):
             raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
+        browse_submit_ms = float(receipt.with_suffix('.json.browse-submit-ms').read_text(encoding='utf8'))
+        browse_receipt_ms = float(receipt.with_suffix('.json.browse-receipt-ms').read_text(encoding='utf8'))
         if receipt.with_suffix('.json.autowalk').read_text(encoding='utf8') != 'At Synthetic wall. face east.':
             raise RuntimeError('NW autowalk did not announce its verified arrival')
         if receipt.with_suffix('.json.autowalk-path').read_text(encoding='utf8') != 'Synthetic wall. 1 east. face east.' or \
@@ -1143,7 +1151,8 @@ def main():
             raise RuntimeError(f'NW settings did not survive restart in the isolated profile: {reloaded}')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
-        print(f'Throttled synthetic renderer command and cold worker submission: {submit_ms:.1f} ms.')
+        print(f'Throttled synthetic cold browse submission {browse_submit_ms:.1f} ms, speech receipt '
+              f'{browse_receipt_ms:.1f} ms with 40 ms polling, warm route submission {submit_ms:.1f} ms.')
         print('Verified native autowalk dispatch, both narration settings, spoken arrival and explicit cancellation.')
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified saved mute before title speech, audio preview during mute and controller restoration.')

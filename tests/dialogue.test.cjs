@@ -6,6 +6,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { fixture, mapData } = require('./map-lifecycle.test.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
+const { bakeMap } = require('../src/world/geometry.cjs');
+const { findReachable } = require('../src/world/routes.cjs');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
     path.join(__dirname, 'dialogue-producers.py'), process.argv[2]], { encoding: 'utf8', timeout: 6000, maxBuffer: 64000 }));
@@ -275,11 +277,13 @@ async function verifySaltGuide() {
     const map = c.$gameMap;
     const interpreter = map._interpreter;
     const player = c.$gamePlayer;
-    Object.assign(map, { _mapId: 19, _events: [] });
+    Object.assign(map, { _mapId: 19, _tilesetId: data.tilesetId, _events: [], _tileEvents: [], _vehicles: [] });
+    c.$dataTilesets = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', 'Tilesets.json'), 'utf8'));
     for (const id of [19, 20, 21, 22, 35, 36, 49, 68, 97, 114, 115, 120]) {
         const entry = data.events[id];
         const page = entry.pages[0];
-        map._events[id] = Object.assign(f.event(id, 0), { _x: entry.x, _y: entry.y, _pageIndex: 0, _trigger: page.trigger });
+        map._events[id] = Object.assign(f.event(id, 0), { _x: entry.x, _y: entry.y, _pageIndex: 0,
+            _trigger: page.trigger, _priorityType: page.priorityType, _through: page.through });
     }
     player._vehicleType = 'walk';
     player.setPosition(26, 12);
@@ -318,6 +322,11 @@ async function verifySaltGuide() {
     delete c.Input.keyMapper[71];
     assert.match(review(), /Wall clue selected/);
     key('k');
+    f.frame();
+    const request = f.routePackets.at(-1);
+    const geometry = bakeMap(data, c.$dataTilesets[data.tilesetId].flags);
+    f.routeReply({ sequence: request.sequence, epoch: request.epoch, map: request.map,
+        result: findReachable(geometry, request.live, request.request) });
     f.frame();
     assert.equal(formatSpeech(f.records.filter(packet => packet.kind === 'fieldTarget').at(-1)), 'Wall clue, 1 south');
 

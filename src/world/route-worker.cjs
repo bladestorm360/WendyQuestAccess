@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { createHash } = require('crypto');
 const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS } = require('./geometry.cjs');
-const { solveRoute } = require('./routes.cjs');
+const { solveRoute, findReachable } = require('./routes.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
 
 const BUILD = '26578620';
@@ -58,7 +58,8 @@ parentPort.on('message', message => {
             const base = geometry(map);
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
-            result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
+            if (request.candidates !== undefined) result = findReachable(base, live, request, cancelled);
+            else result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
             const follows = result.status === 'ready' && !result.reenter && (request.beacon === true || request.autowalk === true);
             if (follows || (result.status === 'interrupted' && request.autowalk === true)) {
                 // Two direction bits and the bounded distance to the next turn.
@@ -95,6 +96,6 @@ parentPort.on('message', message => {
         result = { status: 'unavailable' };
     }
     if (cancelled() || !result) result = { status: 'cancelled' };
-    const data = result.course || result.opening?.stamps;
+    const data = result.available || result.course || result.opening?.stamps;
     parentPort.postMessage({ epoch, sequence, map, result }, data ? [data.buffer] : []);
 });

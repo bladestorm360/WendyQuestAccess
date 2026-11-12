@@ -23,10 +23,10 @@ function atApproach(map, player, target, { x, y, facing }) {
     if (facing === null && target._trigger !== 0) return firstStartable(player, x, y, [1, 2], false) === target;
     const forward = nextTile(map, x, y, facing ?? player._direction);
     if (map.airship?.()?.pos(x, y) || map.ship?.()?.pos(...forward) || map.boat?.()?.pos(...forward)) return false;
-    if (facing === null) return firstStartable(player, x, y, [0], false) === target;
     // Native OK checks the player's tile before looking in front. A startable
     // event there or before a counter changes which interaction will win.
-    if (firstStartable(player, x, y, [0], false)) return false;
+    const here = firstStartable(player, x, y, [0], false);
+    if (here || facing === null) return here === target;
     const next = firstStartable(player, ...forward, NORMAL_TRIGGERS, true);
     if (next) return next === target;
     return map.isCounter(...forward) &&

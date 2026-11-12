@@ -70,6 +70,10 @@ function createField(root, host, notifications) {
 
     function status(job, name) { present(job, { kind: 'fieldStatus', name }); }
 
+    function navigationRequest(job) {
+        return job && (job.action === 'directions' || job.action === 'currentDestination' || BROWSE.has(job.action));
+    }
+
     function follow(job, result, record) {
         if (job.autowalk && autowalk.start(job, result, record)) {
             // The movement owner now watches native outcomes. Ordinary
@@ -98,6 +102,23 @@ function createField(root, host, notifications) {
         if (active === job && ready(job.scene) && root.$gameMap._mapId === job.map &&
             travelMode(root.$gameMap, root.$gamePlayer) === job.mode) {
             const player = root.$gamePlayer;
+            if (player._x !== job.x || player._y !== job.y) return retire(job.scene);
+            if (job.filter) {
+                const snapshot = job.filter;
+                job.filter = null;
+                const result = packet.result;
+                if (result?.status !== 'reachable' || Object.prototype.toString.call(result.available) !== '[object Uint8Array]' ||
+                    result.available.length !== snapshot.objects.length) {
+                    job.performed = true;
+                    job.scene._wqaQuestNavigation = false;
+                    return status(job, 'Reachable destinations unavailable');
+                }
+                snapshot.eligibleObjects = snapshot.objects;
+                snapshot.objects = snapshot.objects.filter((target, index) => result.available[index] === 1 &&
+                    (!target.quest || questDestinationCurrent(root, job.scene, target.quest)));
+                job.performed = true;
+                return select(job, snapshot);
+            }
             if (job.quest && !questDestinationCurrent(root, job.scene, job.quest)) {
                 job.quest = null;
                 job.scene._wqaQuestNavigation = false;
@@ -154,10 +175,11 @@ function createField(root, host, notifications) {
                 status(job, job.nearestLanding ? 'No landing site is available' : prefix + job.label);
             }
             else if (result?.status === 'unavailable') status(job, 'Directions unavailable for ' + job.label);
-        } else if (active?.action === 'directions' && ready(active.scene)) afterRender();
+        } else if (navigationRequest(active) && ready(active.scene)) afterRender();
     }
 
-    function route(job, snapshot, target, area, motion) {
+    function submit(job, snapshot, request, filtering = false) {
+        job.filter = filtering ? snapshot : null;
         try {
             if (!worker) {
                 admission = host.makeWord();
@@ -169,8 +191,13 @@ function createField(root, host, notifications) {
                     if (admission) Atomics.store(admission, 0, 0);
                     const dropped = inFlight;
                     inFlight = null;
-                    if (dropped) status(dropped, 'Directions service unavailable');
-                    if (active?.action === 'directions' && active !== dropped && ready(active.scene)) afterRender();
+                    if (dropped && active === dropped) {
+                        dropped.performed = true;
+                        dropped.scene._wqaQuestNavigation = false;
+                        status(dropped, dropped.filter ? 'Reachable destinations unavailable' : 'Directions service unavailable');
+                        dropped.filter = null;
+                    }
+                    if (navigationRequest(active) && active !== dropped && ready(active.scene)) afterRender();
                 };
                 created.on('message', received);
                 created.on('error', failed);
@@ -179,47 +206,81 @@ function createField(root, host, notifications) {
             }
             job.map = snapshot.map;
             job.mode = snapshot.mode;
-            job.label = target.name;
-            job.area = area;
-            job.target = target.id;
             job.x = snapshot.x;
             job.y = snapshot.y;
-            job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
-            job.nearestLanding = target.nearestLanding === true;
-            job.autowalk = !timedCave(snapshot.map) && preferences().autowalk;
-            job.motionFrame = motion?.frame;
-            if (motion) {
-                host.caveTiming?.warm(job.scene);
-                job.timing = host.caveTiming?.capture(job.scene, motion, target);
-            }
             Atomics.store(admission, 0, job.sequence);
             inFlight = job;
+            // A directions request queued behind browse still needs this
+            // same settled snapshot when the availability reply returns.
+            const transfers = filtering && job.action === 'directions' ? [] : [snapshot.live.terrain.buffer];
             worker.postMessage({ map: snapshot.map, sequence: job.sequence, epoch: job.sequence, live: snapshot.live,
-                request: { x: snapshot.x, y: snapshot.y, event: target.nearestLanding ? undefined : target.id,
-                    limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship',
-                    surface: snapshot.mode !== 'walk', vehicle: target.vehicle, entryDirection: target.entryDirection,
-                    waypoint: target.quest?.waypoint === true,
-                    beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk,
-                    timingCue: !!job.timing } }, [snapshot.live.terrain.buffer]);
+                request: { x: snapshot.x, y: snapshot.y, ...request } }, transfers);
         } catch {
             if (admission) Atomics.store(admission, 0, 0);
             inFlight = null;
-            status(job, 'Directions service unavailable');
+            job.filter = null;
+            job.performed = true;
+            status(job, filtering ? 'Reachable destinations unavailable' : 'Directions service unavailable');
         }
+    }
+
+    function route(job, snapshot, target, area, motion) {
+        job.label = target.name;
+        job.area = area;
+        job.target = target.id;
+        job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
+        job.nearestLanding = target.nearestLanding === true;
+        job.autowalk = !timedCave(snapshot.map) && preferences().autowalk;
+        job.motionFrame = motion?.frame;
+        if (motion) {
+            host.caveTiming?.warm(job.scene);
+            job.timing = host.caveTiming?.capture(job.scene, motion, target);
+        }
+        submit(job, snapshot, { event: target.nearestLanding ? undefined : target.id,
+            limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship',
+            surface: snapshot.mode !== 'walk', vehicle: target.vehicle, entryDirection: target.entryDirection,
+            waypoint: target.quest?.waypoint === true,
+            beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk, timingCue: !!job.timing });
+    }
+
+    function select(job, snapshot) {
+        const result = browse(owner.browser, snapshot, job.changes);
+        job.quest = result.target?.quest;
+        job.scene._wqaQuestNavigation = !!job.quest;
+        if (!result.target) return status(job, result.status);
+        const { target, category } = result;
+        if (job.action !== 'directions') return present(job, { kind: 'fieldTarget', name: target.name, category,
+            dx: target.x - snapshot.x, dy: target.y - snapshot.y });
+        if (!timedCave(snapshot.map)) return route(job, snapshot, target);
+        const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.id);
+        const motion = area ? null : captureMotion(root, host.graphics);
+        if (!area && !motion) return status(job, 'Patrol timing is unavailable here');
+        const terrain = captureWorld(root);
+        if (!terrain) return status(job, 'Map information unavailable');
+        route(job, terrain, target, area, motion);
     }
 
     function perform(job) {
         const movingReport = job.action === 'navigationReport';
         if (active !== job || !ready(job.scene, movingReport)) return;
-        if (job.action === 'directions' && inFlight) return;
-        job.performed = true;
+        if (navigationRequest(job) && inFlight) return;
         if (movingReport) return present(job, job.text, true);
         if (job.action === 'status') return status(job, job.text);
         const routing = job.action === 'directions';
         const timed = timedCave(root.$gameMap._mapId);
+        const filtering = !timed && navigationRequest(job) && (!routing || job.changes.length > 0);
         const label = salt.available(job.scene) ? (id, fallback) => salt.label(job.scene, id, fallback) : undefined;
-        const snapshot = captureWorld(root, routing && !timed, label, job.scene);
+        const snapshot = captureWorld(root, filtering || (routing && !timed), label, job.scene);
         if (!snapshot) return status(job, 'Map information unavailable');
+        if (filtering && snapshot.objects.length) {
+            job.scene._wqaQuestNavigation = snapshot.objects.some(target => !!target.quest);
+            return submit(job, snapshot, { candidates: snapshot.objects.map(target => ({
+                event: target.nearestLanding ? undefined : target.id, vehicle: target.vehicle,
+                entryDirection: target.entryDirection, waypoint: target.quest?.waypoint === true,
+                nearestLanding: target.nearestLanding === true
+            })) }, true);
+        }
+        job.performed = true;
         if (job.action === 'puzzleGuide') {
             const result = guideFor(job.scene)?.review(job.scene, snapshot.objects, snapshot.x, snapshot.y);
             if (!result) return;
@@ -229,20 +290,7 @@ function createField(root, host, notifications) {
             }
             return status(job, result.text);
         }
-        const result = browse(owner.browser, snapshot, job.changes);
-        job.quest = result.target?.quest;
-        job.scene._wqaQuestNavigation = !!job.quest;
-        if (!result.target) return status(job, result.status);
-        const { target, category } = result;
-        if (!routing) return present(job, { kind: 'fieldTarget', name: target.name, category,
-            dx: target.x - snapshot.x, dy: target.y - snapshot.y });
-        if (!timed) return route(job, snapshot, target);
-        const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.id);
-        const motion = area ? null : captureMotion(root, host.graphics);
-        if (!area && !motion) return status(job, 'Patrol timing is unavailable here');
-        const terrain = captureWorld(root);
-        if (!terrain) return status(job, 'Map information unavailable');
-        route(job, terrain, target, area, motion);
+        select(job, snapshot);
     }
 
     function afterRender() {
@@ -297,7 +345,7 @@ function createField(root, host, notifications) {
             host.beacon?.stop(scene);
             host.caveTiming?.cancelPlan(scene);
         }
-        const changes = active?.scene === scene && !active.performed ? active.changes : [];
+        const changes = active?.scene === scene && !active.performed ? active.changes.slice() : [];
         if (BROWSE.has(action) && changes.length < 16) changes.push(action);
         if (owner) retire(owner.scene);
         if (owner?.scene !== scene) owner = { scene, browser: createDestinationBrowser() };
@@ -314,7 +362,7 @@ function createField(root, host, notifications) {
         ready,
         autowalk,
         questRefresh(scene) {
-            if (active?.scene !== scene || !active.quest) return;
+            if (active?.scene !== scene || !scene._wqaQuestNavigation) return;
             autowalk.stop(scene);
             host.beacon?.stop(scene);
             retire(scene);

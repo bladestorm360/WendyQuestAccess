@@ -57,7 +57,19 @@ function browse(state, snapshot, changes) {
         groups.get(target.category).push(target);
     }
     const categories = Object.keys(CATEGORY_LABELS).filter(category => groups.has(category));
-    if (!categories.length) return { status: 'No destinations here' };
+    const selectionMissing = !changes.length && state.selections[state.category] !== undefined &&
+        !groups.get(state.category)?.some(item => item.id === state.selections[state.category]);
+    if (selectionMissing) {
+        const selected = state.selections[state.category];
+        // Keep the selected live target so Directions can still explain the
+        // closed approach or the native event at the end of its safe prefix.
+        if (snapshot.eligibleObjects?.some(item => item.category === state.category && item.id === selected))
+            return { status: 'Selected destination is out of reach' };
+        delete state.selections[state.category];
+        if (!groups.has(state.category)) state.category = categories[0] || null;
+        return { status: 'Selected destination is unavailable' };
+    }
+    if (!categories.length) return { status: snapshot.eligibleObjects ? 'No reachable destinations here' : 'No destinations here' };
     const closest = items => {
         let nearest = 0;
         const distance = item => Math.abs(item.x - snapshot.x) + Math.abs(item.y - snapshot.y);
@@ -83,11 +95,6 @@ function browse(state, snapshot, changes) {
     const items = groups.get(state.category);
     const selection = state.selections[state.category];
     const existing = items?.find(item => item.id === selection);
-    if (!changes.length && selection !== undefined && !existing) {
-        delete state.selections[state.category];
-        if (!items) state.category = categories[0];
-        return { status: 'Selected destination is unavailable' };
-    }
     if (!items) state.category = categories[0];
     const current = groups.get(state.category);
     const target = existing || current[closest(current)];
