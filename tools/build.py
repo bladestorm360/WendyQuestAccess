@@ -23,6 +23,7 @@ def bundle():
         './frontend/title': 'frontend/title.js',
         './frontend/files': 'frontend/files.js',
         './options': 'frontend/options.js',
+        './world/map-banner': 'world/map-banner.js',
     }
     target = OUT / 'js' / 'plugins' / 'WendyQuestAccess.js'
     target.parent.mkdir(parents=True, exist_ok=True)

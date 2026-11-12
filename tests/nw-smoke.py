@@ -97,6 +97,8 @@ function updatedViewport() {
 window.addEventListener('resize', updatedViewport);
 nw.Window.get().resizeTo(440, 320);
 Graphics._wqaFinishResize(transition, true, 440, 320);
+let fileShown = false;
+let mapShown = false;
 const interval = setInterval(() => {
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
         fileShown = true;
@@ -108,9 +110,19 @@ const interval = setInterval(() => {
         WendyQuestAccessFilesReady(scene);
         Graphics.app.renderer.emit('postrender');
     }
+    if (!mapShown && require('fs').existsSync(receipt + '.slot')) {
+        mapShown = true;
+        WendyQuestAccessSceneLeaving(SceneManager._scene);
+        const layer = {};
+        const scene = { _active: true, _windowLayer: layer, _mapNameWindow: {
+            parent: layer, worldVisible: true, worldAlpha: 1, contentsOpacity: 255,
+            _wqaBannerDrawnRevision: 1, _wqaBannerText: 'Synthetic map banner' } };
+        SceneManager._scene = Graphics.app.stage = scene;
+        WendyQuestAccessMapBannerReady(scene, 1);
+        Graphics.app.renderer.emit('postrender');
+    }
     if (require('fs').existsSync(receipt)) { clearInterval(interval); nw.App.quit(); }
 }, 40);
-let fileShown = false;
 setTimeout(() => {
     write({ error: 'No worker receipt', versions: process.versions, shared: typeof SharedArrayBuffer });
     nw.App.quit();
@@ -129,7 +141,8 @@ parentPort.on('message', message => {
         epoch: message.epoch, name: message.name, kind: message.kind, slot: message.slot, empty: message.empty });
     parentPort.postMessage('ack');
     if (message.kind === 'title') fs.writeFileSync(receipt + '.title', '');
-    if (message.kind === 'saveSlot') {
+    if (message.kind === 'saveSlot') fs.writeFileSync(receipt + '.slot', '');
+    if (message.kind === 'mapBanner') {
         fs.writeFileSync(receipt + '.tmp', JSON.stringify({ versions: process.versions, records }));
         fs.renameSync(receipt + '.tmp', receipt);
     }
@@ -161,14 +174,15 @@ def main():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 2 or not all(r.get('sameEpoch') for r in records):
+        if result.returncode or data.get('error') or len(records) != 3 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, slot = records
+        title, slot, banner = records
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
-                slot.get('slot') != 2 or not slot.get('empty') or title['epoch'] == slot['epoch']:
-            raise RuntimeError(f'NW fixture did not deliver distinct title and slot packets: {data}')
+                slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
+                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records}) != 3:
+            raise RuntimeError(f'NW fixture did not deliver distinct title, slot and map banner packets: {data}')
         versions = data['versions']
-        print(f"Verified hidden window resize, title and save slot in NW {versions.get('nw', VERSION)}, "
+        print(f"Verified hidden window resize, title, save slot and map banner in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}. Distinct shared epochs verified.")
 
 

@@ -3,10 +3,12 @@
 const { createRenderer } = require('./runtime/renderer');
 const { createTitleObserver, presented } = require('./frontend/title');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
+const { createMapBannerObserver } = require('./world/map-banner');
 
 function boot(root, nodeRequire, nodeProcess) {
     let title = null;
     let files = null;
+    let mapBanner = null;
     let titleWaiting = null;
     let filesWaiting = null;
 
@@ -40,6 +42,7 @@ function boot(root, nodeRequire, nodeProcess) {
         const { notifications } = createRenderer(host);
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
+        mapBanner = createMapBannerObserver(host, notifications);
         root.Graphics._wqaFrontEndObserved = true;
     }
 
@@ -98,6 +101,14 @@ function boot(root, nodeRequire, nodeProcess) {
         files?.leave(scene);
     };
 
+    root.WendyQuestAccessMapBannerReady = function (scene, revision) {
+        try {
+            if (!supported() || root.SceneManager._scene !== scene || !root.document.hasFocus()) return;
+            if (!mapBanner) initialize();
+            mapBanner.observe(scene, revision);
+        } catch { mapBanner?.leave(scene); }
+    };
+
     // Direct native scene changes and developer reload can bypass the active
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
@@ -106,6 +117,7 @@ function boot(root, nodeRequire, nodeProcess) {
         if (filesWaiting === scene) filesWaiting = null;
         title?.leave(scene);
         files?.leave(scene);
+        mapBanner?.leave(scene);
     };
 
     root.WendyQuestAccessResizeStarting = function () {
@@ -113,6 +125,7 @@ function boot(root, nodeRequire, nodeProcess) {
         filesWaiting = null;
         const scene = root.SceneManager._scene;
         if (scene?._wqaPresentation) scene._wqaPresentation = false;
+        mapBanner?.leave(scene);
         title?.suspend();
         files?.suspend();
     };

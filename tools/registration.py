@@ -19,6 +19,9 @@ MANAGERS_REL = Path('package.nw/js/rmmz_managers.js')
 SCENES_REL = Path('package.nw/js/rmmz_scenes.js')
 CORE_REL = Path('package.nw/js/rmmz_core.js')
 WINDOW_REL = Path('package.nw/js/plugins/MonkeyWrenchMZ.js')
+MAP_REL = Path('package.nw/js/plugins/MapScene.js')
+OBJECTS_REL = Path('package.nw/js/rmmz_objects.js')
+CANVAS_REL = Path('package.nw/js/plugins/CanvasScaler.js')
 STATS_REL = Path('package.nw/js/plugins/WendyQuest.js')
 TITLE_SHA = 'a3c35f004b66a6d4e7a918e36b8bc7e48f2383875165ce1c00ae1a5a031e5634'
 REGISTRY_SHA = '083317d6b2ee7ba9655762dee7671564a64b0bba82bb33d8cbacd52a7e7b3ab7'
@@ -30,6 +33,9 @@ MANAGERS_SHA = 'e87efc29229a80c903c1651a78bbeafa8b9ffb925227b31cfa7f4741875140bd
 SCENES_SHA = '0f69c04d51b9ce17410e952ceafa31527a1b6c94663a12e11ca7d0e30cf2913a'
 CORE_SHA = 'f7f807a8329b6996577771dd5b65b84dac072117b6f24e4f2fc0a6068ccd61e0'
 WINDOW_SHA = '37dfb71367496ca5f96a86156c3ea9fb4f813a3d6323280e342848d3bfd9cd42'
+MAP_SHA = 'aff25c073cffce32857bb654d0ae30938f10ddfa534cfc0cb80ebb078a4aaf64'
+OBJECTS_SHA = 'b9da176c2041866df643b7d62b36d99d67bf1b44216deb52568adbd08264848a'
+CANVAS_SHA = '713457886c5589be41d137d81b327947e37b19707c2f30c5da1b1ff43a9d8ccf'
 STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
 DEPENDENCIES = {
     STATS_REL: STATS_SHA,
@@ -38,6 +44,9 @@ DEPENDENCIES = {
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
+MAP_LEAVING = (b'if(SceneManager._scene?._wqaMapAnnouncement){'
+               b'globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene);}')
+AUTOSAVE_DONE = (b'if(wqaAutosave){wqaAutosave=false;SceneManager._wqaNativeAutosaves--;}')
 PLUGIN = {'name': 'WendyQuestAccess', 'status': True, 'description': 'WendyQuest accessibility support',
           'parameters': {}}
 
@@ -115,11 +124,65 @@ def managers_notification(original):
         54263: SCENE_LEAVING + b'\n        ',
         57606: b'\n' + files_ready('this._scene'),
         58080: b'\n    ' + SCENE_LEAVING,
+        59505: b'\n    ' + MAP_LEAVING,
     })
 
 
 def scenes_notification(original):
-    return insert(original, SCENES_SHA, {3177: b'\n' + files_ready('this')})
+    return insert(original, SCENES_SHA, {
+        2349: b'\n    ' + MAP_LEAVING,
+        3177: b'\n' + files_ready('this'),
+    })
+
+
+def objects_notification(original):
+    return insert(original, OBJECTS_SHA, {
+        21807: b'\n    ' + MAP_LEAVING,  # Game_Screen fade-out
+        217381: b'\n    ' + MAP_LEAVING,  # Accepted transfer reservation
+        255063: b'\n    if(this===$gameMap?._interpreter){' + MAP_LEAVING + b'}',
+        255573: MAP_LEAVING + b'\n                ',  # Face preload
+        255696: MAP_LEAVING + b'\n                ',  # Picture preload
+    })
+
+
+def map_notification(original):
+    # Before a mod callback, rely on the native map update's completed
+    # restoration, control and asset flags. While no banner can be published
+    # or retired, the native update reaches only the outer scalar checks.
+    banner_update = b'''
+    {
+        const wqaWindow = this._mapNameWindow;
+        const wqaRevision = wqaWindow?._wqaBannerDrawnRevision;
+        const wqaUnread = wqaRevision && wqaRevision !== wqaWindow._wqaBannerRead;
+        if (this._wqaMapAnnouncement || wqaUnread) {
+            const wqaReady = wqaRevision && wqaWindow._showCount > 0 &&
+                wqaWindow.visible && wqaWindow.openness === 255 && wqaWindow.contentsOpacity > 0 &&
+                this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
+                this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true &&
+                this.srcWendy && this.srcStones && $gameMap._nameDisplay && $gameMap.inactiveTime < 30 &&
+                !$gamePlayer._transferring && $gameScreen._brightness === 255 && !($gameScreen._fadeOutDuration > 0) &&
+                this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
+                !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this;
+            if (this._wqaMapAnnouncement && (!wqaReady || this._wqaMapAnnouncement !== wqaRevision))
+                globalThis.WendyQuestAccessSceneLeaving?.(this);
+            if (wqaReady && wqaUnread && !this._wqaMapAnnouncement)
+                globalThis.WendyQuestAccessMapBannerReady?.(this, wqaRevision);
+        }
+    }
+'''
+    return insert(original, MAP_SHA, {
+        59596: b'this._wqaMapRestored=true;',
+        62779: banner_update,
+        69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
+        86279: b'if(SceneManager._scene?._mapNameWindow===this){' + MAP_LEAVING + b'}'
+               b'const wqaRevision=(this._wqaBannerRevision||0)+1;'
+               b'this._wqaBannerRevision=wqaRevision;this._wqaBannerDrawnRevision=0;let wqaName;',
+        86846: b'(wqaName=',
+        86874: b')',
+        87176: b'if(this._wqaBannerRevision===wqaRevision&&typeof wqaName==="string"&&'
+               b'wqaName.length>0&&wqaName.length<=256){this._wqaBannerText=wqaName;'
+               b'this._wqaBannerDrawnRevision=wqaRevision;}',
+    })
 
 
 def core_notification(original):
@@ -128,6 +191,7 @@ def core_notification(original):
         19696: b'\n    this._wqaViewportWidth = window.innerWidth;\n'
                b'    this._wqaViewportHeight = window.innerHeight;\n'
                b'    if (this._wqaResize) this._wqaTryResumeResize();',
+        24280: b'\n    ' + MAP_LEAVING,
         24315: b'\n' + markers + b'\n',
     })
 
@@ -148,6 +212,18 @@ def window_notification(original):
         34787: b'(',
         34805: b',Graphics._wqaFinishResize(wqaResize,_0x497b42.isFullscreen,'
                b'window.screen.width,window.screen.height))',
+        65299: MAP_LEAVING + b'let wqaAutosave=true;'
+               b'SceneManager._wqaNativeAutosaves=(SceneManager._wqaNativeAutosaves||0)+1;',
+        65684: AUTOSAVE_DONE,
+        65792: AUTOSAVE_DONE,
+    })
+
+
+def canvas_notification(original):
+    # CanvasScaler has its own resize listener and can rebuild the scene.
+    return insert(original, CANVAS_SHA, {
+        7221: b'SceneManager._scene?._wqaMapAnnouncement&&'
+              b'globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene),',
     })
 
 
@@ -180,6 +256,8 @@ def main():
     for relative, transform in ((TITLE_REL, title_notification), (MENU_REL, menu_notifications),
                                 (MANAGERS_REL, managers_notification), (SCENES_REL, scenes_notification),
                                 (CORE_REL, core_notification), (WINDOW_REL, window_notification),
+                                (OBJECTS_REL, objects_notification), (MAP_REL, map_notification),
+                                (CANVAS_REL, canvas_notification),
                                 (REGISTRY_REL, register)):
         file = args.game_root / relative
         if file.stat().st_size > 1024 * 1024:
