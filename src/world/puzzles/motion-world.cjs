@@ -3,9 +3,10 @@
 const { composeWorld, indexOf, offset, step } = require('../geometry.cjs');
 const { tickPatrol, advancePosition } = require('./patrol-motion.cjs');
 
-function motionWorld(geometry, live, patrols, cancelled) {
+function motionWorld(geometry, live, patrols, cancelled, barrier = 0) {
     if (geometry.scrollType || live.mode !== 'walk' || live.through || patrols.length > 17 ||
-        patrols.some(actor => indexOf(geometry, actor.x, actor.y) < 0)) return null;
+        patrols.some(actor => indexOf(geometry, actor.x, actor.y) < 0) ||
+        (barrier && !patrols.some(actor => actor.id === barrier && actor.forced))) return null;
     const moving = new Set(patrols.map(actor => actor.id));
     const events = live.events.filter(event => !moving.has(event.id));
     const player = composeWorld(geometry, { ...live, events }, cancelled);
@@ -13,7 +14,7 @@ function motionWorld(geometry, live, patrols, cancelled) {
     // Map events collide with all non-through events. Players collide with
     // normal priority events plus rectangles and native tile/vehicle checks.
     const patrol = composeWorld(geometry, { ...live, events: events.map(event => ({ ...event, normal: true })) }, cancelled);
-    return patrol ? { player, patrol } : null;
+    return patrol ? { player, patrol, barrier } : null;
 }
 
 function changeOccupancy(state, actor, cell, delta) {
@@ -52,6 +53,7 @@ function advancePatrols(state) {
         const y = actor.y;
         const result = tickPatrol(actor, player, state.view, tryStep);
         if (result !== 'settled') return result;
+        if (actor.id === state.world.barrier && !actor.forced) return 'boundary';
         // An adjacent move on these non-looping maps cannot hit the actor's
         // own occupied tile. Only logical tile changes affect occupancy.
         if (actor.x !== x || actor.y !== y) {

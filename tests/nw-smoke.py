@@ -121,6 +121,7 @@ let settingsStep = 0;
 let audioStarted = 0;
 let wallPreviewStarted = 0;
 let beaconStarted = 0;
+let caveCueStarted = 0;
 let controllerStep = 0;
 let dialoguePadStep = 0;
 let nativeZ = 0;
@@ -237,14 +238,20 @@ function verifySettings() {
         choose('Preview beacon arrival');
         settingsStep++;
     } else if (settingsStep === 15 && menuStatus() === 'Preview uses stereo and rear pitch.') {
-        choose('Mod sounds');
+        choose('Cave timing cues');
         settingsStep++;
     } else if (settingsStep === 16 && menuStatus() === 'Audio settings saved') {
+        choose('Preview cave crossing tone');
+        settingsStep++;
+    } else if (settingsStep === 17 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        choose('Mod sounds');
+        settingsStep++;
+    } else if (settingsStep === 18 && menuStatus() === 'Audio settings saved') {
         choose('Preview right');
         if (menuStatus() !== 'Mod sounds are off.') throw Error('The sound switch did not prevent preview');
         choose('Mod sounds');
         settingsStep++;
-    } else if (settingsStep === 17 && menuStatus() === 'Audio settings saved') {
+    } else if (settingsStep === 19 && menuStatus() === 'Audio settings saved') {
         tap('Escape');
         if (document.activeElement.textContent !== 'Audio') throw Error('Audio parent focus was lost');
         key('keydown', 'Escape', 'Escape');
@@ -321,7 +328,7 @@ const interval = setInterval(() => {
             const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 3).map(item => item.textContent);
             tap('Escape');
             choose('Audio');
-            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 8).map(item => item.textContent);
+            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 11).map(item => item.textContent);
             write({ bindings, controller, navigation, audio });
             clearInterval(interval);
             nw.App.quit();
@@ -329,7 +336,7 @@ const interval = setInterval(() => {
         return;
     }
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
-        if (settingsStep < 18) return verifySettings();
+        if (settingsStep < 20) return verifySettings();
         if (!require('fs').existsSync(receipt + '.returned-title')) return;
         if (controllerStep < 13) return verifyController();
         if (!require('fs').existsSync(receipt + '.controller-returned-title')) return;
@@ -444,10 +451,10 @@ const interval = setInterval(() => {
             _spriteset: { _tilemap: tilemap } };
         $gameMap = { _mapId: 196, _tilesetId: 1, inactiveTime: 0, _events: events, _displayX: 0, _displayY: 20,
             _tileEvents: [], _vehicles: [], _commonEvents: [] };
-        $dataMap = { width: 23, height: 52, scrollType: 0, tilesetId: 1, data: new Array(23 * 52 * 6).fill(0),
+        $dataMap = { width: 23, height: 52, scrollType: 0, tilesetId: 1, disableDashing: false, data: new Array(23 * 52 * 6).fill(0),
             events: [null, null, { name: 'Synthetic cave switch', pages: [{ list: [{}, {}] }] },
                 null, { name: 'Synthetic patrol', pages: [{ list: [{}, {}] }] }] };
-        $gamePlayer = { _x: 6, _y: 26, _realX: 6, _realY: 26, _vehicleType: 'walk', _moveSpeed: 4 };
+        $gamePlayer = { _x: 6, _y: 26, _realX: 6, _realY: 26, _vehicleType: 'walk', _moveSpeed: 4, _direction: 8 };
         SceneManager._scene = Graphics.app.stage = scene;
         Object.assign(Graphics, { width: 640, height: 360, frameCount: 400 });
         Graphics.app.renderer.screen = new PIXI.Rectangle(0, 0, 320, 200);
@@ -462,10 +469,25 @@ const interval = setInterval(() => {
         tap(String.fromCharCode(92), 'Backslash');
         Graphics.app.renderer.emit('postrender');
         require('fs').writeFileSync(receipt + '.timed-submit-ms', String(performance.now() - started));
+        // Let the first receipt arrive after the fixture's useful window.
+        // This stationary patrol's native stop counter advances once per update.
+        Graphics.frameCount += 40;
+        $gameMap._events[4]._stopCount += 40;
     }
+    if (caveRoute && !dialogueShown) Graphics.app.renderer.emit('postrender');
     if (!dialogueShown && require('fs').existsSync(receipt + '.timed')) {
+        const timingScene = SceneManager._scene;
+        if (!caveCueStarted) {
+            if (timingScene._wqaCaveCueDue !== Graphics.frameCount) throw Error('The late cave forecast was not replaced');
+            caveCueStarted = performance.now();
+            WendyQuestAccessCaveTimingUpdate(timingScene);
+            Graphics.app.renderer.emit('postrender');
+        }
+        if (!require('fs').existsSync(receipt + '.cave-cue')) return;
+        require('fs').writeFileSync(receipt + '.cave-cue-ms', String(performance.now() - caveCueStarted));
         dialogueShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
+        if (timingScene._wqaCaveTimingActive) throw Error('Native scene entry retained the cave timing cue');
         const layer = {};
         const visible = { parent: layer, worldVisible: true, worldAlpha: 1, openness: 255, contentsOpacity: 255 };
         const choice = { ...visible, active: true, _index: 0, _wqaChoiceShown: null,
@@ -548,7 +570,7 @@ parentPort.on('message', message => {
         fs.writeFileSync(receipt + '.route-' + count, '');
     }
     if (message.kind === 'fieldStatus' && message.name.startsWith('Secret cave.')) fs.writeFileSync(receipt + '.cave', '');
-    if (message.kind === 'timedDirections') fs.writeFileSync(receipt + '.timed', '');
+    if (message.kind === 'timedCue') fs.writeFileSync(receipt + '.timed', '');
     if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
     if (message.kind === 'dialoguePage' && fs.existsSync(receipt + '.choice')) {
         fs.writeFileSync(receipt + (fs.existsSync(receipt + '.repeat') ? '.controller-repeat' : '.repeat'), '');
@@ -576,6 +598,9 @@ const post = parentPort.postMessage.bind(parentPort);
 parentPort.postMessage = packet => {
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 3 && active.forward === 1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.beacon'), String(packet.status));
+    }
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 6 && active.forward === -1) {
+        fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.cave-cue'), String(packet.status));
     }
     return post(packet);
 };
@@ -637,8 +662,8 @@ def main():
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
             raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
-        if timed['kind'] != 'timedDirections' or timed.get('speech') != 'Preview. 2 steps south. Recheck if you wait.':
-            raise RuntimeError(f'NW fixture did not publish the timed route preview: {data}')
+        if timed['kind'] != 'timedCue' or timed.get('speech') != 'One tile south on the tone.':
+            raise RuntimeError(f'NW fixture did not publish the one-step timing cue: {data}')
         cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
         audio_ms = float(receipt.with_suffix('.json.audio-init-ms').read_text(encoding='utf8'))
@@ -646,6 +671,9 @@ def main():
         if receipt.with_suffix('.json.beacon').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW route beacon did not publish stereo PCM to SDL')
         beacon_ms = float(receipt.with_suffix('.json.beacon-ms').read_text(encoding='utf8'))
+        if receipt.with_suffix('.json.cave-cue').read_text(encoding='utf8') != '1':
+            raise RuntimeError('NW cave cue did not publish stereo PCM to SDL')
+        cave_cue_ms = float(receipt.with_suffix('.json.cave-cue-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
@@ -667,7 +695,8 @@ def main():
                                                'Next destination, N'] or reloaded.get('audio') != [
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
                     'Increase wall volume, 55 percent', 'Navigation beacon, on', 'Decrease beacon volume, 65 percent',
-                    'Increase beacon volume, 65 percent']:
+                    'Increase beacon volume, 65 percent', 'Cave timing cues, on', 'Decrease cave timing volume, 65 percent',
+                    'Increase cave timing volume, 65 percent']:
             raise RuntimeError('NW settings did not survive restart in the isolated profile')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
@@ -679,6 +708,8 @@ def main():
         print(f'Throttled warm wall preview status observed after {wall_ms:.1f} ms with 40 ms polling.')
         print(f'Verified a live stereo route beacon and its retirement in field settings. '
               f'Throttled warm native submission observed after {beacon_ms:.1f} ms with 40 ms polling.')
+        print(f'Verified late forecast replacement, native cue submission and retirement at cave exit. '
+              f'Throttled warm submission observed after {cave_cue_ms:.1f} ms with 40 ms polling.')
 
 
 if __name__ == '__main__':

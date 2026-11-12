@@ -11,13 +11,14 @@ const { EventEmitter } = require('node:events');
 const { bake } = require('../tools/bake-world.cjs');
 const { bakeMap, decodeMap, composeWorld, indexOf, DIRECTIONS, step, surface } = require('../src/world/geometry.cjs');
 const { solveRoute } = require('../src/world/routes.cjs');
-const { warningApproach } = require('../src/world/puzzles/cave');
+const { warningApproach, captureMotion } = require('../src/world/puzzles/cave');
 const { copyPatrol } = require('../src/world/puzzles/patrol-motion.cjs');
 const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../src/world/puzzles/motion-world.cjs');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
 const { createAudio, CUE } = require('../src/runtime/audio');
 const { createWallAudio } = require('../src/world/wall-audio');
 const { createBeacon } = require('../src/world/beacon');
+const { createCaveTiming } = require('../src/world/cave-timing');
 
 const game = path.resolve(process.argv[2]);
 const derived = path.resolve(process.argv[3]);
@@ -31,7 +32,7 @@ const c = vm.createContext({
     _0x34cc1b() { throw new Error('Unresolved tile property'); },
     Game_Map: function () {}, Game_CharacterBase: function () {}, Game_Character: function () {},
     Game_Player: function () {}, Game_Event: function () {}, Game_Vehicle: function () {}, Tilemap: function () {},
-    Game_Followers: function () {},
+    Game_Followers: function () {}, Game_Interpreter: function () {},
     TileEditor: {}, SceneManager: { _scene: { _spriteset: {} } }, Point: function (x, y) { this.x = x; this.y = y; },
     Time: { GetDeltaTime: () => 1 / 60 }, $dataTilesets: tilesets, $dataItems: read('Items.json'), $dataSystem: read('System.json'),
     Graphics: { width: 480, height: 336 },
@@ -491,10 +492,11 @@ function configureMotion(fixture, x, y, displayX = 0, displayY = 0) {
     const { gameMap, player } = fixture;
     Object.assign(gameMap, { _displayX: displayX, _displayY: displayY, _parallaxX: 0, _parallaxY: 0, _commonEvents: [] });
     Object.assign(player, { _x: x, _y: y, _realX: x, _realY: y, _moveSpeed: 4, _jumpCount: 0, _stopCount: 0,
-        _followers: new c.Game_Followers() });
+        _followers: new c.Game_Followers(), _dashing: false, _direction: 6 });
     const actors = [];
     for (const event of gameMap.events()) {
         if (event._trigger !== 2) {
+            Object.assign(event, { _realX: event.x, _realY: event.y, _moveType: event.page()?.moveType || 0 });
             event.update = () => {};
             continue;
         }
@@ -507,7 +509,7 @@ function configureMotion(fixture, x, y, displayX = 0, displayY = 0) {
     return actors;
 }
 
-function verifyMotion(fixture, actors, frames, directions = [], startAt = 0) {
+function verifyMotion(fixture, actors, frames, directions = [], startAt = 0, dashMask = 0) {
     const { geometry, gameMap, player } = fixture;
     const patrols = actors.map(copyPatrol);
     assert(patrols.every(Boolean));
@@ -530,7 +532,11 @@ function verifyMotion(fixture, actors, frames, directions = [], startAt = 0) {
         }
         const fromX = player.scrolledX();
         const fromY = player.scrolledY();
-        if (heading !== null) c.Game_CharacterBase.prototype.moveStraight.call(player, DIRECTIONS[heading]);
+        if (heading !== null) {
+            player._dashing = !!((dashMask >> (next - 1)) & 1);
+            state.player.speed = player.realMoveSpeed();
+            c.Game_CharacterBase.prototype.moveStraight.call(player, DIRECTIONS[heading]);
+        }
         c.Game_CharacterBase.prototype.update.call(player);
         player.updateScroll(fromX, fromY);
         assert.equal(advancePlayer(state, heading), 'settled');
@@ -631,6 +637,132 @@ async function verifyCrossingPreview() {
     const prior = configureMotion(checkpoint, target.x, target.y + 1, 4, 0);
     const at = previewCrossing(checkpoint.geometry, snapshot(checkpoint), { ...motionRequest(checkpoint, prior), event: 21 });
     assert.deepEqual([at.status, at.direction, at.tiles, at.terminal], ['timed', 8, 1, true]);
+}
+
+async function verifyLiveCrossing() {
+    const cave = load(196);
+    const actors = configureMotion(cave, 5, 30, 0, 20);
+    const scene = c.SceneManager._scene;
+    c.Graphics.frameCount = 200;
+    assert.equal(captureMotion(c, c.Graphics), null, 'native entry and lighting pages keep timing closed');
+    for (const id of [1, 3, 23, 24]) cave.gameMap._events[id]._erased = true;
+    const motion = captureMotion(c, c.Graphics);
+    assert(motion?.dash && motion.patrols.length === actors.length);
+    const request = { x: 5, y: 30, event: 21, motion };
+    const data = snapshot(cave);
+    const detour = previewCrossing(cave.geometry, data, request);
+    assert.deepEqual([detour.status, detour.direction, detour.tiles, detour.alternate], ['timed', 4, 1, true]);
+    assert.equal(previewCrossing(cave.geometry, data, request, () => true).status, 'cancelled');
+    await verifyWorker(cave, { ...request, timingCue: true }, data, result => {
+        assert.equal(result.status, 'timedCue');
+        assert.deepEqual([result.opening.direction, result.opening.from, result.opening.alternate], [4, 0, true]);
+    });
+    for (const dashMask of [0, 1]) {
+        const replay = load(196);
+        const current = configureMotion(replay, 5, 30, 0, 20);
+        const frames = detour.startWindow + 32;
+        assert.equal(verifyMotion(replay, current, frames, [DIRECTIONS.indexOf(4)], detour.startWindow, dashMask), frames);
+        assert.deepEqual([replay.player.x, replay.player.y], [4, 30]);
+    }
+
+    const renderer = new EventEmitter();
+    c.Graphics.app = { renderer };
+    const sounds = [];
+    const reports = [];
+    let sounding = false;
+    const timing = createCaveTiming(c, value => value === scene && scene._wqaFieldReady, {
+        cues: CUE, isPrepared: () => true,
+        play(_scene, _hrtf, cue, gain, bearing, ready) {
+            assert(ready());
+            sounds.push({ cue, gain, bearing });
+            sounding = true;
+            return true;
+        },
+        retire(_scene, source) { assert.equal(source, 'cave'); sounding = false; }
+    }, () => ({ enabled: true, caveTiming: true, caveVolume: 55, hrtf: true }), text => reports.push(text));
+    c.WendyQuestAccessCaveTimingStop = owner => timing.stop(owner);
+    c.WendyQuestAccessCaveTimingPose = owner => timing.pose(owner);
+    c.WendyQuestAccessFieldEvent = owner => timing.stop(owner);
+    scene._wqaFieldReady = true;
+
+    function sampleDelayed() {
+        const current = load(196);
+        configureMotion(current, 6, 30, 0, 20);
+        for (const id of [1, 3, 23, 24]) current.gameMap._events[id]._erased = true;
+        for (let n = 0; n < 15; n++) current.gameMap.updateEvents();
+        c.Graphics.frameCount = 400;
+        const start = performance.now();
+        const motion = captureMotion(c, c.Graphics);
+        const captured = timing.capture(scene, motion, { id: 21 });
+        const captureMs = performance.now() - start;
+        const result = previewCrossing(current.geometry, snapshot(current),
+            { x: 6, y: 30, targetX: 5, targetY: 30, area: [5, 30, 6, 30], motion, timingCue: true });
+        assert.equal(result.status, 'timedCue');
+        assert.deepEqual([result.opening.direction, result.opening.from], [4, 81]);
+        assert(result.opening.through >= 126 && result.opening.through <= 141);
+        assert(timing.start(captured, 6, 30, result.opening));
+        return { current, captureMs, deadline: motion.frame + result.opening.through - 30 };
+    }
+
+    function advanceToCue(current) {
+        while (c.Graphics.frameCount < scene._wqaCaveCueDue) {
+            current.gameMap.updateEvents();
+            c.Graphics.frameCount++;
+            assert(!current.gameMap.isAnyEventStarting());
+        }
+        timing.update(scene);
+        const start = performance.now();
+        renderer.emit('postrender');
+        return performance.now() - start;
+    }
+
+    const delayed = sampleDelayed();
+    assert.equal(scene._wqaCaveCueDue, 481);
+    assert.equal(sounds.length, 0);
+    const issueMs = advanceToCue(delayed.current);
+    assert.deepEqual(sounds[0], { cue: CUE.caveGo, gain: 0.55, bearing: [0, 0, -1] });
+    assert.equal(scene._wqaCaveCueUntil, 489);
+    const checkpoint = delayed.current.gameMap._events[21];
+    checkpoint.lock = () => assert.equal(sounding, false, 'event acceptance revokes timing audio before locking');
+    checkpoint.start();
+    assert(checkpoint.isStarting());
+    assert(!timing.active(scene) && !sounding);
+
+    const changed = sampleDelayed();
+    changed.current.gameMap._events[4]._moveRoute = { ...changed.current.gameMap._events[4]._moveRoute };
+    advanceToCue(changed.current);
+    assert.equal(sounds.length, 1);
+    assert.match(reports.at(-1), /Patrol timing changed/);
+    const expired = sampleDelayed();
+    c.Graphics.frameCount = expired.deadline + 1;
+    advanceToCue(expired.current);
+    assert.equal(sounds.length, 1);
+    assert(!timing.active(scene));
+    scene._wqaFieldReady = false;
+
+    const distraction = load(200, { switches: [581] });
+    configureMotion(distraction, 1, 1);
+    for (const id of [1, 13, 43, 44]) distraction.gameMap._events[id]._erased = true;
+    assert.equal(captureMotion(c, c.Graphics), null, 'parallel route issuance is a protected boundary');
+    const issuer = distraction.gameMap._events[19];
+    const nativeActor = distraction.gameMap._events[18];
+    distraction.gameMap.refreshIfNeeded = () => {};
+    const interpreter = issuer._interpreter = Object.assign(new c.Game_Interpreter(), {
+        _list: issuer.page().list, _index: 45, _waitMode: '', character: id => distraction.gameMap._events[id]
+    });
+    assert(interpreter.executeCommand());
+    assert(interpreter.updateWaitMode());
+    const waiting = captureMotion(c, c.Graphics);
+    assert.equal(waiting?.barrier, 18);
+    nativeActor._moveRouteIndex = nativeActor._moveRoute.list.length - 1;
+    const done = captureMotion(c, c.Graphics);
+    const physics = motionWorld(distraction.geometry, snapshot(distraction), done.patrols, () => false, done.barrier);
+    const state = startMotion(physics, done.patrols, { x: 1, y: 1 }, done.view);
+    assert.equal(advancePatrols(state), 'boundary');
+    nativeActor.update();
+    assert.equal(interpreter.updateWaitMode(), false);
+    assert.equal(captureMotion(c, c.Graphics), null);
+    console.log(`Verified cave detour and delayed cue on native patrol updates. Throttled capture ${delayed.captureMs.toFixed(2)} ms, recheck and enqueue ${issueMs.toFixed(2)} ms.`);
 }
 
 async function verifyWarningApproach() {
@@ -767,6 +899,7 @@ async function main() {
     await verifyNativeBeacon();
     verifyNativePatrolMotion();
     await verifyCrossingPreview();
+    await verifyLiveCrossing();
     await verifyWarningApproach();
     const entry = read('Map199.json').events[26].pages.flatMap(page => page.list).find(command =>
         command.code === 201 && command.parameters[1] === 200).parameters;

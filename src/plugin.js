@@ -8,6 +8,7 @@ const { createMapBannerObserver } = require('./world/map-banner');
 const { createField } = require('./world/field');
 const { createWallAudio } = require('./world/wall-audio');
 const { createBeacon } = require('./world/beacon');
+const { createCaveTiming } = require('./world/cave-timing');
 const { createDialogueObserver } = require('./dialogue/observer');
 const { createSettingsMenu } = require('./settings/menu');
 const { createController, modeAnnouncement } = require('./settings/controller');
@@ -20,6 +21,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let audio = null;
     let wall = null;
     let beacon = null;
+    let caveTiming = null;
     let field = null;
     let settings = null;
     let settingsScene = null;
@@ -92,6 +94,7 @@ function boot(root, nodeRequire, nodeProcess) {
         field = createField(root, host, notifications);
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
         beacon = host.beacon = createBeacon(root, field.ready, audio, () => audioPreferences, field.report);
+        caveTiming = host.caveTiming = createCaveTiming(root, field.ready, audio, () => audioPreferences, field.report);
         function readyScene() {
             const scene = host.manager._scene;
             if (settingsScene !== scene || !scene?._wqaPresentation || !host.hasFocus() ||
@@ -144,10 +147,14 @@ function boot(root, nodeRequire, nodeProcess) {
                 const master = value.enabled !== audioPreferences.enabled || value.hrtf !== audioPreferences.hrtf;
                 if (master || value.wall !== audioPreferences.wall || value.wallVolume !== audioPreferences.wallVolume) wall.leave();
                 if (master || value.beacon !== audioPreferences.beacon || value.beaconVolume !== audioPreferences.beaconVolume) beacon.stop();
+                if (master || value.caveTiming !== audioPreferences.caveTiming || value.caveVolume !== audioPreferences.caveVolume)
+                    caveTiming.stop();
                 audioPreferences = value;
                 root.Graphics._wqaWallEnabled = value.enabled && value.wall && value.wallVolume > 0;
+                root.Graphics._wqaCaveTimingEnabled = value.enabled && value.caveTiming && value.caveVolume > 0;
                 const scene = host.manager._scene;
-                if (root.Graphics._wqaWallEnabled && field.ready(scene)) root.WendyQuestAccessFieldReady(scene);
+                if ((root.Graphics._wqaWallEnabled || root.Graphics._wqaCaveTimingEnabled) && field.ready(scene))
+                    root.WendyQuestAccessFieldReady(scene);
             },
             previewAudio(owner, hrtf, bearing, report, cue, gain) {
                 return audio.preview(owner.scene, hrtf, bearing, () =>
@@ -156,6 +163,7 @@ function boot(root, nodeRequire, nodeProcess) {
             suspend(scene) {
                 wall.leave(scene);
                 beacon.stop(scene);
+                caveTiming.stop(scene);
                 setSettingsScene(null);
                 title.suspend();
                 files.suspend();
@@ -197,12 +205,14 @@ function boot(root, nodeRequire, nodeProcess) {
         for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
             wall.leave();
             beacon.stop();
+            caveTiming.stop();
             audio.retire();
             controller.reset();
         });
         root.addEventListener('focus', () => {
             const scene = host.manager._scene;
-            if (root.Graphics._wqaWallEnabled && field.ready(scene)) root.WendyQuestAccessFieldReady(scene);
+            if ((root.Graphics._wqaWallEnabled || root.Graphics._wqaCaveTimingEnabled) && field.ready(scene))
+                root.WendyQuestAccessFieldReady(scene);
         });
         root.Graphics._wqaFrontEndObserved = true;
     }
@@ -284,7 +294,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFieldReady = function (scene) {
-        if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaWallEnabled) ||
+        if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaWallEnabled && !root.Graphics._wqaCaveTimingEnabled) ||
             fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
             !root.document.hasFocus()) return;
         const renderer = root.Graphics.app?.renderer;
@@ -300,18 +310,21 @@ function boot(root, nodeRequire, nodeProcess) {
                 if (!field) initialize();
                 field.observeRecovery(scene);
                 if (root.Graphics._wqaWallEnabled) wall.arm(scene);
+                if (root.Graphics._wqaCaveTimingEnabled) caveTiming.warm(scene);
             } catch { /* Native field input remains available. */ }
         });
     };
 
     root.WendyQuestAccessFieldChanged = function (scene) {
         wall?.leave(scene);
+        caveTiming?.stop(scene);
         if (scene?._wqaTerrainWork) beacon?.stop(scene);
         else beacon?.invalidate(scene);
         field?.changed(scene);
     };
     root.WendyQuestAccessFieldControlLost = function (scene) {
         wall?.leave(scene);
+        caveTiming?.stop(scene);
         beacon?.stop(scene);
         field?.controlLost(scene);
         controller?.reset();
@@ -322,10 +335,17 @@ function boot(root, nodeRequire, nodeProcess) {
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
     };
     root.WendyQuestAccessFieldEvent = function (scene) {
+        caveTiming?.stop(scene);
+        if (scene?._wqaCaveReview) field?.changed(scene);
         beacon?.stop(scene);
         wall?.interrupt(scene);
     };
     root.WendyQuestAccessWallExpire = function (scene) { wall?.expire(scene); };
+    root.WendyQuestAccessCaveTimingUpdate = function (scene) {
+        try { caveTiming?.update(scene); } catch { caveTiming?.stop(scene); }
+    };
+    root.WendyQuestAccessCaveTimingStop = function (scene) { caveTiming?.stop(scene); };
+    root.WendyQuestAccessCaveTimingPose = function (scene) { caveTiming?.pose(scene); };
     root.WendyQuestAccessBeaconUpdate = function (scene) {
         try { beacon?.update(scene); } catch { beacon?.stop(scene); }
     };
@@ -340,6 +360,7 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessSceneLeaving = function (scene) {
         wall?.leave(scene);
         beacon?.stop(scene);
+        caveTiming?.stop(scene);
         audio?.retire(scene);
         if (settingsScene === scene) setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
@@ -362,6 +383,7 @@ function boot(root, nodeRequire, nodeProcess) {
         const scene = root.SceneManager._scene;
         wall?.leave(scene);
         beacon?.stop(scene);
+        caveTiming?.stop(scene);
         audio?.retire(scene);
         setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
@@ -380,7 +402,8 @@ function boot(root, nodeRequire, nodeProcess) {
         if (!scene) return;
         if (scene instanceof root.Scene_Title) root.WendyQuestAccessTitleReady(scene);
         else if (scene._wqaFileKind) root.WendyQuestAccessFilesReady(scene);
-        else if (scene._wqaFieldReady && root.Graphics._wqaWallEnabled) root.WendyQuestAccessFieldReady(scene);
+        else if (scene._wqaFieldReady && (root.Graphics._wqaWallEnabled || root.Graphics._wqaCaveTimingEnabled))
+            root.WendyQuestAccessFieldReady(scene);
     };
 }
 

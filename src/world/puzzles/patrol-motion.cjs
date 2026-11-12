@@ -4,6 +4,19 @@
 // collision and camera state. It never asks the live game to simulate a step.
 const DIRECTIONS = [2, 4, 6, 8];
 const MAX_ROUTE_COMMANDS = 128;
+const STAMP_FIELDS = ['id', 'x', 'y', 'rx', 'ry', 'speed', 'frequency', 'direction', 'stop', 'wait', 'jump', 'index',
+    'forced', 'originalIndex', 'autonomous', 'locked', 'fixed', 'through', 'normal', 'hazard'];
+const STAMP_WIDTH = STAMP_FIELDS.length;
+const TIMING_CUE = Object.freeze({ wait: 120, minSpan: 45, maxSpan: 60, lead: 30 });
+
+function writeMotionStamp(stamp, offset, patrols) {
+    for (const actor of patrols) for (const key of STAMP_FIELDS) stamp[offset++] = Number(actor[key]);
+}
+
+function matchesMotionStamp(stamp, offset, patrols) {
+    for (const actor of patrols) for (const key of STAMP_FIELDS) if (stamp[offset++] !== Number(actor[key])) return false;
+    return true;
+}
 
 function copyRoute(route) {
     if (!Array.isArray(route?.list) || !route.list.length || route.list.length > MAX_ROUTE_COMMANDS) return null;
@@ -129,4 +142,4 @@ function tickPatrol(actor, player, view, tryStep) {
     return 'settled';
 }
 
-module.exports = { copyPatrol, tickPatrol, advancePosition };
+module.exports = { copyPatrol, tickPatrol, advancePosition, TIMING_CUE, STAMP_WIDTH, writeMotionStamp, matchesMotionStamp };

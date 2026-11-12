@@ -94,19 +94,21 @@ function route(world, start, goals, cancelled, area) {
     return { status: 'unreachable' };
 }
 
+function routeGoals(world, request, cancelled) {
+    if (Number.isInteger(request.event)) return actionGoals(world, request.event, cancelled);
+    const end = indexOf(world, request.targetX, request.targetY);
+    if (end < 0) return null;
+    const goals = new Uint8Array(world.cells.length);
+    goals[end] = 1;
+    return goals;
+}
+
 function solveWorldRoute(world, request, cancelled = () => false) {
     const start = indexOf(world, request.x, request.y);
     if (start < 0) return { status: 'unavailable' };
     const area = request.area && clipRectangle(world, request.area);
     if (request.area && (!area || !inside(world, start, area))) return { status: 'unavailable' };
-    let goals;
-    if (Number.isInteger(request.event)) goals = actionGoals(world, request.event, cancelled);
-    else {
-        const end = indexOf(world, request.targetX, request.targetY);
-        if (end < 0) return { status: 'unavailable' };
-        goals = new Uint8Array(world.cells.length);
-        goals[end] = 1;
-    }
+    const goals = routeGoals(world, request, cancelled);
     if (cancelled()) return { status: 'cancelled' };
     return goals ? route(world, start, goals, cancelled, area) : { status: 'unavailable' };
 }
@@ -117,4 +119,4 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     return world ? solveWorldRoute(world, request, cancelled) : { status: 'cancelled' };
 }
 
-module.exports = { solveRoute, solveWorldRoute };
+module.exports = { solveRoute, solveWorldRoute, routeGoals, inside };

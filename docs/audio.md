@@ -1,6 +1,6 @@
 # Spatial audio
 
-Open mod settings with **F8** on the default keyboard binding, choose **Audio**, then choose **Preview ahead**, **left**, **right**, **behind** or **above**. The settings dialog also accepts its configured controller navigation and confirm/back actions. **Mod sounds** and **HRTF** are independent and both default on. They persist in the NW profile. Turning sounds off prevents cues and previews and retains the HRTF preference. Returning to the root focuses **Audio** again. The separate speech master, soundscape and cave timing sounds remain open. [Route beacon](beacon.md) · [Feature register](feature-checkpoint.md)
+Open mod settings with **F8** on the default keyboard binding, choose **Audio**, then choose **Preview ahead**, **left**, **right**, **behind** or **above**. The settings dialog also accepts its configured controller navigation and confirm/back actions. **Mod sounds** and **HRTF** are independent and both default on. They persist in the NW profile. Turning sounds off prevents cues and previews and retains the HRTF preference. Returning to the root focuses **Audio** again. The separate speech master and soundscape remain open. [Route beacon](beacon.md) · [Live cave cues](puzzles-and-secrets.md#live-crossing-cues) · [Feature register](feature-checkpoint.md)
 
 The preview status reports the output mode selected for the cue. A request that loses its dialog or scene drops its status. The fallback pans left and right relative to the listener and lowers pitch to 72% of the forward pitch across the rear half-plane. HRTF uses the same original cue with a three-dimensional bearing and the built-in OpenAL Soft dataset. The listener's axes are right, up and forward. The bridge reverses the forward axis for OpenAL's default listener orientation. Compare front, behind and above with headphones during final gameplay testing. Native game audio is owned by the game.
 
@@ -26,7 +26,7 @@ November 11, 2026, Steam build 26578620. The bounded 512 MB build with `-VerifyA
 
 The wall fixture exercised extracted installed input, collision, passage and event start against the actual Salt Caverns and Map 196 data. It verified cold contact suppression, the bump and left brush bearings, repeat pacing, modal and age retirement, and an active cue revoked before the patrol's native event lock. The two runs measured 2.54–3.18 ms baseline and 2.79–3.10 ms with silent wall requests across 120 blocked native attempts. Those overlapping totals show the scale of work in this capped fixture. The native SDL dummy fixture verified that preparation is idle and that callback counts stop after both revocation and natural completion. The standalone NW test verified the packaged wall brush preview and settings persistence. Warm preview status appeared after about 40 ms with 40 ms polling. [Installed-method test](../tests/world.test.cjs) · [Device test](../tests/spatial-audio-fixture.cpp)
 
-These measurements end at generated PCM, silent submission or UI status. Actual audible onset, hardware buffering, direction recognition, coexistence with native audio and comparable native application overhead remain unverified. The callback removes itself at the first opportunity after revocation. SDK calls already entered and PCM already buffered in SDL or the device may span the boundary. Device-level phase quiescence remains open. Before attaching live cave cues, qualify warm audible latency against the actual crossing window and cancellation under load.
+These measurements end at generated PCM, silent submission or UI status. Actual audible onset, hardware buffering, direction recognition, coexistence with native audio and comparable native application overhead remain unverified. The callback removes itself at the first opportunity after revocation. SDK calls already entered and PCM already buffered in SDL or the device may span the boundary. Device-level phase quiescence remains open. The cave's cue deadlines are verified through silent submission. Compare warm audible latency and cancellation against the native crossing window in the final gameplay pass. [Cave timing evidence](puzzles-and-secrets.md#live-crossing-cues)
 
 At final gameplay handoff, first compare the two wall previews with headphones. On an ordinary walking map with a continuous tile wall, turn Wall sounds on and attempt one step into it. Expect a brief bump ahead. Walk alongside the edge. Expect a softer cue from the wall's side. A held blocked direction should repeat at a controlled cadence. Open a menu or transfer and listen for a lingering cue. Later in the cave, a patrol contact should follow the native encounter feedback without a competing wall bump. Missing, reversed or delayed cues and audio after a transition are failures to record.
 
@@ -34,16 +34,20 @@ At final gameplay handoff, first compare the two wall previews with headphones. 
 
 The builder uses the approved FFPR SDK inputs by default and accepts `-AudioSdkRoot` for an equivalent local source. It verifies the key input hashes before staging the two runtime libraries and their notices in `audio-deps`. OpenAL Soft includes its MIT KEMAR measurements in the DLL. The matching corresponding-source URL and measurement attribution travel in `audio-deps/SOURCE.txt`. The Windows release must preserve those files and the SDL license. The current platform target is Windows x64. [SDL 3.4.4](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.4) · [OpenAL Soft 1.25.2 HRTF](https://github.com/kcat/openal-soft/blob/1.25.2/docs/hrtf.txt) · [MIT KEMAR measurements and terms](https://sound.media.mit.edu/resources/KEMAR.html)
 
-Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the extracted route beacon development payload on November 12, 2026 at 06:53 UTC and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.257.0 updated at 05:18 UTC. The native files reported `NotSigned`. The final release still needs its own exact payload and installer checks, signing status and installed verification.
+Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the extracted cave timing development payload on November 12, 2026 at 07:17 UTC and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.257.0 updated at 05:18 UTC. The native files reported `NotSigned`. The final release still needs its own exact payload and installer checks, signing status and installed verification.
 
 | Scanned file | SHA-256 |
 | --- | --- |
-| `WendyQuestAudio.node` | `6c972647f37accd857e9a6e916e4a9760116214791e002e8c13a45a8ce145f5f` |
+| `WendyQuestAudio.node` | `19b88a46373cc3a24552334d2e4c5006d6b4529d1dbf454db7c4a58381f3f9c8` |
 | `SDL3.dll` | `132e7f953951944f7628861227ecaea8c37a5a484f004c2072b7f3a1c343fa73` |
 | `soft_oal.dll` | `3963b06e319180700be0bcc0d027336664bb3a4975876b4a5442f10746fab5b4` |
-| `WendyQuestSpeech.exe` | `7f7de314db97ef47b85d048e9b88d795ab2d7e38a6ea32a19ac46ef8fa7d6ae7` |
+| `WendyQuestSpeech.exe` | `7ed5391076e6c3f8aa41e9c8c956b0944ee6bef81ccaf829b34f044c328bb636` |
 | `prism.dll` | `7c7d09c8c7306e8e1a0c46d603ccb2a391c194c77843400c11b746e7dd56a467` |
-| `WendyQuestAccess.js` | `b2f89c61591810fdd7f828fe7b41d0449c2025d6c8c99c90d4804abd3dfac0b0` |
+| `WendyQuestAccess.js` | `102e8e37ff87e7356d21007da02bf54569f5ba053f4bd56eb1edb18cd48279dd` |
 | `audio-worker.cjs` | `0be8969b3433adf108a0f644b25695e07e9118b20dfec0901a61d4c64e47913b` |
-| `route-worker.cjs` | `09e8ae95ec035b28ce38dfcd67fc657f8e774965f817c0c24a5e0d14c81ecbf5` |
-| `speech-text.cjs` | `56659b5f29ab7ed503664245389f41c77e79f3b32de771513320f2a1781987fc` |
+| `route-worker.cjs` | `39f27fde390eaa533666e7b3a37fc463722548286367a97d1ab653fb113744c3` |
+| `speech-text.cjs` | `bd67153ea1b94a0937720bff3fc82209f6fca244f6f0e1251e011478ea9e2952` |
+| `routes.cjs` | `0bf86e85244a1636697aeaed5c804bd368ad83480dbc466fb8a94116a94316f5` |
+| `crossing.cjs` | `33f395ae86a10429ae850fafd72cd1da2bdbb04fe0bc86191059093a1440ac26` |
+| `motion-world.cjs` | `94fcc0b3430b2a5f734e521d0db9cc2edc4797131105d7ee65843feedfa27df9` |
+| `patrol-motion.cjs` | `46f65258f597524d094e1d333cad385e786c14ee931d57a32a10fec523390317` |

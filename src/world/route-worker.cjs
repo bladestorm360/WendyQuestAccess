@@ -84,5 +84,6 @@ parentPort.on('message', message => {
         result = { status: 'unavailable' };
     }
     if (cancelled() || !result) result = { status: 'cancelled' };
-    parentPort.postMessage({ epoch, sequence, map, result }, result.course ? [result.course.buffer] : []);
+    const data = result.course || result.opening?.stamps;
+    parentPort.postMessage({ epoch, sequence, map, result }, data ? [data.buffer] : []);
 });

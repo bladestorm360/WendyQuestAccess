@@ -2,7 +2,7 @@
 
 // IDs match the original Windows cue bank. Preparation uses no output.
 const CUE = Object.freeze({ prepare: -1, preview: 0, wallBump: 1, wallBrush: 2,
-    beaconPulse: 3, beaconTurn: 4, beaconArrival: 5 });
+    beaconPulse: 3, beaconTurn: 4, beaconArrival: 5, caveGo: 6 });
 
 function createAudio(host) {
     let generation = null;
@@ -77,6 +77,7 @@ function createAudio(host) {
     function play(scene, hrtf, cue, gain, bearing, ready, complete, source = 'preview') {
         if (!ready()) return false;
         if (active?.scene === scene && source === 'beacon' && active.source === 'wall') return false;
+        if (active?.scene === scene && active.source === 'cave' && source !== 'cave' && source !== 'preview') return false;
         if (cue === CUE.prepare && (active?.cue === CUE.prepare || inFlight?.cue === CUE.prepare)) return false;
         if (failed || nextEpoch >= 0x7ffffffe) {
             complete?.(-1);

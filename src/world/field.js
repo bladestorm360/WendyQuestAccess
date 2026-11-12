@@ -3,7 +3,7 @@
 const { captureWorld } = require('./snapshot');
 const { browse, createDestinationBrowser } = require('./destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
-const { createCaveGuide, timedCave, warningApproach, captureMotion } = require('./puzzles/cave');
+const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 
 function createField(root, host, notifications) {
@@ -67,6 +67,19 @@ function createField(root, host, notifications) {
             if (job.area && !warningApproach(root.$gameMap, player._x, player._y, job.target))
                 return status(job, 'Warning sign directions are no longer available');
             const result = packet.result;
+            if (result?.status === 'timedCue') {
+                if (!job.cueRetried && host.graphics.frameCount > job.motionFrame + result.opening?.through - TIMING_CUE.lead) {
+                    // One fresh native sample after a cold/late worker result.
+                    // The previous snapshot and expired opening are retired.
+                    job.cueRetried = true;
+                    return afterRender();
+                }
+                if (!job.timing || !host.caveTiming.start(job.timing, job.x, job.y, result.opening))
+                    return status(job, 'Patrol timing changed. Request directions again.');
+                job.scene._wqaPreviewUntil = job.motionFrame + result.opening.through - 22;
+                return present(job, { kind: 'timedCue', direction: result.opening.direction, terminal: result.opening.terminal,
+                    alternate: result.opening.alternate });
+            }
             if (result?.status === 'timed') {
                 const age = host.graphics.frameCount - job.motionFrame;
                 if (!Number.isInteger(age) || age < 0 || !Number.isInteger(result.startWindow) ||
@@ -74,7 +87,7 @@ function createField(root, host, notifications) {
                     return status(job, 'Patrol timing changed. Request directions again');
                 job.scene._wqaPreviewUntil = job.motionFrame + result.startWindow;
                 return present(job, { kind: 'timedDirections', direction: result.direction, tiles: result.tiles,
-                    terminal: result.terminal === true });
+                    terminal: result.terminal === true, alternate: result.alternate === true });
             }
             if (result?.status === 'timedWait') status(job, 'No crossing preview ready. Check the patrols and request again');
             else if (result?.status === 'ready') {
@@ -115,11 +128,15 @@ function createField(root, host, notifications) {
             job.x = snapshot.x;
             job.y = snapshot.y;
             job.motionFrame = motion?.frame;
+            if (motion) {
+                host.caveTiming?.warm(job.scene);
+                job.timing = host.caveTiming?.capture(job.scene, motion, target);
+            }
             Atomics.store(admission, 0, job.sequence);
             inFlight = job;
             worker.postMessage({ map: snapshot.map, sequence: job.sequence, epoch: job.sequence, live: snapshot.live,
                 request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area, motion,
-                    beacon: !motion && host.beacon?.enabled() === true } }, [snapshot.live.terrain.buffer]);
+                    beacon: !motion && host.beacon?.enabled() === true, timingCue: !!job.timing } }, [snapshot.live.terrain.buffer]);
         } catch {
             if (admission) Atomics.store(admission, 0, 0);
             inFlight = null;
@@ -185,8 +202,10 @@ function createField(root, host, notifications) {
             if (!host.hasFocus()) return false;
             const pending = active?.scene === scene && active.action === 'puzzleGuide';
             const stopped = salt.stop(scene) || cave.stop(scene);
-            if (!pending && !stopped) return false;
-            if (pending) retire(scene);
+            const timing = host.caveTiming?.stop(scene);
+            const waiting = active?.scene === scene && active.action === 'directions' && timedCave(root.$gameMap._mapId);
+            if (!pending && !stopped && !timing && !waiting) return false;
+            if (pending || waiting) retire(scene);
             if (stopped && timedCave(root.$gameMap._mapId)) host.beacon?.stop(scene);
             if (!active && ready(scene)) command('status', 'Puzzle guidance stopped');
             return true;
@@ -194,7 +213,10 @@ function createField(root, host, notifications) {
         const puzzle = action === 'puzzleGuide' && guideFor(scene);
         if ((!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' && action !== 'status' && !puzzle) ||
             !ready(scene) || sequence >= 0x7ffffffe) return false;
-        if (BROWSE.has(action) || action === 'directions' || puzzle) host.beacon?.stop(scene);
+        if (BROWSE.has(action) || action === 'directions' || puzzle) {
+            host.beacon?.stop(scene);
+            host.caveTiming?.cancelPlan(scene);
+        }
         const changes = active?.scene === scene && !active.performed ? active.changes : [];
         if (BROWSE.has(action) && changes.length < 16) changes.push(action);
         if (owner) retire(owner.scene);
@@ -214,7 +236,8 @@ function createField(root, host, notifications) {
             if (!ready(scene)) return null;
             if (control?.scene !== scene) control = { kind: 'field', scene };
             control.puzzle = !!guideFor(scene);
-            control.puzzleActive = salt.active(scene) || cave.active(scene);
+            control.puzzleActive = salt.active(scene) || cave.active(scene) || !!host.caveTiming?.active(scene) ||
+                (active?.scene === scene && active.action === 'directions' && timedCave(root.$gameMap._mapId));
             control.beaconActive = host.beacon?.active(scene);
             return control;
         },

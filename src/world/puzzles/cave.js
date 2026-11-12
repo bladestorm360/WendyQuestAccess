@@ -1,6 +1,6 @@
 'use strict';
 
-const { copyPatrol } = require('./patrol-motion.cjs');
+const { copyPatrol, TIMING_CUE, STAMP_WIDTH, matchesMotionStamp } = require('./patrol-motion.cjs');
 
 const ROOMS = Object.freeze({
     196: { patrols: [4, 5, 6, 7, 12, 13, 14, 15, 17, 18], checkpoints: [21], sign: 2 },
@@ -66,6 +66,18 @@ function warningApproach(map, x, y, target) {
     return WARNING_APPROACH;
 }
 
+function waitingDistraction(map, event, page) {
+    // The only admitted parallel interpreter is the authored return route.
+    // It publishes switch 620 as soon as the last forced route completes.
+    if (map._mapId !== 200 || event._eventId !== 19 || event._pageIndex !== 1) return false;
+    const wait = event._interpreter;
+    const actor = map._events[18];
+    const command = page.list[45];
+    return command?.code === 205 && command.parameters[0] === 18 && command.parameters[1]?.wait === true &&
+        wait?._list === page.list && wait._index === 46 && wait._waitMode === 'route' && wait._characterId === 18 &&
+        actor?._moveRouteForcing === true && actor._moveRoute === command.parameters[1];
+}
+
 function captureMotion(root, graphics) {
     const map = root.$gameMap;
     const room = ROOMS[map?._mapId];
@@ -76,15 +88,20 @@ function captureMotion(root, graphics) {
     const frame = graphics.frameCount;
     if (!room || data?.scrollType !== 0 || !Number.isInteger(frame) || frame < 0 ||
         !Number.isInteger(speed) || speed < 3 || speed > 6 || player._moveRouteForcing || map._scrollRest > 0 ||
-        map._commonEvents?.length || !(tileSize > 0) || !Array.isArray(map._events)) return null;
+        map._commonEvents?.length || !(tileSize > 0) || !Array.isArray(map._events) || map._events.length > 64) return null;
     const view = { x: map._displayX, y: map._displayY, width: graphics.width / tileSize, height: graphics.height / tileSize };
     if (![view.x, view.y, view.width, view.height].every(Number.isFinite) || view.width <= 0 || view.height <= 0) return null;
     const patrols = [];
+    let barrier = 0;
     for (const event of map._events) {
         if (!event || event._erased || event._pageIndex < 0) continue;
         const id = event._eventId;
         const page = data.events[id]?.pages?.[event._pageIndex];
-        if (!page || ((event._trigger === 3 || event._trigger === 4) && page.list.length > 1)) return null;
+        if (!page) return null;
+        if ((event._trigger === 3 || event._trigger === 4) && page.list.length > 1) {
+            if (!waitingDistraction(map, event, page)) return null;
+            barrier = 18;
+        }
         const mobile = event._moveType > 0 || event._moveRouteForcing || event._jumpCount > 0 ||
             event._x !== event._realX || event._y !== event._realY;
         if (!mobile && event._trigger !== 2) continue;
@@ -93,7 +110,7 @@ function captureMotion(root, graphics) {
         if (!actor) return null;
         patrols.push(actor);
     }
-    return { frame, speed, view, patrols };
+    return { frame, speed, dash: data.disableDashing === false, view, patrols, barrier };
 }
 
 function offsetLabel(delta, negative, positive) {
@@ -275,4 +292,5 @@ function createCaveGuide(root, graphics) {
     };
 }
 
-module.exports = { createCaveGuide, timedCave, checkpointTarget, warningApproach, captureMotion };
+module.exports = { createCaveGuide, timedCave, checkpointTarget, warningApproach, captureMotion,
+    TIMING_CUE, STAMP_WIDTH, matchesMotionStamp };

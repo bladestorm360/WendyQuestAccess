@@ -18,10 +18,13 @@ const AUDIO_PREVIEWS = [
 function normalizeAudio(value) {
     const volume = value?.wallVolume;
     const beaconVolume = value?.beaconVolume;
+    const caveVolume = value?.caveVolume;
     return { enabled: value?.enabled !== false, hrtf: value?.hrtf !== false, wall: value?.wall === true,
         wallVolume: Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : 65,
         beacon: value?.beacon === true,
-        beaconVolume: Number.isInteger(beaconVolume) && beaconVolume >= 0 && beaconVolume <= 100 ? beaconVolume : 65 };
+        beaconVolume: Number.isInteger(beaconVolume) && beaconVolume >= 0 && beaconVolume <= 100 ? beaconVolume : 65,
+        caveTiming: value?.caveTiming === true,
+        caveVolume: Number.isInteger(caveVolume) && caveVolume >= 0 && caveVolume <= 100 ? caveVolume : 65 };
 }
 
 function createSettingsMenu(root, host) {
@@ -166,7 +169,13 @@ function createSettingsMenu(root, host) {
             beaconLower: button(owner, `Decrease beacon volume, ${audio.beaconVolume} percent`, () =>
                 update('beaconLower', { ...audio, beaconVolume: Math.max(0, audio.beaconVolume - 10) })),
             beaconRaise: button(owner, `Increase beacon volume, ${audio.beaconVolume} percent`, () =>
-                update('beaconRaise', { ...audio, beaconVolume: Math.min(100, audio.beaconVolume + 10) }))
+                update('beaconRaise', { ...audio, beaconVolume: Math.min(100, audio.beaconVolume + 10) })),
+            caveTiming: button(owner, `Cave timing cues, ${audio.caveTiming ? 'on' : 'off'}`, () =>
+                update('caveTiming', { ...audio, caveTiming: !audio.caveTiming })),
+            caveLower: button(owner, `Decrease cave timing volume, ${audio.caveVolume} percent`, () =>
+                update('caveLower', { ...audio, caveVolume: Math.max(0, audio.caveVolume - 10) })),
+            caveRaise: button(owner, `Increase cave timing volume, ${audio.caveVolume} percent`, () =>
+                update('caveRaise', { ...audio, caveVolume: Math.min(100, audio.caveVolume + 10) }))
         };
         function preview(bearing, cue, gain) {
             if (loading || saving) return;
@@ -180,6 +189,7 @@ function createSettingsMenu(root, host) {
         button(owner, 'Preview beacon ahead', () => preview([0, 0, 1], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconTurn', audio.beaconVolume / 100));
         button(owner, 'Preview beacon arrival', () => preview([0, 0, 1], 'beaconArrival', audio.beaconVolume / 100));
+        button(owner, 'Preview cave crossing tone', () => preview([0, 0, 1], 'caveGo', audio.caveVolume / 100));
         for (const [direction, bearing] of AUDIO_PREVIEWS) {
             button(owner, `Preview ${direction}`, () => preview(bearing));
         }

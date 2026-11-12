@@ -37,6 +37,7 @@ def bundle():
         './world/field': 'world/field.js',
         './world/wall-audio': 'world/wall-audio.js',
         './world/beacon': 'world/beacon.js',
+        './world/cave-timing': 'world/cave-timing.js',
         './spatial-direction': 'world/spatial-direction.js',
         './snapshot': 'world/snapshot.js',
         './destinations': 'world/destinations.js',

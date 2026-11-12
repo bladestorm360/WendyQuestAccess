@@ -71,7 +71,13 @@ function formatSpeech(message) {
             const heading = HEADINGS[message.direction];
             const steps = message.tiles;
             if (!heading || !Number.isInteger(steps) || steps < 1 || steps > 3) return '';
-            text = `Preview. ${steps} ${steps === 1 ? 'step' : 'steps'} ${heading}${message.terminal ? ' to an event' : ''}. Recheck if you wait.`;
+            text = `${message.alternate ? 'Alternate preview' : 'Preview'}. ${steps} ${steps === 1 ? 'step' : 'steps'} ${heading}${message.terminal ? ' to an event' : ''}. Recheck if you wait.`;
+            break;
+        }
+        case 'timedCue': {
+            const heading = HEADINGS[message.direction];
+            if (!heading) return '';
+            text = `${message.alternate ? 'Alternate opening. ' : ''}One tile ${heading}${message.terminal ? ' to an event' : ''} on the tone.`;
             break;
         }
         case 'routeDirections': {
