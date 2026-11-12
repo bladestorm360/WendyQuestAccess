@@ -61,6 +61,17 @@ PIXI_SHA = '6eca31989af44e87ac64319da69b9e484a7fdf0cbbdcaf3cd85869362588cee1'
 DEPENDENCIES = {
     SYSTEM_REL: SYSTEM_SHA,
     PIXI_REL: PIXI_SHA,
+    Path('package.nw/img/system/Caffeine Caverns Map.png'): '12bc943da57f479922703bc70451f5b95658830d3a391868e6ce77fa2e86f483',
+    Path('package.nw/img/system/Caffeine Caverns Map Trail 1.png'): '56a0363a00319d0236d93f6b396e723247c24971c414cbed0c2e1c29dc9d977b',
+    Path('package.nw/img/system/Caffeine Caverns Map Trail 2.png'): '70cc8d178a3d3d98bdb338022767d9200264c2c1621130f3b761957d1a8bda61',
+    Path('package.nw/img/system/Caffeine Caverns Map Trail 3.png'): 'a187aa3b243052eb4bf15d74b0e9ee28de5bf2b2b3a613ef2d447e3a1a48e6be',
+    Path('package.nw/img/system/Savoria Map.png'): '4558afc06f8761406d502d6b3a43e31d1950e78ae98b67dfcacc7404c3273b40',
+    Path('package.nw/img/system/WendyIcon.png'): '5ed0f87b6ce74d5677532d02c4c0ff52ab8cd02da5e4ec10b3bc069a7899252b',
+    Path('package.nw/img/system/MapMarkers/Map Markers0.png'): 'd2e7220db93f784df36e2f809e39ab57321101f6b4e35806cd35687c039b174c',
+    Path('package.nw/img/system/MapMarkers/Map Markers1.png'): '966705d415684a52d21941f66b3c8fe2526eff3c220af18695c3276a2a135ced',
+    Path('package.nw/img/system/MapMarkers/Map Markers2.png'): '41fda6962b54b5261718e58987749669de762fabff055749d09d4977a7817bdc',
+    Path('package.nw/img/system/MapMarkers/Map Markers3.png'): '0083bd47f5830550603f80c93e9c6adc19ab140776cebd929c0b2aee368b1811',
+    Path('package.nw/img/system/MapMarkers/Map Quest Marker.png'): '70565af90ad1765c1df5b70c5305fe9c3940d9e303f6703f9b0fa065095ed0e7',
     BITMAP_FONT_REL: BITMAP_FONT_SHA,
     STATS_REL: STATS_SHA,
     MESSAGE_OWNER_REL: '26e0230f7bcf8a425ad4c128c728cb0d74d8589d1a07d9d3026edbc2b09c7ce0',
@@ -475,7 +486,11 @@ def dialogue_update(context_ready):
         const wqaNumberWaiting = wqaNumber?.active && wqaNumber.openness === 255 && wqaNumber._wqaNumberDrawn &&
             (wqaNumber._wqaNumberShownIndex !== wqaNumber._index ||
                 wqaNumber._wqaNumberShownChange !== wqaNumber._wqaNumberChange);
-        if ((wqaPageWaiting || wqaChoiceWaiting || wqaNumberWaiting) && !this._wqaDialoguePending &&
+        const wqaPicture = this._wqaMapRestored && wqaMessage?.pause && !this._wqaDiagramShown &&
+            (this._wqaDiagramAttempts || 0) < 30 && $gameScreen._pictures?.[27];
+        const wqaDiagramWaiting = !!(wqaPicture && !wqaPicture._duration &&
+            (wqaPicture._name === "system/Caffeine Caverns Map" || wqaPicture._name === "system/Savoria Map"));
+        if ((wqaPageWaiting || wqaChoiceWaiting || wqaNumberWaiting || wqaDiagramWaiting) && !this._wqaDialoguePending &&
             __WQA_CONTEXT__ && this._started && this._active &&
             this._fadeDuration === 0 && this._fadeOpacity === 0 && !($gameScreen._fadeOutDuration > 0) &&
             this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
@@ -483,7 +498,7 @@ def dialogue_update(context_ready):
             (!wqaPageWaiting || (!wqaMessage._faceBitmap &&
                 (wqaAuto || !(wqaMessage._nameSprite?._currentString && wqaMessage._nameSprite._animationRunning)) &&
                 (!wqaMessage._slicedSprite?.visible || (wqaMessage._slicedSpriteFull && wqaMessage._slicedSpriteFaded)))))
-            globalThis.WendyQuestAccessDialogueReady?.(this);
+            globalThis.WendyQuestAccessDialogueReady?.(this, wqaDiagramWaiting);
     }
 '''.replace(b'__WQA_CONTEXT__', context_ready)
 

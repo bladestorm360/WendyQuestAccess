@@ -134,6 +134,7 @@ let dialogueShown = false;
 let routeRequested = false;
 let fieldStep = 0;
 let mapVitalsStep = 0;
+let diagramViewport;
 let browseStarted = 0;
 let autowalkStep = 0;
 let repeated = false;
@@ -591,7 +592,57 @@ const interval = setInterval(() => {
             fs.unlinkSync(receipt + '.autosave-notice-stage');
             mapVitalsStep++;
         }
-        if (mapVitalsStep < 7) return;
+        if (mapVitalsStep === 7) {
+            fs.writeFileSync(receipt + '.map-diagram-stage', '');
+            scene._wqaMapRestored = true;
+            const spriteset = scene._spriteset = { parent: scene };
+            const layer = spriteset._pictureContainer_upper = { parent: spriteset, children: [] };
+            $gameScreen._pictures = [];
+            $gameMessage.interpreter = { _list: [{}], _index: 1, _waitMode: 'message' };
+            scene._messageWindow = { parent: scene._windowLayer, pause: true, openness: 255, contentsOpacity: 0 };
+            const title = 'system/Caffeine Caverns Map';
+            for (const [id, name, alpha] of [[27, title, 1], [35, title + ' Trail 1', 1], [37, title + ' Trail 3', 0]]) {
+                $gameScreen._pictures[id] = { _name: name, _duration: 0 };
+                layer.children.push({ _pictureId: id, _pictureName: name, parent: layer, worldVisible: true,
+                    worldAlpha: alpha, texture: { valid: true }, bitmap: { isReady: () => true },
+                    anchor: { x: 0.5, y: 0.5 }, _frame: { width: 380, height: 300 },
+                    worldTransform: { a: 1, d: 1, b: 0, c: 0, tx: 320, ty: 180 } });
+            }
+            diagramViewport = { width: Graphics.width, height: Graphics.height };
+            Object.assign(Graphics, { width: 640, height: 360 });
+            WendyQuestAccessDialogueReady(scene, true);
+            Graphics.app.renderer.emit('postrender');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 8 && fs.existsSync(receipt + '.map-diagram-title')) {
+            tap('i', 'KeyI');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 9 && fs.existsSync(receipt + '.map-diagram-details')) {
+            pad();
+            if (padTap(7) !== 1 << 7) throw Error('Map diagram did not enter controller mod mode');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 10 && fs.existsSync(receipt + '.map-diagram-mode')) {
+            if (padTap(15) !== 1 << 15 || padTap(15) !== 0) throw Error('Diagram review did not return to native input');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 11 && fs.existsSync(receipt + '.map-diagram-review')) {
+            WendyQuestAccessSceneLeaving(scene);
+            scene._wqaFieldReady = true;
+            delete scene._messageWindow;
+            delete $gameScreen._pictures;
+            delete $gameMessage.interpreter;
+            delete scene._wqaMapRestored;
+            Object.assign(Graphics, diagramViewport);
+            fs.unlinkSync(receipt + '.map-diagram-stage');
+            mapVitalsStep++;
+        }
+        if (mapVitalsStep < 12) return;
         if (!soundscapeStarted) {
             Object.assign($gameMap, { tileWidth: () => 32, deltaX: (x, y) => x - y, deltaY: (x, y) => x - y });
             const actor = $gameMap._events[1];
@@ -1575,6 +1626,12 @@ parentPort.on('message', message => {
         parentPort.postMessage('ack');
         return;
     }
+    if (fs.existsSync(receipt + '.map-diagram-stage')) {
+        const label = { mapBanner: 'title', menuDetails: 'details', controllerStatus: 'mode', menuReview: 'review' }[message.kind];
+        if (label) fs.writeFileSync(receipt + '.map-diagram-' + label, formatSpeech(message));
+        parentPort.postMessage('ack');
+        return;
+    }
     if (fs.existsSync(receipt + '.autosave-notice-stage')) {
         if (message.kind === 'mapBanner') fs.appendFileSync(receipt + '.autosave-notice', formatSpeech(message) + '\\n');
         parentPort.postMessage('ack');
@@ -2008,7 +2065,13 @@ def main():
                 raise AssertionError(f'Unexpected {suffix} receipt')
         if receipt.with_suffix('.json.autosave-notice').read_text(encoding='utf8').splitlines() != ['GAME SAVED', 'GAME SAVED']:
             raise AssertionError('The packaged map save notifications did not follow two distinct completed presentations')
-        print('Verified map HUD, map save notifications, battle commands, targets, vitals and rendered Bag items.')
+        diagram = {name: receipt.with_suffix('.json.map-diagram-' + name).read_text(encoding='utf8')
+                   for name in ('title', 'details', 'mode', 'review')}
+        if diagram['title'] != 'Caffeine Caverns map, 1 pathway shown' or \
+                'Pathway 1' not in diagram['details'] or 'Pathway 3' in diagram['details'] or \
+                'A reads the map' not in diagram['mode'] or not diagram['review'].startswith('Pathway 1'):
+            raise AssertionError('Unexpected map diagram review')
+        print('Verified map HUD, map save and diagram review, battle commands, targets, vitals and rendered Bag items.')
         print('Verified the Battle timing setting, preview and action retirement. '
               f'Throttled warm battle cue reached silent SDL submission in {battle_cue_ms:.0f} ms.')
         print('Verified the Quests category, packaged route and marker replacement handback.')

@@ -271,6 +271,102 @@ async function verifyNumberEntry() {
     assert.equal(standalone.packets()[0].append, false);
 }
 
+async function verifyMapDiagrams() {
+    const installed = path.join(process.argv[2], 'package.nw');
+    const events = JSON.parse(fs.readFileSync(path.join(installed, 'data/CommonEvents.json'), 'utf8'));
+    const data = mapData(87);
+    const f = await enter(data, 87);
+    const { c, scene, window } = f;
+    c.$dataCommonEvents = events;
+    const pictures = c.$gameScreen._pictures = [];
+    const spriteset = scene._spriteset = { parent: scene };
+    const layer = spriteset._pictureContainer_upper = { parent: spriteset, children: [] };
+    Object.assign(c.Graphics, { width: 640, height: 360 });
+    enableNativeMessage(f);
+    installInterpreterConstructor(c);
+    const interpreter = c.$gameMap._interpreter;
+    const diagramPackets = () => f.records.filter(packet => packet.kind === 'mapBanner' || packet.kind === 'menuDetails' ||
+        packet.kind === 'menuReview');
+
+    function picture(list, command, x, y, alpha = 1) {
+        const descriptor = list[command].parameters[3];
+        const id = Number(descriptor.id);
+        const name = descriptor.pictureName;
+        const png = fs.readFileSync(path.join(installed, 'img', name + '.png'));
+        const sprite = {
+            _pictureId: id, _pictureName: name, parent: layer, worldVisible: true, worldAlpha: alpha,
+            bitmap: { isReady: () => true }, texture: { valid: true }, anchor: { x: 0.5, y: 0.5 },
+            worldTransform: { tx: x, ty: y, a: 1, d: 1, b: 0, c: 0 },
+            _frame: { width: png.readUInt32BE(16), height: png.readUInt32BE(20) }
+        };
+        pictures[id] = { _name: name, _duration: 0 };
+        layer.children.push(sprite);
+        return sprite;
+    }
+    function wait(list, index) {
+        Object.assign(interpreter, { _mapId: 87, _eventId: 121, _list: list, _index: index });
+        assert(interpreter.executeCommand());
+        assert.equal(interpreter._waitMode, 'message');
+        assert.equal(c.$gameMessage.interpreter, interpreter);
+        window.openness = 255;
+        window.contentsOpacity = 0;
+        window.pause = true;
+    }
+
+    const cavern = events[101].list;
+    const base = picture(cavern, 30, 320, 180);
+    picture(cavern, 45, 320, 180);
+    picture(cavern, 62, 320, 180, 0);
+    picture(cavern, 79, 320, 180);
+    picture(cavern, 110, 220, 235);
+    wait(cavern, 192);
+    base.texture.valid = false;
+    f.tick();
+    assert.equal(diagramPackets().length, 0);
+    base.texture.valid = true;
+    f.tick(false);
+    assert.equal(diagramPackets().length, 0);
+    f.frame();
+    assert.equal(formatSpeech(diagramPackets()[0]), 'Caffeine Caverns map, 2 pathways shown');
+    assert.equal(diagramPackets().length, 1, 'Autodetail defaults off');
+    assert(tapPuzzleKey(f, 'i'));
+    const details = formatSpeech(diagramPackets().at(-1));
+    assert.match(details, /Wendy marker, southwest/);
+    assert.match(details, /Pathway 1/);
+    assert.match(details, /Pathway 3/);
+    assert.doesNotMatch(details, /Pathway 2/);
+    const review = { key: 'ArrowRight', code: 'ArrowRight', shiftKey: true, preventDefault() {}, stopPropagation() {} };
+    f.dispatchWindowEvent('keydown', review);
+    f.dispatchWindowEvent('keyup', review);
+    assert.match(formatSpeech(diagramPackets().at(-1)), /^Pathway 3/);
+    f.advance();
+    assert.equal(scene._wqaDiagramShown, false);
+    assert.equal(tapPuzzleKey(f, 'i'), false);
+
+    pictures.length = layer.children.length = 0;
+    const atlas = events[142].list;
+    picture(atlas, 17, 320, 180);
+    picture(atlas, 45, 315, 165);
+    const marked = events[161].list;
+    const marker = marked.findIndex(command => command.code === 357 &&
+        command.parameters[3]?.pictureName === 'system/MapMarkers/Map Markers1');
+    assert(marker >= 0);
+    picture(marked, marker, 410, 110);
+    wait(events[166].list, 59);
+    f.tick();
+    assert.equal(formatSpeech(diagramPackets().at(-1)), 'World Atlas, southwest ruins map');
+    assert(tapPuzzleKey(f, 'i'));
+    assert.match(formatSpeech(diagramPackets().at(-1)), /Crossed-out ruin location, northeast/);
+    pictures[27]._name = 'Other picture';
+    assert.equal(tapPuzzleKey(f, 'i'), false);
+    f.advance();
+
+    const { localDestination } = require('../src/world/local-destinations');
+    assert.deepEqual(localDestination({ $gameMap: { _mapId: 87 } },
+        { _eventId: 130, _trigger: 0 }, data.events[130].pages[0]),
+        { name: 'Map board', category: 'objects' });
+}
+
 async function verifyChamberChestHint() {
     const map = mapData(197);
     const f = await enter(map, 197);
@@ -972,6 +1068,8 @@ async function main() {
     await verifySaltGuide();
     await verifyCaveGuide();
     await verifyChamberChestHint();
+    await verifyMapDiagrams();
+    console.log('Verified native picture waits, visible cavern trails, atlas markers and manual diagram review.');
     await verifyAutomaticClose();
     await verifyBattleDialogue();
 

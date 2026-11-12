@@ -1,6 +1,7 @@
 'use strict';
 
 const { readNumberFocus } = require('./number-entry');
+const { moveReview } = require('../menus/review');
 
 function visible(scene, window) {
     return window?.parent && window.parent === scene._windowLayer && window.worldVisible &&
@@ -12,6 +13,10 @@ function createDialogueObserver(host, notifications) {
 
     function leave(scene) {
         if (scene?._messageWindow?._wqaAutoPaint) scene._messageWindow._wqaAutoPaint = null;
+        if (scene?._wqaDiagramShown || scene?._wqaDiagramAttempts) {
+            scene._wqaDiagramShown = false;
+            scene._wqaDiagramAttempts = 0;
+        }
         if (!current || current.scene !== scene) return;
         const epoch = current.epoch;
         current = null;
@@ -37,7 +42,7 @@ function createDialogueObserver(host, notifications) {
         else context.epoch = notifications.open(record, () => currentScene(context));
     }
 
-    function publish(context) {
+    function publish(context, diagramWaiting) {
         const { scene, window } = context;
         if (!currentScene(context)) return leave(scene);
         const autoPaint = window._wqaAutoPaint;
@@ -45,8 +50,10 @@ function createDialogueObserver(host, notifications) {
         const choices = window._choiceListWindow;
         const number = window._numberInputWindow;
         const pageVisible = visible(scene, window) && window.contentsOpacity > 0;
-        if (!context.epoch && (!paint || (autoPaint && !pageVisible)) && !choices?.active && !number?.active) {
-            return leave(scene);
+        const diagram = diagramWaiting && !scene._wqaDiagramShown && host.dialogueDiagram?.(scene, window);
+        if (!context.epoch && !diagram && (!paint || (autoPaint && !pageVisible)) && !choices?.active && !number?.active) {
+            if (!diagramWaiting) leave(scene);
+            return;
         }
         const name = window._nameSprite;
         if (pageVisible && paint && paint.end > paint.spoken) {
@@ -64,6 +71,15 @@ function createDialogueObserver(host, notifications) {
             window._wqaAutoPaint = null;
             host.dialoguePresented?.(scene, paint);
             submit(context, { kind: 'dialoguePage', text, speaker });
+        }
+
+        if (diagram) {
+            context.diagram = diagram;
+            context.hasReview = true;
+            scene._wqaControllerReady = scene._wqaDiagramShown = true;
+            submit(context, { kind: 'mapBanner', name: diagram.title, append: !!context.epoch });
+            if (host.speechPreferences?.().autodetail)
+                submit(context, { kind: 'menuDetails', lines: diagram.lines, append: true });
         }
 
         if (number?.active && visible(scene, number) && number.contentsOpacity > 0) {
@@ -87,9 +103,28 @@ function createDialogueObserver(host, notifications) {
             (page.automatic ? !window._wqaDialoguePaint : window._wqaDialoguePaint === page.paint);
     }
 
+    function diagramIsCurrent(context) {
+        return context?.diagram && currentScene(context) && context.diagram.live();
+    }
+
+    function diagramCommand(context, action) {
+        if (!diagramIsCurrent(context)) return false;
+        const diagram = context.diagram;
+        if (action === 'details') submit(context, { kind: 'menuDetails', lines: diagram.lines });
+        else if (action.startsWith('review')) {
+            const record = moveReview(diagram, action);
+            if (!host.speechPreferences?.().indexing) {
+                delete record.position;
+                delete record.total;
+            }
+            submit(context, record);
+        } else return false;
+        return true;
+    }
+
     function repeatPage() {
         const context = current;
-        if (!context || !pageIsCurrent(context)) return false;
+        if (!context || !pageIsCurrent(context)) return diagramCommand(context, 'details');
         const { page } = context;
         const record = {
             kind: 'dialoguePage', text: page.paint.text.slice(0, page.end), speaker: page.paint.speaker
@@ -102,7 +137,7 @@ function createDialogueObserver(host, notifications) {
     function suspend() {
         const context = current;
         if (!context) return;
-        if (!context.page) return leave(context.scene);
+        if (!context.page && !context.diagram) return leave(context.scene);
         if (context.epoch) notifications.close(context.epoch);
         // Retain only the previously presented page. Invalidate any queued
         // render callback, but leave native retirement armed across blur.
@@ -110,7 +145,7 @@ function createDialogueObserver(host, notifications) {
         context.scene._wqaDialoguePending = false;
     }
 
-    function observe(scene) {
+    function observe(scene, diagramWaiting) {
         const window = scene._messageWindow;
         const renderer = host.graphics.app?.renderer;
         if (!window || typeof renderer?.once !== 'function' || scene._wqaDialoguePending) return;
@@ -118,11 +153,12 @@ function createDialogueObserver(host, notifications) {
         if (!current) current = { kind: 'dialogue', scene, window, epoch: 0 };
         const context = current;
         scene._wqaDialogue = scene._wqaDialoguePending = scene._wqaPresentation = true;
+        if (diagramWaiting) scene._wqaDiagramAttempts = (scene._wqaDiagramAttempts || 0) + 1;
         try {
             renderer.once('postrender', () => {
                 if (current !== context) return;
                 scene._wqaDialoguePending = false;
-                try { publish(context); }
+                try { publish(context, diagramWaiting); }
                 catch { leave(scene); }
             });
         } catch { leave(scene); }
@@ -134,11 +170,16 @@ function createDialogueObserver(host, notifications) {
     }
     return {
         observe, leave, repeatPage,
+        diagramCommand(scene, action) {
+            return current?.scene === scene && diagramCommand(current, action);
+        },
         controllerOwner(scene) {
-            return current && current.scene === scene && !current.page?.automatic && pageIsCurrent(current) ? current : null;
+            if (!current || current.scene !== scene || current.page?.automatic) return null;
+            current.diagramAvailable = current.hasReview = !!diagramIsCurrent(current);
+            return current.diagramAvailable || pageIsCurrent(current) ? current : null;
         },
         announce(context, record) {
-            if (context === current && pageIsCurrent(context)) submit(context, record);
+            if (context === current && (pageIsCurrent(context) || diagramIsCurrent(context))) submit(context, record);
         }
     };
 }

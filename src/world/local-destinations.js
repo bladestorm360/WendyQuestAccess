@@ -51,6 +51,8 @@ function localDestination(root, event, page) {
     if (trigger !== 0) return undefined;
     if (PULLS[map]?.includes(id)) return event._pageIndex === 0 ? { name: 'Pull handle', category: 'objects' } : null;
     if (map === 15 && id >= 31 && id <= 33) return { name: 'Gate switch', category: 'objects' };
+    if (map === 87 && id >= 121 && id <= 130 && page.list[35]?.parameters?.[3]?.pictureName === 'system/Caffeine Caverns Map')
+        return { name: 'Map board', category: 'objects' };
     if ((map === 128 && id === 11) || (map === 133 && id === 4))
         return { name: 'Hidden passage button', category: 'objects' };
     return undefined;

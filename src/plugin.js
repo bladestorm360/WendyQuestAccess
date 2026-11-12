@@ -21,6 +21,7 @@ const { createBeacon } = require('./world/beacon');
 const { createCaveTiming } = require('./world/cave-timing');
 const { createSoundscape } = require('./world/soundscape');
 const { createDialogueObserver } = require('./dialogue/observer');
+const { captureDiagram } = require('./dialogue/map-diagram');
 const { createSettingsMenu } = require('./settings/menu');
 const { createController, modeAnnouncement } = require('./settings/controller');
 
@@ -139,6 +140,8 @@ function boot(root, nodeRequire, nodeProcess) {
         battleLog = createBattleLog(root, host, notifications, battleFocus.appendFeedback);
         radialResult = createRadialResult(root, host);
         mapBanner = createMapBannerObserver(host, notifications);
+        host.speechPreferences = () => speechPreferences;
+        host.dialogueDiagram = (scene, window) => captureDiagram(root, host.graphics, scene, window);
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
@@ -299,7 +302,8 @@ function boot(root, nodeRequire, nodeProcess) {
                 const scene = host.manager._scene;
                 try { return menus.command(menus.controlOwner(scene), action) ||
                     battleFocus.command(battleFocus.controlOwner(scene), action) ||
-                    battleTargets.command(battleTargets.controlOwner(scene), action) || quests.command(scene, action); }
+                    battleTargets.command(battleTargets.controlOwner(scene), action) ||
+                    dialogue.diagramCommand(scene, action) || quests.command(scene, action); }
                 catch { return false; }
             },
             battleCommand(action) { try { return battleVitalsAction(action); } catch { return false; } },
@@ -325,6 +329,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 else if (context.kind === 'battle') battleFocus.command(context, action);
                 else if (context.kind === 'battleTarget') battleTargets.command(context, action);
                 else if (context.kind === 'field') fieldAction(action);
+                else if (context.kind === 'dialogue') dialogue.diagramCommand(context.scene, action);
             }
         });
         host.dialoguePresented = field.dialoguePresented;
@@ -485,11 +490,11 @@ function boot(root, nodeRequire, nodeProcess) {
         } catch { mapBanner?.leave(scene); }
     };
 
-    root.WendyQuestAccessDialogueReady = function (scene) {
+    root.WendyQuestAccessDialogueReady = function (scene, diagramWaiting = false) {
         try {
             if (!supported() || root.SceneManager._scene !== scene || !root.document.hasFocus()) return;
             if (!dialogue) initialize();
-            dialogue.observe(scene);
+            dialogue.observe(scene, diagramWaiting);
         } catch { dialogue?.leave(scene); }
     };
 
