@@ -32,16 +32,16 @@ At final gameplay handoff, first compare the two wall previews with headphones. 
 
 ## Dependencies and payload check
 
-The builder uses the approved FFPR SDK inputs by default and accepts `-AudioSdkRoot` for an equivalent local source. It verifies the key input hashes before staging the two runtime libraries and their notices in `audio-deps`. OpenAL Soft includes its MIT KEMAR measurements in the DLL. The matching corresponding-source URL and measurement attribution travel in `audio-deps/SOURCE.txt`. The Windows release must preserve those files and the SDL license. The current platform target is Windows x64. [SDL 3.4.4](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.4) · [OpenAL Soft 1.25.2 HRTF](https://github.com/kcat/openal-soft/blob/1.25.2/docs/hrtf.txt) · [MIT KEMAR measurements and terms](https://sound.media.mit.edu/resources/KEMAR.html)
+The builder defaults to the checkout's `.deps/audio-sdk` and accepts `-AudioSdkRoot` for an equivalent local source. It verifies the key input hashes before staging the two runtime libraries and their notices in `audio-deps`. OpenAL Soft includes its MIT KEMAR measurements in the DLL. The matching corresponding-source URL and measurement attribution travel in `audio-deps/SOURCE.txt`. The Windows release must preserve those files and the SDL license. The current platform target is Windows x64. [SDL 3.4.4](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.4) · [OpenAL Soft 1.25.2 HRTF](https://github.com/kcat/openal-soft/blob/1.25.2/docs/hrtf.txt) · [MIT KEMAR measurements and terms](https://sound.media.mit.edu/resources/KEMAR.html)
 
-Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the bookmark browser and special-entrance development payload on November 12, 2026 at 12:24 UTC and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.257.0 updated at 05:18 UTC. The native files reported `NotSigned`. The final release still needs its own exact payload and installer checks, signing status and installed verification.
+Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the exact development payload rebuilt from the relocated checkout on November 12, 2026 at 13:22 UTC and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.261.0. The native files reported `NotSigned`. The final release still needs its own exact payload and installer checks, signing status and installed verification.
 
 | Scanned file | SHA-256 |
 | --- | --- |
-| `WendyQuestAudio.node` | `a031b67ec27905cf87de0ea5100b3dd689d8df4069f0b3f5bd9404299f57bd33` |
+| `WendyQuestAudio.node` | `eba500ae10c504e595468f2e3a3a58c7c276b5e815a8b62a0f7e1dd773713f9d` |
 | `SDL3.dll` | `132e7f953951944f7628861227ecaea8c37a5a484f004c2072b7f3a1c343fa73` |
 | `soft_oal.dll` | `3963b06e319180700be0bcc0d027336664bb3a4975876b4a5442f10746fab5b4` |
-| `WendyQuestSpeech.exe` | `babf5e68d12a2b3e9d6234991a81d1f0f377597981a51ce7e35a66e984277c3e` |
+| `WendyQuestSpeech.exe` | `f9c30df7ef64e285eacaae872e311a0e398858c1697fc60835bd8c87d7cc92fb` |
 | `prism.dll` | `7c7d09c8c7306e8e1a0c46d603ccb2a391c194c77843400c11b746e7dd56a467` |
 | `WendyQuestAccess.js` | `152089d6d42bdce2f7507a0d7b2fc2ae75f0517d7baa81ca8de8371be7da2c78` |
 | `audio-worker.cjs` | `0be8969b3433adf108a0f644b25695e07e9118b20dfec0901a61d4c64e47913b` |

@@ -2,7 +2,7 @@
 
 ## Build identification
 
-Initial inspection on November 11, 2026 used the D: Steam library. The user moved the game on November 12 to `C:/Program Files (x86)/Steam/steamapps/common/Wendy Quest`. The manifest at `C:/Program Files (x86)/Steam/steamapps/appmanifest_3339970.acf` identifies App `3339970`, build `26578620`. The inspected depot manifest is `7572248151708134333` and Steam language is `english`. The shipped `System.json` identifies locale `en_US`, a 32-pixel tile, stock turn-based battle mode and autosave enabled. The shipped `rmmz_core.js` reports RPG Maker MZ `1.8.0`.
+Initial inspection took place on November 11, 2026. The user moved the game on November 12 to `C:/Program Files (x86)/Steam/steamapps/common/Wendy Quest`. The manifest at `C:/Program Files (x86)/Steam/steamapps/appmanifest_3339970.acf` identifies App `3339970`, build `26578620`. The inspected depot manifest is `7572248151708134333` and Steam language is `english`. The shipped `System.json` identifies locale `en_US`, a 32-pixel tile, stock turn-based battle mode and autosave enabled. The shipped `rmmz_core.js` reports RPG Maker MZ `1.8.0`.
 
 | Relative file | SHA-256 |
 | --- | --- |

@@ -1,13 +1,13 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][string]$PrismArchive,
-    [string]$AudioSdkRoot = 'D:/Games/Dev/Unity/FFPR/FFPRCore-Screen-Reader/third_party',
+    [string]$PrismArchive = (Join-Path $PSScriptRoot '.deps/prism-windows-x64.zip'),
+    [string]$AudioSdkRoot = (Join-Path $PSScriptRoot '.deps/audio-sdk'),
     [switch]$VerifySpeechPipe,
     [switch]$VerifyAudio
 )
 
 $ErrorActionPreference = 'Stop'
-$runner = 'D:/Games/Dev/codex/templates/accessibility-mod/scripts/run-build.py'
+$runner = Join-Path $PSScriptRoot 'tools/run-build.py'
 $vswhere = Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Microsoft Visual Studio/Installer/vswhere.exe'
 $instance = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if ($LASTEXITCODE -ne 0 -or !$instance) { throw 'Visual Studio x64 C++ build tools were not found.' }
