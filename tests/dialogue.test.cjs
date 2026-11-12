@@ -10,7 +10,7 @@ const { bakeMap } = require('../src/world/geometry.cjs');
 const { findReachable } = require('../src/world/routes.cjs');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
-    path.join(__dirname, 'dialogue-producers.py'), process.argv[2]], { encoding: 'utf8', timeout: 6000, maxBuffer: 64000 }));
+    path.join(__dirname, 'dialogue-producers.py'), process.argv[2]], { encoding: 'utf8', timeout: 6000, maxBuffer: 72000 }));
 
 async function enter(map, mapId = 19, battle = false) {
     const f = fixture(map);
@@ -20,6 +20,8 @@ async function enter(map, mapId = 19, battle = false) {
     c.Alias = {};
     c.Eli = { Utils: { spriteCharacters: {} } };
     c.Game_Message = function () {};
+    c.Game_Picture = function () {};
+    c.Sprite_Text = function () {};
     c.Game_Actor = function () {};
     c.Sprite_Character = function () {};
     c.Tilemap = function () {};
@@ -365,6 +367,114 @@ async function verifyMapDiagrams() {
     assert.deepEqual(localDestination({ $gameMap: { _mapId: 87 } },
         { _eventId: 130, _trigger: 0 }, data.events[130].pages[0]),
         { name: 'Map board', category: 'objects' });
+}
+
+async function verifyCredits() {
+    const f = await enter(mapData(189), 189);
+    const { c, scene } = f;
+    c.PIXI = { BLEND_MODES: { NORMAL: 0 } };
+    c.GetEvent = () => null;
+    c.Game_Picture.prototype.show = function (_name, _origin, _x, _y, _scaleX, _scaleY, opacity) {
+        this._opacity = opacity;
+        this._duration = 0;
+    };
+    c.Game_Picture.prototype.setLayer = c.Game_Picture.prototype.setPositionSpace = () => {};
+    c.$gameScreen.realPictureId = id => id;
+    const pictures = c.$gameScreen._pictures = [];
+    const spriteset = scene._spriteset = { parent: scene };
+    const layer = spriteset._pictureContainer_upper = { parent: spriteset, children: [] };
+    Object.assign(c.Graphics, { width: 640, height: 360, frameCount: 100 });
+    const list = mapData(189).events[1].pages[0].list;
+    c.$gameMap._mapId = 189;
+    c.$gameMap._interpreter._list = list;
+    const spoken = () => f.packets().map(formatSpeech);
+
+    function textCard(command, index) {
+        assert.equal(command.parameters[1], 'SetPictureText');
+        const args = command.parameters[3];
+        const id = Number(args.id);
+        c.wqaFixturePictureText(args);
+        const sprite = { _pictureId: id, parent: layer, worldVisible: true, worldAlpha: 1 };
+        const text = sprite._textSprite = Object.assign(new c.Sprite_Text(), {
+            parent: sprite, worldVisible: true, worldAlpha: 1,
+            worldTransform: { tx: 4.48 * Number(args.positionX), ty: 3.6 * Number(args.positionY) },
+        });
+        text.setText(pictures[id]._text);
+        text._dirty = false;
+        text.children = text._currentString.split('').filter(character => character !== '\n').map(() => ({
+            parent: text, worldVisible: true, worldAlpha: 1, scale: { x: 1, y: 1 }, bitmap: { isReady: () => true }
+        }));
+        layer.children[index] = sprite;
+        return text;
+    }
+
+    const heading = textCard(list[30], 0);
+    const body = textCard(list[46], 1);
+    assert(body._currentString.includes('\n'));
+    body.children[0].scale.x = 0;
+    f.tick(false);
+    assert.deepEqual(spoken(), [], 'Wait for render even when native opacity is settled');
+    f.frame();
+    const headSpeech = formatSpeech({ kind: 'dialoguePage', text: heading._currentString });
+    const bodySpeech = formatSpeech({ kind: 'dialoguePage', text: body._currentString });
+    assert.deepEqual(spoken(), [headSpeech]);
+    for (let index = 0; index < 53; index++) {
+        c.Graphics.frameCount++;
+        f.tick();
+    }
+    assert.deepEqual(spoken(), [headSpeech], 'Long-hidden glyphs cannot speak');
+    body.children[0].scale.x = 1;
+    c.Graphics.frameCount += 4;
+    f.tick();
+    assert.deepEqual(spoken(), [headSpeech, bodySpeech]);
+    assert.equal(f.packets()[1].append, true);
+    f.tick();
+    assert.equal(spoken().length, 2, 'An unchanged visible model does not repeat automatically');
+    assert(tapPuzzleKey(f, 'i'));
+    assert(spoken().at(-1).includes(bodySpeech));
+    const review = { key: 'ArrowRight', code: 'ArrowRight', shiftKey: true, preventDefault() {}, stopPropagation() {} };
+    f.dispatchWindowEvent('keydown', review);
+    f.dispatchWindowEvent('keyup', review);
+    assert.equal(f.records.at(-1).name, body._currentString.split('\n').at(-1).trim());
+    const beforeRepeat = spoken().length;
+    assert.equal(tapPuzzleKey(f, 'r'), false, 'Repeat leaves the native key unconsumed');
+    assert.equal(spoken().length, beforeRepeat + 1);
+    assert(spoken().at(-1).includes(bodySpeech));
+    pictures[4]._duration = pictures[5]._duration = 1;
+    f.tick();
+    assert.equal(tapPuzzleKey(f, 'i'), false, 'A fading card hands control back');
+    assert.equal(f.epoch(), 0);
+
+    c.$gameMap._mapId = 239;
+    const ending = mapData(239).events[1].pages[0].list;
+    c.$gameMap._interpreter._list = ending;
+    const command = ending.find(item => item.code === 357 && item.parameters[3]?.pictureName === 'pictures/TheEnd');
+    assert(command);
+    const data = command.parameters[3];
+    const id = Number(data.id);
+    pictures[id] = { _name: data.pictureName, _opacity: 255, _duration: 0 };
+    const title = layer.children[2] = {
+        _pictureId: id, _pictureName: data.pictureName, parent: layer, worldVisible: true, worldAlpha: 1,
+        bitmap: { isReady: () => true }, texture: { valid: false }, anchor: { x: 0.5, y: 0.5 },
+        worldTransform: { tx: 320, ty: 180, a: 1, d: 1, b: 0, c: 0 }
+    };
+    const before = spoken().length;
+    f.tick();
+    assert.equal(spoken().length, before);
+    title.texture.valid = true;
+    c.$gameScreen._brightness = 0;
+    f.tick();
+    assert.equal(spoken().length, before);
+    c.$gameScreen._brightness = 255;
+    c.Graphics.frameCount += 4;
+    f.tick();
+    assert.equal(spoken().at(-1), 'The end');
+    pictures[id] = { ...pictures[id] };
+    f.tick();
+    assert.equal(spoken().slice(before).join(' / '), 'The end / The end', 'A distinct native card can repeat the same text');
+    delete pictures[id];
+    f.tick();
+    assert.equal(f.epoch(), 0, 'Erasing the card retires its speech context');
 }
 
 async function verifyChamberChestHint() {
@@ -1069,7 +1179,8 @@ async function main() {
     await verifyCaveGuide();
     await verifyChamberChestHint();
     await verifyMapDiagrams();
-    console.log('Verified native picture waits, visible cavern trails, atlas markers and manual diagram review.');
+    await verifyCredits();
+    console.log('Verified native picture waits, cavern trails, atlas markers, ending cards and current-picture review.');
     await verifyAutomaticClose();
     await verifyBattleDialogue();
 

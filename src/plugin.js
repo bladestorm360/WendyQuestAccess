@@ -22,6 +22,7 @@ const { createCaveTiming } = require('./world/cave-timing');
 const { createSoundscape } = require('./world/soundscape');
 const { createDialogueObserver } = require('./dialogue/observer');
 const { captureDiagram } = require('./dialogue/map-diagram');
+const { createCredits, creditSlots } = require('./dialogue/credits');
 const { createSettingsMenu } = require('./settings/menu');
 const { createController, modeAnnouncement } = require('./settings/controller');
 
@@ -42,6 +43,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let mapBanner = null;
     let autosaveNotice = null;
     let dialogue = null;
+    let credits = null;
     let audio = null;
     let wall = null;
     let beacon = null;
@@ -143,6 +145,7 @@ function boot(root, nodeRequire, nodeProcess) {
         host.speechPreferences = () => speechPreferences;
         host.dialogueDiagram = (scene, window) => captureDiagram(root, host.graphics, scene, window);
         dialogue = createDialogueObserver(host, notifications);
+        credits = createCredits(root, host, notifications, host.speechPreferences);
         field = createField(root, host, notifications);
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
         quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
@@ -167,6 +170,8 @@ function boot(root, nodeRequire, nodeProcess) {
             if (readyScene()) return frontendControl;
             const menu = menus.controlOwner(scene) || battleFocus.controlOwner(scene) || battleTargets.controlOwner(scene);
             if (menu) return menu;
+            const credit = credits.owner(scene);
+            if (credit) return credit;
             const speaking = dialogue.controllerOwner(scene);
             if (!speaking) {
                 const control = field.controlOwner(scene);
@@ -184,6 +189,7 @@ function boot(root, nodeRequire, nodeProcess) {
             else if (context.kind === 'battle') battleFocus.announce(context, record);
             else if (context.kind === 'battleTarget') battleTargets.announce(context, record);
             else if (context.kind === 'dialogue') dialogue.announce(context, record);
+            else if (context.kind === 'credits') credits.announce(context, record);
             else if (context.scene instanceof root.Scene_Title) title.announce(context.scene, record);
             else files.announce(context.scene, record);
         }
@@ -297,13 +303,16 @@ function boot(root, nodeRequire, nodeProcess) {
             },
             capturePads: () => root.Input?._pollGamepads?.(),
             resume(scene) { if (host.manager._scene === scene) root.WendyQuestAccessResizeReady(); },
-            repeat() { try { return dialogue.repeatPage() || battleLogAction(); } catch { return false; } },
+            repeat() {
+                try { return dialogue.repeatPage() || credits.command(host.manager._scene, 'details') || battleLogAction(); }
+                catch { return false; }
+            },
             menuCommand(action) {
                 const scene = host.manager._scene;
                 try { return menus.command(menus.controlOwner(scene), action) ||
                     battleFocus.command(battleFocus.controlOwner(scene), action) ||
                     battleTargets.command(battleTargets.controlOwner(scene), action) ||
-                    dialogue.diagramCommand(scene, action) || quests.command(scene, action); }
+                    dialogue.diagramCommand(scene, action) || credits.command(scene, action) || quests.command(scene, action); }
                 catch { return false; }
             },
             battleCommand(action) { try { return battleVitalsAction(action); } catch { return false; } },
@@ -318,7 +327,10 @@ function boot(root, nodeRequire, nodeProcess) {
                     if (text && !owner) announce(context, text);
                 } else if (context.kind === 'settings') settings.controllerInput(context, action, family, buttons);
                 else if (action === 'settings') settings.open(context.scene, family);
-                else if (action === 'repeat') dialogue.repeatPage();
+                else if (action === 'repeat') {
+                    if (context.kind === 'credits') credits.command(context.scene, 'details');
+                    else dialogue.repeatPage();
+                }
                 else if (action === 'battleVitals') battleVitalsAction(action, context);
                 else if (action === 'battleLog') battleLogAction(context);
                 else if (action === 'puzzleStop') field.command(action);
@@ -330,6 +342,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 else if (context.kind === 'battleTarget') battleTargets.command(context, action);
                 else if (context.kind === 'field') fieldAction(action);
                 else if (context.kind === 'dialogue') dialogue.diagramCommand(context.scene, action);
+                else if (context.kind === 'credits') credits.command(context.scene, action);
             }
         });
         host.dialoguePresented = field.dialoguePresented;
@@ -355,6 +368,7 @@ function boot(root, nodeRequire, nodeProcess) {
             radialResult.retire(host.manager._scene);
             quests.leave(host.manager._scene);
             autosaveNotice.leave(host.manager._scene);
+            credits.leave(host.manager._scene);
             controller.reset();
         });
         root.addEventListener('focus', () => {
@@ -489,6 +503,17 @@ function boot(root, nodeRequire, nodeProcess) {
             mapBanner.observe(scene, revision);
         } catch { mapBanner?.leave(scene); }
     };
+
+    root.WendyQuestAccessCreditSlots = creditSlots;
+    root.WendyQuestAccessCreditsReady = function (scene) {
+        try {
+            if (!supported() || root.SceneManager._scene !== scene || !root.document.hasFocus()) return;
+            if (!credits) initialize();
+            credits.observe(scene);
+        } catch { credits?.leave(scene); }
+    };
+
+    root.WendyQuestAccessCreditsObscured = function (scene) { credits?.obscure(scene); };
 
     root.WendyQuestAccessDialogueReady = function (scene, diagramWaiting = false) {
         try {
@@ -625,6 +650,7 @@ function boot(root, nodeRequire, nodeProcess) {
         radialResult?.retire(scene);
         mapBanner?.leave(scene);
         autosaveNotice?.leave(scene);
+        credits?.leave(scene);
         dialogue?.leave(scene);
         field?.leave(scene);
     };
@@ -647,6 +673,7 @@ function boot(root, nodeRequire, nodeProcess) {
         if (scene?._wqaPresentation) scene._wqaPresentation = false;
         mapBanner?.leave(scene);
         autosaveNotice?.leave(scene);
+        credits?.leave(scene);
         dialogue?.leave(scene);
         field?.leave(scene);
         title?.suspend();

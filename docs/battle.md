@@ -155,3 +155,7 @@ At final gameplay handoff, win a battle and hear the result and any visible rewa
 ## Turn order audit
 
 Build 26578620 uses turn-based combat. The stock manager's action-battler array is used to queue, sort, force and dispatch actions. The custom `BattleManager.makeActionOrders` at byte 191238 of `BattleSceneArranger.js` sorts the queue, and `getNextSubject` at 11029 of `ActionCommandCombat.js` consumes it. The active plugin and stock call-site audit found no display reader of that queue. The battle scene constructs the radial party HUD, enemy sprites, command and target UI, timing display and action log. The visible upcoming-turn list is inapplicable to this build. Current action messages and displayed actors remain covered.
+
+## Illustrated timing tutorials
+
+The two picture variants are the Golden Archer and frozen attack illustrations from Troops 15 and 158, page 0. The first labels the accuracy and power meters already explained in the accompanying dialogue. The second illustrates the ice segment. The native radial observer exposes its actual timing window through the distinct ice-break cue and reads the resulting frozen feedback. [Battle dialogue](implementation.md#battle-messages) · [Radial timing tones](#radial-timing-tones)

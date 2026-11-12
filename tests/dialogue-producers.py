@@ -97,4 +97,14 @@ for kind, name, tail in [
     methods.append(between(eli, f"{kind}['prototype']['{name}']=function(", tail) + '};')
 monkey, _ = decode((installed / WINDOW_REL).read_text(encoding='utf8'))
 methods.append(between(monkey, 'ExecuteEvent=function(', "},PluginManager['registerCommand']") + '};')
+picture_handler = between(custom, "'SetPictureText',function(", "}),PluginManager['registerCommand']")
+methods.append('globalThis.wqaFixturePictureText = function(' + picture_handler.split('function(', 1)[1] + '};')
+for klass, name, following in [
+    ('Game_Screen', 'showPictureText', 'Game_Map'),
+    ('Game_Picture', 'initText', 'Game_Picture'),
+]:
+    methods.append(between(custom, f"{klass}['prototype']['{name}']=function(", f'}},{following}[') + '};')
+platform, _ = decode((installed / 'package.nw/js/plugins/MonkeyWrenchMZ.js').read_text(encoding='utf8'))
+methods.append(between(platform, "Sprite_Text['prototype']['setText']=function(",
+                       "},Sprite_Text['prototype']['RedrawText']") + '};')
 print(json.dumps(methods))

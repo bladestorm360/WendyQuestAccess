@@ -1554,6 +1554,38 @@ const interval = setInterval(() => {
         } else if (endingStep === 63 && fs.existsSync(receipt + '.coupon-response-copy')) {
             fs.unlinkSync(receipt + '.coupon-response-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const scene = SceneManager._scene = Graphics.app.stage = {
+                _wqaMapRestored: true, _mapLoaded: true, _started: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0
+            };
+            const spriteset = scene._spriteset = { parent: scene };
+            const layer = spriteset._pictureContainer_upper = { parent: spriteset, children: [] };
+            const picture = { _text: 'Synthetic heading\\nSynthetic description.', _opacity: 255, _duration: 0 };
+            $gameMap = { _mapId: 189, _interpreter: { _list: [{}] } };
+            $gameScreen = { _brightness: 255, _pictures: [] };
+            $gameScreen._pictures[4] = picture;
+            const sprite = { _pictureId: 4, parent: layer, worldVisible: true, worldAlpha: 1 };
+            sprite._textSprite = battleText(sprite, picture._text.replaceAll('\\\\n', '\\n'));
+            sprite._textSprite.worldTransform = { tx: 120, ty: 60 };
+            layer.children.push(sprite);
+            fs.writeFileSync(receipt + '.credits-stage', '');
+            WendyQuestAccessCreditsReady(scene);
+            if (scene._wqaControllerReady) throw Error('Credit controls activated before paint');
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 65;
+        } else if (endingStep === 65 && fs.existsSync(receipt + '.credits-page')) {
+            pad();
+            if (padTap(7) !== 1 << 7) throw Error('Credits did not enter controller mod mode');
+            endingStep = 66;
+        } else if (endingStep === 66 && fs.existsSync(receipt + '.credits-mode')) {
+            if (padTap(15) !== 1 << 15 || padTap(15) !== 0) throw Error('Credits review did not restore native input');
+            endingStep = 67;
+        } else if (endingStep === 67 && fs.existsSync(receipt + '.credits-review')) {
+            delete $gameScreen._pictures[4];
+            WendyQuestAccessCreditsObscured(SceneManager._scene);
+            if (SceneManager._scene._wqaControllerReady || padTap(7) !== 0)
+                throw Error('Erased credits retained controller ownership');
+            fs.unlinkSync(receipt + '.credits-stage');
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
             WendyQuestAccessTitleReady(title);
             Graphics.app.renderer.emit('postrender');
@@ -1623,6 +1655,12 @@ parentPort.on('message', message => {
         } else if (message.kind === 'title') {
             fs.writeFileSync(receipt + '.restored-title', '');
         }
+        parentPort.postMessage('ack');
+        return;
+    }
+    if (fs.existsSync(receipt + '.credits-stage')) {
+        const label = { dialoguePage: 'page', controllerStatus: 'mode', menuReview: 'review' }[message.kind];
+        if (label) fs.writeFileSync(receipt + '.credits-' + label, formatSpeech(message));
         parentPort.postMessage('ack');
         return;
     }
@@ -2071,7 +2109,12 @@ def main():
                 'Pathway 1' not in diagram['details'] or 'Pathway 3' in diagram['details'] or \
                 'A reads the map' not in diagram['mode'] or not diagram['review'].startswith('Pathway 1'):
             raise AssertionError('Unexpected map diagram review')
-        print('Verified map HUD, map save and diagram review, battle commands, targets, vitals and rendered Bag items.')
+        credits = {name: receipt.with_suffix('.json.credits-' + name).read_text(encoding='utf8')
+                   for name in ('page', 'mode', 'review')}
+        if 'Synthetic heading' not in credits['page'] or 'Synthetic description.' not in credits['page'] or \
+                'A reads the credits' not in credits['mode'] or not credits['review'].startswith('Synthetic description.'):
+            raise AssertionError('Unexpected credits review')
+        print('Verified map HUD, map save, diagrams, credits review, battle commands, targets, vitals and rendered Bag items.')
         print('Verified the Battle timing setting, preview and action retirement. '
               f'Throttled warm battle cue reached silent SDL submission in {battle_cue_ms:.0f} ms.')
         print('Verified the Quests category, packaged route and marker replacement handback.')

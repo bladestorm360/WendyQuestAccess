@@ -82,6 +82,7 @@ def bundle():
         './geometry.cjs': 'world/geometry.cjs',
         './dialogue/observer': 'dialogue/observer.js',
         './dialogue/map-diagram': 'dialogue/map-diagram.js',
+        './dialogue/credits': 'dialogue/credits.js',
         './number-entry': 'dialogue/number-entry.js',
         './settings/menu': 'settings/menu.js',
         './bookmark-menu': 'settings/bookmark-menu.js',

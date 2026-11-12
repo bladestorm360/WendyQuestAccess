@@ -35,3 +35,21 @@ November 12, 2026, 18:45 UTC. The prepared plan hash was `10efb23a72ec37fba64621
 | `bake-world.cjs` | `544f28ae4fc3c4ea8b767f6157b895835af26b72fd82dc5fe45f29e2f65720b6` |
 
 The actual Steam installation was verified as stock. Protected-phase output verification and the diagram scope are open. The final candidate still needs its own build, smoke, exact security and installed checks. [Current scope and evidence](feature-checkpoint.md) · [Native dependency hashes](audio.md#dependencies-and-payload-check)
+
+## Combined development candidate
+
+November 12, 2026, 19:24 UTC, Steam build 26578620. The combined candidate added ending and credit-card review to the prior map and atlas coverage. The exact prepared plan SHA-256 was `65ef297fb960b87f07f075754eb734f83f46db514d182f3fbd8832b9561ef65e`. It includes the original and transformed hashes for all 16 native registration candidates, the mod payload hashes, and the 239-map local geometry hashes. The bake covered 191,235 cells.
+
+The canonical Windows build with native speech-pipe and audio fixtures passed. The 24 direct Node fixtures passed, including 120,972 directed movement comparisons and 9,504 airship landing comparisons. Run the direct fixtures with the pinned Steam root as the first argument and the separate world fixture with a fresh analysis directory as the second argument. Run the dialogue fixture with 256 MB and the world and installer fixtures with 384 MB. The matching hidden NW test used 768 MB and an isolated profile. It matched the installed NW libraries and passed controller handback, settings restart, rendered menu and credits, speech and audio submission, map routes, puzzle review and timing. The isolated installer fixture exercised the real installation and removal paths with an untouched save witness.
+
+In the latest capped NW fixture, cross-map submission and ready handback took 1.4 and 0.2 ms. A silent speech receipt took 31.3 ms with 40 ms polling. Cave review and timed preview took 0.9 ms each from key press through enqueue. Warm battle audio reached the silent device in 2 ms. Cold HRTF status appeared after 595.3 ms with 40 ms polling. The separate direct fixture compared 20 paired sweeps at 16.73 ms native and 20.51 ms with observation. It compared 48 native movement steps at 11.28 ms manual and 11.11 ms with autowalk. The 260-frame dense soundscape fixture measured 0.10 ms off and 5.68 ms on, with a peak of 0.68 ms. These capped fixtures use simulated presentation or silent output. Audible onset, hardware buffering and whole-game lag require actual gameplay confirmation.
+
+At 19:24:55 UTC, Microsoft Defender found no threats in the exact staged payload, geometry and plan directory, and the three installer source files. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.267.0. The native binaries reported unsigned. The current-user and machine stores had no code-signing certificate with a private key during the earlier check.
+
+| Scanned installer file | SHA-256 |
+| --- | --- |
+| `install.py` | `52f8c993854e8028656075e559f7050177fd11a7b12dac99201505fdec30f9d5` |
+| `registration.py` | `8c1fe47bc85185ad0d6bad4bb6a4d3d75519aa0f981f154b1f4ba88928bcc51d` |
+| `bake-world.cjs` | `544f28ae4fc3c4ea8b767f6157b895835af26b72fd82dc5fe45f29e2f65720b6` |
+
+The exact Steam target still verifies as stock. The protected-phase requirement remains the deployment blocker. [Output lifetime and current limit](implementation.md#speech-service) · [Exact payload hashes](audio.md#dependencies-and-payload-check)

@@ -61,6 +61,8 @@ PIXI_SHA = '6eca31989af44e87ac64319da69b9e484a7fdf0cbbdcaf3cd85869362588cee1'
 DEPENDENCIES = {
     SYSTEM_REL: SYSTEM_SHA,
     PIXI_REL: PIXI_SHA,
+    Path('package.nw/img/pictures/Ending.png'): '5e2da2fdd47aedcccf1987649c01e26a155aa29a48aa28321f450a28aef06ac3',
+    Path('package.nw/img/pictures/TheEnd.png'): '9b69e9fa84b661d09ba8b3a80ab3b13b05ad811f098450867b36f6cb1e6cc361',
     Path('package.nw/img/system/Caffeine Caverns Map.png'): '12bc943da57f479922703bc70451f5b95658830d3a391868e6ce77fa2e86f483',
     Path('package.nw/img/system/Caffeine Caverns Map Trail 1.png'): '56a0363a00319d0236d93f6b396e723247c24971c414cbed0c2e1c29dc9d977b',
     Path('package.nw/img/system/Caffeine Caverns Map Trail 2.png'): '70cc8d178a3d3d98bdb338022767d9200264c2c1621130f3b761957d1a8bda61',
@@ -128,7 +130,7 @@ BATTLE_RADIAL_LEAVING = (b'SceneManager._scene?._wqaRadialActive&&'
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
-                 b'SceneManager._scene?._wqaAutosaveNotice||'
+                 b'SceneManager._scene?._wqaAutosaveNotice||SceneManager._scene?._wqaCreditsActive||'
                  b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
@@ -563,6 +565,35 @@ def map_notification(original):
         this._wqaBeaconActive || this._wqaCaveTimingActive || this._wqaSoundscapeActive)
         globalThis.WendyQuestAccessFieldControlLost?.(this);
 '''
+    credits_update = b'''
+    {
+        const wqaMap = $gameMap._mapId;
+        const wqaSlots = globalThis.WendyQuestAccessCreditSlots;
+        if ((wqaMap === 188 || wqaMap === 189 || (wqaMap >= 210 && wqaMap <= 239)) &&
+            wqaSlots && !this._wqaCreditsPending && this._wqaMapRestored && this._mapLoaded &&
+            this._started && this._active && this._fadeDuration === 0 && this._fadeOpacity === 0 &&
+            $gameScreen._brightness === 255 && !$gameScreen._fadeOutDuration && !this._wqaTerrainWork &&
+            !$gamePlayer._transferring && $gameMap._interpreter?._list && !$gameMessage.isBusy() &&
+            this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
+            !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this) {
+            for (const wqaSlot of wqaSlots) {
+                const wqaPicture = $gameScreen._pictures?.[wqaSlot];
+                if (wqaPicture?._opacity >= 250 && !wqaPicture._duration && !this._wqaCreditsSeen?.has(wqaPicture) &&
+                    (this._wqaCreditsRetry?.get(wqaPicture) ?? 0) <= Graphics.frameCount &&
+                    (wqaPicture._text || (wqaSlot === 25 && wqaPicture._name === "pictures/Ending") ||
+                        (wqaSlot === 26 && wqaPicture._name === "pictures/TheEnd"))) {
+                    globalThis.WendyQuestAccessCreditsReady?.(this);
+                    break;
+                }
+            }
+        }
+        if (this._wqaCreditCards && (this._fadeDuration || this._fadeOpacity || $gameScreen._brightness !== 255 ||
+            $gameScreen._fadeOutDuration || $gameMessage.isBusy() || !this._wqaCreditCards.some(wqaCard =>
+                $gameScreen._pictures[wqaCard.id] === wqaCard.picture && wqaCard.picture._opacity >= 250 &&
+                !wqaCard.picture._duration)))
+            globalThis.WendyQuestAccessCreditsObscured?.(this);
+    }
+'''
     return insert(original, MAP_SHA, {
         # Track the native generator lifetime, including yielded rings.
         32483: b'const wqaFloodScene=SceneManager._scene?._wqaMapRestored?SceneManager._scene:null;'
@@ -575,7 +606,7 @@ def map_notification(original):
         33722: b'}catch(wqaError){wqaFloodDone();throw wqaError;}',
         47577: ACTOR_DIRTY + beacon_actor(),  # Runtime rectangle replacement
         59596: b'this._wqaMapRestored=true;',
-        62779: field_update + banner_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
+        62779: field_update + banner_update + credits_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
                                                b'this.srcStones && $gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),
         69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
         86279: b'if(SceneManager._scene?._mapNameWindow===this){' + MAP_LEAVING + b'}'
