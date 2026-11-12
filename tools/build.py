@@ -34,6 +34,7 @@ def bundle():
         './frontend/files': 'frontend/files.js',
         './menus/observer': 'menus/observer.js',
         './shop': 'menus/shop.js',
+        './coupons': 'menus/coupons.js',
         './menus/quest-tracker': 'menus/quest-tracker.js',
         './quest-paint': 'menus/quest-paint.js',
         './quest-restore': 'menus/quest-restore.js',

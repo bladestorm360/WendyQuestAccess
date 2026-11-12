@@ -1356,6 +1356,31 @@ const interval = setInterval(() => {
             endingStep = 58;
         } else if (endingStep === 58 && fs.existsSync(receipt + '.menu-vitals-full')) {
             fs.unlinkSync(receipt + '.menu-vitals-stage');
+            fs.writeFileSync(receipt + '.coupon-list-stage', '');
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const scene = SceneManager._scene = Graphics.app.stage = { _active: true, _started: true,
+                _fadeDuration: 0, _fadeOpacity: 0, _windowLayer: {} };
+            const list = scene._couponsWindow = { parent: scene._windowLayer, active: true, worldVisible: true,
+                worldAlpha: 1, openness: 255, contentsOpacity: 255, contents: { isReady: () => true },
+                _index: 0, innerWidth: 600, innerHeight: 180, _clientArea: {},
+                itemRect: i => ({ x: 50 + 100 * i, y: 40, width: 80, height: 80 }) };
+            list.titleText = battleText(list, 'AVAILABLE REWARDS');
+            list.stonesBitmap = { isReady: () => true };
+            list.lockBitmap = { isReady: () => true };
+            list.sprites = Array.from({ length: 5 }, (_, i) => ({ parent: list._clientArea, worldVisible: true,
+                worldAlpha: 1, bitmap: i === 0 ? list.stonesBitmap : list.lockBitmap,
+                _frame: { x: i * 64, y: 0, width: 64, height: 64 } }));
+            WendyQuestAccessMenuReady(scene, 6);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 59;
+        } else if (endingStep === 59 && fs.existsSync(receipt + '.coupon-list-stone')) {
+            const scene = SceneManager._scene;
+            scene._couponsWindow._index = 1;
+            WendyQuestAccessMenuReady(scene, 6);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 60;
+        } else if (endingStep === 60 && fs.existsSync(receipt + '.coupon-list-locked')) {
+            fs.unlinkSync(receipt + '.coupon-list-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
             WendyQuestAccessTitleReady(title);
@@ -1418,6 +1443,12 @@ parentPort.on('message', message => {
     if (fs.existsSync(receipt + '.closing-pass')) {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
+        if (fs.existsSync(receipt + '.coupon-list-stage')) {
+            if (message.kind === 'menuFocus')
+                fs.writeFileSync(receipt + (message.enabled ? '.coupon-list-stone' : '.coupon-list-locked'), speech);
+            parentPort.postMessage('ack');
+            return;
+        }
         if (fs.existsSync(receipt + '.menu-vitals-stage')) {
             if (message.kind === 'menuDetails')
                 fs.writeFileSync(receipt + (message.lines.length > 2 ? '.menu-vitals-full' : '.menu-vitals-hp'), speech);
@@ -1754,6 +1785,8 @@ def main():
             'shop-quantity-details': 'Quantity 3, total 57 Gold. Shown effect. Owned 2. Balance 12 Gold',
             'menu-vitals-hp': 'Synthetic menu hero. HP 8 of 14',
             'menu-vitals-full': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent',
+            'coupon-list-stone': 'Available rewards, Fry Stone, 1 of 5',
+            'coupon-list-locked': 'Locked reward, unavailable, 2 of 5',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',

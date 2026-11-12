@@ -3,6 +3,7 @@
 const { reviewLines, moveReview } = require('./review');
 const { battlePresented, drawnText } = require('../battle/presentation');
 const { shopRow, shopQuantity, shopDetails, sameShopPaint, shopPaint } = require('./shop');
+const { couponListItem, couponListFocus } = require('./coupons');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
 const PARAMS = [0, 1, 2, 3];
@@ -17,6 +18,7 @@ function focusWindow(scene, screen) {
     if (screen === 3) return scene._itemWindow;
     if (screen === 4) return scene._buyWindow;
     if (screen === 5) return scene._numberWindow;
+    if (screen === 6) return scene._couponsWindow;
     if (scene._actorWindow?.active) return null;
     return scene._itemWindow?.isFocused ? scene._itemWindow : scene._categoryWindow;
 }
@@ -66,7 +68,7 @@ function createMenuObserver(root, host, notifications, preferences) {
         return scene && scene === host.manager._scene && host.graphics.app?.stage === scene &&
             scene._started && scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 &&
             !scene._wqaSettingsActive && !host.manager._nextScene && !host.manager._exiting &&
-            !host.manager._wqaNativeAutosaves && !host.graphics._wqaResize && host.hasFocus();
+            !host.manager._wqaNativeAutosaves && !host.graphics._wqaResize && !scene._wqaCouponBusy && host.hasFocus();
     }
 
     function retireBag(scene) {
@@ -96,6 +98,9 @@ function createMenuObserver(root, host, notifications, preferences) {
     function live(page) {
         if (!page || page.suspended || !ready(page.scene, page.screen)) return false;
         const window = focusWindow(page.scene, page.screen);
+        if (page.screen === 6) return window === page.window && window.active && visible(page.scene, window) &&
+            window._index === page.index && couponListItem(window) === page.item &&
+            (page.index === -1 || presentedRow(window));
         if (page.screen >= 4) {
             if (window !== page.window || !window.active || !visible(page.scene, window) ||
                 !sameShopPaint(page.scene, page.shopPaint, visible)) return false;
@@ -176,7 +181,8 @@ function createMenuObserver(root, host, notifications, preferences) {
         }
         scene._wqaControllerReady = scene._wqaMenuActive = scene._wqaPresentation = true;
         const options = preferences();
-        const heading = ['Menu', 'Inventory', 'Battle Bag', 'Shop', 'Purchase quantity'][screen - 1];
+        const headings = ['Menu', 'Inventory', 'Battle Bag', 'Shop', 'Purchase quantity', 'Available rewards'];
+        const heading = headings[screen - 1];
         show(page, { kind: 'menuFocus', ...focus, indexed: options.indexing,
             screen: previous?.scene === scene && !previous.suspended &&
                 (screen <= 2 || previous.screen === screen) ? '' : heading });
@@ -222,10 +228,22 @@ function createMenuObserver(root, host, notifications, preferences) {
             position: window._index + 1, total: window.maxItems() });
     }
 
+    function publishCouponList(scene, window) {
+        const offer = couponListFocus(window);
+        if (!offer) return;
+        const { item, name, enabled } = offer;
+        const page = { kind: 'menu', scene, screen: 6, window, index: window._index, item,
+            lines: [], position: 0, epoch: 0, hasReview: false };
+        present(page, { name, enabled, position: window._index + 1, total: window.sprites.length });
+    }
+
     function publish(scene, screen) {
         if (!ready(scene, screen)) return retire(scene);
         const window = focusWindow(scene, screen);
-        if (!window?.active || !visible(scene, window) || (screen !== 5 && !presentedRow(window))) return;
+        if (!window?.active || !visible(scene, window)) return;
+        const rowRequired = screen !== 5 && !(screen === 6 && window._index === -1);
+        if (rowRequired && !presentedRow(window)) return;
+        if (screen === 6) return publishCouponList(scene, window);
         if (screen === 3) return publishBag(scene, window);
         if (screen >= 4) return publishShop(scene, window, screen);
         const item = selectedItem(window);
@@ -267,8 +285,8 @@ function createMenuObserver(root, host, notifications, preferences) {
         if (waiting?.scene === scene) return;
         const window = focusWindow(scene, screen);
         if (!window?.active) return retire(scene);
-        const row = screen === 5 ? shopQuantity(window) : screen === 4 ? shopRow(window) :
-            screen === 3 ? battleBagRow(window) : selectedItem(window);
+        const row = screen === 6 ? couponListItem(window) : screen === 5 ? shopQuantity(window) :
+            screen === 4 ? shopRow(window) : screen === 3 ? battleBagRow(window) : selectedItem(window);
         if (!row) return retire(scene);
         // Close stale output immediately. Keep the old cursor until the next
         // painted selection settles so a refresh of the same row can clamp it.

@@ -92,6 +92,8 @@ DEPENDENCIES = {
     Path('package.nw/data/Map206.json'): '89dadfb242c46f0945edc42c900e967b5fe1e6e9415b60f63cc7129795c69f47',
     Path('package.nw/js/plugins/UIGeneral.js'): '9a282cc96ee2edb4777fc18228d4a5976e2ad7546d50df72a6d0429bc6af9b0e',
     Path('package.nw/img/system/IconSet.png'): '709b556b0c2b217436172d90d7d8af4c722ce421aa19f504261ee72607f5203e',
+    Path('package.nw/img/UI/AllStones2X.png'): '87907e3cab62ac897d22d688ac740cb89ddfb3db0a62dbd54428be5c1f533c86',
+    Path('package.nw/img/UI/lock.png'): '5ae4449f43c3a06a366139149095045465f21d31d3ccb00b7308b03f5d0a95be',
 }
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
 BATTLE_TARGET_LEAVING = (b'SceneManager._scene?._wqaBattleTargetActive&&'
@@ -223,6 +225,14 @@ def menu_notifications(original):
         113848: b'if(this._volumePips&&this._index===_0xe6cc9c){this._wqaOptionRow=_0xe6cc9c;'
                 b'this._wqaOptionTab=this.currentTab;this._wqaOptionStatus=_0x2a39aa;}',
         115137: b'if(this._list[this._index]?.symbol===_0x409fc3)this._wqaVolumeShown=_0x20639e;',
+        122099: b'if(!this._wqaCouponBusy&&this._couponsWindow?.active&&this._couponsWindow.sprites&&'
+                b'this._started&&this._active&&this._fadeDuration===0&&this._fadeOpacity===0&&'
+                b'!this._wqaSettingsActive&&!SceneManager._nextScene&&!SceneManager._exiting&&'
+                b'!SceneManager._wqaNativeAutosaves&&!Graphics._wqaResize&&Graphics.app?.stage===this)'
+                b'globalThis.WendyQuestAccessMenuReady?.(this,6);',
+        122210: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
+        122542: b'this._wqaCouponBusy=true;',
+        122716: b'this._wqaCouponBusy=false;',
         163333: b'this._wqaFileKind=3;',
         165098: b'this._wqaDeleteStatus=_0x4a1a5b;' + files_ready('this'),
         165586: FILES_LEAVING,
