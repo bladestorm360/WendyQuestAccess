@@ -282,6 +282,21 @@ async function main() {
         frame();
         assert.deepEqual(speech(), [data.displayName, data.displayName], 'a new native banner may repeat the same text');
 
+        const sceneLeaving = c.WendyQuestAccessSceneLeaving;
+        let retirements = 0;
+        c.WendyQuestAccessSceneLeaving = leaving => {
+            retirements++;
+            sceneLeaving(leaving);
+        };
+        name.close();
+        c.SceneManager.updateScene();
+        frame();
+        assert.equal(scene._wqaMapAnnouncement, 0, 'closing the native name window retires its own announcement');
+        assert.equal(retirements, 0, 'the banner alone does not retire scene-wide work');
+        assert.equal(scene._wqaPresentation, true, 'shared presentation ownership is still available');
+        replay();
+        c.WendyQuestAccessSceneLeaving = sceneLeaving;
+
         const parallel = new c.Game_Interpreter();
         parallel.setup(pendingEvent.list(), 16);
         assert.equal(epoch(), 0, 'a parallel face preload retires the existing banner');
@@ -345,7 +360,7 @@ async function main() {
     scene.updateMoveDetector();
     assert.equal(scene._prevCanMove, false, 'native dialogue owns movement while it is actually busy');
 
-    for (const id of [system.startMapId, 198, 196]) {
+    for (const id of [system.startMapId, 13, 198, 196]) {
         const entryData = mapData(id);
         const entry = fixture(entryData);
         const { c, name, bitmapCallbacks, idleCallbacks, frame, speech } = entry;
@@ -362,9 +377,9 @@ async function main() {
         idleCallbacks.shift()();
         c.SceneManager.updateScene();
         frame();
-        if (id === 196) {
+        if (id === 13 || id === 196) {
             assert(name._wqaBannerDrawnRevision > 0);
-            assert.deepEqual(speech(), [entryData.displayName], 'the visible secret cave banner remains accessible');
+            assert.deepEqual(speech(), [entryData.displayName], 'the visible native entry banner remains accessible');
         } else {
             assert.equal(name._wqaBannerDrawnRevision, 0);
             assert.deepEqual(speech(), [], 'unnamed opening or reset maps do not publish a location');

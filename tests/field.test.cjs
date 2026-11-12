@@ -266,8 +266,8 @@ async function verifyOpeningField(tilesets) {
     assert(map._needsRefresh, 'the actual parallel lightning timer asks for a native refresh every frame');
     assert(c.$gameVariables.value(2) < 60);
     assert(scene._wqaFieldReady, 'Crispy Beach admits field controls after the intro despite the lightning timer');
-    const key = (value, keyCode) => {
-        f.dispatchWindowEvent('keydown', { key: value, keyCode });
+    const key = (value, keyCode, shiftKey = false) => {
+        f.dispatchWindowEvent('keydown', { key: value, keyCode, shiftKey });
         f.dispatchWindowEvent('keyup', { key: value });
     };
     let settingsAttempts = 0;
@@ -313,6 +313,83 @@ async function verifyOpeningField(tilesets) {
     f.frame();
     assert.equal(settingsAttempts, 1, 'a genuine refresh after the frame closes the immediate keyboard gate');
     assert.equal(routePackets.at(-1), directions);
+
+    const barrelData = data.events[20];
+    map._events[20] = Object.assign(f.event(20, 0), {
+        _x: barrelData.x, _y: barrelData.y, _pageIndex: 0,
+        _trigger: barrelData.pages[0].trigger, _priorityType: barrelData.pages[0].priorityType
+    });
+    c.SceneManager.updateScene();
+    c.WendyQuestAccessSceneLeaving(scene);
+    c.SceneManager.updateScene();
+    key('p', 80);
+    f.frame();
+    const resumed = routePackets.at(-1);
+    assert.notEqual(resumed.sequence, directions.sequence);
+    assert.equal(resumed.request.event, 14, 'same-map retirement keeps Treasure selected instead of jumping to Objects');
+    submit(resumed, solveRoute(base, resumed.live, resumed.request));
+    f.frame();
+
+    // Both native categories are reachable from this beach tile.
+    player.setPosition(16, 20);
+    const elderData = data.events[5];
+    const elder = map._events[5] = Object.assign(f.event(5, 1), {
+        _x: elderData.x, _y: elderData.y, _pageIndex: 1, _trigger: 4, _priorityType: 1,
+        canPass: () => true, setMovementSuccess(value) { this.success = value; },
+        isMovementSucceeded() { return this.success; }, setDirection() {}, reverseDir: direction => 10 - direction,
+        increaseSteps() {}
+    });
+    Object.assign(map, { roundXWithDirection: x => x + 1, roundYWithDirection: (_x, y) => y,
+        xWithDirection: x => x - 1, yWithDirection: y => y });
+    key('l', 76, true);
+    f.frame();
+    const stale = routePackets.at(-1);
+    assert(Array.isArray(stale.request.candidates));
+    elder.moveStraight(6);
+    assert.equal(f.routeEpoch(), 0, 'a native NPC step retires the original snapshot');
+    submit(stale, { status: 'cancelled' });
+    f.frame();
+    const retry = routePackets.at(-1);
+    assert.notEqual(retry.sequence, stale.sequence, 'the original category key still produces a fresh request');
+    assert.equal(retry.live.events.find(entry => entry.id === 5).x, elder._x);
+    submit(retry, findReachable(base, retry.live, retry.request));
+    f.frame();
+    assert.match(formatSpeech(f.packets.filter(packet => packet.kind === 'fieldTarget').at(-1)), /^Objects, /);
+
+    player._realX = player._x - 0.5;
+    key('p', 80);
+    f.frame();
+    assert.equal(routePackets.at(-1), retry, 'no directions snapshot is taken in the middle of a step');
+    player._realX = player._x;
+    c.SceneManager.updateScene();
+    f.frame();
+    const settled = routePackets.at(-1);
+    assert.notEqual(settled.sequence, retry.sequence, 'a directions key during the step uses its settled landing');
+    assert.equal(settled.request.event, 20);
+    submit(settled, solveRoute(base, settled.live, settled.request));
+    f.frame();
+
+    key('k', 75);
+    f.frame();
+    for (let turn = 0; turn < 3; turn++) {
+        const outdated = routePackets.at(-1);
+        elder.moveStraight(6);
+        assert.equal(f.routeEpoch(), 0);
+        submit(outdated, { status: 'cancelled' });
+        f.frame();
+    }
+    assert.equal(f.packets.filter(packet => packet.kind === 'fieldStatus').at(-1).name,
+        'The map is changing. Try the pathfinder again.');
+    assert.equal(f.routeEpoch(), 0, 'the actor retry cap leaves no worker request');
+    const beforeBoundary = routePackets.length;
+    player._realX = player._x - 0.5;
+    key('p', 80);
+    player.reserveTransfer(19, 8, 8, 2, 0);
+    player._transferring = false;
+    player._realX = player._x;
+    c.SceneManager.updateScene();
+    f.frame();
+    assert.equal(routePackets.length, beforeBoundary, 'a native transfer cancels a pending step request');
 
     const samples = 240;
     c.Time.GetDeltaTime = () => 1 / 60;

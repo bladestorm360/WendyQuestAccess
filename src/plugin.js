@@ -504,6 +504,8 @@ function boot(root, nodeRequire, nodeProcess) {
         } catch { mapBanner?.leave(scene); }
     };
 
+    root.WendyQuestAccessMapBannerLeaving = function (scene) { mapBanner?.leave(scene); };
+
     root.WendyQuestAccessCreditSlots = creditSlots;
     root.WendyQuestAccessCreditsReady = function (scene) {
         try {
@@ -562,14 +564,16 @@ function boot(root, nodeRequire, nodeProcess) {
         try { field?.bookmarkTransferReserved(scene, player, map, x, y, direction); } catch { /* Preserve the native transfer. */ }
     };
 
-    root.WendyQuestAccessFieldChanged = function (scene) {
+    root.WendyQuestAccessStepNavigationReady = function (scene) { field?.stepReady(scene); };
+
+    root.WendyQuestAccessFieldChanged = function (scene, steppedActor) {
         quests?.suspend(scene);
         soundscape?.invalidate(scene);
         wall?.leave(scene);
         caveTiming?.stop(scene);
         if (scene?._wqaTerrainWork) beacon?.stop(scene);
         else beacon?.invalidate(scene);
-        field?.changed(scene);
+        field?.changed(scene, steppedActor);
     };
     root.WendyQuestAccessFieldControlLost = function (scene) {
         quests?.suspend(scene);

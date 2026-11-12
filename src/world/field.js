@@ -13,6 +13,7 @@ const { collectQuestDestinations, questDestinationCurrent } = require('./quest-d
 const { createSaltGuide } = require('./puzzles/salt-caverns');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
+const ACTOR_RETRIES = 2;
 
 function remoteBookmarkAvailable(map, mode, bookmark) {
     return bookmark.mode === 'walk' && bookmark.map !== map &&
@@ -27,6 +28,8 @@ function createField(root, host, notifications) {
     const salt = createSaltGuide(root);
     const cave = createCaveGuide(root, host.graphics);
     const transfers = createTransferBookmarks(root, host);
+    const selectionSites = new WeakMap();
+    let browser = createDestinationBrowser();
     let owner = null;
     let active = null;
     let worker = null;
@@ -64,11 +67,28 @@ function createField(root, host, notifications) {
             !(player._jumpCount > 0));
     }
 
+    function browserOwner(scene) {
+        const map = root.$gameMap;
+        const mode = travelMode(map, root.$gamePlayer);
+        const site = selectionSites.get(map);
+        if (!site || site.id !== map._mapId || site.mode !== mode || site.browser !== browser) {
+            const category = browser.category;
+            browser = createDestinationBrowser();
+            browser.category = category;
+            // Event IDs are local to the current map and mode. The weak
+            // identity lets a replaced game map be collected at scene exit.
+            selectionSites.set(map, { id: map._mapId, mode, browser });
+        }
+        if (owner?.scene !== scene || owner.browser !== browser) owner = { scene, browser };
+        return owner;
+    }
+
     function retire(scene) {
         if (!owner || owner.scene !== scene) return;
         if (admission) Atomics.store(admission, 0, 0);
         active = null;
         scene._wqaRouteActive = false;
+        scene._wqaStepNavigation = false;
         scene._wqaCaveReview = false;
         scene._wqaQuestNavigation = false;
         scene._wqaPreviewUntil = 0;
@@ -419,7 +439,7 @@ function createField(root, host, notifications) {
 
     function perform(job) {
         const movingReport = job.action === 'navigationReport';
-        if (active !== job || !ready(job.scene, movingReport)) return;
+        if (active !== job || job.step || !ready(job.scene, movingReport)) return;
         if (navigationRequest(job) && inFlight) return;
         if (movingReport) return present(job, job.text, true);
         if (job.action === 'status') return status(job, job.text);
@@ -473,6 +493,16 @@ function createField(root, host, notifications) {
         autowalk.stop();
         if (owner) retire(owner.scene);
     });
+    function queue(job) {
+        const { scene } = job;
+        active = { ...job, sequence: ++sequence };
+        scene._wqaStepNavigation = !!job.step;
+        scene._wqaCaveReview = timedCave(root.$gameMap._mapId);
+        scene._wqaRouteActive = !scene._wqaCaveReview && !autowalk.active(scene);
+        scene._wqaPresentation = true;
+        if (!job.step) afterRender();
+    }
+
     function pendingAutowalk(scene) {
         return active?.scene === scene && active.action === 'directions' && preferences().autowalk &&
             !timedCave(root.$gameMap._mapId);
@@ -501,7 +531,12 @@ function createField(root, host, notifications) {
             return true;
         }
         const reporting = action === 'navigationReport';
-        if (!ready(scene, reporting) || sequence >= 0x7ffffffe) return false;
+        const navigation = navigationRequest({ action });
+        const canWaitForStep = navigation && !timedCave(root.$gameMap?._mapId);
+        if (!ready(scene, reporting || canWaitForStep) || sequence >= 0x7ffffffe) return false;
+        const player = root.$gamePlayer;
+        const step = canWaitForStep && (player._x !== player._realX || player._y !== player._realY) ?
+            { x: player._x, y: player._y } : null;
         const puzzle = action === 'puzzleGuide' && guideFor(scene);
         const vitals = action === 'fieldVitals' && fieldVitalsVisible(scene);
         if (!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' &&
@@ -514,23 +549,17 @@ function createField(root, host, notifications) {
         const changes = active?.scene === scene && !active.performed ? active.changes.slice() : [];
         if (BROWSE.has(action) && changes.length < 16) changes.push(action);
         if (owner) retire(owner.scene);
-        if (owner?.scene !== scene) owner = { scene, browser: createDestinationBrowser() };
+        browserOwner(scene);
         if (BROWSE.has(action) || puzzle) {
             owner.remoteBookmark = null;
             transfers.clear();
         }
-        active = { scene, action, sequence: ++sequence, changes, text };
-        // Patrol steps between the key press and the rendered frame are
-        // expected. Their new sprite positions belong to the requested sample.
-        scene._wqaCaveReview = timedCave(root.$gameMap._mapId);
-        scene._wqaRouteActive = !scene._wqaCaveReview && !autowalk.active(scene);
-        scene._wqaPresentation = true;
-        afterRender();
+        queue({ scene, action, changes, text, step, retries: 0 });
         return true;
     }
 
     function activateBookmark(scene, entry, remote = false, trail = []) {
-        if (owner?.scene !== scene) owner = { scene, browser: createDestinationBrowser() };
+        browserOwner(scene);
         owner.remoteBookmark = remote ? { id: entry.id, revision: entry.revision, trail } : null;
         owner.browser.category = 'bookmarks';
         owner.browser.selections.bookmarks = bookmarkId(entry.id);
@@ -615,9 +644,38 @@ function createField(root, host, notifications) {
             return autowalk.active(scene) ? command('navigationReport', { kind: 'fieldStatus', name: text }) :
                 command('status', text);
         },
-        changed(scene) {
+        stepReady(scene) {
+            const job = active;
+            if (job?.scene !== scene || !job.step) return;
+            const player = root.$gamePlayer;
+            if (!ready(scene) || player._x !== job.step.x || player._y !== job.step.y) return retire(scene);
+            scene._wqaStepNavigation = false;
+            job.step = null;
+            afterRender();
+        },
+        changed(scene, steppedActor) {
             autowalk.dirty(scene);
+            const job = active;
+            if (!steppedActor || steppedActor === root.$gamePlayer || job?.scene !== scene ||
+                scene._wqaCaveReview || sequence >= 0x7ffffffe) return retire(scene);
+            if (job.ambientStatus) return;
+            if (!navigationRequest(job)) return retire(scene);
+            if (inFlight !== job) {
+                // A fresh capture already sees the next pose. Once browse
+                // speech starts, ordinary ambient steps need no new result.
+                if (!job.performed || job.action !== 'directions') return;
+                return retire(scene);
+            }
+            if (!ready(scene)) return retire(scene);
+            // Revoke the old packet first. The next render takes one fresh
+            // snapshot after the single in-flight worker has returned.
             retire(scene);
+            if (job.retries >= ACTOR_RETRIES) {
+                queue({ scene, action: 'status', changes: [], text: 'The map is changing. Try the pathfinder again.',
+                    ambientStatus: true });
+            } else {
+                queue({ scene, action: job.action, changes: job.performed ? [] : job.changes, retries: job.retries + 1 });
+            }
         },
         controlLost(scene) {
             autowalk.stop(scene);

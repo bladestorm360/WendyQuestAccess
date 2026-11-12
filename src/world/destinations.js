@@ -66,7 +66,6 @@ function browse(state, snapshot, changes) {
         if (snapshot.eligibleObjects?.some(item => item.category === state.category && item.id === selected))
             return { status: 'Selected destination is out of reach' };
         delete state.selections[state.category];
-        if (!groups.has(state.category)) state.category = categories[0] || null;
         return { status: 'Selected destination is unavailable' };
     }
     if (!categories.length) return { status: snapshot.eligibleObjects ? 'No reachable destinations here' : 'No destinations here' };
@@ -82,10 +81,12 @@ function browse(state, snapshot, changes) {
     for (const action of changes) {
         if (action === 'previousCategory' || action === 'nextCategory') {
             const index = categories.indexOf(state.category);
-            state.category = categories[index < 0 ? 0 : relative(categories.length, index, action === 'previousCategory' ? -1 : 1)];
+            const previous = action === 'previousCategory';
+            state.category = categories[index < 0 ? (previous ? categories.length - 1 : 0) :
+                relative(categories.length, index, previous ? -1 : 1)];
         } else {
-            if (!groups.has(state.category)) state.category = categories[0];
             const items = groups.get(state.category);
+            if (!items) continue;
             let index = items.findIndex(item => item.id === state.selections[state.category]);
             if (index < 0) index = closest(items);
             const offset = action === 'previousDestination' ? -1 : 1;
@@ -93,11 +94,10 @@ function browse(state, snapshot, changes) {
         }
     }
     const items = groups.get(state.category);
+    if (!items) return { status: 'No ' + (snapshot.eligibleObjects ? 'reachable ' : '') +
+        'destinations in ' + CATEGORY_LABELS[state.category] };
     const selection = state.selections[state.category];
-    const existing = items?.find(item => item.id === selection);
-    if (!items) state.category = categories[0];
-    const current = groups.get(state.category);
-    const target = existing || current[closest(current)];
+    const target = items.find(item => item.id === selection) || items[closest(items)];
     state.selections[state.category] = target.id;
     return { target, category: changes.some(action => action.endsWith('Category')) ||
         (previousCategory && previousCategory !== state.category) ? CATEGORY_LABELS[state.category] : '' };

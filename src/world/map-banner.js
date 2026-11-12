@@ -10,7 +10,6 @@ function createMapBannerObserver(host, notifications) {
         const epoch = current.epoch;
         current = null;
         scene._wqaMapAnnouncement = 0;
-        scene._wqaPresentation = false;
         if (epoch) notifications.close(epoch);
     }
 

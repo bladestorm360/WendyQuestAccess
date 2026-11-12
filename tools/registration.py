@@ -148,6 +148,7 @@ ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||t
                b'this._type==="boat"||this._type==="ship"||this._type==="airship")||'
                b'SceneManager._scene?._wqaCaveReview&&this===$gamePlayer)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
+ACTOR_STEP = ACTOR_DIRTY.replace(b'?.(SceneManager._scene);', b'?.(SceneManager._scene,this);')
 AUTO_DISCARD = (b'SceneManager._scene?._messageWindow?._wqaAutoPaint&&'
                 b'(SceneManager._scene._messageWindow._wqaAutoPaint=null)')
 MAP_LEAVING = (AUTO_DISCARD + b';if' + FIELD_WATCHED +
@@ -389,8 +390,8 @@ def objects_notification(original):
         194681: b'\n    if(this._tileId!==tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
         195557: beacon_actor(b'd') + b'if(SceneManager._scene?._wqaCaveTimingActive&&this===$gamePlayer)'
                 b'globalThis.WendyQuestAccessCaveTimingStop?.(SceneManager._scene);\n        ',  # Before destination assignment
-        195829: ACTOR_DIRTY + b'\n        ',  # Accepted straight/diagonal steps
-        196445: ACTOR_DIRTY + beacon_actor() + b'\n        ',
+        195829: ACTOR_STEP + b'\n        ',  # Accepted straight/diagonal steps
+        196445: ACTOR_STEP + beacon_actor() + b'\n        ',
         196721: b'\n    if(xPlus||yPlus){' + ACTOR_DIRTY + beacon_actor() + b'}',
         197969: b'\n    if(this._through!==through){' + ACTOR_DIRTY + beacon_actor() + b'}',
         202310: b'if(SceneManager._scene?._wqaCaveTimingActive||SceneManager._scene?._wqaPreviewUntil)'
@@ -541,7 +542,7 @@ def map_notification(original):
                 this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
                 !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this;
             if (this._wqaMapAnnouncement && (!wqaReady || this._wqaMapAnnouncement !== wqaRevision))
-                globalThis.WendyQuestAccessSceneLeaving?.(this);
+                globalThis.WendyQuestAccessMapBannerLeaving?.(this);
             if (wqaReady && wqaUnread && !this._wqaMapAnnouncement)
                 globalThis.WendyQuestAccessMapBannerReady?.(this, wqaRevision);
         }
@@ -567,6 +568,8 @@ def map_notification(original):
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
         !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
     if (this._wqaFieldReady) {
+        if (this._wqaStepNavigation && $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY)
+            globalThis.WendyQuestAccessStepNavigationReady?.(this);
         if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaBookmarkTransferPending) &&
             !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||
@@ -629,7 +632,8 @@ def map_notification(original):
         62779: field_update + banner_update + credits_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
                                                b'this.srcStones && $gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),
         69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
-        86279: b'if(SceneManager._scene?._mapNameWindow===this){' + MAP_LEAVING + b'}'
+        86279: b'if(SceneManager._scene?._mapNameWindow===this&&SceneManager._scene._wqaMapAnnouncement)'
+               b'globalThis.WendyQuestAccessMapBannerLeaving?.(SceneManager._scene);'
                b'const wqaRevision=(this._wqaBannerRevision||0)+1;'
                b'this._wqaBannerRevision=wqaRevision;this._wqaBannerDrawnRevision=0;let wqaName;',
         86846: b'(wqaName=',
