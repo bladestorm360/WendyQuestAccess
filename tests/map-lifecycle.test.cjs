@@ -59,6 +59,7 @@ function fixture(data, failSave = false) {
         Scene_Boot: function () {},
         Game_CharacterBase: function () {}, Game_Player: function () {}, Game_Event: function () {},
         Game_Map: function () {}, Game_Screen: function () {}, TileEditor: {},
+        Game_Variables: function () { this._data = []; },
         Game_Interpreter: function () {}, Window_MapName: function () {},
         Game_Event_prototype_onSceneStart: undefined,
         SceneManager: { _scene: null, _nextScene: null, _previousScene: null, isGameActive: () => true },

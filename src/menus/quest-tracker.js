@@ -18,7 +18,9 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
             !host.graphics._wqaResize && !host.screenFading() && host.hasFocus() && !scene._wqaTerrainWork &&
             root.$gameScreen?._brightness === 255 && !root.$gamePlayer?._transferring &&
             !root.$gamePlayer?._vehicleGettingOn && !root.$gamePlayer?._vehicleGettingOff &&
-            root.$gameMap?.inactiveTime < 30 && !root.$gameMap._needsRefresh && !root.$gameMap._needsTilemapRefresh;
+            root.$gameMap?.inactiveTime < 30 &&
+            (!root.$gameMap._needsRefresh || (root.$gameMap._mapId === 13 && scene._wqaLightningRefreshOnly)) &&
+            !root.$gameMap._needsTilemapRefresh;
     }
 
     function liveWindow(scene, window) {

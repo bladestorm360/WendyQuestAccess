@@ -56,7 +56,8 @@ function createField(root, host, notifications) {
             !host.manager._nextScene && !host.manager._exiting && !host.manager._wqaNativeAutosaves &&
             !host.graphics._wqaResize && !host.screenFading() && host.hasFocus() && !scene._wqaTerrainWork &&
             scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 && root.$gameScreen?._brightness === 255 &&
-            map?.inactiveTime < 30 && !map._needsRefresh && !map._needsTilemapRefresh && !player?._transferring &&
+            map?.inactiveTime < 30 && (!map._needsRefresh || (map._mapId === 13 && scene._wqaLightningRefreshOnly)) &&
+            !map._needsTilemapRefresh && !player?._transferring &&
             !player?._vehicleGettingOn && !player?._vehicleGettingOff &&
             !root.$gameMessage?.isBusy() && !map?._interpreter?._list && travelMode(map, player) &&
             !player._moveRouteForcing && (moving || player._x === player._realX && player._y === player._realY) &&

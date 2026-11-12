@@ -199,8 +199,132 @@ async function main() {
         assert.deepEqual(destination(entry, entry.pages[0], entry.pages[0].trigger), { category, name });
     }
     profileSnapshot(flags);
+    await verifyOpeningField(flags);
     await verifySurfaceField(flags);
     console.log('Verified native field admission, spoken object selection and route, restored tiles, and stale-route retirement.');
+}
+
+async function verifyOpeningField(tilesets) {
+    const data = mapData(13);
+    const f = fixture(data);
+    const { c, routePackets } = f;
+    const map = c.$gameMap;
+    const player = c.$gamePlayer;
+    c.$dataTilesets = tilesets;
+    c.$gameSwitches = { value: id => id === 31 };
+    c.$gameVariables = new c.Game_Variables();
+    c.$gameVariables.setValue(2, 60);
+    Object.assign(map, { _mapId: 13, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
+        _vehicles: [], _nameDisplay: false, updateInterpreter() {}, updateScroll() {},
+        updateVehicles() {}, updateParallax() {}, refresh() { this._needsRefresh = false; } });
+    delete map.refreshIfNeeded;
+    const chest = data.events[14];
+    const event = Object.assign(f.event(14, 0), { _x: chest.x, _y: chest.y, _pageIndex: 0,
+        _trigger: chest.pages[0].trigger, _priorityType: chest.pages[0].priorityType });
+    map._events[14] = event;
+    map.fixtureEvents.push(event);
+    f.run('Math.randomInt = () => 0;');
+    const timer = data.events[9].pages[0];
+    assert.equal(timer.trigger, 4);
+    assert(data.events.every(entry => !entry || entry.pages.every(page =>
+        !page.conditions.variableValid || page.conditions.variableId !== 2)));
+    const decrement = timer.list.find(command => command.code === 122 && command.parameters[2] === 2);
+    assert(decrement);
+    const parallel = new c.Game_Interpreter();
+    let otherChange = '';
+    map.updateEvents = function () {
+        if (otherChange === 'before') c.$gameVariables.setValue(3, 1);
+        parallel.command122(decrement.parameters);
+        if (otherChange === 'after') this.requestRefresh();
+    };
+    c.Scene_Map.prototype.updateMainMultiply = () => map.update(true);
+    player._vehicleType = 'walk';
+    player.setPosition(17, 21);
+    player.reserveTransfer(13, 17, 21, 2, 0);
+    c.SceneManager.goto(c.Scene_Map);
+    c.SceneManager.changeScene();
+    c.DataManager.ready = c.ImageManager.ready = true;
+    c.SceneManager.updateScene();
+    await new Promise(setImmediate);
+    const scene = c.Graphics.app.stage;
+    scene._fadeDuration = scene._fadeOpacity = 0;
+    c.SceneManager.updateScene();
+    f.idleCallbacks.shift()();
+    c.SceneManager.updateScene();
+    f.frame();
+    assert(map._needsRefresh, 'the actual parallel lightning timer asks for a native refresh every frame');
+    assert(c.$gameVariables.value(2) < 60);
+    assert(scene._wqaFieldReady, 'Crispy Beach admits field controls after the intro despite the lightning timer');
+    const key = (value, keyCode) => {
+        f.dispatchWindowEvent('keydown', { key: value, keyCode });
+        f.dispatchWindowEvent('keyup', { key: value });
+    };
+    let settingsAttempts = 0;
+    c.document.createElement = tag => { if (tag === 'dialog') settingsAttempts++; return {}; };
+    key('F8', 119);
+    assert.equal(settingsAttempts, 1, 'F8 reaches the settings dialog on Crispy Beach');
+
+    const base = bakeMap(data, tilesets[data.tilesetId].flags);
+    const submit = (packet, result) => f.routeReply({
+        epoch: packet.epoch, sequence: packet.sequence, map: packet.map, result
+    });
+    key('l', 76);
+    f.frame();
+    const browse = routePackets.at(-1);
+    assert(Array.isArray(browse.request.candidates), 'L submits a reachable destination request');
+    submit(browse, findReachable(base, browse.live, browse.request));
+    f.frame();
+    key('p', 80);
+    f.frame();
+    const directions = routePackets.at(-1);
+    assert.equal(directions.request.event, 14);
+    submit(directions, solveRoute(base, directions.live, directions.request));
+    f.frame();
+    assert(f.packets.some(packet => packet.kind === 'routeDirections'));
+
+    for (const phase of ['before', 'after']) {
+        otherChange = phase;
+        c.SceneManager.updateScene();
+        assert(map._needsRefresh);
+        assert(!scene._wqaFieldReady, 'an unrelated refresh still wins in either order');
+        key('F8', 119);
+        key('p', 80);
+        f.frame();
+        assert.equal(settingsAttempts, 1);
+        assert.equal(routePackets.at(-1), directions);
+    }
+    otherChange = '';
+    c.SceneManager.updateScene();
+    assert(scene._wqaFieldReady, 'controls resume after the native refresh');
+    map.requestRefresh();
+    key('F8', 119);
+    key('p', 80);
+    f.frame();
+    assert.equal(settingsAttempts, 1, 'a genuine refresh after the frame closes the immediate keyboard gate');
+    assert.equal(routePackets.at(-1), directions);
+
+    const samples = 240;
+    c.Time.GetDeltaTime = () => 1 / 60;
+    function measureFrames() {
+        map.inactiveTime = 0;
+        c.$gameVariables._data[2] = samples + 1;
+        const started = performance.now();
+        for (let frame = 0; frame < samples; frame++) c.SceneManager.updateScene();
+        return performance.now() - started;
+    }
+    const withMark = measureFrames();
+    const originals = fs.readFileSync(path.join(process.argv[2], 'package.nw/js/rmmz_objects.js'), 'utf8');
+    for (const name of ['Game_Variables.prototype.setValue', 'Game_Map.prototype.requestRefresh']) {
+        const start = originals.indexOf(name + ' = function(');
+        assert(start >= 0);
+        f.run(originals.slice(start, originals.indexOf('\n};', start) + 3));
+    }
+    scene._wqaLightningRefreshOnly = false;
+    const baseline = measureFrames();
+    assert(!scene._wqaFieldReady);
+    console.log('Verified the native Crispy Beach lightning timer, F8, destination cycling, directions and unrelated refresh retirement.');
+    console.log('Throttled Crispy Beach update series,', samples, 'frames:', baseline.toFixed(2), 'ms before,',
+        withMark.toFixed(2), 'ms with refresh qualification.');
 }
 
 async function verifySurfaceField(tilesets) {

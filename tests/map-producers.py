@@ -42,7 +42,11 @@ for relative, transform, names in [
     (OBJECTS_REL, objects_notification, ['Game_Player.prototype.reserveTransfer', 'Game_Screen.prototype.startFadeOut',
                                         'Game_Interpreter.prototype.setup', 'Game_Interpreter.prototype.loadImages',
                                         'Game_CharacterBase.prototype.setPosition', 'Game_CharacterBase.prototype.moveStraight',
-                                        'Game_Map.prototype.setupStartingMapEvent']),
+                                        'Game_Map.prototype.setupStartingMapEvent', 'Game_Map.prototype.requestRefresh',
+                                        'Game_Map.prototype.update', 'Game_Map.prototype.refreshIfNeeded',
+                                        'Game_Variables.prototype.value', 'Game_Variables.prototype.setValue',
+                                        'Game_Variables.prototype.onChange', 'Game_Interpreter.prototype.command122',
+                                        'Game_Interpreter.prototype.operateVariable']),
 ]:
     source = transform((PLUGINS.parent.parent / relative.relative_to('package.nw')).read_bytes()).decode('utf8')
     methods.extend(between(source, f'{name} = function(', '\n};') + '\n};' for name in names)

@@ -83,6 +83,7 @@ DEPENDENCIES = {
     Path('package.nw/data/Skills.json'): '107e79081ab63e78446b7ebcaeb3310bf5ee2d8b9c667ae1d6f63dbc900eac60',
     CAFFEINE_REL: 'e26a883c1d464508d446382ee5be94c5ca7ada1b76ec70e4f9650bdb1f24d48f',
     Path('package.nw/data/CommonEvents.json'): '1884583f50d8e6c37c53c7552df9c6628d59faf0b92ea90d1ed3a65769c0b9d9',
+    Path('package.nw/data/Map013.json'): '4edbf96422217319734b094c5df37eb74e9d5f0659d33826dd17311ee636bfbc',
     Path('package.nw/data/Map015.json'): 'f55ea800b85a452dc076ff35a945256a68f4af0e3bacd209924759da9167c6e5',
     Path('package.nw/data/Map028.json'): '80194daf64d2636d038b97efc668377549739dac152b55cefdf8b84d3bd8f04d',
     Path('package.nw/data/Map032.json'): '8be32e1819de5e31d0f4dcfa0d9deba7c8ebfb6beeb8448ca913a991b3749a58',
@@ -354,6 +355,16 @@ def objects_notification(original):
     return insert(original, OBJECTS_SHA, {
         2915: b'        if(SceneManager._scene?._wqaBattleStarted){BattleManager._wqaBattleSpritesBusy=undefined;'
               + BATTLE_LOG_LEAVING + b';}\n',
+        # Crispy Beach variable 2 is its parallel lightning countdown. No
+        # page on the pinned map uses it as a condition. Preserve the native
+        # refresh, while a transient scene flag identifies its sole producer.
+        17935: b'const wqaLightningScene=variableId===2&&$gameMap?._mapId===13&&'
+               b'SceneManager._scene?._wqaMapRestored?SceneManager._scene:null;'
+               b'const wqaLightningOnly=wqaLightningScene&&'
+               b'(!$gameMap._needsRefresh||wqaLightningScene._wqaLightningRefreshOnly);',
+        17951: b'if(wqaLightningOnly)wqaLightningScene._wqaLightningRefreshOnly=true;',
+        162252: b'if(this===$gameMap&&SceneManager._scene?._wqaLightningRefreshOnly)'
+                b'SceneManager._scene._wqaLightningRefreshOnly=false;',
         178811: b'\n    ' + ROUTE_DIRTY,  # Tileset replacement
         180829: b'if(this===$gameMap&&SceneManager._scene?._wqaCaveGuideActive&&SceneManager._scene._wqaFieldReady&&'
                 b'!SceneManager._nextScene&&Graphics.app?.stage===SceneManager._scene&&!$gamePlayer._transferring)'
@@ -541,7 +552,9 @@ def map_notification(original):
     const wqaWasFieldReady = this._wqaFieldReady;
     this._wqaFieldReady = !!(this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
         this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true && this.srcWendy &&
-        this.srcStones && $gameMap.inactiveTime < 30 && !$gameMap._needsRefresh && !$gameMap._needsTilemapRefresh &&
+        this.srcStones && $gameMap.inactiveTime < 30 &&
+        (!$gameMap._needsRefresh || ($gameMap._mapId === 13 && this._wqaLightningRefreshOnly)) &&
+        !$gameMap._needsTilemapRefresh &&
         !$gamePlayer._transferring && !$gamePlayer._vehicleGettingOn && !$gamePlayer._vehicleGettingOff &&
         $gameScreen._brightness === 255 && !$gameScreen._fadeOutDuration && !this._wqaTerrainWork &&
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
