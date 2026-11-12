@@ -9,7 +9,7 @@ import sys
 helpers = runpy.run_path(str(Path(__file__).with_name('file-producers.py')))
 decode = helpers['load_decoder']()
 between = helpers['between']
-from registration import MENU_REL, menu_notifications
+from registration import MENU_REL, WINDOW_REL, menu_notifications, window_notification
 
 
 def methods(installed):
@@ -24,5 +24,32 @@ def methods(installed):
     )]
 
 
+def save_methods(installed):
+    selected = methods(installed)[:2]
+    original = (installed / WINDOW_REL).read_bytes()
+    text, _ = decode(window_notification(original).decode('utf-8-sig'))
+    pairs = (
+        ('Scene_Base', 'executeAutosave', 'onAutosaveSuccess'),
+        ('Scene_Base', 'onAutosaveSuccess', 'playAutoSaveAnimation'),
+        ('Sprite_Text', 'initialize', 'destroy'),
+        ('Sprite_Text', 'setText', 'RedrawText'),
+        ('Sprite_Text', 'RedrawText', 'GetText'),
+        ('Sprite_Text', 'GetText', 'GetTextWidth'),
+        ('Sprite_Text', 'createChildSprite', 'createBitmap'),
+        ('Sprite_Text', 'createBitmap', 'update'),
+        ('Sprite_Text', 'update', 'StartTextAnimation'),
+        ('Sprite_Text', 'StartTextAnimation', 'updateAnimation'),
+    )
+    for owner, name, tail in pairs:
+        selected.append(between(text, f"{owner}['prototype']['{name}']=function(",
+                                f"}},{owner}['prototype']['{tail}']") + '};')
+    for owner, name, tail in (('Scene_Base', 'playAutoSaveAnimation', "},DataManager['isAnyKeyItem']"),
+                              ('Sprite_Text', 'updateAnimation', ',VFXBody')):
+        selected.append(between(text, f"{owner}['prototype']['{name}']=function(", tail) +
+                        ('};' if owner == 'Scene_Base' else ';'))
+    return selected
+
+
 if __name__ == '__main__':
-    print(json.dumps(methods(Path(sys.argv[1]))))
+    extract = save_methods if sys.argv[2:] == ['save'] else methods
+    print(json.dumps(extract(Path(sys.argv[1]))))

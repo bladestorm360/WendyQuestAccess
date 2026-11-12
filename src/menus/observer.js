@@ -1,7 +1,7 @@
 'use strict';
 
 const { reviewLines, moveReview } = require('./review');
-const { battlePresented } = require('../battle/presentation');
+const { battlePresented, drawnText } = require('../battle/presentation');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
 const PARAMS = [0, 1, 2, 3];
@@ -114,6 +114,43 @@ function createMenuObserver(root, host, notifications, preferences) {
         page.epoch = notifications.open(record, () => current === page && live(page));
     }
 
+    function announceSave(scene, page) {
+        const save = scene._wqaMenuSave;
+        const text = save?.status === -1 ? 'Could not save the game.' : save?.text;
+        if (!text) return;
+        scene._wqaMenuSave = null;
+        scene._wqaLastManualSave = text;
+        if (page.item.symbol === 'save') {
+            page.lines = reviewLines(text.split('\n'));
+            page.hasReview = page.lines.length > 0;
+        }
+        notifications.focus(page.epoch, { kind: 'dialoguePage', text, append: true });
+    }
+
+    function observeSave(scene) {
+        const save = scene._wqaMenuSave;
+        if (save?.status !== 1 || save.text || save.pending) return;
+        const banner = save.banner?.parent === scene ? save.banner : save.fallback;
+        const value = banner?._currentString;
+        if (banner?.parent !== scene || banner._dirty || typeof value !== 'string' || !value.length || value.length > 384)
+            return;
+        // The banner is revealed one glyph at a time. Only schedule
+        // postrender once the last glyph can appear on the current frame.
+        const last = banner.children[banner.children.length - 1];
+        if (!last || !(last.alpha > 0) || !last.scale.x || !last.scale.y) return;
+        const renderer = host.graphics.app?.renderer;
+        if (typeof renderer?.once !== 'function') return;
+        renderer.once('postrender', () => {
+            save.pending = false;
+            if (scene._wqaMenuSave !== save || !ready(scene, 1)) return;
+            try {
+                save.text = drawnText(scene, banner, 384);
+                if (current?.scene === scene && live(current)) announceSave(scene, current);
+            } catch { retire(scene); }
+        });
+        save.pending = true;
+    }
+
     function present(page, focus) {
         const { scene, screen, window, lines } = page;
         const previous = current;
@@ -133,6 +170,7 @@ function createMenuObserver(root, host, notifications, preferences) {
             screen: previous?.scene === scene && !previous.suspended &&
                 (screen !== 3 || previous.screen === 3) ? '' : heading });
         if (page.lines.length && options.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
+        if (screen === 1) announceSave(scene, page);
     }
 
     function publishBag(scene, window) {
@@ -160,7 +198,9 @@ function createMenuObserver(root, host, notifications, preferences) {
         const visibleHelp = inventory && visible(scene, help) && help._selectedItem === item && help._wqaMenuHelpPaint;
         const lines = reviewLines([
             ...(visibleHelp && typeof help._text === 'string' ? help._text.split(/\r?\n/) : []),
-            ...(equipment ? comparison(root, scene, item, status) : [])
+            ...(equipment ? comparison(root, scene, item, status) : []),
+            ...(screen === 1 && item.symbol === 'save' && scene._wqaLastManualSave ?
+                scene._wqaLastManualSave.split('\n') : [])
         ]);
         const list = window._list || window._data;
         const choices = window._list ? list.filter(row => label(row?.name)) : null;
@@ -180,7 +220,11 @@ function createMenuObserver(root, host, notifications, preferences) {
     function observe(scene, screen) {
         if (scene._wqaSettingsActive || (screen === 2 && scene._actorWindow?.active)) return suspend(scene);
         if (!ready(scene, screen)) return retire(scene);
-        if (current?.scene === scene && live(current)) return;
+        if (screen === 1) observeSave(scene);
+        if (current?.scene === scene && live(current)) {
+            if (screen === 1) announceSave(scene, current);
+            return;
+        }
         if (waiting?.scene === scene) return;
         const window = focusWindow(scene, screen);
         if (!window?.active || (screen === 3 ? !battleBagRow(window) : !selectedItem(window))) return retire(scene);

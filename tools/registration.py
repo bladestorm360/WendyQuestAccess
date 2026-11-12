@@ -180,6 +180,8 @@ def menu_notifications(original):
     # native actions. Existing event arguments and call order are preserved.
     return insert(original, MENU_SHA, {
         9404: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
+        9431: b'this._wqaMenuSave={status:0};this._wqaLastManualSave=null;',
+        12025: b',this._wqaMenuSave&&(this._wqaMenuSave.banner=_0x385754)',
         12930: b'globalThis.WendyQuestAccessMenuReady?.(this,1);',
         20002: b'globalThis.WendyQuestAccessMenuReady?.(this,2);',
         25165: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
@@ -763,10 +765,18 @@ def window_notification(original):
         34787: b'(',
         34805: b',Graphics._wqaFinishResize(wqaResize,_0x497b42.isFullscreen,'
                b'window.screen.width,window.screen.height))',
-        65299: MAP_LEAVING + b'let wqaAutosave=true;'
+        65299: MAP_LEAVING + b'let wqaAutosave=true,wqaManualSave=this._wqaMenuSave;'
+               b'if(wqaManualSave&&!wqaManualSave.started)wqaManualSave.started=true;else wqaManualSave=null;'
                b'SceneManager._wqaNativeAutosaves=(SceneManager._wqaNativeAutosaves||0)+1;',
+        # A native success callback can itself throw. Keep the completed file
+        # write distinct from a callback error, using the existing operation flag.
+        65656: b'(wqaAutosave&&wqaManualSave&&(wqaManualSave.status=1),',
+        65683: b')',
         65684: AUTOSAVE_DONE,
+        65767: b'(wqaAutosave&&wqaManualSave?.status===0&&(wqaManualSave.status=-1),',
+        65791: b')',
         65792: AUTOSAVE_DONE,
+        66582: b',this._wqaMenuSave?.status===1&&(this._wqaMenuSave.fallback=_0x495fa1)',
     })
 
 
