@@ -60,7 +60,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker) {
     };
     const fromBeach = { x: beachView.x, y: beachView.y };
     const candidates = [destination(1), destination(5), destination(7)];
-    assert(!beachView.objects.some(item => item.id === 16), 'the current Russetwood dialogue page is not an exit');
+    assert(!beachView.objects.some(item => item.id === 16 && item.category === 'exits'),
+        'the current Russetwood dialogue page is not an exit');
     const directCandidates = candidates.map(({ handoffs, ...candidate }) => candidate);
     const availability = entries => findReachable(beach.geometry, beachView.live, { ...fromBeach, candidates: entries });
     assert.deepEqual([...availability(directCandidates).available], [0, 0, 0]);
@@ -86,15 +87,31 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker) {
         beachMap.roundYWithDirection(beachY, prefix.boundary));
     beach.player.checkEventTriggerHere([1, 2]);
     assert.equal(beachMap.events().find(event => event.isStarting()).eventId(), 30);
+    const beforeTrigger = { ...fromBeach, field: true, event: 30, stopBeforeEvent: true };
+    const trigger = beachView.objects.find(item => item.id === 30 && item.category === 'events');
+    assert.equal(trigger?.name, 'Scene trigger');
+    assert.equal(trigger.eventAction, 'step');
+    assert.equal(availability([beforeTrigger]).available[0], 1);
+    assert.deepEqual(solveRoute(beach.geometry, beachView.live, beforeTrigger), prefix);
+    await verifyWorker(beach, { ...beforeTrigger, autowalk: true }, beachView.live, result => {
+        assert.equal(result.status, 'interrupted');
+        assert.equal(result.boundary, prefix.boundary);
+        assert.deepEqual(result.arrival, prefix.arrival);
+        assert.equal(result.course.length, prefix.distance, 'autowalk excludes the activation step');
+    });
+    assert(!beachView.objects.some(item => item.category === 'events' && [5, 7].includes(item.id)),
+        'the parallel elder page and named transfer are excluded from Events');
     const pathEvent = beachMap.event(30);
     pathEvent.setupPage = () => {}; // Only the erased flag affects the next route.
     const interpreter = Object.assign(new c.Game_Interpreter(), { _mapId: 13, _eventId: 30, _list: pathEvent.list(), _index: 0 });
     assert(interpreter.executeCommand());
     assert.equal(pathEvent._erased, true);
     const nextView = captureWorld(c);
+    assert(!nextView.objects.some(item => item.id === 30 && item.category === 'events'));
     const next = solveRoute(beach.geometry, nextView.live, { ...elderRequest, x: nextView.x, y: nextView.y });
     assert.equal(next.status, 'interrupted');
     assert.equal(next.boundaryEvent, 35);
+    assert(nextView.objects.some(item => item.id === 35 && item.name === 'Scene trigger'));
     beach.player.setPosition(beachMap.event(21).x + 1, beachMap.event(21).y);
     const eastern = captureWorld(c);
     const reached = findReachable(beach.geometry, eastern.live, { x: eastern.x, y: eastern.y, candidates });

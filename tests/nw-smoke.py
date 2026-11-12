@@ -240,7 +240,8 @@ function verifySettings() {
         tap('Enter');
         if (!menuStatus()?.includes('Previous category Shift+J')) throw Error('Help did not expose the pathfinder instructions');
         tap('ArrowDown');
-        if (!document.activeElement.textContent.includes('NPC lists reachable characters'))
+        if (!document.activeElement.textContent.includes('NPC lists reachable characters') ||
+            !document.activeElement.textContent.includes('Events lists nearby scene triggers and conversations'))
             throw Error('Help did not use the NPC category label');
         tap('Escape');
         if (document.activeElement.textContent !== 'Help') throw Error('Help did not return to its parent');
@@ -1181,9 +1182,19 @@ const interval = setInterval(() => {
             SceneManager._scene = Graphics.app.stage = { _wqaFieldReady: true, _active: true, _fadeOpacity: 0, _fadeDuration: 0 };
             installTransferPage(3, 2);
             tap('[', 'BracketLeft', { shiftKey: true });
-            tap('[', 'BracketLeft', { shiftKey: true });
             Graphics.app.renderer.emit('postrender');
-            endingStep++;
+            endingStep = 68;
+        } else if (endingStep === 68 && fs.existsSync(receipt + '.cross-map-event')) {
+            tap(String.fromCharCode(92), 'Backslash');
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 69;
+        } else if (endingStep === 69 && fs.existsSync(receipt + '.cross-map-event-route')) {
+            $gamePlayer.moveByInput();
+            if ($gamePlayer._x !== 0 || $gameMap._events[1]._starting)
+                throw Error('Generic event directions crossed the native boundary');
+            tap(']', 'BracketRight', { shiftKey: true });
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 25;
         } else if (endingStep === 25 && crossMapStarted === 0 && fs.existsSync(receipt + '.cross-map-browse')) {
             crossMapStarted = performance.now();
             tap(String.fromCharCode(92), 'Backslash');
@@ -1784,6 +1795,10 @@ parentPort.on('message', message => {
         if (fs.existsSync(receipt + '.cross-map-stage')) {
             if (message.kind === 'fieldStatus' || message.kind === 'fieldTarget')
                 fs.writeFileSync(receipt + '.cross-map-last', speech);
+            if (message.kind === 'fieldTarget' && message.category === 'Events')
+                fs.writeFileSync(receipt + '.cross-map-event', speech);
+            if (message.kind === 'routeDirections' && message.name === 'Scene trigger')
+                fs.writeFileSync(receipt + '.cross-map-event-route', speech);
             if (message.kind === 'fieldStatus' && message.name.startsWith('Bookmarks, Return marker.'))
                 fs.writeFileSync(receipt + '.cross-map-browse', speech);
             if (message.kind === 'routeDirections' && message.name === 'Next entrance toward Return marker')
@@ -2065,6 +2080,8 @@ def main():
             'bookmark-arrival': 'At Return marker. you are here.',
             'bookmark-entity': 'Objects, Synthetic quest anchor, 2 east',
             'cross-map-entrance': 'Entrance for Return marker. Move east to activate.',
+            'cross-map-event': 'Events, Scene trigger, 1 east',
+            'cross-map-event-route': 'Scene trigger. Move east to activate.',
             'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
             'cross-map-next': 'Next entrance toward Return marker. Move east to activate.',
             'cross-map-arrived': 'Return marker. you are here.',
@@ -2166,7 +2183,7 @@ def main():
               f'Throttled warm battle cue reached silent SDL submission in {battle_cue_ms:.0f} ms.')
         print('Verified the Quests category, packaged route and marker replacement handback.')
         print('Verified controller bookmark naming, keyboard save, native tile arrival, linked event removal and persistence.')
-        print('Verified reachable entrance speech, two manual transfers, native loading gates and restored bookmark selection.')
+        print('Verified packaged Events speech and the manual activation step, two native transfers and restored bookmark selection.')
         cross_map = [float(receipt.with_suffix('.json.cross-map-' + name + '-ms').read_text(encoding='utf8'))
                      for name in ('submission', 'receipt', 'handback')]
         print(f'Throttled cross-map submission {cross_map[0]:.1f} ms, silent speech receipt {cross_map[1]:.1f} ms '

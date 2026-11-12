@@ -259,14 +259,17 @@ function createField(root, host, notifications) {
                     { quest: job.quest, point: job.point });
                 follow(job, result, { kind: 'routeDirections', name: job.label,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
-                    reenter: result.reenter === true, enter: job.entrance?.action, sailing: job.entrance?.mode === 'ship',
+                    reenter: result.reenter === true, enter: job.entrance?.action,
+                    sailing: job.entrance?.mode === 'ship',
+                    conversation: job.eventAction === 'talk',
                     board: !!job.vehicle, land: result.land === true,
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
             }
             else if (result?.status === 'interrupted') {
-                const handoff = localHandoffName(job.map, result.boundaryEvent);
+                const handoff = !job.eventAction && localHandoffName(job.map, result.boundaryEvent);
+                const activate = job.eventAction === 'step' && job.target === result.boundaryEvent ? result.boundary : undefined;
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
-                    boundaryName: handoff || worldBoundaryName(root, result.boundaryEvent),
+                    activate, boundaryName: handoff || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
                     manualHandoff: !!handoff, more: result.more === true });
             }
             else if (result?.status === 'approachBlocked') status(job, 'A floor event blocks the approach to ' + job.label);
@@ -341,6 +344,7 @@ function createField(root, host, notifications) {
         job.area = area;
         const destination = destinationRequest(target);
         job.target = destination.event;
+        job.eventAction = target.eventAction;
         job.point = target.point === true;
         job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
         job.nearestLanding = target.nearestLanding === true;
@@ -350,7 +354,7 @@ function createField(root, host, notifications) {
             host.caveTiming?.warm(job.scene);
             job.timing = host.caveTiming?.capture(job.scene, motion, target);
         }
-        submit(job, snapshot, { ...destination,
+        submit(job, snapshot, { ...destination, stopBeforeEvent: job.eventAction === 'step',
             limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
             surface: snapshot.mode !== 'walk',
             beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk, timingCue: !!job.timing });

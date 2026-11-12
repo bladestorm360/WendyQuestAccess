@@ -1,12 +1,12 @@
 'use strict';
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
-const { destination } = require('./destinations');
+const { destination, eventDescription } = require('./destinations');
 const { localDestination } = require('./local-destinations');
 const { worldDestination, discoveryEntrance } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
-const { checkpointTarget, caveDestination } = require('./puzzles/cave');
+const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
 
 function eventTarget(root, mode, event, entry, page) {
     let target = worldDestination(root, mode, event, entry, page);
@@ -78,6 +78,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
 
     const events = [];
     const objects = [];
+    const eventBrowser = mode === 'walk' && !timedCave(id);
     const quests = scene ? collectQuestDestinations(root, scene, mode) : null;
     const tiles = routing ? new Set(map._tileEvents) : null;
     for (const event of map._events) {
@@ -101,6 +102,10 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
         if (target) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
+        }
+        if (eventBrowser) {
+            const description = eventDescription(entry, page, event, target);
+            if (description) objects.push({ id: eventId, x, y, ...description });
         }
         const quest = quests?.get(eventId);
         if (quest && target !== null && (mode !== 'airship' || target?.category === 'exits')) {

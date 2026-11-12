@@ -159,6 +159,8 @@ function formatSpeech(message) {
                 parts.push(message.sailing ? 'Sail off this tile and back to activate' : 'Walk off this tile and back to activate');
             else if (message.enter === true && facing) parts.push(`face ${facing} and press the action button to enter`);
             else if (message.enter === true) parts.push('Press the action button to enter');
+            else if (message.conversation === true && facing) parts.push(`face ${facing} and press the action button to talk`);
+            else if (message.conversation === true) parts.push('Press the action button to talk');
             else if (message.board === true && facing) parts.push(`face ${facing} and press the action button`);
             else if (message.board === true) parts.push('Press the action button to board');
             else if (message.land === true) {

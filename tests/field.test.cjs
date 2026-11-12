@@ -581,13 +581,20 @@ async function verifyBeachHandoffs(tilesets) {
         f.routeReply({ epoch: packet.epoch, sequence: packet.sequence, map: packet.map,
             result: solve(geometry, packet.live, packet.request) });
         f.frame();
-        return formatSpeech(f.packets.filter(record => ['fieldTarget', 'routeDirections'].includes(record.kind)).at(-1));
+        return formatSpeech(f.packets.filter(record => ['fieldTarget', 'routeDirections', 'fieldStatus'].includes(record.kind)).at(-1));
     };
     assert.match(key('k', 75), /^Elder Tater, .*route stops at a floor event/);
     assert.match(key('l', 76, true), /^Exits, Elder Tater's house, .*route stops at a floor event/);
     assert.match(key('j', 74, true), /^NPC, Elder Tater, .*route stops at a floor event/);
     assert.equal(key('p', 80), 'Elder Tater. 2 south, 2 east. Beach path one tile east. Move east to continue, then request directions again.');
-    console.log('Verified Crispy Beach browse and directions speech when an authored floor event separates the player from Elder Tater.');
+    assert.match(key('l', 76, true), /^Exits, Elder Tater's house/);
+    assert.match(key('l', 76, true), /^Events, Scene trigger,/);
+    assert.equal(key('p', 80), 'Scene trigger. 1 south, 2 east. Move east to activate.');
+    const selected = map._events[routePackets.at(-1).request.event];
+    assert.equal(selected._erased, false, 'reading directions leaves the selected floor event to the player');
+    selected._erased = true;
+    assert.equal(key('k', 75), 'Selected destination is unavailable');
+    console.log('Verified Crispy Beach NPC, Exits and generic Events speech, manual activation and erased event retirement.');
 }
 
 async function verifySurfaceField(tilesets) {

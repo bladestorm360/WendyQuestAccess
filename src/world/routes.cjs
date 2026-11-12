@@ -478,7 +478,7 @@ function flightApproaches(world, tiles, candidates, cancelled) {
 function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () => false) {
     // One ordinary and one quest entry per event, vehicle entries and up
     // to 64 saved bookmarks.
-    if (!Array.isArray(candidates) || candidates.length > MAX_EVENTS * 2 + 4 + 64) return { status: 'unavailable' };
+    if (!Array.isArray(candidates) || candidates.length > MAX_EVENTS * 3 + 4 + 64) return { status: 'unavailable' };
     const world = composeWorld(geometry, snapshot, cancelled);
     if (!world) return { status: 'cancelled' };
     const start = indexOf(world, x, y);
@@ -653,7 +653,22 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
         return reenter ? { ...trace(world, start, start, 1, null, cancelled), reenter: true } : { status: 'unreachable' };
     }
     const clear = route(world, start, goals, cancelled, area, stops);
-    if (clear.status !== 'unreachable') return finishEntry(world, clear, entry);
+    if (clear.status !== 'unreachable') {
+        if (clear.status === 'ready' && request.stopBeforeEvent === true && clear.distance > 0) {
+            const goal = indexOf(world, clear.arrival.x, clear.arrival.y);
+            if (stops[goal] === targetStop) {
+                // Reuse the verified final edge, but leave the activation
+                // step to the player. Offset preserves looping-map geometry.
+                const last = clear.legs[clear.legs.length - 1];
+                if (--last.tiles === 0) clear.legs.pop();
+                const before = offset(world, goal, 3 - DIRECTIONS.indexOf(last.direction));
+                return { ...clear, status: 'interrupted', distance: clear.distance - 1,
+                    boundary: last.direction, boundaryEvent: targetStop,
+                    arrival: { x: before % world.width, y: Math.floor(before / world.width), facing: null } };
+            }
+        }
+        return finishEntry(world, clear, entry);
+    }
     const possible = route(world, start, goals, cancelled, area, stops, true);
     return possible.status === 'unreachable' && blockedApproach ? { status: 'approachBlocked' } : finishEntry(world, possible, entry);
 }

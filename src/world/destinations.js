@@ -1,7 +1,7 @@
 'use strict';
 
 const CATEGORY_LABELS = Object.freeze({ all: 'All', objects: 'Objects', people: 'NPC', merchants: 'Merchants', exits: 'Exits',
-    treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
+    events: 'Events', treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
 
 function eventName(entry) {
     const raw = typeof entry.name === 'string' ? entry.name.trim() : '';
@@ -48,6 +48,18 @@ function destination(entry, page, trigger) {
     return name ? { category: 'objects', name } : null;
 }
 
+// Give eligible native interactions a generic alias. Never use the event's
+// name, dialogue text or command parameters for these labels.
+function eventDescription(entry, page, event, target) {
+    if (target?.category === 'exits' || target?.category === 'vehicles' || /^(?:test|debug|developer)/i.test(entry.name?.trim()))
+        return null;
+    if ((event._trigger === 1 || event._trigger === 2) && event._priorityType !== 1)
+        return { category: 'events', name: 'Scene trigger', eventAction: 'step' };
+    if (event._trigger === 0 && target?.category === 'people' && page.list.some(command => command.code === 101))
+        return { category: 'events', name: 'Conversation', eventAction: 'talk' };
+    return null;
+}
+
 function createDestinationBrowser() { return { category: null, selections: Object.create(null) }; }
 
 function browse(state, snapshot, changes) {
@@ -56,11 +68,12 @@ function browse(state, snapshot, changes) {
     for (const target of snapshot.objects) {
         if (!groups.has(target.category)) groups.set(target.category, []);
         groups.get(target.category).push(target);
-        // A quest marker may describe an already-listed event. Prefer the
-        // ordinary entry in All, while retaining both typed lists and saved
-        // bookmarks, whose IDs belong to their own namespace.
+        // Prefer the ordinary identity in All, then a generic event alias,
+        // then a quest marker. Keep each alias in its own category.
         const previous = all.get(target.id);
-        if (!previous || (previous.category === 'quests' && target.category !== 'quests')) all.set(target.id, target);
+        if (!previous || (previous.category === 'quests' && target.category !== 'quests') ||
+            (previous.category === 'events' && target.category !== 'events' && target.category !== 'quests'))
+            all.set(target.id, target);
     }
     if (all.size) groups.set('all', [...all.values()]);
     const categories = Object.keys(CATEGORY_LABELS).filter(category => groups.has(category));
@@ -111,4 +124,4 @@ function browse(state, snapshot, changes) {
         (previousCategory && previousCategory !== state.category) ? CATEGORY_LABELS[state.category] : '' };
 }
 
-module.exports = { destination, eventName, treasureName, createDestinationBrowser, browse };
+module.exports = { destination, eventDescription, eventName, treasureName, createDestinationBrowser, browse };
