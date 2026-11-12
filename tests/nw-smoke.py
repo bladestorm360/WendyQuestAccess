@@ -1275,6 +1275,30 @@ const interval = setInterval(() => {
             endingStep = 50;
         } else if (endingStep === 50 && fs.existsSync(receipt + '.manual-save-details')) {
             fs.unlinkSync(receipt + '.manual-save-stage');
+            fs.writeFileSync(receipt + '.shop-stage', '');
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const scene = SceneManager._scene = Graphics.app.stage = { _active: true, _started: true,
+                _fadeDuration: 0, _fadeOpacity: 0, _windowLayer: {} };
+            const window = () => ({ parent: scene._windowLayer, active: true, worldVisible: true, worldAlpha: 1,
+                openness: 255, contentsOpacity: 255, contents: { isReady: () => true },
+                _index: 0, innerWidth: 120, innerHeight: 80, itemRect: () => ({ x: 0, y: 0, width: 100, height: 32 }) });
+            const item = { name: 'Synthetic shop item', description: 'Shown effect' };
+            const buy = scene._buyWindow = { ...window(), _data: [item], maxItems: () => 1 };
+            buy._wqaShopRows = new Map([[0, { item, price: 19, enabled: false, contents: buy.contents, list: buy._data }]]);
+            const gold = scene._goldWindow = window();
+            gold._wqaShopGold = { contents: gold.contents, value: 12, currency: 'Gold' };
+            const help = scene._helpWindow = window();
+            help._wqaShopHelp = { contents: help.contents, text: item.description };
+            const status = scene._statusWindow = window();
+            status._wqaShopPossession = { contents: status.contents, item, count: 2 };
+            WendyQuestAccessMenuReady(scene, 4);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 51;
+        } else if (endingStep === 51 && fs.existsSync(receipt + '.shop-focus')) {
+            tap('i', 'KeyI');
+            endingStep = 52;
+        } else if (endingStep === 52 && fs.existsSync(receipt + '.shop-details')) {
+            fs.unlinkSync(receipt + '.shop-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
             WendyQuestAccessTitleReady(title);
@@ -1337,6 +1361,12 @@ parentPort.on('message', message => {
     if (fs.existsSync(receipt + '.closing-pass')) {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
+        if (fs.existsSync(receipt + '.shop-stage')) {
+            if (message.kind === 'menuFocus') fs.writeFileSync(receipt + '.shop-focus', speech);
+            if (message.kind === 'menuDetails' && !message.append) fs.writeFileSync(receipt + '.shop-details', speech);
+            parentPort.postMessage('ack');
+            return;
+        }
         if (fs.existsSync(receipt + '.manual-save-stage')) {
             if (message.kind === 'dialoguePage') fs.writeFileSync(receipt + '.manual-save', speech);
             if (message.kind === 'menuDetails') fs.writeFileSync(receipt + '.manual-save-details', speech);
@@ -1647,6 +1677,8 @@ def main():
             'battle-outcome': 'Synthetic victory reward.',
             'manual-save': 'Synthetic save finished.',
             'manual-save-details': 'Synthetic save finished.',
+            'shop-focus': 'Shop, Synthetic shop item, Price 19 Gold, unavailable, 1 of 1',
+            'shop-details': 'Shown effect. Owned 2. Balance 12 Gold',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',

@@ -57,11 +57,16 @@ function formatSpeech(message) {
         case 'menuFocus': {
             const name = label(message);
             if (!name) return '';
-            const screen = ['Menu', 'Inventory', 'Battle commands', 'Battle Bag'].includes(message.screen) ? message.screen : '';
+            const screen = ['Menu', 'Inventory', 'Battle commands', 'Battle Bag', 'Shop'].includes(message.screen) ? message.screen : '';
             const actor = screen === 'Battle commands' && typeof message.actor === 'string' && message.actor.length <= 48 ?
                 message.actor : '';
             const parts = [actor, screen, name];
             if (Number.isSafeInteger(message.quantity) && message.quantity >= 0) parts.push(String(message.quantity));
+            if (Number.isSafeInteger(message.price) && message.price >= 0) {
+                const currency = typeof message.currency === 'string' && message.currency.length <= 24 ?
+                    message.currency.trim() : '';
+                parts.push('Price ' + message.price + (currency ? ' ' + currency : ''));
+            }
             if (message.equipped === true) parts.push('equipped');
             if (message.enabled === false) parts.push('unavailable');
             if (message.indexed && message.position > 0 && message.position <= message.total &&

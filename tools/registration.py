@@ -183,6 +183,13 @@ def menu_notifications(original):
         9431: b'this._wqaMenuSave={status:0};this._wqaLastManualSave=null;',
         12025: b',this._wqaMenuSave&&(this._wqaMenuSave.banner=_0x385754)',
         12930: b'globalThis.WendyQuestAccessMenuReady?.(this,1);',
+        16877: b'let wqaShopGold,wqaShopCurrency;',
+        16937: b'(wqaShopGold=',
+        16961: b')',
+        16962: b'(wqaShopCurrency=',
+        16984: b')',
+        17016: b'if(SceneManager._scene?._wqaShop&&SceneManager._scene._goldWindow===this)'
+               b'this._wqaShopGold={contents:this.contents,value:wqaShopGold,currency:wqaShopCurrency};',
         20002: b'globalThis.WendyQuestAccessMenuReady?.(this,2);',
         25165: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
         34744: b'const wqaRedraw=SceneManager._scene?._wqaMenuActive&&'
@@ -191,6 +198,13 @@ def menu_notifications(original):
         39079: b'if(SceneManager._scene?._itemWindow===this&&'
                b'SceneManager._scene._equipStatusWindow===this.statusWindow){'
                b'this.statusWindow._wqaMenuCompareItem=_0x204675;this.statusWindow._wqaMenuCompareActor=_0x1d24e1;}',
+        59805: b'this._wqaShop=true;',
+        61263: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
+        63109: b'if(SceneManager._scene?._wqaShop&&SceneManager._scene._helpWindow===this)'
+               b'this._wqaShopHelp={contents:this.contents,text:this._text};',
+        64664: b'if(SceneManager._scene?._wqaShop&&SceneManager._scene._statusWindow===this){'
+               b'this._wqaShopPossession={contents:this.contents,item:this._item,count:_0x22ef5e};'
+               b'this._wqaShopEquip=this._wqaShopChange=null;}',
         79513: b'this._wqaMenuHelpPaint=(this._wqaMenuHelpPaint||0)+1;',
         91658: b'this._wqaFileKind=4;',
         92959: FILES_LEAVING,
@@ -278,6 +292,11 @@ def scenes_notification(original):
         106138: b'    if(this._wqaBattleBagActive)globalThis.WendyQuestAccessMenuLeaving?.(this);\n',
         2349: b'\n    ' + MAP_LEAVING,
         3177: b'\n' + files_ready('this'),
+        33497: b'\n    if(this._wqaShop&&this._started&&this._active&&this._fadeDuration===0&&this._fadeOpacity===0&&'
+               b'!this._wqaSettingsActive&&!SceneManager._nextScene&&!SceneManager._exiting&&'
+               b'!SceneManager._wqaNativeAutosaves&&!Graphics._wqaResize&&Graphics.app?.stage===this){'
+               b'if(this._buyWindow?.active&&this._buyWindow._wqaShopRows?.has(this._buyWindow._index))'
+               b'globalThis.WendyQuestAccessMenuReady?.(this,4);}\n',
     })
 
 
@@ -359,6 +378,19 @@ def windows_notification(original):
         7872: b'\n' + paint + b'\n',
         11423: b'\n        if (textState._wqaMessage || textState._wqaPaint) '
                b'this._wqaRecordPaint(textState, "\\x01" + iconIndex + "\\x02");',
+        97987: b'let wqaEnabled;\n    ',
+        98011: b'(wqaEnabled=',
+        98031: b')',
+        98187: b'\n    if(SceneManager._scene?._wqaShop&&SceneManager._scene._buyWindow===this&&index>=0&&index<128)'
+               b'(this._wqaShopRows||=new Map()).set(index,{item,price,enabled:wqaEnabled,'
+               b'contents:this.contents,list:this._data});',
+        108820: b'let wqaName;\n    ',
+        108834: b'(wqaName=',
+        108846: b')',
+        109039: b'\n    if(SceneManager._scene?._wqaShop&&SceneManager._scene._statusWindow===this)'
+                b'this._wqaShopEquip={contents:this.contents,item:this._item,name:wqaName,enabled,oldItem:item1};',
+        109483: b'\n    if(SceneManager._scene?._wqaShop&&SceneManager._scene._statusWindow===this)'
+                b'this._wqaShopChange={contents:this.contents,item:this._item,paramId,change};',
         127397: b'    if (' + DIALOGUE_HOST + b' && SceneManager._scene._messageWindow === this._messageWindow) {\n'
                 b'        this._wqaChoiceRows = [];\n        this._wqaChoiceShown = null;\n    }\n',
         131029: b'    if (this._wqaChoiceRows) this._wqaChoicePaint = { index, text: "" };\n',

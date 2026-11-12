@@ -2,6 +2,7 @@
 
 const { reviewLines, moveReview } = require('./review');
 const { battlePresented, drawnText } = require('../battle/presentation');
+const { shopRow, shopDetails, sameShopPaint, shopPaint } = require('./shop');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
 const PARAMS = [0, 1, 2, 3];
@@ -14,6 +15,7 @@ function visible(scene, window) {
 function focusWindow(scene, screen) {
     if (screen === 1) return scene._commandWindow;
     if (screen === 3) return scene._itemWindow;
+    if (screen === 4) return scene._buyWindow;
     if (scene._actorWindow?.active) return null;
     return scene._itemWindow?.isFocused ? scene._itemWindow : scene._categoryWindow;
 }
@@ -93,6 +95,9 @@ function createMenuObserver(root, host, notifications, preferences) {
     function live(page) {
         if (!page || page.suspended || !ready(page.scene, page.screen)) return false;
         const window = focusWindow(page.scene, page.screen);
+        if (page.screen === 4) return window === page.window && window.active && visible(page.scene, window) &&
+            window._index === page.index && shopRow(window) === page.shopRow && presentedRow(window) &&
+            sameShopPaint(page.scene, page.shopPaint, visible);
         if (page.screen === 3) return window === page.window && window.active && visible(page.scene, window) &&
             window._index === page.index && battleBagRow(window) === page.bagRow && presentedRow(window);
         return window === page.window && window.active && visible(page.scene, window) && window._index === page.index &&
@@ -165,7 +170,7 @@ function createMenuObserver(root, host, notifications, preferences) {
         }
         scene._wqaControllerReady = scene._wqaMenuActive = scene._wqaPresentation = true;
         const options = preferences();
-        const heading = screen === 1 ? 'Menu' : screen === 2 ? 'Inventory' : 'Battle Bag';
+        const heading = ['Menu', 'Inventory', 'Battle Bag', 'Shop'][screen - 1];
         show(page, { kind: 'menuFocus', ...focus, indexed: options.indexing,
             screen: previous?.scene === scene && !previous.suspended &&
                 (screen !== 3 || previous.screen === 3) ? '' : heading });
@@ -184,11 +189,24 @@ function createMenuObserver(root, host, notifications, preferences) {
             position: window._index + 1, total: window.maxItems() });
     }
 
+    function publishShop(scene, window) {
+        const row = shopRow(window);
+        const name = label(row?.item?.name);
+        if (!name) return;
+        const paint = shopPaint(scene, visible);
+        const lines = shopDetails(root, row, paint);
+        const page = { kind: 'menu', scene, screen: 4, window, index: window._index, item: row.item, shopRow: row,
+            shopPaint: paint, lines, position: 0, epoch: 0, hasReview: lines.length > 0 };
+        present(page, { name, price: row.price, currency: paint.gold?.currency, enabled: row.enabled,
+            position: window._index + 1, total: window.maxItems() });
+    }
+
     function publish(scene, screen) {
         if (!ready(scene, screen)) return retire(scene);
         const window = focusWindow(scene, screen);
         if (!window?.active || !visible(scene, window) || !presentedRow(window)) return;
         if (screen === 3) return publishBag(scene, window);
+        if (screen === 4) return publishShop(scene, window);
         const item = selectedItem(window);
         if (!item || !label(item.name)) return;
         const inventory = screen === 2 && window === scene._itemWindow;
@@ -227,7 +245,8 @@ function createMenuObserver(root, host, notifications, preferences) {
         }
         if (waiting?.scene === scene) return;
         const window = focusWindow(scene, screen);
-        if (!window?.active || (screen === 3 ? !battleBagRow(window) : !selectedItem(window))) return retire(scene);
+        if (!window?.active || (screen === 4 ? !shopRow(window) :
+            screen === 3 ? !battleBagRow(window) : !selectedItem(window))) return retire(scene);
         // Close stale output immediately. Keep the old cursor until the next
         // painted selection settles so a refresh of the same row can clamp it.
         if (current?.scene === scene) notifications.close(current.epoch);

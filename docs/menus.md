@@ -39,3 +39,15 @@ At final gameplay handoff, save from the pause menu and listen when native contr
 ## Inventory item targeting audit
 
 Build 26578620 overrides `Scene_ItemBase.determineItem` at byte 17214 of `MenuScene.js`. A friendly-target item selects the last native target and calls the native use handler immediately. Other items take the direct use path. Equipment uses the party leader in `Scene_Item.useItem`. The installed item data includes friendly-target consumables usable from the menu. The stock actor window is instantiated for the game logic. This build's normal inventory flow has no presented actor-selection step.
+
+## Shop browse
+
+The buy list speaks the selected item, its displayed price and whether the game currently enables it. **I** or the controller details action reads the visible description, owned count, gold balance and equipment comparison. Autodetail and menu indexing use the same independent settings as Inventory. Native arrows, confirmation and cancellation retain their usual actions.
+
+The installed build opens the buy list directly. The final `Scene_Shop.create` override at byte 59714 of `MenuScene.js` calls the native Buy command. The scene update observes the active window after `Scene_MenuBase.update` at byte 33497 of `rmmz_scenes.js`. The stock `Window_ShopBuy.drawItem` at 97671 of `rmmz_windows.js` supplies the actual row, price and paint-opacity decision. The markers pair each row with its active item list and bitmap.
+
+The help, balance and possession come from the completed paint at `MenuScene.js` bytes 62841, 16629 and 64004. The native possession count includes an equipped copy when the shop displays one. The stock equipment pane uses the drawn actor, current equipment and displayed attack or defense difference. A stale paint or hidden pane is withheld. Native `Scene_Shop.onBuyOk` at 61172 retires browsing before opening the quantity window. [Shop paint reader](../src/menus/shop.js) · [Shared menu observer](../src/menus/observer.js) · [Native markers](../tools/registration.py)
+
+The installed-method fixture verified price and enablement, quantity owned, equipment comparison, balance, and that changing storage without repaint leaves the original displayed snapshot intact. It verified native handback to the quantity window. Focus reached synthetic render and formatted receipt in 2.05 ms under the bounded runner. The same 300 stable fixture frames took 0.15 ms native and 1.05 ms enabled. The matching NW.js test verified shop focus and manual details in the worker. The pause, Save and inventory regressions, bounded build, all 16 registration candidates and exact development payload scan passed. Cleanup removed 9706153 bytes of generated staging. [Installed shop fixture](../tests/shop.test.cjs) · [Payload evidence](audio.md#dependencies-and-payload-check)
+
+At final gameplay handoff, visit a merchant and move among at least two items. Check price, availability, owned count and balance. Try equipment details when equipment is offered. Actual speech onset and game-frame cost remain open. Quantity speech and accepted purchase feedback are the next increment.
