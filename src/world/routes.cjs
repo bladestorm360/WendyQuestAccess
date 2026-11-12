@@ -97,7 +97,8 @@ function boardingGoals(world, type) {
 
 function groundDistances(world, request, cancelled, tiles = interactionTiles(world, cancelled)) {
     const ground = { ...world, mode: 'walk', through: false };
-    const goals = routeGoals(ground, request, cancelled, tiles);
+    const goals = request.approach ? orientedApproach(ground, tiles, request, cancelled)?.goals :
+        routeGoals(ground, request, cancelled, tiles);
     if (!goals || cancelled()) return null;
     const stops = tiles.touch;
     const distance = new Uint16Array(goals.length);
@@ -126,12 +127,15 @@ function nearestLanding(world, request, ground, cancelled) {
     let nearest = null;
     let cost = Infinity;
     let bestWalk = Infinity;
+    // An oriented floor transfer can be entered directly from a valid
+    // landing tile. A solid event still needs a separate action position.
+    const occupiesAction = Number.isInteger(request.event) && request.waypoint !== true &&
+        (!request.approach || world.events.find(event => event.id === request.event)?.normal);
     for (let cell = 0; cell < world.cells.length; cell++) {
         if ((cell & 63) === 0 && cancelled()) return null;
         // Leave the parked airship behind before the player uses the final
         // interaction. On its tile, native OK would try to board it first.
-        if (!(world.cells[cell] & LAND) || (ground && (!ground[cell] ||
-            (Number.isInteger(request.event) && request.waypoint !== true && ground[cell] === 1)))) continue;
+        if (!(world.cells[cell] & LAND) || (ground && (!ground[cell] || (occupiesAction && ground[cell] === 1)))) continue;
         let east = Math.abs(cell % world.width - request.x);
         let south = Math.abs(Math.floor(cell / world.width) - request.y);
         if (world.scrollType & 2) east = Math.min(east, world.width - east);
@@ -198,14 +202,14 @@ function airshipEntranceRoute(world, start, request, area, cancelled) {
     for (const entrance of request.entrances.slice().sort((a, b) => a.rank - b.rank)) {
         if (cancelled()) return { status: 'cancelled' };
         if (entrance.rank > rank) break;
-        const target = { x: request.x, y: request.y, event: entrance.event };
+        const target = { x: request.x, y: request.y, event: entrance.event, approach: entrance.approach };
         const ground = groundDistances(world, target, cancelled, tiles);
         let site = ground && nearestLanding(world, target, ground, cancelled);
         let viaDiscovery;
         if (!site) for (const candidate of request.discoveries || []) {
             if (cancelled()) return { status: 'cancelled' };
             if (candidate.target !== entrance.event) continue;
-            const reveal = { ...target, event: candidate.event };
+            const reveal = { ...target, event: candidate.event, approach: undefined };
             const approach = groundDistances(world, reveal, cancelled, tiles);
             const next = approach && nearestLanding(world, reveal, approach, cancelled);
             if (next && (!site || next.cost < site.cost)) {
@@ -215,13 +219,16 @@ function airshipEntranceRoute(world, start, request, area, cancelled) {
         }
         if (site && (!best || site.cost < best.cost)) {
             best = site;
-            chosen = entrance.event;
+            chosen = entrance;
             rank = entrance.rank;
             discovery = viaDiscovery;
         }
     }
     const result = flyToLanding(world, start, best, area, cancelled, discovery);
-    if (result.status === 'ready') result.entrance = chosen;
+    if (result.status === 'ready') {
+        result.entrance = chosen.event;
+        if (chosen.approach) result.approach = chosen.approach;
+    }
     return result;
 }
 
@@ -344,7 +351,7 @@ function entryGoal(world, goals, request, area) {
     if (before < 0 || step(world, before, heading) !== cell) return null;
     goals.fill(0);
     goals[before] = 1;
-    return { cell, direction: request.entryDirection };
+    return { cell, before, direction: request.entryDirection };
 }
 
 function finishEntry(world, result, entry) {
@@ -401,10 +408,21 @@ function walkingLanding(geometry, snapshot, x, y) {
     const { reached, events } = reachableApproaches(world, start, tiles, () => false);
     // Reaching a different floor event does not mean the player retains
     // control there. A landing itself is already occupied on native handback.
+    const approaches = new Uint8Array(MAX_EVENTS + 1);
     for (let cell = 0; cell < reached.length; cell++) {
-        if (cell !== start && tiles.touch[cell]) reached[cell] = 0;
+        if (!reached[cell]) continue;
+        if (cell !== start && tiles.touch[cell]) {
+            reached[cell] = 0;
+            continue;
+        }
+        for (let heading = 0; heading < DIRECTIONS.length; heading++) {
+            const button = buttonEvent(world, tiles, cell, heading);
+            if (button) approaches[button] |= 1 << heading;
+            const next = step(world, cell, heading);
+            if (next >= 0 && tiles.touch[next]) approaches[tiles.touch[next]] |= 1 << heading;
+        }
     }
-    return { reached, events };
+    return { reached, events, approaches };
 }
 
 function approachAvailable(world, start, candidate, tiles, approaches, cancelled) {
@@ -521,8 +539,41 @@ function entranceRoute(world, start, events, tiles, cancelled) {
     return result;
 }
 
+function orientedApproach(world, tiles, candidate, cancelled) {
+    const heading = DIRECTIONS.indexOf(candidate.approach);
+    const target = world.events.find(event => event.id === candidate.event && !event.erased && event.action);
+    if (!target || heading < 0 || target.trigger !== 1) return null;
+    if (target.normal) {
+        const goals = new Uint8Array(world.cells.length);
+        for (let cell = 0; cell < goals.length; cell++) {
+            if ((cell & 63) === 0 && cancelled()) return null;
+            if (!tiles.touch[cell] && buttonEvent(world, tiles, cell, heading) === target.id) goals[cell] = candidate.approach;
+        }
+        return { goals };
+    }
+    const goals = actionGoals(world, candidate.event, cancelled, false, tiles);
+    const entry = goals && entryGoal(world, goals, { event: candidate.event, entryDirection: candidate.approach });
+    return entry ? { goals, entry } : null;
+}
+
 function transferEntranceRoute(world, start, request, tiles, cancelled) {
-    const direct = entranceRoute(world, start, request.entrances, tiles, cancelled);
+    const ordinary = request.entrances.filter(edge => !edge.approach);
+    let direct = entranceRoute(world, start, ordinary, tiles, cancelled);
+    if (world.mode === 'walk') {
+        let rank = ordinary.find(edge => edge.event === direct.entrance)?.rank ?? Infinity;
+        for (const candidate of request.entrances) {
+            if (cancelled()) return { status: 'cancelled' };
+            if (!candidate.approach || candidate.rank > rank) continue;
+            const approach = orientedApproach(world, tiles, candidate, cancelled);
+            if (!approach || (approach.entry && approach.entry.before !== start && tiles.touch[approach.entry.before])) continue;
+            const result = finishEntry(world, route(world, start, approach.goals, cancelled, undefined, tiles.touch), approach.entry);
+            if (result.status === 'ready' && (candidate.rank < rank || result.distance < direct.distance)) {
+                direct = { ...result, entrance: candidate.event, approach: candidate.approach };
+                rank = candidate.rank;
+            }
+        }
+        if (direct.status === 'unavailable' && request.entrances.some(edge => edge.approach)) direct = { status: 'unreachable' };
+    }
     if (world.mode !== 'walk' || direct.status !== 'unreachable' || !request.discoveries?.length) return direct;
     const ranks = new Map(request.entrances.map(edge => [edge.event, edge.rank]));
     const choices = request.discoveries.filter(edge => ranks.has(edge.target))
@@ -545,6 +596,7 @@ function shipLandingRoute(world, request, cancelled) {
     if (sailing.status === 'ready') {
         sailing.entrance = event;
         if (walking.entrance) sailing.groundEntrance = walking.discoveryFor ?? walking.entrance;
+        if (walking.approach) sailing.groundApproach = walking.approach;
     }
     return sailing;
 }

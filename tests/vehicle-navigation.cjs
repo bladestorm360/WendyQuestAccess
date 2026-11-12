@@ -423,10 +423,13 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             scene._wqaSettingsActive = true;
             assert(field.selectBookmark(scene, bookmark));
             scene._wqaSettingsActive = false;
+            const cpuStart = process.cpuUsage();
             const started = performance.now();
             assert(field.command('directions'));
             frames.emit('postrender');
             const submitMs = performance.now() - started;
+            const cpu = process.cpuUsage(cpuStart);
+            const submitCpuMs = (cpu.user + cpu.system) / 1000;
             const packet = packets.pop();
             assert.equal(packet.live.mode, mode);
             let result;
@@ -469,7 +472,8 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             field.observeReady(scene);
             const handbackMs = performance.now() - readyAt;
             console.log(mode, entrance ? 'area bookmark' : 'same-map bookmark', 'throttled renderer submission',
-                submitMs.toFixed(2), 'ms, settled handback', handbackMs.toFixed(2), 'ms.');
+                submitMs.toFixed(2), 'ms elapsed,', submitCpuMs.toFixed(2), 'ms process CPU, settled handback',
+                handbackMs.toFixed(2), 'ms.');
             assert(!c.Graphics._wqaBookmarkTransferPending);
             assert(field.command('directions'));
             frames.emit('postrender');

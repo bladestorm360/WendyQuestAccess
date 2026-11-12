@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { captureWorld } = require('../src/world/snapshot');
 const { createTransferBookmarks } = require('../src/world/transfer-bookmarks');
 const { solveRoute } = require('../src/world/routes.cjs');
-const { PASSAGE } = require('../src/world/geometry.cjs');
+const { LAND, PASSAGE } = require('../src/world/geometry.cjs');
 const { readCatalog, rankEntrances } = require('../src/world/walking-catalog.cjs');
 
 function reachableStart(fixture, live, entrances) {
@@ -14,7 +14,8 @@ function reachableStart(fixture, live, entrances) {
             const x = sourceX + dx;
             const y = sourceY + dy;
             if (x < 0 || y < 0 || x >= width || y >= height) continue;
-            const request = { x, y, field: true, entrances: entrances.map(edge => edge.event) };
+            const request = { x, y, field: true, entrances: entrances.map(edge => edge.approach ?
+                { event: edge.event, rank: 1, approach: edge.approach } : edge.event) };
             const result = solveRoute(fixture.geometry, live, request);
             if (result.status === 'ready' && result.distance > 0) return { request, result };
         }
@@ -63,6 +64,15 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
     assert.equal(solveRoute(open, simple, { x: 0, y: 0,
         entrances: [{ event: 1, rank: 1 }, { event: 2, rank: 2 }] }).entrance, 1);
 
+    const flight = { ...small, cells: small.cells.slice(), hasLandings: true };
+    flight.cells[1] |= LAND;
+    const landForFacing = solveRoute(flight, { mode: 'airship', terrain: [], vehicles: [], events: [event(1, 2)] },
+        { x: 0, y: 0, landing: true, entrances: [{ event: 1, rank: 1, approach: 6 }] });
+    assert.equal(landForFacing.status, 'ready');
+    assert(landForFacing.land);
+    assert.equal(landForFacing.approach, 6);
+    assert.deepEqual(landForFacing.arrival, { x: 1, y: 0, facing: null });
+
     const scene = { _wqaFieldReady: true };
     const originalScene = c.SceneManager._scene;
     const originalApp = c.Graphics.app;
@@ -81,14 +91,20 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
     c.WendyQuestAccessSceneLeaving = transfers.leave;
     const marker = { id: 1, revision: 1, trail: [] };
 
-    function reserveSpecial(fixture, event, start, expected, commonId = 38) {
+    function reserveSpecial(fixture, event, start, expected, commonId = 38, approach) {
         const { gameMap, player } = fixture;
         player.setPosition(...start);
-        const edge = transfers.candidates().entrances.find(candidate => candidate.event === event);
+        const edge = transfers.candidates().entrances.find(candidate => candidate.event === event && candidate.approach === approach);
         assert.equal(edge?.map, expected);
         const request = { x: start[0], y: start[1], event, field: true };
-        const result = solveRoute(fixture.geometry, captureWorld(c).live, request);
+        const planning = approach ? { ...request, entrances: [{ event, rank: 1, approach }] } : request;
+        const result = solveRoute(fixture.geometry, captureWorld(c).live, planning);
         verifyRoute(fixture, request, result);
+        if (approach) {
+            const heading = result.arrival.facing ?? result.legs.at(-1)?.direction;
+            assert.equal(heading, approach);
+            player._direction = player.facing = heading;
+        }
         const interpreter = gameMap._interpreter = Object.assign(new c.Game_Interpreter(), {
             setup(list, id) {
                 Object.assign(this, { _list: list, _eventId: id, _mapId: gameMap._mapId,
@@ -253,6 +269,35 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         reserveSpecial(bay, bayStart.result.entrance, [bayStart.request.x, bayStart.request.y], 113);
         transfers.clear();
         console.log('Verified quest marker pages, Nuggedor story variants, and eight Breaded Bay exits.');
+
+        for (const [event, approach, destination, targetX, targetY] of [
+            [3, 8, 12, 6, 40], [3, 6, 12, 2, 22], [59, 8, 191, 28, 1]
+        ]) {
+            const directed = load(113);
+            const { gameMap, player } = directed;
+            player.setPosition(1, 1);
+            const { entrances, state } = transfers.candidates();
+            const edge = entrances.find(candidate => candidate.event === event && candidate.approach === approach);
+            assert.deepEqual([edge?.map, edge?.x, edge?.y], [destination, targetX, targetY]);
+            transfers.arm(scene, marker, edge);
+            player._direction = approach === 8 ? 2 : 8;
+            transfers.accepted(scene, gameMap._events[event]);
+            assert(!c.Graphics._wqaBookmarkTransferPending, 'a different heading cannot inherit the planned handback');
+            const live = captureWorld(c).live;
+            const { request: { x, y } } = reachableStart(directed, live, [edge]);
+            await verifyWorker(directed, { x, y, field: true, transfer: { map: destination, state,
+                point: { x: targetX, y: targetY }, candidates: [{ event, map: destination, x: targetX, y: targetY, approach }] } },
+            live, result => {
+                assert.equal(result.entrance, event);
+                assert.equal(result.approach, approach);
+                assert.equal(result.arrival.facing ?? result.legs.at(-1)?.direction, approach);
+            });
+            const accepted = reserveSpecial(directed, event, [x, y], destination, 138, approach);
+            gameMap._mapId = destination;
+            player.setPosition(accepted.x, accepted.y);
+            assert.deepEqual(transfers.settle({}), { ...marker, trail: [destination + '/' + accepted.x + '/' + accepted.y] });
+        }
+        console.log('Verified both Russetwood arrival sides and the solid Cracked Cove entrance from the native heading.');
 
         for (const [origin, destination, expectNormal] of [[19, 20, true], [17, 113, false]]) {
             const fixture = load(origin);

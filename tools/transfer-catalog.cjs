@@ -1,6 +1,6 @@
 'use strict';
 
-const { PASSAGE, indexOf, tileKey } = require('../src/world/geometry.cjs');
+const { DIRECTIONS, PASSAGE, indexOf, tileKey } = require('../src/world/geometry.cjs');
 const { walkingLanding } = require('../src/world/routes.cjs');
 const { catalogTransferOptions, shipPort } = require('../src/world/transfer-events.cjs');
 const { MAX_LANDINGS, validTile, readCatalog } = require('../src/world/walking-catalog.cjs');
@@ -68,10 +68,10 @@ function bakeCatalog(sources, maps) {
     }
     const landings = origins.map(([map, x, y]) => {
         const { geometry, live, exits } = sources.get(map);
-        const { reached, events } = walkingLanding(geometry, live, x, y);
+        const { reached, events, approaches } = walkingLanding(geometry, live, x, y);
         const links = [];
         for (const edge of exits) {
-            if (!events[edge.event]) continue;
+            if (edge.approach ? !(approaches[edge.event] & (1 << DIRECTIONS.indexOf(edge.approach))) : !events[edge.event]) continue;
             const next = byTile.get(tileKey(edge.map, edge.x, edge.y));
             if (next !== undefined) links.push(next, edge.gate);
         }

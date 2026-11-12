@@ -359,7 +359,8 @@ function createField(root, host, notifications) {
     function admitRemoteRoute(job, result) {
         const { bookmark, entrances, ground, island, state, selection } = job.remote;
         const target = result.discoveryFor ?? result.entrance;
-        const entrance = island?.event === target ? island : entrances.find(edge => edge.event === target);
+        const entrance = island?.event === target ? island :
+            entrances.find(edge => edge.event === target && edge.approach === result.approach);
         if (!entrance || !transfers.matchesState(state)) return false;
         job.target = entrance.event;
         if (result.land) {
@@ -382,7 +383,7 @@ function createField(root, host, notifications) {
             return true;
         }
         if (entrance === island) {
-            const walking = ground.find(edge => edge.event === result.groundEntrance);
+            const walking = ground.find(edge => edge.event === result.groundEntrance && edge.approach === result.groundApproach);
             if (!walking || !transfers.current(walking, 'walk')) return false;
             job.groundEntrance = walking;
         }
@@ -406,7 +407,7 @@ function createField(root, host, notifications) {
         job.remote = { bookmark, entrances: current, ground, island, state, selection: { ...selection, trail } };
         job.autowalk = preferences().autowalk;
         const point = bookmark.kind === 'point' ? { x: bookmark.x, y: bookmark.y } : undefined;
-        const copy = ({ event, map, x, y }) => ({ event, map, x, y });
+        const copy = ({ event, map, x, y, approach }) => ({ event, map, x, y, approach });
         const shipLanding = island && { event: island.event, x: island.x, y: island.y, facing: island.facing };
         submit(job, snapshot, { limit: 8, field: true, landing, shipLanding, autowalk: job.autowalk,
             beacon: host.beacon?.enabled() === true, transfer: { map: bookmark.map, point, state, trail,

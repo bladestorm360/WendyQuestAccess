@@ -1,6 +1,6 @@
 'use strict';
 
-const { MAX_CELLS, MAX_EVENTS, tileKey } = require('./geometry.cjs');
+const { DIRECTIONS, MAX_CELLS, MAX_EVENTS, tileKey } = require('./geometry.cjs');
 const { validGate, gateAllows } = require('./transfer-gates.cjs');
 
 const MAX_LANDINGS = 1024;
@@ -76,15 +76,16 @@ function rankEntrances(catalog, source, transfer, maps, cancelled, allowDirectFa
     for (const candidate of candidates) {
         if (cancelled()) return [];
         // A request from an older direct-only renderer omits the edge map.
-        const { event, x, y, map: target = map } = candidate;
-        if (!Number.isInteger(event) || event < 1 || event > MAX_EVENTS || target === source || !validTile(target, x, y, maps))
+        const { event, x, y, map: target = map, approach } = candidate;
+        if (!Number.isInteger(event) || event < 1 || event > MAX_EVENTS || target === source || !validTile(target, x, y, maps) ||
+            (approach !== undefined && !DIRECTIONS.includes(approach)))
             continue;
         const key = tileKey(target, x, y);
         if (visited.has(key)) continue;
         const index = catalog?.byTile.get(key);
         const rank = ranks?.[index];
-        if (rank || (allowDirectFallback && target === map && index === undefined))
-            options.push({ event, rank: rank || MAX_LANDINGS + 1 });
+        if (rank || (!approach && allowDirectFallback && target === map && index === undefined))
+            options.push(approach ? { event, rank, approach } : { event, rank: rank || MAX_LANDINGS + 1 });
     }
     return options;
 }

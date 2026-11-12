@@ -7,26 +7,26 @@ const { travelMode, vehicleOnMap } = require('./vehicle-navigation');
 const { transferState, gateAllows } = require('./transfer-gates.cjs');
 const { tileKey } = require('./geometry.cjs');
 
-function liveEntrance(root, event, state, mode) {
+function liveEntrances(root, event, state, mode) {
     const map = root.$gameMap;
     const id = event?._eventId;
     if (!Number.isInteger(id) || id < 1 || map?._events?.[id] !== event || event._erased ||
-        event._through || event._moveRouteForcing) return null;
+        event._through || event._moveRouteForcing) return [];
     const entry = root.$dataMap?.events?.[id];
     const page = entry?.pages?.[event._pageIndex];
-    if (!page || event._trigger !== page.trigger || event._priorityType !== page.priorityType) return null;
+    if (!page || event._trigger !== page.trigger || event._priorityType !== page.priorityType) return [];
     const common = root.$dataCommonEvents;
     const craft = mode === 'ship' && vehicleOnMap(map, mode);
-    let destination;
-    if (mode === 'walk') destination = transferOptions(map._mapId, entry, page, common).find(edge => gateAllows(edge.gate, state));
+    let choices = [];
+    if (mode === 'walk') choices = transferOptions(map._mapId, entry, page, common).filter(edge => gateAllows(edge.gate, state));
     else if (craft && id === ISLAND_DOCK && root.$gameSwitches?.value?.(224) === false)
-        destination = islandDismount(entry, page);
-    else if (craft) destination = shipPort(entry, page, common);
-    if (!destination || !root.$dataMapInfos?.[destination.map] ||
-        (destination.sameScene && (event._x !== entry.x || event._y !== entry.y)) ||
-        (craft && !craft.isLandOk?.(event._x, event._y, destination.facing))) return null;
-    return { ...destination, event: id, sourceX: event._x, sourceY: event._y, action: page.trigger === 0 || page.priorityType === 1,
-        mode, craft, list: page.list };
+        choices = [islandDismount(entry, page)];
+    else if (craft) choices = [shipPort(entry, page, common)];
+    return choices.filter(destination => destination && root.$dataMapInfos?.[destination.map] &&
+        (!destination.sameScene || (event._x === entry.x && event._y === entry.y)) &&
+        (!craft || craft.isLandOk?.(event._x, event._y, destination.facing)))
+        .map(destination => ({ ...destination, event: id, sourceX: event._x, sourceY: event._y,
+            action: page.trigger === 0 || page.priorityType === 1, mode, craft, list: page.list }));
 }
 
 function liveDiscovery(root, event, target) {
@@ -68,12 +68,12 @@ function createTransferBookmarks(root, host) {
         const map = root.$gameMap;
         if (mode !== edge.mode) return false;
         const event = map?._events?.[edge.event];
-        const entrance = edge.discoveryFor ? liveDiscovery(root, event, edge.discoveryFor) :
-            liveEntrance(root, event, transferState(root), mode);
-        return !!entrance && entrance.craft === edge.craft && entrance.list === edge.list && entrance.map === edge.map &&
-            entrance.x === edge.x && entrance.y === edge.y && entrance.direction === edge.direction &&
-            entrance.action === edge.action &&
-            entrance.sourceX === edge.sourceX && entrance.sourceY === edge.sourceY;
+        const choices = edge.discoveryFor ? [liveDiscovery(root, event, edge.discoveryFor)] :
+            liveEntrances(root, event, transferState(root), mode);
+        return choices.some(entrance => entrance && entrance.craft === edge.craft && entrance.list === edge.list &&
+            entrance.map === edge.map && entrance.x === edge.x && entrance.y === edge.y && entrance.direction === edge.direction &&
+            entrance.approach === edge.approach && entrance.action === edge.action &&
+            entrance.sourceX === edge.sourceX && entrance.sourceY === edge.sourceY);
     }
 
     function accepted(scene, event) {
@@ -83,7 +83,8 @@ function createTransferBookmarks(root, host) {
         // Native interpreter setup retires the old same-scene browser
         // even when a different event won acceptance.
         if (edge.sameScene) scene._wqaBookmarkEntrance = true;
-        if (map !== root.$gameMap || player !== root.$gamePlayer || event !== map._events[edge.event] || !current(edge)) return;
+        if (map !== root.$gameMap || player !== root.$gamePlayer || event !== map._events[edge.event] ||
+            (edge.approach && player._direction !== edge.approach) || !current(edge)) return;
         if (edge.sameScene) {
             if (player._x !== edge.sourceX || player._y !== edge.sourceY || (edge.facing && player._direction !== edge.facing)) return;
             pending = { scene, player, ownerMap: map, map: edge.map, x: edge.x, y: edge.y, bookmark, sameScene: true,
@@ -148,7 +149,7 @@ function createTransferBookmarks(root, host) {
         clear, current, accepted, landingAccepted, reserved, settle,
         islandLanding() {
             const map = root.$gameMap;
-            return liveEntrance(root, map?._events?.[ISLAND_DOCK], null, travelMode(map, root.$gamePlayer));
+            return liveEntrances(root, map?._events?.[ISLAND_DOCK], null, travelMode(map, root.$gamePlayer))[0] || null;
         },
         matchesState: state => transferState(root).every((value, index) => state[index] === value),
         discovery(event, target) { return liveDiscovery(root, root.$gameMap._events?.[event], target); },
@@ -172,16 +173,10 @@ function createTransferBookmarks(root, host) {
             const events = mode === 'walk' ? map._events :
                 mode === 'ship' ? Object.keys(SHIP_PORTS).map(id => map._events[id]) : [];
             const entrances = [];
-            for (const event of events) {
-                const edge = liveEntrance(root, event, state, mode);
-                if (edge) entrances.push(edge);
-            }
+            for (const event of events) entrances.push(...liveEntrances(root, event, state, mode));
             const ground = [];
             if (mode === 'ship' || mode === 'airship') {
-                for (const event of map._events) {
-                    const edge = liveEntrance(root, event, state, 'walk');
-                    if (edge) ground.push(edge);
-                }
+                for (const event of map._events) ground.push(...liveEntrances(root, event, state, 'walk'));
             }
             return { entrances, ground, state };
         },

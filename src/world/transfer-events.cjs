@@ -1,6 +1,6 @@
 'use strict';
 
-const { MAX_CELLS } = require('./geometry.cjs');
+const { DIRECTIONS, MAX_CELLS } = require('./geometry.cjs');
 const { HOUSE_SWITCHES, CAULDRON_VARIABLE, NUGGEDOR_VARIABLE, NUGGEDOR_THRESHOLD, NUGGEDOR_BEFORE, NUGGEDOR_AFTER,
     STAGE, ALL_STAGES, cauldronGate } = require('./transfer-gates.cjs');
 
@@ -301,6 +301,40 @@ function worldQuestEntrance(entry, page, index, common) {
     return null;
 }
 
+function playerHeading(command) {
+    const args = command?.parameters;
+    return rowIs(command, 111) && args?.length === 3 && args[0] === 6 && args[1] === -1 && DIRECTIONS.includes(args[2])
+        ? args[2] : null;
+}
+
+function worldFacingEntrances(entry, page, common) {
+    const eitherSide = [3, 4, 74].includes(entry.id);
+    if (!eitherSide && ![22, 56, 59, 60, 63, 64].includes(entry.id)) return null;
+    const { list } = page;
+    if (entry.pages.length !== 1 || page.trigger !== 1 || !flagsAre(page) || !recordsPositionAt(list, 0, common)) return [];
+    if (eitherSide) {
+        const north = transferTo(list[2], 113);
+        const other = transferTo(list[5], 113);
+        if (list.length !== 9 || playerHeading(list[1]) !== 8 || !rowIs(list[2], 201, 1) || !rowIs(list[3], 0, 1) ||
+            !rowIs(list[4], 411) || !rowIs(list[5], 201, 1) || !rowIs(list[6], 0, 1) ||
+            !rowIs(list[7], 412) || !rowIs(list[8], 0) ||
+            !landingIs(north, 12, 6, 40) || !landingIs(other, 12, 2, 22)) return [];
+        return DIRECTIONS.map(approach => ({ ...(approach === 8 ? north : other), approach }));
+    }
+    const blocks = (list.length - 2) / 4;
+    if (!Number.isInteger(blocks) || blocks < 1 || blocks > DIRECTIONS.length || !rowIs(list[list.length - 1], 0)) return [];
+    const edges = [];
+    for (let index = 0; index < blocks; index++) {
+        const at = 1 + index * 4;
+        const approach = playerHeading(list[at]);
+        const edge = transferTo(list[at + 1], 113);
+        if (!approach || !edge || edges.some(option => option.approach === approach) ||
+            !rowIs(list[at + 1], 201, 1) || !rowIs(list[at + 2], 0, 1) || !rowIs(list[at + 3], 412)) return [];
+        edges.push({ ...edge, approach });
+    }
+    return edges;
+}
+
 function worldWalkingEntrance(entry, page, common) {
     if (entry.pages.length !== 1 || page.trigger !== 1 || !flagsAre(page)) return null;
     const { list } = page;
@@ -341,6 +375,10 @@ function transferOptions(map, entry, page, common) {
     if (map === 87 && entry.id === 91) return caffeineEntrance(page, index);
     const special = cauldronSpecial(map, entry.id, page, index, common);
     if (special !== undefined) return special;
+    if (map === 113) {
+        const facing = worldFacingEntrances(entry, page, common);
+        if (facing) return facing;
+    }
     const world = map === 113 ? worldQuestEntrance(entry, page, index, common) || worldWalkingEntrance(entry, page, common) :
         map === 206 ? islandReturn(entry, page) : map === 49 ? bayReturn(entry, page) : null;
     if (world) return [world];
