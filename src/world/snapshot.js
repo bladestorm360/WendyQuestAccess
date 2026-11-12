@@ -2,6 +2,7 @@
 
 const { surface, MAX_CELLS, CELL_BITS } = require('./geometry.cjs');
 const { destination } = require('./destinations');
+const { localDestination } = require('./local-destinations');
 const { checkpointTarget, caveDestination } = require('./puzzles/cave');
 
 const MAX_EVENTS = 512;
@@ -62,8 +63,10 @@ function captureWorld(root, routing = true, label) {
             events.push({ id: eventId, x, y, normal: event._priorityType === 1, through: event._through === true,
                 tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action });
         }
-        const target = action && (checkpointTarget(id, eventId, pageIndex, trigger)
-            ? { name: 'Checkpoint', category: 'objects' } : caveDestination(id, event, entry, page) || destination(entry, page, trigger));
+        if (!action) continue;
+        const local = localDestination(root, event, page);
+        const target = local !== undefined ? local : checkpointTarget(id, eventId, pageIndex, trigger)
+            ? { name: 'Checkpoint', category: 'objects' } : caveDestination(id, event, entry, page) || destination(entry, page, trigger);
         if (target) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });

@@ -59,7 +59,7 @@ parentPort.on('message', message => {
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
             result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
-            if (result.status === 'ready' && request.beacon === true) {
+            if (result.status === 'ready' && !result.reenter && request.beacon === true) {
                 // Two direction bits and the bounded distance to the next turn.
                 // The renderer advances one byte per accepted native step.
                 const course = new Uint8Array(result.distance);
@@ -74,7 +74,8 @@ parentPort.on('message', message => {
                 }
                 result.course = course;
             }
-            if (result.status === 'ready' && Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
+            if ((result.status === 'ready' || result.status === 'interrupted') &&
+                Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
                 result.legs.length > request.limit) {
                 result.more = true;
                 result.legs.length = request.limit;

@@ -57,7 +57,58 @@ function actionGoals(world, id, cancelled) {
     return goals;
 }
 
-function route(world, start, goals, cancelled, area) {
+function automaticEvents(world, cancelled) {
+    const stops = new Uint16Array(world.cells.length);
+    // Native movement selects the first active non-normal touch event in
+    // map order. Through affects collision but leaves touch eligibility intact.
+    for (const event of world.events) {
+        if (event.erased || event.normal || !event.action || (event.trigger !== 1 && event.trigger !== 2)) continue;
+        const [left, top, right, bottom] = bounds(world, event);
+        for (let y = top; y <= bottom; y++) {
+            if (cancelled()) return stops;
+            for (let x = left; x <= right; x++) {
+                const cell = y * world.width + x;
+                if (!stops[cell]) stops[cell] = event.id;
+            }
+        }
+    }
+    return stops;
+}
+
+function trace(world, start, goal, facing, parents, cancelled, stops) {
+    const legs = [];
+    let cell = goal;
+    let arrival = goal;
+    let boundary = 0;
+    let distance = 0;
+    let traced = 0;
+    while (cell !== start) {
+        if ((traced++ & 63) === 0 && cancelled()) return { status: 'cancelled' };
+        const heading = parents[cell] - 1;
+        const direction = DIRECTIONS[heading];
+        const previous = offset(world, cell, 3 - heading);
+        if (cell !== goal && stops?.[cell]) {
+            // The first interruption encountered from the origin wins.
+            legs.length = 0;
+            distance = 0;
+            arrival = previous;
+            boundary = direction;
+        } else {
+            const last = legs[legs.length - 1];
+            if (last?.direction === direction) last.tiles++;
+            else legs.push({ direction, tiles: 1 });
+            distance++;
+        }
+        cell = previous;
+    }
+    const result = { status: boundary ? 'interrupted' : 'ready', distance, legs: legs.reverse(),
+        arrival: { x: arrival % world.width, y: Math.floor(arrival / world.width),
+            facing: !boundary && facing !== 1 ? facing : null } };
+    if (boundary) result.boundary = boundary;
+    return result;
+}
+
+function route(world, start, goals, cancelled, area, stops, crossStops = false) {
     const parents = new Uint8Array(world.cells.length);
     const frontier = new Uint16Array(world.cells.length);
     parents[start] = 255;
@@ -67,23 +118,8 @@ function route(world, start, goals, cancelled, area) {
         if ((cursor & 63) === 0 && cancelled()) return { status: 'cancelled' };
         const cell = frontier[cursor];
         const facing = goals[cell];
-        if (facing) {
-            const legs = [];
-            let index = cell;
-            let distance = 0;
-            while (index !== start) {
-                if ((distance & 63) === 0 && cancelled()) return { status: 'cancelled' };
-                const heading = parents[index] - 1;
-                const direction = DIRECTIONS[heading];
-                const last = legs[legs.length - 1];
-                if (last?.direction === direction) last.tiles++;
-                else legs.push({ direction, tiles: 1 });
-                index = offset(world, index, 3 - heading);
-                distance++;
-            }
-            return { status: 'ready', distance, legs: legs.reverse(),
-                arrival: { x: cell % world.width, y: Math.floor(cell / world.width), facing: facing === 1 ? null : facing } };
-        }
+        if (facing) return trace(world, start, cell, facing, parents, cancelled, crossStops ? stops : null);
+        if (!crossStops && cell !== start && stops?.[cell]) continue;
         for (let heading = 0; heading < DIRECTIONS.length; heading++) {
             const next = step(world, cell, heading);
             if (next < 0 || parents[next] || (area && !inside(world, next, area))) continue;
@@ -110,7 +146,28 @@ function solveWorldRoute(world, request, cancelled = () => false) {
     if (request.area && (!area || !inside(world, start, area))) return { status: 'unavailable' };
     const goals = routeGoals(world, request, cancelled);
     if (cancelled()) return { status: 'cancelled' };
-    return goals ? route(world, start, goals, cancelled, area) : { status: 'unavailable' };
+    if (!goals) return { status: 'unavailable' };
+    if (request.field !== true || world.mode !== 'walk') return route(world, start, goals, cancelled, area);
+    const stops = automaticEvents(world, cancelled);
+    let blockedApproach = false;
+    for (let cell = 0; cell < stops.length; cell++) {
+        if ((cell & 63) === 0 && cancelled()) return { status: 'cancelled' };
+        if (cell === start || !goals[cell] || !stops[cell] || stops[cell] === request.event) continue;
+        goals[cell] = 0;
+        blockedApproach = true;
+    }
+    if (goals[start] && stops[start] === request.event) {
+        const reenter = DIRECTIONS.some((_, heading) => {
+            const adjacent = step(world, start, heading);
+            return adjacent >= 0 && !stops[adjacent] && (!area || inside(world, adjacent, area)) &&
+                step(world, adjacent, 3 - heading) === start;
+        });
+        return reenter ? { ...trace(world, start, start, 1, null, cancelled), reenter: true } : { status: 'unreachable' };
+    }
+    const clear = route(world, start, goals, cancelled, area, stops);
+    if (clear.status !== 'unreachable') return clear;
+    const possible = route(world, start, goals, cancelled, area, stops, true);
+    return possible.status === 'unreachable' && blockedApproach ? { status: 'approachBlocked' } : possible;
 }
 
 function solveRoute(geometry, snapshot, request, cancelled = () => false) {

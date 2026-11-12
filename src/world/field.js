@@ -91,11 +91,14 @@ function createField(root, host, notifications) {
             }
             if (result?.status === 'timedWait') status(job, 'No crossing preview ready. Check the patrols and request again');
             else if (result?.status === 'ready') {
-                host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
+                if (!result.reenter) host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
                     warningApproach(root.$gameMap, player._x, player._y, job.target) : null);
                 present(job, { kind: 'routeDirections', name: job.label,
-                    legs: result.legs, facing: result.arrival.facing, more: result.more === true });
+                    legs: result.legs, facing: result.arrival.facing, more: result.more === true, reenter: result.reenter === true });
             }
+            else if (result?.status === 'interrupted') present(job, { kind: 'routeDirections', name: job.label,
+                legs: result.legs, boundary: result.boundary, more: result.more === true });
+            else if (result?.status === 'approachBlocked') status(job, 'A floor event blocks the approach to ' + job.label);
             else if (result?.status === 'unreachable') status(job, 'No walkable route to ' + job.label);
             else if (result?.status === 'unavailable') status(job, 'Directions unavailable for ' + job.label);
         } else if (active?.action === 'directions' && ready(active.scene)) afterRender();
@@ -135,7 +138,7 @@ function createField(root, host, notifications) {
             Atomics.store(admission, 0, job.sequence);
             inFlight = job;
             worker.postMessage({ map: snapshot.map, sequence: job.sequence, epoch: job.sequence, live: snapshot.live,
-                request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area, motion,
+                request: { x: snapshot.x, y: snapshot.y, event: target.id, limit: 8, area, motion, field: true,
                     beacon: !motion && host.beacon?.enabled() === true, timingCue: !!job.timing } }, [snapshot.live.terrain.buffer]);
         } catch {
             if (admission) Atomics.store(admission, 0, 0);

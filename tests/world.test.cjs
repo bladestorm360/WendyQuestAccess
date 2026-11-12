@@ -13,6 +13,7 @@ const { bakeMap, decodeMap, composeWorld, indexOf, DIRECTIONS, step, surface } =
 const { solveRoute } = require('../src/world/routes.cjs');
 const { warningApproach, captureMotion } = require('../src/world/puzzles/cave');
 const { verifyCaveProgression } = require('./cave-progression.cjs');
+const { verifyLocalDestinations } = require('./local-destinations.cjs');
 const { copyPatrol } = require('../src/world/puzzles/patrol-motion.cjs');
 const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../src/world/puzzles/motion-world.cjs');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
@@ -902,6 +903,7 @@ async function main() {
     await verifyNativeBeacon();
     verifyNativePatrolMotion();
     verifyCaveProgression(c, load, snapshot, verifyRoute);
+    await verifyLocalDestinations(c, load, verifyRoute, verifyWorker);
     await verifyCrossingPreview();
     await verifyLiveCrossing();
     await verifyWarningApproach();

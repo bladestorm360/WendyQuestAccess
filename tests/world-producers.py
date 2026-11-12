@@ -42,8 +42,9 @@ def methods(installed):
                         'moveStraight', 'canMove', 'isInVehicle', 'isInBoat', 'isInShip', 'isDashing', 'areFollowersGathering',
                         'reserveTransfer', 'isTransferring'],
         'Game_Vehicle': ['pos', 'isBoat', 'isShip', 'isAirship', 'isMapPassable'],
-        'Game_Interpreter': ['command111', 'command115', 'command121', 'command201', 'command203', 'command205',
-                             'command214', 'command402', 'executeCommand', 'updateWaitMode', 'currentCommand',
+        'Game_Interpreter': ['command111', 'command115', 'command121', 'command122', 'command123', 'operateVariable',
+                             'command201', 'command203', 'command205',
+                             'command214', 'command402', 'command411', 'executeCommand', 'updateWaitMode', 'currentCommand',
                              'setWaitMode', 'skipBranch', 'isOnCurrentMap', 'character'],
         'Game_Event': ['findProperPageIndex', 'meetsConditions', 'event', 'page', 'list', 'isTriggerIn', 'start', 'isStarting',
                        'checkEventTriggerTouch', 'isCollidedWithCharacters', 'isCollidedWithPlayerCharacters', 'isCollidedWithEvents',
@@ -56,7 +57,7 @@ def methods(installed):
     output.append(between(stock, 'Game_Character.ROUTE_END =', 'Game_Character.prototype.initialize ='))
     core = core_notification((installed / CORE_REL).read_bytes()).decode('utf8')
     output.append(between(core, 'Tilemap.TILE_ID_B =', 'Tilemap.isVisibleTile ='))
-    for name in ('Number.prototype.mod', 'Array.prototype.contains', 'Tilemap.prototype._readMapData',
+    for name in ('Math.randomInt', 'Number.prototype.mod', 'Array.prototype.contains', 'Tilemap.prototype._readMapData',
                  'Tilemap.getAutotileKind', 'Tilemap.isTileA3', 'Tilemap.isTileA4',
                  'Tilemap.isWaterfallTile', 'Tilemap.isWallSideTile'):
         output.append(between(core, f'\n{name} = function(', '\n};') + '\n};')

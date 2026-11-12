@@ -91,7 +91,10 @@ function formatSpeech(message) {
             }
             const parts = directions.length ? [directions.join(', ')] : [];
             const facing = HEADINGS[message.facing];
+            const boundary = HEADINGS[message.boundary];
             if (message.more) parts.push('More directions available');
+            else if (boundary) parts.push(`Floor event one tile ${boundary}`);
+            else if (message.reenter === true) parts.push('Walk off this tile and back to activate');
             else if (facing) parts.push(`face ${facing}`);
             if (!parts.length) parts.push('you are here');
             text = `${name}. ${parts.join('. ')}.`;

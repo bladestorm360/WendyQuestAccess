@@ -41,6 +41,7 @@ def bundle():
         './spatial-direction': 'world/spatial-direction.js',
         './snapshot': 'world/snapshot.js',
         './destinations': 'world/destinations.js',
+        './local-destinations': 'world/local-destinations.js',
         './puzzles/salt-caverns': 'world/puzzles/salt-caverns.js',
         './puzzles/cave': 'world/puzzles/cave.js',
         './cave-progression': 'world/puzzles/cave-progression.js',

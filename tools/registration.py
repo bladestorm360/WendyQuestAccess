@@ -29,6 +29,7 @@ BATTLE_REL = Path('package.nw/js/plugins/BattleSceneArranger.js')
 STATS_REL = Path('package.nw/js/plugins/WendyQuest.js')
 MESSAGE_OWNER_REL = Path('package.nw/js/plugins/EliMZ_Book.js')
 SALT_REL = Path('package.nw/data/Map019.json')
+CAFFEINE_REL = Path('package.nw/data/Map087.json')
 TITLE_SHA = 'a3c35f004b66a6d4e7a918e36b8bc7e48f2383875165ce1c00ae1a5a031e5634'
 REGISTRY_SHA = '083317d6b2ee7ba9655762dee7671564a64b0bba82bb33d8cbacd52a7e7b3ab7'
 TITLE_INSERTION = 17749
@@ -52,13 +53,32 @@ DEPENDENCIES = {
     MESSAGE_OWNER_REL: '26e0230f7bcf8a425ad4c128c728cb0d74d8589d1a07d9d3026edbc2b09c7ce0',
     Path('package.nw/js/rmmz_sprites.js'): '33440ac9584344c4a9675d0b464f82eb49f5dcde0c23c485edbd385360475ba1',
     SALT_REL: '4d14b04a8980f4a4eb50dfa01d0ab61dd5507c62b65a1cd23b5df1621662e296',
+    CAFFEINE_REL: 'e26a883c1d464508d446382ee5be94c5ca7ada1b76ec70e4f9650bdb1f24d48f',
     Path('package.nw/data/CommonEvents.json'): '1884583f50d8e6c37c53c7552df9c6628d59faf0b92ea90d1ed3a65769c0b9d9',
+    Path('package.nw/data/Map015.json'): 'f55ea800b85a452dc076ff35a945256a68f4af0e3bacd209924759da9167c6e5',
+    Path('package.nw/data/Map028.json'): '80194daf64d2636d038b97efc668377549739dac152b55cefdf8b84d3bd8f04d',
+    Path('package.nw/data/Map032.json'): '8be32e1819de5e31d0f4dcfa0d9deba7c8ebfb6beeb8448ca913a991b3749a58',
+    Path('package.nw/data/Map044.json'): '82ce5e8c9c738876baa4df41c97066d1f276161824fe4657d746e70aaccceb51',
+    Path('package.nw/data/Map050.json'): '7ff3d348ede2ebe23149b1b446d9bc4cdb50d5f409c8ac9d3f07aa0abf0dd3bd',
+    Path('package.nw/data/Map051.json'): '2d1755085570a41f244ed74c256e19fd1a7eda5f315f2da5b26d885b8021f55b',
+    Path('package.nw/data/Map053.json'): 'da1044ed17970c37ec582f4a111e95a15752a074efa0f8159abb9ce4fb1275d6',
+    Path('package.nw/data/Map055.json'): '16be52e42002832bf13659b9b9ce47163141756cfa9111de11851ca646591f09',
+    Path('package.nw/data/Map057.json'): '013ca80bda617519cb775255abb7f50199dbe7f7f82b646499dd7d5fc0beee2e',
+    Path('package.nw/data/Map058.json'): '87468a017df640e89983ba5f73a2b14a464fda43d2a2e5645751fc261548f999',
+    Path('package.nw/data/Map063.json'): '0764431236c1c0c672b3041d2b7e1aedf81fef229164e0d1f90ea29fd0a943f0',
+    Path('package.nw/data/Map127.json'): 'ae459a57d039d2d469cb570dc1a9a61a0eec2c54b8f17c7b941f98726874b58e',
+    Path('package.nw/data/Map128.json'): 'd906119d7cafeb5b332fd302296aa31221b1efe25b958731d869bbc8a0adfa75',
+    Path('package.nw/data/Map132.json'): 'aa18adc96ab3994b94f0a3983b85eb8cfa9ce3bda773414bd604ad3f68880591',
+    Path('package.nw/data/Map133.json'): '943ae2bce574fec5671652c1ada1b0e17d5e24ce626074713963354dcea4a75e',
+    Path('package.nw/data/Map195.json'): '70ee9fb64540fdc1b2371a22f7e3d5f5e821161cba5aea3c171433dad65e0d1b',
     Path('package.nw/data/Map196.json'): 'bb3dbeb99080470bc3c009ece7b6e5a60aa99d1fad6cfc71fa95b6a8e9a788e8',
     Path('package.nw/data/Map197.json'): '473add1cb944e63f0fb5b077689bf3e525d7a93068e6b03f86e9e9421f80c0b9',
     Path('package.nw/data/Map199.json'): 'ba3fc58a0d8c1c0d71dc2de23010a6e35a7c3c6bd37925becb1fee86adb7998e',
     Path('package.nw/data/Map200.json'): '7b9894f8c5548d3534e4cd14e9c007a8a8ea594acf8352182f91277b4531f0fa',
     Path('package.nw/data/Map201.json'): '3d6cde06daacedebc77a44ee826816890128646ea9c68115404405b7ff14ad21',
     Path('package.nw/data/Map202.json'): 'd35c539b94ed69ca161d4c1a4e30778c1ce8ea70fefef1931b11f4bd480f32f7',
+    Path('package.nw/data/Map203.json'): '7c0d6eaa4a9cf7d2b87949b86a1a2e91ca108df180600ec9c0fceb925a287d18',
+    Path('package.nw/data/Map205.json'): 'c6dbb57bc575a4fcabefa467358c5c463b00fa1f3a2a3eedd8a1e27365f69013',
     Path('package.nw/data/Map206.json'): '89dadfb242c46f0945edc42c900e967b5fe1e6e9415b60f63cc7129795c69f47',
     Path('package.nw/js/plugins/UIGeneral.js'): '9a282cc96ee2edb4777fc18228d4a5976e2ad7546d50df72a6d0429bc6af9b0e',
     Path('package.nw/img/system/IconSet.png'): '709b556b0c2b217436172d90d7d8af4c722ce421aa19f504261ee72607f5203e',
@@ -473,7 +493,8 @@ def main():
     args = parser.parse_args()
     for relative, expected in DEPENDENCIES.items():
         dependency = args.game_root / relative
-        if dependency.stat().st_size > 1024 * 1024 or hashlib.sha256(dependency.read_bytes()).hexdigest() != expected:
+        limit = 1_463_068 if relative == CAFFEINE_REL else 1024 * 1024
+        if dependency.stat().st_size > limit or hashlib.sha256(dependency.read_bytes()).hexdigest() != expected:
             raise ValueError(f'Game dependency does not match the supported Steam build: {relative}')
     for relative, transform in ((TITLE_REL, title_notification), (MENU_REL, menu_notifications),
                                 (MANAGERS_REL, managers_notification), (SCENES_REL, scenes_notification),

@@ -1,6 +1,6 @@
 # WendyQuest project memory
 
-Private `refs/heads/main` was verified at `03fd8cefc1a33996be0c064bfcf58e36908a685a` for live cave cues and at `923b3d47c97424cdf6a9db56db6e3ed8f8794c50` for [native cave progression](docs/puzzles-and-secrets.md#cave-progression-and-chamber). The [reachability audit](docs/puzzles-and-secrets.md#ordinary-progression-and-secret-reachability) classifies the Cauldron and Forest controls as ordinary quest progression and locates the 21 Lost Ruins entrance and return pairs. Continue with gated local destination access, then the wider world and vehicle path. [Work estimates and remaining gates](docs/feature-checkpoint.md)
+Private `refs/heads/main` was verified at `03fd8cefc1a33996be0c064bfcf58e36908a685a` for live cave cues, at `923b3d47c97424cdf6a9db56db6e3ed8f8794c50` for [native cave progression](docs/puzzles-and-secrets.md#cave-progression-and-chamber), and at `0775a11becceed5d888e3ff37363018c2ca96605` for the [reachability audit](docs/puzzles-and-secrets.md#ordinary-progression-and-secret-reachability). [Gated local directions](docs/navigation.md#gated-exits-and-floor-events) now cover the house stairs, Caffeine Caverns, Cauldron and Forest mechanisms. Continue with the wider world and vehicle path. [Work estimates and remaining gates](docs/feature-checkpoint.md)
 
 Reviewed November 11, 2026. Full mod implementation is active. The title, file selector, retry, Options, visible map banner and map dialogue have build-matched native producer fixtures. Deployment and gameplay confirmation remain open.
 
