@@ -16,7 +16,9 @@ const AUDIO_PREVIEWS = [
 ];
 
 function normalizeAudio(value) {
-    return { enabled: value?.enabled !== false, hrtf: value?.hrtf !== false };
+    const volume = value?.wallVolume;
+    return { enabled: value?.enabled !== false, hrtf: value?.hrtf !== false, wall: value?.wall === true,
+        wallVolume: Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : 65 };
 }
 
 function createSettingsMenu(root, host) {
@@ -44,6 +46,7 @@ function createSettingsMenu(root, host) {
         navigation = normalizeNavigation(savedNavigation);
         audio = normalizeAudio(savedAudio);
         host.controllerChanged();
+        host.audioChanged(audio);
         storage = database;
     }).catch(() => {}).finally(() => {
         loading = false;
@@ -95,6 +98,7 @@ function createSettingsMenu(root, host) {
             else if (isAudio) {
                 audio = value;
                 host.audioStop(owner.scene);
+                host.audioChanged(audio);
             }
             else keys = value;
         }
@@ -142,20 +146,33 @@ function createSettingsMenu(root, host) {
         owner.heading.textContent = 'Audio';
         owner.status.textContent = loading ? 'Loading settings' : '';
         owner.contents.textContent = '';
-        const enabled = button(owner, `Mod sounds, ${audio.enabled ? 'on' : 'off'}`, () =>
-            change(owner, { ...audio, enabled: !audio.enabled }, 'enabled', 'audio'));
-        const hrtf = button(owner, `HRTF, ${audio.hrtf ? 'on' : 'off'}`, () =>
-            change(owner, { ...audio, hrtf: !audio.hrtf }, 'hrtf', 'audio'));
+        const update = (key, value) => change(owner, value, key, 'audio');
+        const items = {
+            enabled: button(owner, `Mod sounds, ${audio.enabled ? 'on' : 'off'}`, () =>
+                update('enabled', { ...audio, enabled: !audio.enabled })),
+            hrtf: button(owner, `HRTF, ${audio.hrtf ? 'on' : 'off'}`, () =>
+                update('hrtf', { ...audio, hrtf: !audio.hrtf })),
+            wall: button(owner, `Wall sounds, ${audio.wall ? 'on' : 'off'}`, () =>
+                update('wall', { ...audio, wall: !audio.wall })),
+            lower: button(owner, `Decrease wall volume, ${audio.wallVolume} percent`, () =>
+                update('lower', { ...audio, wallVolume: Math.max(0, audio.wallVolume - 10) })),
+            raise: button(owner, `Increase wall volume, ${audio.wallVolume} percent`, () =>
+                update('raise', { ...audio, wallVolume: Math.min(100, audio.wallVolume + 10) }))
+        };
+        function preview(bearing, cue, gain) {
+            if (loading || saving) return;
+            if (!audio.enabled) return status(owner, 'Mod sounds are off.');
+            if (gain === 0) return status(owner, 'Wall volume is zero.');
+            status(owner, 'Preparing audio preview.');
+            if (!host.previewAudio(owner, audio.hrtf, bearing, text => status(owner, text), cue, gain)) status(owner, '');
+        }
+        button(owner, 'Preview wall bump ahead', () => preview([0, 0, 1], 'wallBump', audio.wallVolume / 100));
+        button(owner, 'Preview wall brush on the left', () => preview([-1, 0, 0], 'wallBrush', audio.wallVolume / 100));
         for (const [direction, bearing] of AUDIO_PREVIEWS) {
-            button(owner, `Preview ${direction}`, () => {
-                if (loading || saving) return;
-                if (!audio.enabled) return status(owner, 'Mod sounds are off.');
-                status(owner, 'Preparing audio preview.');
-                if (!host.previewAudio(owner, audio.hrtf, bearing, text => status(owner, text))) status(owner, '');
-            });
+            button(owner, `Preview ${direction}`, () => preview(bearing));
         }
         button(owner, 'Back', () => showRoot(owner, 'audio'));
-        (selection === 'hrtf' ? hrtf : enabled).focus();
+        (items[selection] || items.enabled).focus();
     }
 
     function showNavigation(owner, selection = 'layout') {

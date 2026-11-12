@@ -17,7 +17,8 @@ inline bool admitted(volatile LONG* word, LONG epoch) {
 class Device {
 #define WQA_SDL(X) X(SDL_GetVersion) X(SDL_IsMainThread) X(SDL_SetMainReady) X(SDL_SetHint) X(SDL_InitSubSystem) \
     X(SDL_QuitSubSystem) X(SDL_OpenAudioDeviceStream) X(SDL_ResumeAudioStreamDevice) X(SDL_DestroyAudioStream) \
-    X(SDL_LockAudioStream) X(SDL_UnlockAudioStream) X(SDL_PutAudioStreamData) X(SDL_ClearAudioStream)
+    X(SDL_LockAudioStream) X(SDL_UnlockAudioStream) X(SDL_PutAudioStreamData) X(SDL_ClearAudioStream) \
+    X(SDL_SetAudioStreamGetCallback)
 #define FIELD(name) decltype(&::name) name##_ = nullptr;
     WQA_SDL(FIELD)
 #undef FIELD
@@ -31,22 +32,36 @@ class Device {
     int next_ = render_frames;
 #ifdef WQA_AUDIO_TEST
     int submitted_ = 0;
+    int callbacks_ = 0;
 #endif
 
     static void SDLCALL supply(void* user, SDL_AudioStream* stream, int amount, int) {
         auto& self = *static_cast<Device*>(user);
         constexpr int bytes_per_frame = 2 * sizeof(std::int16_t);
-        if (!admitted(self.word_, self.epoch_) || amount < bytes_per_frame) return;
+#ifdef WQA_AUDIO_TEST
+        ++self.callbacks_;
+#endif
+        if (!admitted(self.word_, self.epoch_)) {
+            self.SDL_SetAudioStreamGetCallback_(stream, nullptr, nullptr);
+            return;
+        }
         int frames = std::min({amount / bytes_per_frame, render_frames - self.next_, 1024});
         while (frames > 0 && admitted(self.word_, self.epoch_)) {
             const int count = std::min(frames, 256);
-            if (!self.SDL_PutAudioStreamData_(stream, self.samples_.data() + self.next_ * 2, count * bytes_per_frame)) break;
+            if (!self.SDL_PutAudioStreamData_(stream, self.samples_.data() + self.next_ * 2, count * bytes_per_frame)) {
+                self.next_ = render_frames;
+                break;
+            }
             self.next_ += count;
             frames -= count;
 #ifdef WQA_AUDIO_TEST
             self.submitted_ += count;
 #endif
         }
+        // SDL owns a recursive stream mutex while calling supply. Unsubscribe
+        // here so completed or revoked cues leave no periodic mod callback.
+        if (self.next_ == render_frames || !admitted(self.word_, self.epoch_))
+            self.SDL_SetAudioStreamGetCallback_(stream, nullptr, nullptr);
     }
 
 public:
@@ -75,7 +90,7 @@ public:
         initialized_ = true;
         if (!admitted(word_, epoch)) return false;
         const SDL_AudioSpec format{SDL_AUDIO_S16, 2, rate};
-        stream_ = SDL_OpenAudioDeviceStream_(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &format, supply, this);
+        stream_ = SDL_OpenAudioDeviceStream_(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &format, nullptr, nullptr);
         if (!stream_ || !admitted(word_, epoch)) return false;
         ready_ = SDL_ResumeAudioStreamDevice_(stream_);
         return ready_;
@@ -83,11 +98,12 @@ public:
 
     bool publish(LONG epoch, const Stereo& data) {
         if (!ready_ || !admitted(word_, epoch) || !SDL_ClearAudioStream_(stream_) || !SDL_LockAudioStream_(stream_)) return false;
-        const bool current = admitted(word_, epoch);
+        bool current = admitted(word_, epoch);
         if (current) {
             samples_ = data;
             epoch_ = epoch;
             next_ = 0;
+            current = SDL_SetAudioStreamGetCallback_(stream_, supply, this);
         }
         SDL_UnlockAudioStream_(stream_);
         return current;
@@ -97,6 +113,12 @@ public:
     int submitted() {
         if (!SDL_LockAudioStream_(stream_)) return -1;
         const int count = submitted_;
+        SDL_UnlockAudioStream_(stream_);
+        return count;
+    }
+    int callbacks() {
+        if (!SDL_LockAudioStream_(stream_)) return -1;
+        const int count = callbacks_;
         SDL_UnlockAudioStream_(stream_);
         return count;
     }

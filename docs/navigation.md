@@ -26,6 +26,8 @@ Walking follows stock `Game_Map.checkPassage`, `allTiles`, `isPassable` and `Gam
 
 ## Offline evidence and limits
 
+The optional wall cues read the same live tile passage rules for lateral edges and observe the result of the player's native input attempt for bumps. A route result cannot create a bump. A patrol's native event takes precedence and revokes an active cue before locking the actor. [Controls and wall evidence](audio.md#wall-feedback)
+
 Build with `build.ps1`, then run `tests/world.test.cjs` with Node under the bounded runner. Pass the installed root and a fresh temporary output directory outside every Git tree. The test bakes all maps, compares native movement through the extracted installed functions, and verifies route legs and arrival triggers with those same functions. Remove the temporary geometry after the test. Run `tests/field.test.cjs` with the installed root for the transformed native map, terrain and movement entry points. `tests/nw-smoke.py` drives P through the packaged worker and speech formatting in matching NW.js 0.48.4 with a synthetic map and temporary profile. [Build and fixture commands](implementation.md#reproduction)
 
 - Compared **120,972** directed movements across maps 019, 062, 113, 195, 196, 199, 200, 201, 202 and 206, including repeated states. The worker reached the Salt Caverns wall clue and returned unreachable for the reset event from that fixture's origin and state. The test checked a crystal self-switch page selection and both authored flood fills in event 36. This covers native writes and resulting movement rules for the fixture states.

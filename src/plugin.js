@@ -6,6 +6,7 @@ const { createTitleObserver, presented } = require('./frontend/title');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createField } = require('./world/field');
+const { createWallAudio } = require('./world/wall-audio');
 const { createDialogueObserver } = require('./dialogue/observer');
 const { createSettingsMenu } = require('./settings/menu');
 const { createController, modeAnnouncement } = require('./settings/controller');
@@ -16,6 +17,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let mapBanner = null;
     let dialogue = null;
     let audio = null;
+    let wall = null;
     let field = null;
     let settings = null;
     let settingsScene = null;
@@ -79,12 +81,14 @@ function boot(root, nodeRequire, nodeProcess) {
             }
         };
         const { notifications } = createRenderer(host);
+        let audioPreferences = {};
         audio = createAudio(host);
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
+        wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
         function readyScene() {
             const scene = host.manager._scene;
             if (settingsScene !== scene || !scene?._wqaPresentation || !host.hasFocus() ||
@@ -123,11 +127,19 @@ function boot(root, nodeRequire, nodeProcess) {
             nativeButton,
             controllerChanged: () => controller?.reset(),
             audioStop: audio.retire,
-            previewAudio(owner, hrtf, bearing, report) {
+            audioChanged(value) {
+                wall.leave();
+                audioPreferences = value;
+                root.Graphics._wqaWallEnabled = value.enabled && value.wall && value.wallVolume > 0;
+                const scene = host.manager._scene;
+                if (root.Graphics._wqaWallEnabled && field.ready(scene)) root.WendyQuestAccessFieldReady(scene);
+            },
+            previewAudio(owner, hrtf, bearing, report, cue, gain) {
                 return audio.preview(owner.scene, hrtf, bearing, () =>
-                    owner.group === 'audio' && controlContext() === owner && !host.screenFading(), report);
+                    owner.group === 'audio' && controlContext() === owner && !host.screenFading(), report, audio.cues[cue], gain);
             },
             suspend(scene) {
+                wall.leave(scene);
                 setSettingsScene(null);
                 title.suspend();
                 files.suspend();
@@ -167,8 +179,13 @@ function boot(root, nodeRequire, nodeProcess) {
             if (root.Input?._wqaSettingsPads) delete root.Input._wqaSettingsPads[event.gamepad.index];
         });
         for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+            wall.leave();
             audio.retire();
             controller.reset();
+        });
+        root.addEventListener('focus', () => {
+            const scene = host.manager._scene;
+            if (root.Graphics._wqaWallEnabled && field.ready(scene)) root.WendyQuestAccessFieldReady(scene);
         });
         root.Graphics._wqaFrontEndObserved = true;
     }
@@ -250,7 +267,8 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFieldReady = function (scene) {
-        if ((field && !root.Graphics._wqaCaveRecoveryPending) || fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
+        if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaWallEnabled) ||
+            fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
             !root.document.hasFocus()) return;
         const renderer = root.Graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return;
@@ -264,20 +282,32 @@ function boot(root, nodeRequire, nodeProcess) {
             try {
                 if (!field) initialize();
                 field.observeRecovery(scene);
+                if (root.Graphics._wqaWallEnabled) wall.arm(scene);
             } catch { /* Native field input remains available. */ }
         });
     };
 
-    root.WendyQuestAccessFieldChanged = function (scene) { field?.changed(scene); };
+    root.WendyQuestAccessFieldChanged = function (scene) {
+        wall?.leave(scene);
+        field?.changed(scene);
+    };
     root.WendyQuestAccessFieldControlLost = function (scene) {
+        wall?.leave(scene);
         field?.controlLost(scene);
         controller?.reset();
     };
+
+    root.WendyQuestAccessWallMove = function (scene, direction, succeeded) {
+        try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
+    };
+    root.WendyQuestAccessWallEvent = function (scene) { wall?.interrupt(scene); };
+    root.WendyQuestAccessWallExpire = function (scene) { wall?.expire(scene); };
 
     // Direct native scene changes and developer reload can bypass the active
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
     root.WendyQuestAccessSceneLeaving = function (scene) {
+        wall?.leave(scene);
         audio?.retire(scene);
         if (settingsScene === scene) setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
@@ -298,6 +328,7 @@ function boot(root, nodeRequire, nodeProcess) {
         filesWaiting = null;
         fieldWaiting = null;
         const scene = root.SceneManager._scene;
+        wall?.leave(scene);
         audio?.retire(scene);
         setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
@@ -316,6 +347,7 @@ function boot(root, nodeRequire, nodeProcess) {
         if (!scene) return;
         if (scene instanceof root.Scene_Title) root.WendyQuestAccessTitleReady(scene);
         else if (scene._wqaFileKind) root.WendyQuestAccessFilesReady(scene);
+        else if (scene._wqaFieldReady && root.Graphics._wqaWallEnabled) root.WendyQuestAccessFieldReady(scene);
     };
 }
 

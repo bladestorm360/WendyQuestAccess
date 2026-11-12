@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
-const { createAudio } = require('../src/runtime/audio');
+const { CUE, createAudio } = require('../src/runtime/audio');
 
 const word = new Int32Array(new SharedArrayBuffer(4));
 const scheduled = [];
@@ -42,7 +42,7 @@ assert.equal(starts, 0);
 run();
 assert.equal(starts, 1);
 const cold = messages[0];
-assert.deepEqual(Object.keys(cold), ['epoch', 'hrtf', 'right', 'up', 'forward', 'gain']);
+assert.deepEqual(Object.keys(cold), ['epoch', 'hrtf', 'cue', 'right', 'up', 'forward', 'gain']);
 preview([-1, 0, 0]);
 preview([0, 0, -1], false);
 const latestEpoch = Atomics.load(word, 0);
@@ -54,9 +54,16 @@ worker.emit('message', { epoch: cold.epoch, status: 2 });
 assert.deepEqual(reports, []);
 run();
 assert.equal(messages.length, 2);
-assert.deepEqual(messages[1], { epoch: latestEpoch, hrtf: false, right: 0, up: 0, forward: -1, gain: 0.65 });
+assert.deepEqual(messages[1], { epoch: latestEpoch, hrtf: false, cue: CUE.preview, right: 0, up: 0, forward: -1, gain: 0.65 });
 worker.emit('message', { epoch: latestEpoch, status: 1 });
 assert.deepEqual(reports, ['Preview uses stereo and rear pitch.']);
+assert.equal(audio.isPrepared(true), true);
+audio.prepare(scene, true, () => ready, status => assert.equal(status, 2));
+run();
+const prepare = messages.at(-1);
+assert.equal(prepare.cue, CUE.prepare);
+assert.equal(prepare.gain, 0);
+worker.emit('message', { epoch: prepare.epoch, status: 2 });
 
 preview();
 run();

@@ -7,6 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { performance } = require('node:perf_hooks');
 const { Worker } = require('node:worker_threads');
+const { EventEmitter } = require('node:events');
 const { bake } = require('../tools/bake-world.cjs');
 const { bakeMap, decodeMap, composeWorld, indexOf, DIRECTIONS, step, surface } = require('../src/world/geometry.cjs');
 const { solveRoute } = require('../src/world/routes.cjs');
@@ -14,6 +15,8 @@ const { warningApproach } = require('../src/world/puzzles/cave');
 const { copyPatrol } = require('../src/world/puzzles/patrol-motion.cjs');
 const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../src/world/puzzles/motion-world.cjs');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
+const { createAudio, CUE } = require('../src/runtime/audio');
+const { createWallAudio } = require('../src/world/wall-audio');
 
 const game = path.resolve(process.argv[2]);
 const derived = path.resolve(process.argv[3]);
@@ -192,6 +195,129 @@ function verifyPatrolContact() {
     stopped.checkEventTriggerTouch(x, y);
     disabled.player.checkEventTriggerTouch(stopped.x, stopped.y);
     assert(!stopped.isStarting(), 'the native caught page disables repeat contact');
+}
+
+function verifyWallFeedback() {
+    const scene = c.SceneManager._scene;
+    const options = { enabled: true, wall: true, hrtf: true, wallVolume: 45 };
+    const worker = new EventEmitter();
+    const requests = [];
+    const queue = [];
+    const word = new Int32Array(new SharedArrayBuffer(4));
+    worker.unref = () => {};
+    worker.postMessage = request => requests.push(request);
+    const audio = createAudio({ makeWord: () => word, createAudioWorker: () => worker, schedule: task => queue.push(task) });
+    const wall = createWallAudio(c, (scene, moving) => moving && scene._wqaFieldReady &&
+        !scene._wqaSettingsActive && c.$gamePlayer._vehicleType === 'walk', audio, () => options);
+    c.WendyQuestAccessWallMove = (scene, motion, success) => wall.move(scene, motion, success);
+    c.WendyQuestAccessWallEvent = scene => wall.interrupt(scene);
+    c.Input = { dir4: 0 };
+    c.$gameTemp = { clearDestination() {}, isDestinationValid: () => false };
+    c.$gameMessage = { isBusy: () => false };
+    c.Graphics.frameCount = 100;
+    c.Graphics._wqaWallEnabled = true;
+    scene._wqaFieldReady = true;
+    const { gameMap, player } = load(19);
+    const place = (x, y, dir = 2) => Object.assign(c.$gamePlayer, { _x: x, _y: y, _realX: x, _realY: y,
+        _direction: dir, _followers: { areGathering: () => false, updateMove() {} } });
+    const press = (direction, frame = c.Graphics.frameCount) => {
+        c.Graphics.frameCount = frame;
+        c.Input.dir4 = direction;
+        c.$gamePlayer.moveByInput();
+    };
+    const send = () => {
+        while (queue.length) queue.shift()();
+        return requests.at(-1);
+    };
+    const ack = request => worker.emit('message', { epoch: request.epoch, status: 2 });
+    const follow = (x, y, d) => [gameMap.roundXWithDirection(x, d), gameMap.roundYWithDirection(y, d)];
+    const side = (x, y, d) => !gameMap.isValid(...follow(x, y, d)) || !player.isMapPassable(x, y, d);
+    const still = () => [player._x, player._y];
+    let corner;
+    let edge;
+    for (let y = 0; y < gameMap.height(); y++) {
+        for (let x = 0; x < gameMap.width(); x++) {
+            if (gameMap.eventsXyNt(x, y).length) continue;
+            const [eastX, eastY] = follow(x, y, 6);
+            if (!gameMap.isValid(eastX, eastY) || !player.canPass(x, y, 6)) continue;
+            if (!corner && side(x, y, 8) && !gameMap.eventsXyNt(...follow(x, y, 8)).length) corner = [x, y];
+            if (!edge && side(x, y, 8) && side(eastX, eastY, 8) && !side(x, y, 2)) edge = [x, y];
+        }
+    }
+    assert(corner && edge);
+    place(...corner);
+    wall.arm(scene);
+    const prepare = send();
+    assert.equal(prepare.cue, CUE.prepare);
+    press(8);
+    assert.equal(send(), prepare, 'a cold step must not turn into a delayed sound');
+    ack(prepare);
+    assert.equal(Atomics.load(word, 0), 0);
+    press(8, 101);
+    const bump = send();
+    assert.deepEqual(still(), corner);
+    assert.equal(player.isMovementSucceeded(), false);
+    assert.deepEqual([bump.cue, bump.right, bump.forward, bump.gain], [CUE.wallBump, 0, 1, 0.45]);
+    ack(bump);
+    press(8, 102);
+    assert.equal(send(), bump);
+    press(8, 119);
+    const again = send();
+    assert.notEqual(again.epoch, bump.epoch);
+    ack(again);
+    wall.expire(scene);
+    assert.equal(Atomics.load(word, 0), 0);
+
+    place(...edge);
+    press(6, 140);
+    assert.equal(player.isMovementSucceeded(), true);
+    assert.deepEqual(still(), follow(...edge, 6));
+    const brush = send();
+    assert.deepEqual([brush.cue, brush.right, brush.forward], [CUE.wallBrush, -1, 0]);
+    ack(brush);
+    scene._wqaSettingsActive = true;
+    place(...corner);
+    press(8, 160);
+    assert.equal(send(), brush);
+    wall.leave(scene);
+    assert.equal(Atomics.load(word, 0), 0);
+    scene._wqaSettingsActive = false;
+
+    press(8, 170);
+    const beforeContact = send();
+    assert.notEqual(beforeContact.epoch, brush.epoch);
+    ack(beforeContact);
+    assert.equal(Atomics.load(word, 0), beforeContact.epoch);
+    const cave = load(196);
+    const patrol = cave.gameMap._events[4];
+    patrol.lock = () => assert.equal(Atomics.load(word, 0), 0, 'close before native event lock');
+    const towardPlayer = [0, 2, 4, 6, 8][patrol.page().moveRoute.list[0].code];
+    place(cave.gameMap.roundXWithDirection(patrol.x, towardPlayer), cave.gameMap.roundYWithDirection(patrol.y, towardPlayer));
+    press(10 - towardPlayer, 180);
+    assert(patrol.isStarting());
+    assert.equal(cave.player.isMovementSucceeded(), false);
+    assert.equal(send(), beforeContact, 'the native patrol encounter must preempt the wall tone');
+    assert.equal(Atomics.load(word, 0), 0);
+
+    load(19);
+    place(...corner);
+    function attempts(enabled, base) {
+        c.Graphics._wqaWallEnabled = enabled;
+        wall.leave(scene);
+        const start = performance.now();
+        for (let i = 0; i < 120; i++) {
+            press(8, base + i);
+            if (queue.length) ack(send());
+            if (scene._wqaWallUntil && c.Graphics.frameCount >= scene._wqaWallUntil) wall.expire(scene);
+        }
+        return performance.now() - start;
+    }
+    const baseline = attempts(false, 300);
+    const withCue = attempts(true, 600);
+    wall.leave(scene);
+    scene._wqaFieldReady = false;
+    c.Graphics._wqaWallEnabled = false;
+    console.log(`Throttled 120 native blocked attempts: ${baseline.toFixed(2)} ms baseline, ${withCue.toFixed(2)} ms with silent wall requests.`);
 }
 
 function configureMotion(fixture, x, y, displayX = 0, displayY = 0) {
@@ -470,6 +596,7 @@ async function main() {
     compare(world);
     for (const id of [195, 196, 199, 200, 201, 202, 206]) compare(load(id));
     verifyPatrolContact();
+    verifyWallFeedback();
     verifyNativePatrolMotion();
     await verifyCrossingPreview();
     await verifyWarningApproach();

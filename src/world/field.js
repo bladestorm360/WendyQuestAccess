@@ -24,7 +24,7 @@ function createField(root, host, notifications) {
         return cave.available(scene) ? cave : null;
     }
 
-    function ready(scene) {
+    function ready(scene, moving = false) {
         const player = root.$gamePlayer;
         const map = root.$gameMap;
         return !!(scene?._wqaFieldReady && !scene._wqaSettingsActive &&
@@ -35,7 +35,7 @@ function createField(root, host, notifications) {
             map?.inactiveTime < 30 && !map._needsRefresh && !map._needsTilemapRefresh && !player?._transferring &&
             !player?._vehicleGettingOn && !player?._vehicleGettingOff &&
             !root.$gameMessage?.isBusy() && !map?._interpreter?._list && player?._vehicleType === 'walk' &&
-            !player._through && player._x === player._realX && player._y === player._realY && !(player._jumpCount > 0));
+            !player._through && (moving || player._x === player._realX && player._y === player._realY) && !(player._jumpCount > 0));
     }
 
     function retire(scene) {

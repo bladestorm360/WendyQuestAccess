@@ -33,47 +33,58 @@ int wmain(int argc, wchar_t** argv) {
     const std::wstring root(argv[1]);
     const auto ready = [] { return true; };
     Stereo front{}, rear{}, left{}, right{}, up{};
-    assert(stereo_preview(front, {0, 0, 1}, 0.7, ready));
-    assert(stereo_preview(rear, {0, 0, -1}, 0.7, ready));
+    assert(stereo_cue(front, Cue::preview, {0, 0, 1}, 0.7, ready));
+    assert(stereo_cue(rear, Cue::preview, {0, 0, -1}, 0.7, ready));
     const auto front_crossings = crossings(front, 0);
     const auto rear_crossings = crossings(rear, 0);
     assert(front_crossings > rear_crossings);
     assert(energy(front, 0) == energy(front, 1) && energy(rear, 0) == energy(rear, 1));
-    assert(stereo_preview(left, {-1, 0, 0}, 0.7, ready));
-    assert(stereo_preview(right, {1, 0, 0}, 0.7, ready));
+    assert(stereo_cue(left, Cue::preview, {-1, 0, 0}, 0.7, ready));
+    assert(stereo_cue(right, Cue::preview, {1, 0, 0}, 0.7, ready));
     assert(energy(left, 1) == 0 && energy(right, 0) == 0);
     assert(crossings(left, 0) == front_crossings && crossings(right, 1) == front_crossings);
     for (int i = -15; i <= 15; ++i) {
         const double angle = tau * i / 64.0;
         Stereo test{};
-        assert(stereo_preview(test, {std::sin(angle), 0, -std::cos(angle)}, 0.7, ready));
+        assert(stereo_cue(test, Cue::preview, {std::sin(angle), 0, -std::cos(angle)}, 0.7, ready));
         assert(crossings(test, i < 0 ? 0 : 1) == rear_crossings);
     }
     int polls = 0;
-    assert(!stereo_preview(up, {0, 1, 0}, 0.7, [&] { return ++polls < 4; }));
+    assert(!stereo_cue(up, Cue::preview, {0, 1, 0}, 0.7, [&] { return ++polls < 4; }));
     assert(polls == 4);
 
     Hrtf hrtf;
     const auto begin = std::chrono::steady_clock::now();
     assert(hrtf.open(root + L"\\soft_oal.dll", ready));
     const auto initialized = std::chrono::steady_clock::now();
-    assert(hrtf.render(front, {0, 0, 1}, 0.7, ready));
-    assert(hrtf.render(rear, {0, 0, -1}, 0.7, ready));
-    assert(hrtf.render(left, {-1, 0, 0}, 0.7, ready));
-    assert(hrtf.render(right, {1, 0, 0}, 0.7, ready));
-    assert(hrtf.render(up, {0, 1, 0}, 0.7, ready));
+    assert(hrtf.render(front, Cue::preview, {0, 0, 1}, 0.7, ready));
+    assert(hrtf.render(rear, Cue::preview, {0, 0, -1}, 0.7, ready));
+    assert(hrtf.render(left, Cue::preview, {-1, 0, 0}, 0.7, ready));
+    assert(hrtf.render(right, Cue::preview, {1, 0, 0}, 0.7, ready));
+    assert(hrtf.render(up, Cue::preview, {0, 1, 0}, 0.7, ready));
     const auto rendered = std::chrono::steady_clock::now();
     assert(front != rear && front != up);
     assert(energy(left, 0) > energy(left, 1) && energy(right, 1) > energy(right, 0));
     polls = 0;
-    assert(!hrtf.render(up, {0, 1, 0}, 0.7, [&] { return ++polls < 6; }));
+    assert(!hrtf.render(up, Cue::preview, {0, 1, 0}, 0.7, [&] { return ++polls < 6; }));
     assert(polls == 6);
+    Stereo bump{}, brush{}, rear_bump{}, rear_brush{};
+    assert(hrtf.render(bump, Cue::wall_bump, {0, 0, 1}, 0.7, ready));
+    assert(hrtf.render(brush, Cue::wall_brush, {0, 0, 1}, 0.7, ready));
+    assert(energy(bump, 0) > 0 && energy(brush, 0) > 0 && bump != brush);
+    assert(stereo_cue(bump, Cue::wall_bump, {0, 0, 1}, 0.7, ready));
+    assert(stereo_cue(brush, Cue::wall_brush, {0, 0, 1}, 0.7, ready));
+    assert(stereo_cue(rear_bump, Cue::wall_bump, {0, 0, -1}, 0.7, ready));
+    assert(stereo_cue(rear_brush, Cue::wall_brush, {0, 0, -1}, 0.7, ready));
+    assert(crossings(rear_bump, 0) < crossings(bump, 0) && crossings(rear_brush, 0) < crossings(brush, 0));
 
     // The build runner sets SDL_AUDIO_DRIVER=dummy for this process only.
     // The real SDL driver callback consumes the pre-rendered PCM.
     volatile LONG generation = 1;
     Device device(&generation);
     assert(device.open(root + L"\\SDL3.dll", 1));
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    assert(device.callbacks() == 0);
     assert(!device.publish(2, left));
     assert(device.publish(1, left));
     for (int i = 0; i < 40 && device.submitted() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -81,12 +92,19 @@ int wmain(int argc, wchar_t** argv) {
     InterlockedExchange(&generation, 0);
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     const auto stopped = device.submitted();
+    const auto revoked = device.callbacks();
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
-    assert(device.submitted() == stopped && !device.publish(1, right));
+    assert(device.submitted() == stopped && device.callbacks() == revoked && !device.publish(1, right));
     InterlockedExchange(&generation, 2);
     assert(device.publish(2, right));
     for (int i = 0; i < 40 && device.submitted() == stopped; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     assert(device.submitted() > stopped);
+    for (int i = 0; i < 80 && device.submitted() < stopped + render_frames; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    assert(device.submitted() == stopped + render_frames);
+    const auto completed = device.callbacks();
+    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    assert(device.callbacks() == completed);
     std::printf("Verified built-in HRTF, full rear-pitch fallback and SDL dummy output generation. Loopback init %.1f ms, five cues %.1f ms.\n",
         std::chrono::duration<double, std::milli>(initialized - begin).count(),
         std::chrono::duration<double, std::milli>(rendered - initialized).count());

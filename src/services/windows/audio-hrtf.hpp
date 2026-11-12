@@ -22,7 +22,7 @@ class Hrtf {
     LPALCRENDERSAMPLESSOFT render_ = nullptr;
     PFNALCSETTHREADCONTEXTPROC set_thread_ = nullptr;
     ALuint source_ = 0;
-    ALuint buffer_ = 0;
+    std::array<ALuint, static_cast<int>(Cue::count)> buffers_{};
     bool available_ = false;
 
 public:
@@ -77,25 +77,28 @@ public:
         const auto name = alcGetString_(device_, ALC_HRTF_SPECIFIER_SOFT);
         if (!enabled || !name || std::strcmp(name, "Built-In HRTF") != 0 || !ready()) return false;
         std::array<std::int16_t, cue_frames> mono{};
-        for (int i = 0; i < cue_frames; ++i) {
-            if ((i % 128) == 0 && !ready()) return false;
-            mono[i] = sample16(preview_sample(i, 1.0));
+        alGenBuffers_(static_cast<ALsizei>(buffers_.size()), buffers_.data());
+        for (int cue = 0; cue < static_cast<int>(Cue::count); ++cue) {
+            for (int i = 0; i < cue_frames; ++i) {
+                if ((i % 128) == 0 && !ready()) return false;
+                mono[i] = sample16(cue_sample(static_cast<Cue>(cue), i, 1.0));
+            }
+            if (!ready()) return false;
+            alBufferData_(buffers_[cue], AL_FORMAT_MONO16, mono.data(), static_cast<ALsizei>(sizeof(mono)), rate);
         }
         if (!ready()) return false;
         alDistanceModel_(AL_NONE);
-        alGenBuffers_(1, &buffer_);
-        alBufferData_(buffer_, AL_FORMAT_MONO16, mono.data(), static_cast<ALsizei>(sizeof(mono)), rate);
         alGenSources_(1, &source_);
         alSourcei_(source_, AL_SOURCE_RELATIVE, AL_TRUE);
-        alSourcei_(source_, AL_BUFFER, static_cast<ALint>(buffer_));
         available_ = alGetError_() == AL_NO_ERROR && ready();
         return available_;
     }
 
     template<class Ready>
-    bool render(Stereo& output, Bearing p, double gain, Ready ready) {
+    bool render(Stereo& output, Cue cue, Bearing p, double gain, Ready ready) {
         if (!available_ || !ready()) return false;
         alSourceStop_(source_);
+        alSourcei_(source_, AL_BUFFER, static_cast<ALint>(buffers_[static_cast<int>(cue)]));
         alSource3f_(source_, AL_POSITION, static_cast<float>(p.right), static_cast<float>(p.up), static_cast<float>(-p.forward));
         alSourcef_(source_, AL_GAIN, static_cast<float>(gain));
         if (!ready()) return false;

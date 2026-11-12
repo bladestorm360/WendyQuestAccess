@@ -1,5 +1,8 @@
 'use strict';
 
+// IDs match the original Windows cue bank. Preparation uses no output.
+const CUE = Object.freeze({ prepare: -1, preview: 0, wallBump: 1, wallBrush: 2 });
+
 function createAudio(host) {
     let generation = null;
     let worker = null;
@@ -8,6 +11,8 @@ function createAudio(host) {
     let inFlight = null;
     let scheduled = false;
     let failed = false;
+    let stereoReady = false;
+    let hrtfResolved = false;
     let nextEpoch = 0;
 
     function retire(scene) {
@@ -17,12 +22,13 @@ function createAudio(host) {
     }
 
     function notify(request, status) {
+        if (status > 0) {
+            stereoReady = true;
+            if (request.hrtf) hrtfResolved = true;
+        }
         if (active !== request) return;
         if (!request.ready()) return retire(request.scene);
-        if (status === 2) request.report('Preview uses HRTF.');
-        else if (status === 1) request.report(request.hrtf ?
-            'HRTF unavailable. Preview uses stereo and rear pitch.' : 'Preview uses stereo and rear pitch.');
-        else if (status < 0) request.report('Mod audio output unavailable.');
+        request.complete?.(status);
     }
 
     function failedWorker() {
@@ -54,10 +60,10 @@ function createAudio(host) {
                 worker.unref();
             }
             inFlight = request;
-            const { epoch, hrtf, right, up, forward, gain } = request;
+            const { epoch, hrtf, cue, right, up, forward, gain } = request;
             // Only the bounded bearing and scalar settings cross to the worker.
             // The scene and readiness predicate remain in the renderer.
-            worker.postMessage({ epoch, hrtf, right, up, forward, gain });
+            worker.postMessage({ epoch, hrtf, cue, right, up, forward, gain });
         } catch { failedWorker(); }
     }
 
@@ -67,23 +73,37 @@ function createAudio(host) {
         host.schedule(drain);
     }
 
-    function preview(scene, hrtf, bearing, ready, report) {
+    function play(scene, hrtf, cue, gain, bearing, ready, complete) {
         if (!ready()) return false;
         if (failed || nextEpoch >= 0x7ffffffe) {
-            report('Mod audio output unavailable.');
-            return true;
+            complete?.(-1);
+            return !!complete;
         }
         if (!generation) generation = host.makeWord();
         const [right, up, forward] = bearing;
         // Replacing the pending preview also revokes any previous native PCM.
         // The callback observes the same word without a worker round trip.
-        active = pending = { epoch: ++nextEpoch, scene, hrtf, right, up, forward, gain: 0.65, ready, report };
+        active = pending = { epoch: ++nextEpoch, scene, hrtf, cue, right, up, forward, gain, ready, complete };
         Atomics.store(generation, 0, active.epoch);
         schedule();
         return true;
     }
 
-    return { preview, retire };
+    return {
+        cues: CUE, play, retire,
+        isPrepared: hrtf => !failed && stereoReady && (!hrtf || hrtfResolved),
+        prepare(scene, hrtf, ready, complete) {
+            return play(scene, hrtf, CUE.prepare, 0, [0, 0, 1], ready, complete);
+        },
+        preview(scene, hrtf, bearing, ready, report, cue = CUE.preview, gain = 0.65) {
+            return play(scene, hrtf, cue, gain, bearing, ready, status => {
+                if (status === 2) report('Preview uses HRTF.');
+                else if (status === 1) report(hrtf ?
+                    'HRTF unavailable. Preview uses stereo and rear pitch.' : 'Preview uses stereo and rear pitch.');
+                else if (status < 0) report('Mod audio output unavailable.');
+            });
+        }
+    };
 }
 
-module.exports = { createAudio };
+module.exports = { CUE, createAudio };

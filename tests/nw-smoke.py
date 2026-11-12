@@ -119,6 +119,7 @@ let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
 let audioStarted = 0;
+let wallPreviewStarted = 0;
 let controllerStep = 0;
 let dialoguePadStep = 0;
 let nativeZ = 0;
@@ -216,9 +217,22 @@ function verifySettings() {
         choose('Preview behind');
         settingsStep++;
     } else if (settingsStep === 10 && menuStatus() === 'Preview uses stereo and rear pitch.') {
-        choose('Mod sounds');
+        choose('Wall sounds');
         settingsStep++;
     } else if (settingsStep === 11 && menuStatus() === 'Audio settings saved') {
+        if (document.activeElement.textContent !== 'Wall sounds, on') throw Error('Wall sound setting failed');
+        choose('Decrease wall volume');
+        settingsStep++;
+    } else if (settingsStep === 12 && menuStatus() === 'Audio settings saved') {
+        if (document.activeElement.textContent !== 'Decrease wall volume, 55 percent') throw Error('Wall gain setting failed');
+        wallPreviewStarted = performance.now();
+        choose('Preview wall brush on the left');
+        settingsStep++;
+    } else if (settingsStep === 13 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        require('fs').writeFileSync(receipt + '.wall-preview-ms', String(performance.now() - wallPreviewStarted));
+        choose('Mod sounds');
+        settingsStep++;
+    } else if (settingsStep === 14 && menuStatus() === 'Audio settings saved') {
         choose('Preview right');
         if (menuStatus() !== 'Mod sounds are off.') throw Error('The sound switch did not prevent preview');
         tap('Escape');
@@ -297,7 +311,7 @@ const interval = setInterval(() => {
             const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 3).map(item => item.textContent);
             tap('Escape');
             choose('Audio');
-            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
+            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 4).map(item => item.textContent);
             write({ bindings, controller, navigation, audio });
             clearInterval(interval);
             nw.App.quit();
@@ -305,7 +319,7 @@ const interval = setInterval(() => {
         return;
     }
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
-        if (settingsStep < 12) return verifySettings();
+        if (settingsStep < 15) return verifySettings();
         if (!require('fs').existsSync(receipt + '.returned-title')) return;
         if (controllerStep < 13) return verifyController();
         if (!require('fs').existsSync(receipt + '.controller-returned-title')) return;
@@ -589,6 +603,7 @@ def main():
         cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
         audio_ms = float(receipt.with_suffix('.json.audio-init-ms').read_text(encoding='utf8'))
+        wall_ms = float(receipt.with_suffix('.json.wall-preview-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
@@ -607,15 +622,17 @@ def main():
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Right trigger', 'Next category, Unassigned'] or \
                 reloaded.get('navigation') != ['Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
-                                               'Next destination, N'] or reloaded.get('audio') != ['Mod sounds, off', 'HRTF, off']:
+                                               'Next destination, N'] or reloaded.get('audio') != [
+                    'Mod sounds, off', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent']:
             raise RuntimeError('NW settings did not survive restart in the isolated profile')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic renderer command and cold worker submission: {submit_ms:.1f} ms.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
-        print(f'Verified native HRTF and stereo preview on the silent SDL driver and settings persistence. '
+        print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '
               f'Throttled cold HRTF status observed after {audio_ms:.1f} ms with 40 ms polling.')
+        print(f'Throttled warm wall preview status observed after {wall_ms:.1f} ms with 40 ms polling.')
 
 
 if __name__ == '__main__':

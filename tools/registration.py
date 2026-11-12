@@ -65,8 +65,9 @@ SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentatio
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
                  b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
-                 b'SceneManager._scene?._wqaSettingsActive)')
-ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview)'
+                 b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio)')
+ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
+               b'SceneManager._scene?._wqaWallAudio)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||this._eventId!==undefined||'
                b'this._type==="boat"||this._type==="ship")||'
@@ -184,6 +185,10 @@ def objects_notification(original):
         249865: ROUTE_DIRTY + b'\n        ',  # Active event page replacement
         21807: b'\n    ' + MAP_LEAVING,  # Game_Screen fade-out
         217381: b'\n    ' + MAP_LEAVING,  # Accepted transfer reservation
+        222850: b'\n            if(Graphics._wqaWallEnabled&&this===$gamePlayer&&SceneManager._scene?._wqaFieldReady)'
+                b'globalThis.WendyQuestAccessWallMove?.(SceneManager._scene,direction,this._movementSuccess);',
+        249454: b'if(Graphics._wqaWallEnabled&&SceneManager._scene?._wqaFieldReady)'
+                b'globalThis.WendyQuestAccessWallEvent?.(SceneManager._scene);\n        ',  # Accepted event start
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING + b'}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
@@ -282,6 +287,8 @@ def map_notification(original):
     }
 '''
     field_update = b'''
+    if (this._wqaWallUntil && Graphics.frameCount >= this._wqaWallUntil)
+        globalThis.WendyQuestAccessWallExpire?.(this);
     if (this._wqaPreviewUntil && Graphics.frameCount >= this._wqaPreviewUntil)
         globalThis.WendyQuestAccessFieldChanged?.(this);
     const wqaWasFieldReady = this._wqaFieldReady;
@@ -293,9 +300,11 @@ def map_notification(original):
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
         !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
     if (this._wqaFieldReady) {
-        if (!Graphics._wqaFrontEndObserved || (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198))
+        if (!Graphics._wqaFrontEndObserved || (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||
+            (!wqaWasFieldReady && Graphics._wqaWallEnabled))
             globalThis.WendyQuestAccessFieldReady?.(this);
-    } else if (wqaWasFieldReady || this._wqaRouteActive || this._wqaCaveReview) globalThis.WendyQuestAccessFieldControlLost?.(this);
+    } else if (wqaWasFieldReady || this._wqaRouteActive || this._wqaCaveReview || this._wqaWallAudio)
+        globalThis.WendyQuestAccessFieldControlLost?.(this);
 '''
     return insert(original, MAP_SHA, {
         # Track the native generator lifetime, including yielded rings.
