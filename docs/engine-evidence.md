@@ -84,6 +84,8 @@ The custom scripts are one-line JavaScript; several use rotating string tables. 
 
 F8 is a separate `SceneManager.onKeyDown` case; stock `showDevTools` is test-only and the shipped manifest disables devtools. `MonkeyWrenchMZ.js` also contains a key-119 handler. Follow its exact guard and consumer before selecting F8. Keep the controller settings path accessible regardless of the final keyboard choice. Do not bind competing game actions twice; honor native focus, controller ownership, hold/release, repeat and manual movement priority.
 
+The installed `InputAdjustments` effective base table leaves R (legacy key 82) free. The quest plugin contains a configurable R branch, so the mod checks the current `Input.keyMapper` at dispatch, including when another plugin claims the key. The window listener observes plain R without cancelling the browser event or writing native input state. `tests/dialogue-producers.py` supplies the decoded native table and key handler to the repeat fixture in memory. The modified native mapping test proves handback. The matching standalone NW.js app verifies the actual bubbling `keydown` and its worker packet without loading the game. Physical input, screen-reader pass-through and controller ownership remain gameplay checks.
+
 ## Offline checks completed and reproducible procedure
 
 1. Read the Steam manifest; inspect `package.nw` as a directory; hash the build identity files; parse PE import, delay import and export tables using the existing `pefile` package in fast-load mode. No binary was executed.

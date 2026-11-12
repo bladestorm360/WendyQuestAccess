@@ -167,6 +167,7 @@ function fixture(data, failSave = false) {
         while (timers.length) timers.shift()();
     }
     return { c, event, name, trace, bitmapCallbacks, idleCallbacks, frame, renderer, packets, run,
+        dispatchWindowEvent: (...args) => events.emit(...args),
         epoch: () => admission ? Atomics.load(admission, 0) : 0,
         speech: () => packets.filter(packet => packet.kind === 'mapBanner').map(formatSpeech) };
 }

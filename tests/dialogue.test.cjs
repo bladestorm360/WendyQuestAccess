@@ -247,9 +247,12 @@ async function verifyAutomaticClose() {
     assert.equal(f.window.pause, false);
     assert.equal(f.settings.text, '');
     assert.equal(f.packets()[0].text.trim(), f.shown.join('').trim());
+    f.dispatchWindowEvent('keydown', { key: 'r', keyCode: 82 });
+    assert.equal(formatSpeech(f.packets()[1]), formatSpeech(f.packets()[0]));
     for (let frame = 0; frame < 10; frame++) f.tick();
     assert.equal(f.window.openness, 0);
-    assert.equal(f.packets().length, 1, 'the confirmed automatic page remains a single speech event');
+    f.dispatchWindowEvent('keydown', { key: 'r', keyCode: 82 });
+    assert.equal(f.packets().length, 2, 'an automatic page speaks once on its own and can only be repeated while visible');
 
     for (const retire of ['advance opacity', 'native transfer']) {
         const pending = await enter(map, 58);
@@ -309,6 +312,91 @@ async function verifyBattleDialogue() {
     assert(auto.epoch());
     auto.tick();
     assert.equal(auto.epoch(), 0, 'native battle phase work retires automatic dialogue first');
+}
+
+async function verifyRepeat() {
+    const f = await enter(mapData(19));
+    const { c, window, speaker, settings, choice } = f;
+    c.a14_0x1f92c6 = () => { throw Error('Unresolved input property'); };
+    c.Input._currentState = {};
+    c.Input._shouldPreventDefault = () => false;
+    c.Input.deviceType = { KEYBOARD: 'keyboard' };
+    c.Input.SetLastInputDeviceType = () => {};
+    const keydown = (overrides = {}) => {
+        const event = { key: 'r', keyCode: 82, ...overrides };
+        c.Input._onKeyDown(event);
+        f.dispatchWindowEvent('keydown', event);
+    };
+
+    assert.equal(c.Input.keyMapper[82], undefined);
+    Object.assign(settings, { text: 'A clue.\\! A second line.', speaker: 'Speaker',
+        faceReady: true, choices: ['First answer', 'Second answer'] });
+    f.until(() => window.pause);
+    speaker._animationRunning = false;
+    f.tick(false);
+    keydown();
+    assert.deepEqual(f.packets(), [], 'a drawn but unpresented page is ineligible');
+    f.frame();
+    assert.equal(formatSpeech(f.packets()[0]), 'Speaker. A clue.');
+    for (const override of [{ ctrlKey: true }, { altKey: true }, { shiftKey: true }, { metaKey: true },
+        { repeat: true }, { isComposing: true }, { defaultPrevented: true }, { key: 't' },
+        { target: { closest: () => ({}) } }]) keydown(override);
+    c.$gameScreen._fadeOutDuration = 1;
+    keydown();
+    c.$gameScreen._fadeOutDuration = 0;
+    c.document.hasFocus = () => false;
+    keydown();
+    c.document.hasFocus = () => true;
+    c.Input.keyMapper[82] = 'fixtureNative';
+    keydown();
+    assert.equal(c.Input._currentState.fixtureNative, true);
+    delete c.Input.keyMapper[82];
+    assert.equal(f.packets().length, 1);
+    keydown({ key: 'R' });
+    assert.equal(formatSpeech(f.packets()[1]), 'Speaker. A clue.');
+    assert.equal(window.pause, true);
+    f.advance();
+    keydown();
+    assert.equal(f.packets().length, 2, 'an accepted advance retires the old presentation');
+    f.until(() => f.packets().length === 4);
+    assert.equal(formatSpeech(f.packets()[2]), 'A second line.');
+    assert.equal(formatSpeech(f.packets()[3]), 'Choices. First answer');
+    choice.select(1);
+    f.tick();
+    assert.equal(formatSpeech(f.packets()[4]), 'Second answer');
+    keydown();
+    assert.equal(formatSpeech(f.packets()[5]), 'Speaker. A clue. A second line.');
+    assert.equal(choice.index(), 1);
+    choice.callOkHandler();
+    keydown();
+    assert.equal(f.packets().length, 6);
+
+    const equal = await enter(mapData(19));
+    for (let index = 0; index < 2; index++) {
+        Object.assign(equal.settings, { text: 'Same words', faceReady: true });
+        equal.until(() => equal.packets().length === index * 2 + 1);
+        equal.dispatchWindowEvent('keydown', { key: 'r', keyCode: 82 });
+        assert.equal(formatSpeech(equal.packets().at(-1)), 'Same words');
+        assert.equal(equal.packets().length, (index + 1) * 2);
+        if (index === 1) {
+            equal.c.document.hasFocus = () => false;
+            equal.dispatchWindowEvent('blur');
+        } else equal.advance();
+        equal.dispatchWindowEvent('keydown', { key: 'r', keyCode: 82 });
+        assert.equal(equal.packets().length, (index + 1) * 2);
+    }
+    assert.notEqual(equal.packets()[0].epoch, equal.packets()[2].epoch);
+    assert.equal(equal.epoch(), 0);
+    equal.c.document.hasFocus = () => true;
+    equal.dispatchWindowEvent('keydown', { key: 'r', keyCode: 82 });
+    assert.equal(formatSpeech(equal.packets()[4]), 'Same words');
+    assert.notEqual(equal.packets()[4].epoch, equal.packets()[2].epoch);
+    equal.c.document.hasFocus = () => false;
+    equal.dispatchWindowEvent('blur');
+    equal.advance();
+    equal.c.document.hasFocus = () => true;
+    equal.dispatchWindowEvent('keydown', { key: 'r', keyCode: 82 });
+    assert.equal(equal.packets().length, 5, 'focus return does not revive a page retired in the background');
 }
 
 async function main() {
@@ -383,7 +471,8 @@ async function main() {
     await verifyNumberEntry();
     await verifyAutomaticClose();
     await verifyBattleDialogue();
-    console.log('Verified installed map and battle dialogue, puzzle clue, choices, number entry, and automatic-close text.');
+    await verifyRepeat();
+    console.log('Verified installed map and battle dialogue, puzzle clue, choices, number entry, automatic-close text, and current-page repeat.');
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

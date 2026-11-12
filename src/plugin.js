@@ -23,6 +23,8 @@ function boot(root, nodeRequire, nodeProcess) {
             graphics: root.Graphics,
             window: root,
             hasFocus: () => root.document.hasFocus(),
+            screenFading: () => root.$gameScreen?._fadeOutDuration > 0,
+            nativeKey: code => root.Input?.keyMapper?.[code],
             battleDialogueIdle: () => root.BattleManager?._wqaDialogueBusy === false,
             saveInfo: index => root.DataManager.savefileInfo(index),
             actor: id => root.$dataActors?.[id],
@@ -47,6 +49,15 @@ function boot(root, nodeRequire, nodeProcess) {
         files = createFilesObserver(host, notifications);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
+        root.addEventListener('keydown', event => {
+            if (event.key !== 'r' && event.key !== 'R') return;
+            if (event.ctrlKey || event.altKey || event.shiftKey || event.metaKey || event.repeat ||
+                event.isComposing || event.defaultPrevented || host.nativeKey(event.keyCode || 82) ||
+                event.target?.closest?.('input, textarea, select, [contenteditable]')) return;
+            // The key is unused natively. Other listeners and device state
+            // retain their ordinary behavior even when the mod reads a page.
+            try { dialogue.repeatPage(); } catch { /* Preserve native key dispatch. */ }
+        });
         root.Graphics._wqaFrontEndObserved = true;
     }
 
