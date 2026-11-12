@@ -1,6 +1,7 @@
 'use strict';
 
-const { transferOptions, cauldronIntroductionFinished, SHIP_PORTS, shipPort } = require('./transfer-events.cjs');
+const { transferOptions, cauldronIntroductionFinished, SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount } =
+    require('./transfer-events.cjs');
 const { travelMode, vehicleOnMap } = require('./vehicle-navigation');
 const { transferState, gateAllows } = require('./transfer-gates.cjs');
 const { tileKey } = require('./geometry.cjs');
@@ -15,9 +16,13 @@ function liveEntrance(root, event, state, mode) {
     if (!page || event._trigger !== page.trigger || event._priorityType !== page.priorityType) return null;
     const common = root.$dataCommonEvents;
     const craft = mode === 'ship' && vehicleOnMap(map, mode);
-    const destination = mode === 'walk' ? transferOptions(map._mapId, entry, page, common).find(edge => gateAllows(edge.gate, state))
-        : craft && shipPort(entry, page, common);
+    let destination;
+    if (mode === 'walk') destination = transferOptions(map._mapId, entry, page, common).find(edge => gateAllows(edge.gate, state));
+    else if (craft && id === ISLAND_DOCK && root.$gameSwitches?.value?.(224) === false)
+        destination = islandDismount(entry, page);
+    else if (craft) destination = shipPort(entry, page, common);
     if (!destination || !root.$dataMapInfos?.[destination.map] ||
+        (destination.sameScene && (event._x !== entry.x || event._y !== entry.y)) ||
         (craft && !craft.isLandOk?.(event._x, event._y, destination.facing))) return null;
     return { ...destination, event: id, sourceX: event._x, sourceY: event._y, action: page.trigger === 0 || page.priorityType === 1,
         mode, craft, list: page.list };
@@ -28,7 +33,10 @@ function createTransferBookmarks(root, host) {
     let pending = null;
 
     function clear() {
-        if (approach) approach.scene._wqaBookmarkEntrance = false;
+        if (approach) {
+            approach.scene._wqaBookmarkEntrance = false;
+            approach.scene._wqaBookmarkLanding = false;
+        }
         approach = null;
         if (pending) host.graphics._wqaBookmarkTransferPending = false;
         pending = null;
@@ -46,12 +54,36 @@ function createTransferBookmarks(root, host) {
     }
 
     function accepted(scene, event) {
-        if (approach?.scene !== scene) return;
+        if (approach?.scene !== scene || !approach.edge) return;
         const { edge, bookmark, map, player } = approach;
         clear();
+        // Native interpreter setup retires the old same-scene browser
+        // even when a different event won acceptance.
+        if (edge.sameScene) scene._wqaBookmarkEntrance = true;
         if (map !== root.$gameMap || player !== root.$gamePlayer || event !== map._events[edge.event] || !current(edge)) return;
-        // The native main interpreter must subsequently reserve this exact landing.
-        pending = { scene, edge, bookmark, map, player };
+        if (edge.sameScene) {
+            if (player._x !== edge.sourceX || player._y !== edge.sourceY || player._direction !== edge.facing) return;
+            pending = { scene, player, ownerMap: map, map: edge.map, x: edge.x, y: edge.y, bookmark, sameScene: true };
+        } else {
+            // The native main interpreter must subsequently reserve this exact landing.
+            pending = { scene, edge, bookmark, map, player };
+        }
+        host.graphics._wqaBookmarkTransferPending = true;
+    }
+
+    function landingAccepted(scene, player) {
+        if (approach?.scene !== scene || !approach.airship) return;
+        const { airship, map, bookmark, x, y } = approach;
+        if (player !== approach.player || map !== root.$gameMap || player._x !== x || player._y !== y ||
+            travelMode(map, player) !== 'airship' || vehicleOnMap(map, 'airship') !== airship) {
+            clear();
+            scene._wqaBookmarkLanding = true;
+            return;
+        }
+        approach = null;
+        // Keep the scene's landing flag until the immediately following
+        // native leave marker closes its controls and other observations.
+        pending = { scene, player, ownerMap: map, map: map._mapId, x, y, bookmark, sameScene: true };
         host.graphics._wqaBookmarkTransferPending = true;
     }
 
@@ -77,7 +109,7 @@ function createTransferBookmarks(root, host) {
         clear();
         const player = root.$gamePlayer;
         const { bookmark, map, x, y } = landing;
-        if (scene === landing.scene || player !== landing.player || root.$gameMap !== landing.ownerMap ||
+        if ((scene === landing.scene) !== !!landing.sameScene || player !== landing.player || root.$gameMap !== landing.ownerMap ||
             root.$gameMap._mapId !== map || player._x !== x) return null;
         const key = tileKey(map, x, y);
         if (player._y === y) return { ...bookmark, trail: [...bookmark.trail, key] };
@@ -88,7 +120,11 @@ function createTransferBookmarks(root, host) {
     }
 
     return {
-        clear, current, accepted, reserved, settle,
+        clear, current, accepted, landingAccepted, reserved, settle,
+        islandLanding() {
+            const map = root.$gameMap;
+            return liveEntrance(root, map?._events?.[ISLAND_DOCK], null, travelMode(map, root.$gamePlayer));
+        },
         matchesState: state => transferState(root).every((value, index) => state[index] === value),
         candidates() {
             const state = transferState(root);
@@ -108,7 +144,19 @@ function createTransferBookmarks(root, host) {
             approach = { scene, bookmark, edge, map: root.$gameMap, player: root.$gamePlayer };
             scene._wqaBookmarkEntrance = true;
         },
+        armAirship(scene, bookmark, { x, y }) {
+            clear();
+            const map = root.$gameMap;
+            const airship = vehicleOnMap(map, 'airship');
+            if (!airship) return;
+            approach = { scene, bookmark, map, player: root.$gamePlayer, airship, x, y };
+            scene._wqaBookmarkLanding = true;
+        },
         leave(scene) {
+            if (scene) {
+                scene._wqaBookmarkEntrance = false;
+                scene._wqaBookmarkLanding = false;
+            }
             if (approach?.scene === scene || (pending && pending.scene !== scene)) clear();
         }
     };

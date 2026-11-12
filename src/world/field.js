@@ -8,7 +8,7 @@ const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { tileKey } = require('./geometry.cjs');
 const { browse, createDestinationBrowser } = require('./destinations');
-const { questDestinationCurrent } = require('./quest-destinations');
+const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
@@ -16,6 +16,10 @@ const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCateg
 function remoteBookmarkAvailable(map, mode, bookmark) {
     return bookmark.mode === 'walk' && bookmark.map !== map &&
         ((mode === 'walk' && !timedCave(map)) || (mode === 'ship' && map === 113));
+}
+
+function localLandingAvailable(map, mode, bookmark) {
+    return map === 113 && bookmark.map === map && bookmark.mode === 'walk' && (mode === 'ship' || mode === 'airship');
 }
 
 function createField(root, host, notifications) {
@@ -178,6 +182,16 @@ function createField(root, host, notifications) {
             else if (result?.status === 'ready') {
                 if (result.land && !canLand(root.$gameMap, result.arrival.x, result.arrival.y))
                     return status(job, 'Landing site changed. Request directions again.');
+                if (job.landingBookmark) {
+                    const { bookmark, edge } = job.landingBookmark;
+                    const selection = { id: bookmark.id, revision: bookmark.revision, trail: [] };
+                    if (edge) {
+                        if (result.entrance !== edge.event || !transfers.current(edge))
+                            return status(job, 'The boat landing changed. Request directions again.');
+                        job.entrance = edge;
+                        transfers.arm(job.scene, selection, edge);
+                    } else if (result.land) transfers.armAirship(job.scene, selection, result.arrival);
+                }
                 if (!result.reenter) host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
                     warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type,
                     { quest: job.quest, point: job.point });
@@ -311,9 +325,41 @@ function createField(root, host, notifications) {
             return job.action === 'directions' ? remoteDirections(job, snapshot, bookmark) : status(job, display);
         }
         owner.remoteBookmark = null;
+        if (localLandingAvailable(snapshot.map, snapshot.mode, bookmark))
+            return job.action === 'directions' ? localLandingDirections(job, snapshot, bookmark) : status(job, display);
         const reason = !sameMode ? ' Use the saved travel mode for directions.' :
             sameMap ? ' Destination currently unavailable.' : ' Entrance directions are unavailable here.';
         return status(job, display + reason);
+    }
+
+    function localLandingDirections(job, snapshot, bookmark) {
+        transfers.clear();
+        let destination;
+        if (bookmark.kind === 'point') destination = { targetX: bookmark.x, targetY: bookmark.y };
+        else {
+            const id = bookmark.event;
+            const event = root.$gameMap._events[id];
+            const entry = root.$dataMap?.events?.[id];
+            const page = entry?.pages?.[event?._pageIndex];
+            if (!event || event._erased || !(page?.list?.length >= 2)) return status(job, 'Saved destination is unavailable');
+            if (bookmark.category === 'quests') {
+                job.quest = collectQuestDestinations(root, job.scene, 'walk')?.get(id);
+                if (!job.quest) return status(job, 'Saved destination is unavailable');
+                job.scene._wqaQuestNavigation = true;
+            } else if (eventTarget(root, 'walk', event, entry, page)?.category !== bookmark.category)
+                return status(job, 'Saved destination is unavailable');
+            destination = { event: id, waypoint: job.quest?.waypoint === true };
+        }
+        const edge = snapshot.mode === 'ship' ? transfers.islandLanding() : null;
+        if (snapshot.mode === 'ship' && !edge) return status(job, 'No verified boat landing for ' + bookmark.name);
+        job.label = edge ? edge.name + ' toward ' + bookmark.name : 'Landing for ' + bookmark.name;
+        job.target = edge?.event ?? destination.event;
+        job.nearestLanding = !edge && !destination.event;
+        job.landingBookmark = { bookmark, edge };
+        job.autowalk = preferences().autowalk;
+        const shipLanding = edge && { event: edge.event, x: edge.x, y: edge.y, facing: edge.facing };
+        submit(job, snapshot, { ...destination, field: true, landing: snapshot.mode === 'airship', shipLanding, limit: 8,
+            beacon: host.beacon?.enabled() === true, autowalk: job.autowalk });
     }
 
     function remoteDirections(job, snapshot, bookmark) {
@@ -454,7 +500,7 @@ function createField(root, host, notifications) {
             const mode = travelMode(map, root.$gamePlayer);
             const point = { kind: 'point', map: map._mapId, mode, x, y };
             const context = { point, canSelect: entry => (point.map === entry.map && point.mode === entry.mode) ||
-                remoteBookmarkAvailable(point.map, point.mode, entry) };
+                remoteBookmarkAvailable(point.map, point.mode, entry) || localLandingAvailable(point.map, point.mode, entry) };
             const target = owner?.scene === scene ? owner.target : null;
             if (!Number.isInteger(target?.id) || owner.browser.category !== target.category ||
                 owner.browser.selections[target.category] !== target.id) return context;
@@ -472,7 +518,8 @@ function createField(root, host, notifications) {
             const remote = map?._mapId !== entry.map;
             const mode = travelMode(map, root.$gamePlayer);
             if (scene !== host.manager._scene || !scene._wqaSettingsActive ||
-                !(remote ? remoteBookmarkAvailable(map?._mapId, mode, entry) : mode === entry.mode)) return false;
+                !(remote ? remoteBookmarkAvailable(map?._mapId, mode, entry) :
+                    mode === entry.mode || localLandingAvailable(map?._mapId, mode, entry))) return false;
             transfers.clear();
             activateBookmark(scene, entry, remote);
             return true;
@@ -499,6 +546,7 @@ function createField(root, host, notifications) {
         puzzleActive(scene) { return salt.active(scene) || cave.active(scene); },
         caveEventAccepted: cave.accepted,
         bookmarkEntranceAccepted: transfers.accepted,
+        bookmarkLandingAccepted: transfers.landingAccepted,
         bookmarkTransferReserved: transfers.reserved,
         observeReady(scene) {
             if (!ready(scene)) return;

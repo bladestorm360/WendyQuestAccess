@@ -97,7 +97,8 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
                  b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaSoundscapeActive||'
-                 b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance)')
+                 b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance||'
+                 b'SceneManager._scene?._wqaBookmarkLanding)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                b'SceneManager._scene?._wqaWallAudio||SceneManager._scene?._wqaBeaconActive||'
                b'SceneManager._scene?._wqaCaveTimingActive||SceneManager._scene?._wqaAutowalkActive||'
@@ -291,7 +292,9 @@ def objects_notification(original):
         231501: MAP_LEAVING + b'\n        ',  # Native aircraft boarding
         231586: MAP_LEAVING + b'\n        ',  # Native ship boarding
         231668: MAP_LEAVING + b'\n        ',  # Native boat boarding
-        232058: MAP_LEAVING + b'\n        ',  # Native landing after isLandOk
+        232058: b'if(this===$gamePlayer&&SceneManager._scene?._wqaBookmarkLanding)'
+                b'globalThis.WendyQuestAccessBookmarkLandingAccepted?.(SceneManager._scene,this);'
+                + MAP_LEAVING + b'\n        ',  # Native landing after isLandOk
         222789: b'if(this===$gamePlayer&&SceneManager._scene?._wqaAutowalkActive)'
                 b'direction=globalThis.WendyQuestAccessAutowalkInput?.(SceneManager._scene,this,direction,'
                 b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',

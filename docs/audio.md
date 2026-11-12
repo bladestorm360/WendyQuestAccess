@@ -34,21 +34,21 @@ At final gameplay handoff, first compare the two wall previews with headphones. 
 
 The builder defaults to the checkout's `.deps/audio-sdk` and accepts `-AudioSdkRoot` for an equivalent local source. It verifies the key input hashes before staging the two runtime libraries and their notices in `audio-deps`. OpenAL Soft includes its MIT KEMAR measurements in the DLL. The matching corresponding-source URL and measurement attribution travel in `audio-deps/SOURCE.txt`. The Windows release must preserve those files and the SDL license. The current platform target is Windows x64. [SDL 3.4.4](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.4) · [OpenAL Soft 1.25.2 HRTF](https://github.com/kcat/openal-soft/blob/1.25.2/docs/hrtf.txt) · [MIT KEMAR measurements and terms](https://sound.media.mit.edu/resources/KEMAR.html)
 
-Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the exact development payload with the ship-port bookmark feature on November 12, 2026 at 13:38 UTC and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.261.0. The native files reported `NotSigned`. The final release still needs its own exact payload and installer checks, signing status and installed verification.
+Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the exact development payload with the same-map bookmark landing feature on November 12, 2026 at 13:48 UTC and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.261.0. The native files reported `NotSigned`. The final release still needs its own exact payload and installer checks, signing status and installed verification.
 
 | Scanned file | SHA-256 |
 | --- | --- |
-| `WendyQuestAudio.node` | `874f32631fcabb1ebb2d0f714d7149de4eb5a53cda47075279e77bb69c12ad59` |
+| `WendyQuestAudio.node` | `cd84835f25d9d892f78ae8b4db47a436d103bb05f1057d4cd1c0034fbe2952dd` |
 | `SDL3.dll` | `132e7f953951944f7628861227ecaea8c37a5a484f004c2072b7f3a1c343fa73` |
 | `soft_oal.dll` | `3963b06e319180700be0bcc0d027336664bb3a4975876b4a5442f10746fab5b4` |
-| `WendyQuestSpeech.exe` | `a3bfa943ed1836ece224abfd64e9bd48f3cb546aaf297f352b0b2acda12679a2` |
+| `WendyQuestSpeech.exe` | `f1819ec2b063df1d23d767d920a18966b601812b1db9f014eecda25c90a4eea6` |
 | `prism.dll` | `7c7d09c8c7306e8e1a0c46d603ccb2a391c194c77843400c11b746e7dd56a467` |
-| `WendyQuestAccess.js` | `8cb1adb2e9f08bc5ede2156b845b3b4f7e6f1c58267dc66ad8d154999d2a4fd3` |
+| `WendyQuestAccess.js` | `71675a771115fcf326cdec2c9a9da4fe284e91f6456b2656d0c6570377a28432` |
 | `audio-worker.cjs` | `0be8969b3433adf108a0f644b25695e07e9118b20dfec0901a61d4c64e47913b` |
 | `speech-worker.cjs` | `1fe62b4525b0ae37e1460a983cfc91f0126baf2bfa4bfd1742d263a18235da7a` |
 | `route-worker.cjs` | `4c311016ba07c4bbbdbe225c2ca377dbe08482654cd2dbf6bafc4931727540de` |
 | `speech-text.cjs` | `ad5d9deb70acc15b5d77b9b1f1dab4ab0d683a9b4ef96bfd4a6e9745d1e0fb1f` |
-| `routes.cjs` | `18839200b55a10b9ac3d4efb4739142d72853a1177257170b2984ba52117912c` |
+| `routes.cjs` | `5b961de12c5572db0ce970fea45240cac04160b94b1e6a4b2ed84c12a5c88580` |
 | `walking-catalog.cjs` | `157d56d76ca4a27b12ec2ce9b74dfb86fdc96f51b2a0131e30e447b25c6abe0d` |
 | `transfer-gates.cjs` | `5c2ba6ba73ae76f76bdaaa5b07172f64b4f670cd566ad97f36e6020bd49eaefc` |
 | `dialogue-icons.cjs` | `8b92089417563dadabeead0e0f0ea7a4ef8befdf6886afd9d62bb97ab8ec2de5` |

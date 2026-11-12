@@ -237,6 +237,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     assert.equal(forced.ship._mapId, 113);
 
     await verifyPortBookmarks();
+    await verifyLandingBookmarks();
     await verifyAirship();
 
     c.$gameParty.inBattle = inBattle;
@@ -363,6 +364,96 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         delete c.WendyQuestAccessBookmarkEntranceAccepted;
         delete c.WendyQuestAccessBookmarkTransferReserved;
         console.log('Verified both ship ports, native disembarkation, exact reservation, and restored walking bookmark selection.');
+    }
+
+    async function verifyLandingBookmarks() {
+        const leave = c.WendyQuestAccessSceneLeaving;
+        const app = c.Graphics.app;
+        const screen = c.$gameScreen;
+        const listen = c.addEventListener;
+        c.addEventListener = () => {};
+        c.$gameScreen = { _brightness: 255 };
+        for (const [mode, start, target] of [['ship', [43, 2], [46, 2]], ['airship', [44, 29], [43, 28]]]) {
+            const landing = begin(113, [221]);
+            const { player, gameMap, source } = landing;
+            const aircraft = mode === 'airship';
+            const craft = gameMap.vehicle(mode);
+            craft.setLocation(113, ...start);
+            craft._driving = true;
+            craft._altitude = aircraft ? craft.maxAltitude() : 0;
+            player.setPosition(...start);
+            player._vehicleType = mode;
+            player._through = aircraft;
+            gameMap.inactiveTime = 0;
+            Object.assign(scene, { _wqaFieldReady: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0 });
+            const frames = new EventEmitter();
+            c.Graphics.app = { stage: scene, renderer: frames };
+            const bookmark = { id: 1, revision: 1, kind: 'point', name: 'Walking marker', mode: 'walk',
+                map: 113, x: target[0], y: target[1] };
+            const records = [];
+            const packets = [];
+            const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
+            const field = createField(c, { graphics: c.Graphics, manager: c.SceneManager, hasFocus: () => true,
+                screenFading: () => false, bookmarks: () => [bookmark], navigationPreferences: () => ({}),
+                makeWord: () => new Int32Array(new SharedArrayBuffer(4)), createRouteWorker: () => worker },
+            { open(record) { records.push(record); return records.length; }, close() {} });
+            c.WendyQuestAccessSceneLeaving = owner => { leave(owner); field.leave(owner); };
+            c.WendyQuestAccessBookmarkEntranceAccepted = field.bookmarkEntranceAccepted;
+            c.WendyQuestAccessBookmarkLandingAccepted = field.bookmarkLandingAccepted;
+            assert(field.bookmarkContext(scene).canSelect(bookmark));
+            scene._wqaSettingsActive = true;
+            assert(field.selectBookmark(scene, bookmark));
+            scene._wqaSettingsActive = false;
+            assert(field.command('directions'));
+            frames.emit('postrender');
+            const packet = packets.pop();
+            assert.equal(packet.live.mode, mode);
+            let result;
+            await verifyWorker(landing, packet.request, packet.live, output => {
+                assert.equal(output.status, 'ready');
+                if (aircraft) assert(output.land);
+                else assert.equal(output.entrance, 51);
+                result = output;
+            });
+            worker.emit('message', { ...packet, result });
+            assert.match(formatSpeech(records.at(-1)), aircraft ? /Landing for Walking marker.*action button to land/ :
+                /^Secret Island boat landing toward Walking marker/);
+            follow(landing, result, aircraft ? undefined : 51);
+            if (aircraft) assert(player.triggerButtonAction());
+            else execute(source);
+            assert(player._vehicleGettingOff && c.Graphics._wqaBookmarkTransferPending);
+            scene._wqaFieldReady = true;
+            field.observeReady(scene);
+            assert(c.Graphics._wqaBookmarkTransferPending, 'landing cannot restore selection during native get-off');
+            if (aircraft) {
+                while (craft._altitude > 0) {
+                    craft.updateAirship();
+                    settle(player);
+                }
+            } else {
+                settle(player);
+                player.updateRoutineMove();
+                settle(player);
+                player.updateRoutineMove();
+                assert.deepEqual([player._x, player._y], [46, 2]);
+            }
+            source._list = null;
+            field.observeReady(scene);
+            assert(!c.Graphics._wqaBookmarkTransferPending);
+            assert(field.command('directions'));
+            frames.emit('postrender');
+            const walking = packets.pop();
+            assert.equal(walking.live.mode, 'walk');
+            assert.deepEqual([walking.request.targetX, walking.request.targetY], target);
+            field.leave(scene);
+        }
+        c.Graphics.app = app;
+        c.$gameScreen = screen;
+        c.addEventListener = listen;
+        c.WendyQuestAccessSceneLeaving = leave;
+        delete c.WendyQuestAccessBookmarkEntranceAccepted;
+        delete c.WendyQuestAccessBookmarkLandingAccepted;
+        console.log('Verified same-map ship and airship landings restore the selected walking bookmark after native settlement.');
     }
 
     async function verifyAirship() {

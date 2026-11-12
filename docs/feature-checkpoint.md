@@ -72,6 +72,8 @@ November 12 relocation checkpoint. The user paused development to move the repos
 
 The ship-to-port bookmark slice is implemented and offline-verified at both Float Fort and Breaded Bay. The bounded native build, installed port and world fixtures, matching NW.js smoke and exact development payload scan passed. The remaining 3–6 engineering-hour vehicle reserve now covers same-map disembarkation and landing handback and their connection to walking routes. Physical ports and timing are pending gameplay verification. [Port controls and evidence](cross-map-routing.md#ship-routes-to-walking-bookmarks)
 
+Same-map ship and airship handback is implemented and offline-verified. The installed methods passed native landing, descent, arrival and restored walking selection. The matching NW.js regression, exact registration checks, bounded native build and Defender scan passed. World routing remains **in progress** for longer vehicle-to-area routes and qualification of additional authored world entrances. Allow 3–6 engineering hours within the current estimate for the first connected world-map entrance slice. Actual play and cumulative frame time remain pending. [Same-map controls and evidence](cross-map-routing.md#same-map-ship-and-airship-landings)
+
 ## Initial feature inventory
 
 The launch/front-end and speech transport rows are **in progress**. Native Options, the map banner, dialogue pages, choices and number entry have implemented and offline-verified slices. The dialogue row remains **in progress** while text review, actual audio confirmation and remaining input reachability are open. Troop dialogue has a fixture. The other combat producers are **not started**. A missing producer is an investigation item before declaring a feature inapplicable.

@@ -95,9 +95,9 @@ function boardingGoals(world, type) {
     return goals;
 }
 
-function groundDistances(world, event, cancelled, tiles = interactionTiles(world, cancelled)) {
+function groundDistances(world, request, cancelled, tiles = interactionTiles(world, cancelled)) {
     const ground = { ...world, mode: 'walk', through: false };
-    const goals = actionGoals(ground, event, cancelled, false, tiles);
+    const goals = routeGoals(ground, request, cancelled, tiles);
     if (!goals || cancelled()) return null;
     const stops = tiles.touch;
     const distance = new Uint16Array(goals.length);
@@ -105,7 +105,7 @@ function groundDistances(world, event, cancelled, tiles = interactionTiles(world
     let count = 0;
     for (let cell = 0; cell < goals.length; cell++) {
         if ((cell & 63) === 0 && cancelled()) return null;
-        if (!goals[cell] || (stops[cell] && stops[cell] !== event)) continue;
+        if (!goals[cell] || (stops[cell] && stops[cell] !== request.event)) continue;
         distance[cell] = 1;
         queue[count++] = cell;
     }
@@ -130,7 +130,8 @@ function nearestLanding(world, request, ground, cancelled) {
         if ((cell & 63) === 0 && cancelled()) return null;
         // Leave the parked airship behind before the player uses the final
         // interaction. On its tile, native OK would try to board it first.
-        if (!(world.cells[cell] & LAND) || (ground && ground[cell] <= 1)) continue;
+        if (!(world.cells[cell] & LAND) || (ground && (!ground[cell] ||
+            (Number.isInteger(request.event) && request.waypoint !== true && ground[cell] === 1)))) continue;
         let east = Math.abs(cell % world.width - request.x);
         let south = Math.abs(Math.floor(cell / world.width) - request.y);
         if (world.scrollType & 2) east = Math.min(east, world.width - east);
@@ -149,17 +150,18 @@ function nearestLanding(world, request, ground, cancelled) {
 function landingRoute(world, start, request, area, cancelled) {
     if (world.mode !== 'airship' || !world.hasLandings) return { status: 'unavailable' };
     const linked = Number.isInteger(request.event);
-    const tiles = linked ? interactionTiles(world, cancelled) : null;
-    const ground = linked ? groundDistances(world, request.event, cancelled, tiles) : null;
+    const destination = linked || request.targetX !== undefined;
+    const tiles = destination ? interactionTiles(world, cancelled) : null;
+    const ground = destination ? groundDistances(world, request, cancelled, tiles) : null;
     if (cancelled()) return { status: 'cancelled' };
-    if (linked && !ground) return { status: 'unavailable' };
+    if (destination && !ground) return { status: 'unavailable' };
     let site = nearestLanding(world, request, ground, cancelled);
     let discovery;
     if (linked && !site) {
         for (const event of world.events) {
             if (cancelled()) return { status: 'cancelled' };
             if (event.discoveryFor !== request.event) continue;
-            const approach = groundDistances(world, event.id, cancelled, tiles);
+            const approach = groundDistances(world, { event: event.id }, cancelled, tiles);
             const candidate = approach && nearestLanding(world, request, approach, cancelled);
             if (candidate && (!site || candidate.cost < site.cost)) {
                 site = candidate;
@@ -395,7 +397,7 @@ function flightApproaches(world, tiles, candidates, cancelled) {
     }
     const canReach = id => {
         if (!connected.has(id)) {
-            const distance = groundDistances(world, id, cancelled, tiles);
+            const distance = groundDistances(world, { event: id }, cancelled, tiles);
             connected.set(id, !!distance?.some((value, cell) => value > 1 && (world.cells[cell] & LAND)));
         }
         return connected.get(id);
@@ -475,12 +477,26 @@ function entranceRoute(world, start, events, tiles, cancelled) {
     return result;
 }
 
+function shipLandingRoute(world, request, cancelled) {
+    if (world.mode !== 'ship') return { status: 'unavailable' };
+    const { event, x, y, facing } = request.shipLanding;
+    // Verify walking reachability from the settled native tile before
+    // offering the sailing route to the authored disembarkation event.
+    const walking = solveWorldRoute({ ...world, mode: 'walk' }, { ...request, x, y, shipLanding: undefined }, cancelled);
+    if (walking.status !== 'ready') return walking.status === 'cancelled' ? walking : { status: 'unreachable' };
+    const sailing = solveWorldRoute(world, { x: request.x, y: request.y, event, entryDirection: facing,
+        surface: true, field: true }, cancelled);
+    if (sailing.status === 'ready') sailing.entrance = event;
+    return sailing;
+}
+
 function solveWorldRoute(world, request, cancelled = () => false) {
     const start = indexOf(world, request.x, request.y);
     if (start < 0) return { status: 'unavailable' };
     const area = request.area && clipRectangle(world, request.area);
     if (request.area && (!area || !inside(world, start, area))) return { status: 'unavailable' };
     if (request.landing === true) return landingRoute(world, start, request, area, cancelled);
+    if (request.shipLanding) return shipLandingRoute(world, request, cancelled);
     const tiles = interactionTiles(world, cancelled);
     if (request.entrances !== undefined) return entranceRoute(world, start, request.entrances, tiles, cancelled);
     const goals = routeGoals(world, request, cancelled, tiles);

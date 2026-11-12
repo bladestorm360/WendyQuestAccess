@@ -152,6 +152,23 @@ function cauldronSpecial(map, event, page, index, common) {
         landingIs(edge, 63, 12, 28) ? [edge] : [];
 }
 
+const ISLAND_DOCK = 51;
+
+function islandDismount(entry, page) {
+    if (entry?.id !== ISLAND_DOCK || entry.x !== 44 || entry.y !== 2 || entry.pages.length !== 1 ||
+        entry.pages[0] !== page || !flagsAre(page) || page.trigger !== 1 || page.priorityType !== 0 ||
+        page.moveType !== 0 || page.through) return null;
+    const { list } = page;
+    const codes = [111, 206, 205, 505, 121, 0, 412, 0];
+    const route = list?.[2]?.parameters?.[1];
+    if (list?.length !== codes.length || !codes.every((code, index) => rowIs(list[index], code, index >= 1 && index <= 5 ? 1 : 0)) ||
+        !parametersAre(list[0], [0, 224, 1]) || list[2].parameters[0] !== -1 ||
+        route?.wait !== true || route.repeat || route.skippable !== true || route.list?.length !== 2 ||
+        route.list[0]?.code !== 3 || route.list[1]?.code !== 0 || !parametersAre(list[4], [221, 221, 1])) return null;
+    // Native disembarkation advances one tile before the authored walk.
+    return { map: 113, x: 46, y: 2, facing: 6, sameScene: true, name: 'Secret Island boat landing' };
+}
+
 const SHIP_PORTS = {
     30: { map: 26, x: 29, y: 14, direction: 0, facing: 4, turn: 17, name: 'Float Fort port' },
     31: { map: 49, x: 2, y: 13, direction: 2, facing: 6, turn: 18, name: 'Breaded Bay port' }
@@ -224,4 +241,4 @@ function cauldronIntroductionFinished(root) {
 }
 
 module.exports = { houseStair, houseBranches, transferOptions, catalogTransferOptions, cauldronIntroductionFinished,
-    SHIP_PORTS, shipPort };
+    SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount };
