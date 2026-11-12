@@ -1076,6 +1076,35 @@ const interval = setInterval(() => {
             if (padTap(15) !== 0) throw Error('Battle review did not return to native input');
             endingStep = 33;
         } else if (endingStep === 33 && fs.existsSync(receipt + '.battle-review')) {
+            const scene = SceneManager._scene;
+            WendyQuestAccessBattleFocusLeaving(scene);
+            fs.writeFileSync(receipt + '.battle-target-stage', '');
+            const enemy = { isAlive: () => true };
+            const sprite = { _enemy: enemy, _isSelected: true, x: 12, worldVisible: true, worldAlpha: 1 };
+            const drawn = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
+            sprite._nameSprite = { ...drawn(sprite), _dirty: false, _currentString: 'Synthetic target' };
+            sprite._selectorIconPivot = { parent: sprite };
+            sprite._selectorIcon = drawn(sprite._selectorIconPivot);
+            sprite._gaugeSprite = { ...drawn(sprite), _statusType: 'hp', _battler: enemy, gaugeRate: () => 0.5 };
+            sprite._gaugeSprite.bitmap.width = 64;
+            scene._spriteset = { _enemySprites: [sprite] };
+            Object.assign(BattleManager, { _phase: 'ActionCommand', _targets: [enemy],
+                _currentActionCommand: { _cancelable: true, _coroutineContainer: {} } });
+            WendyQuestAccessBattleTargetReady(scene);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 34;
+        } else if (endingStep === 34 && fs.existsSync(receipt + '.battle-target-autodetail')) {
+            pad();
+            if (padTap(7) !== 1 << 7) throw Error('Battle target mod mode did not claim its binding');
+            endingStep = 35;
+        } else if (endingStep === 35 && fs.existsSync(receipt + '.battle-target-mode')) {
+            if (padTap(0) !== 1) throw Error('Target mode did not claim its details action');
+            if (padTap(0) !== 0) throw Error('Target review did not return to native confirmation');
+            endingStep = 36;
+        } else if (endingStep === 36 && fs.existsSync(receipt + '.battle-target-details')) {
+            WendyQuestAccessBattleTargetLeaving(SceneManager._scene);
+            if (SceneManager._scene._wqaBattleTargetControl) throw Error('Retired target still owns controller review');
+            fs.unlinkSync(receipt + '.battle-target-stage');
             fs.unlinkSync(receipt + '.battle-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
@@ -1143,7 +1172,8 @@ parentPort.on('message', message => {
             const suffix = message.kind === 'menuFocus' ? 'focus' :
                 message.kind === 'menuDetails' ? (message.append ? 'autodetail' : 'details') :
                 message.kind === 'menuReview' ? 'review' : message.kind === 'controllerStatus' ? 'mode' : '';
-            if (suffix) fs.writeFileSync(receipt + '.battle-' + suffix, speech);
+            const prefix = fs.existsSync(receipt + '.battle-target-stage') ? '.battle-target-' : '.battle-';
+            if (suffix) fs.writeFileSync(receipt + prefix + suffix, speech);
             parentPort.postMessage('ack');
             return;
         }
@@ -1418,6 +1448,9 @@ def main():
             'battle-autodetail': 'Shield raised. Cost 2 MP',
             'battle-details': 'Shield raised. Cost 2 MP',
             'battle-review': 'Cost 2 MP, 2 of 2',
+            'battle-target-focus': 'Target, Synthetic target, 1 of 1',
+            'battle-target-autodetail': 'Synthetic target, HP about 50 percent',
+            'battle-target-details': 'Synthetic target, HP about 50 percent',
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:
@@ -1457,6 +1490,7 @@ def main():
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
+        print('Verified battle command and target review, rendered gauge details and controller handback.')
         print('Verified the Quests category, packaged route and marker replacement handback.')
         print('Verified controller bookmark naming, keyboard save, native tile arrival, linked event removal and persistence.')
         print('Verified reachable entrance speech, two manual transfers, native loading gates and restored bookmark selection.')

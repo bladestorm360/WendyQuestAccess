@@ -5,7 +5,8 @@
 {
     const wqaScene = SceneManager._scene;
     const wqaModal = wqaScene?._wqaSettingsActive === true;
-    const wqaActive = (wqaModal || wqaScene?._wqaControllerReady || wqaScene?._wqaFieldReady) &&
+    const wqaActive = (wqaModal || wqaScene?._wqaControllerReady || wqaScene?._wqaFieldReady ||
+        wqaScene?._wqaBattleTargetControl) &&
         !SceneManager._nextScene && !SceneManager._exiting;
     const wqaIndex = WQA_PAD.index;
     const wqaPrior = this._wqaSettingsPads?.[wqaIndex] || 0;

@@ -26,6 +26,7 @@ MAP_REL = Path('package.nw/js/plugins/MapScene.js')
 OBJECTS_REL = Path('package.nw/js/rmmz_objects.js')
 CANVAS_REL = Path('package.nw/js/plugins/CanvasScaler.js')
 BATTLE_REL = Path('package.nw/js/plugins/BattleSceneArranger.js')
+ACTION_REL = Path('package.nw/js/plugins/ActionCommandCombat.js')
 QUEST_REL = Path('package.nw/js/plugins/Ayatam_HighQualityQuestSystem.js')
 BITMAP_FONT_REL = Path('package.nw/js/plugins/EliMZ_BitmapFontPro.js')
 STATS_REL = Path('package.nw/js/plugins/WendyQuest.js')
@@ -49,6 +50,7 @@ MAP_SHA = 'aff25c073cffce32857bb654d0ae30938f10ddfa534cfc0cb80ebb078a4aaf64'
 OBJECTS_SHA = 'b9da176c2041866df643b7d62b36d99d67bf1b44216deb52568adbd08264848a'
 CANVAS_SHA = '713457886c5589be41d137d81b327947e37b19707c2f30c5da1b1ff43a9d8ccf'
 BATTLE_SHA = 'b6e5b59162e89c38e4d24c55ea622846509ac6d77e91ec0e24c0bb745fd0eab5'
+ACTION_SHA = '6e92fbda24f1611c737961db2f5d2456e14adf0e276fe0ffeea2a51bfd839057'
 QUEST_SHA = '5a17621ec14791c85716cb13ced13b1ceb82a83d3d05df0e850f2f0059c8daf3'
 BITMAP_FONT_SHA = 'b24607bc939ea1f7cfa3972c1121d135550483ffe3ab6484f84c1f135046ae76'
 STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
@@ -90,6 +92,8 @@ DEPENDENCIES = {
     Path('package.nw/img/system/IconSet.png'): '709b556b0c2b217436172d90d7d8af4c722ce421aa19f504261ee72607f5203e',
 }
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
+BATTLE_TARGET_LEAVING = (b'SceneManager._scene?._wqaBattleTargetActive&&'
+                         b'globalThis.WendyQuestAccessBattleTargetLeaving?.(SceneManager._scene)')
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
@@ -246,7 +250,8 @@ def managers_notification(original):
         58080: b'\n    ' + SCENE_LEAVING,
         59505: b'\n    ' + MAP_LEAVING,
         62230: b'\n    if(SceneManager._scene?._wqaBattleFocusActive&&this._phase!=="input")'
-               b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);',
+               b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);'
+               b'\n    if(this._phase!=="input"&&this._phase!=="ActionCommand")' + BATTLE_TARGET_LEAVING + b';',
         62280: b'        if(SceneManager._scene?._wqaBattleStarted){' + MAP_LEAVING + b'}\n',
     })
 
@@ -311,7 +316,8 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene);\n        ',  # Accepted event start
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING +
                 b'if(SceneManager._scene?._wqaBattleFocusActive)'
-                b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);}',
+                b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);' +
+                BATTLE_TARGET_LEAVING + b';}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
         257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
@@ -492,6 +498,27 @@ def battle_notification(original):
                      b'Graphics.app?.stage===SceneManager._scene')
     command_leaving = (b'(this._wqaBattleCommandSeen&&'
                        b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene,this),')
+    # The native scene has advanced all enemy sprites before this marker.
+    # Only a changed target set or a pending paint can schedule observation.
+    target_update = b'''
+    {
+        const wqaPhase = BattleManager._phase;
+        const wqaDriver = wqaPhase === 'ActionCommand' ? BattleManager._currentActionCommand : null;
+        const wqaTargets = BattleManager._targets;
+        if (this._wqaBattleStarted && BattleManager._wqaDialogueBusy === false &&
+            this._fadeDuration === 0 && this._fadeOpacity === 0 && !this._wqaSettingsActive &&
+            !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
+            !Graphics._wqaResize && Graphics.app?.stage === this &&
+            wqaTargets?.length && (wqaPhase === 'input' ? BattleManager._inputting && !this._wqaBattleFocusActive :
+                wqaDriver?._cancelable && wqaDriver._coroutineContainer)) {
+            if (this._wqaBattleTargetKey !== wqaTargets || this._wqaBattleTargetMode !== wqaPhase ||
+                this._wqaBattleTargetDriver !== wqaDriver)
+                globalThis.WendyQuestAccessBattleTargetReady?.(this);
+        } else if (this._wqaBattleTargetActive) {
+            globalThis.WendyQuestAccessBattleTargetLeaving?.(this);
+        }
+    }
+'''
     return insert(original, BATTLE_SHA, {
         155370: command_leaving,  # Accepted activation, before native effects
         155394: b')',
@@ -500,11 +527,21 @@ def battle_notification(original):
         162176: b'((' + command_ready +
                 b')&&globalThis.WendyQuestAccessBattleFocusReady?.(SceneManager._scene,this),',
         162205: b')',
+        192463: BATTLE_TARGET_LEAVING + b';',  # Return to native command input
         193431: b'(this._wqaDialogueBusy=',
         193508: b')',
+        196596: BATTLE_TARGET_LEAVING + b';',  # Native action start
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=undefined;',
-        242214: dialogue_update(ready),
+        242214: target_update + dialogue_update(ready),
+    })
+
+
+def action_notification(original):
+    return insert(original, ACTION_SHA, {
+        25684: BATTLE_TARGET_LEAVING + b',',  # Accepted cancellation, before coroutine effects
+        48198: BATTLE_TARGET_LEAVING + b';',  # Native radial cleanup
+        67814: BATTLE_TARGET_LEAVING + b';',  # Native radial windup starts
     })
 
 
@@ -600,7 +637,8 @@ def main():
                                 (INPUT_REL, input_notification), (TILE_REL, tile_notification),
                                 (OBJECTS_REL, objects_notification), (MAP_REL, map_notification),
                                 (CANVAS_REL, canvas_notification), (WINDOWS_REL, windows_notification),
-                                (BATTLE_REL, battle_notification), (QUEST_REL, quest_notification),
+                                (BATTLE_REL, battle_notification), (ACTION_REL, action_notification),
+                                (QUEST_REL, quest_notification),
                                 (REGISTRY_REL, register)):
         file = args.game_root / relative
         if file.stat().st_size > 1024 * 1024:

@@ -39,6 +39,8 @@ def bundle():
         './review': 'menus/review.js',
         '../menus/review': 'menus/review.js',
         './battle/focus': 'battle/focus.js',
+        './battle/targets': 'battle/targets.js',
+        './presentation': 'battle/presentation.js',
         './options': 'frontend/options.js',
         './world/map-banner': 'world/map-banner.js',
         './world/field': 'world/field.js',

@@ -10,11 +10,13 @@ const DIALOGUE_MODE = ['repeat', 'puzzleStop'];
 const MENU_MODE = ['settings', ...REVIEW_ACTIONS];
 
 function modeAnnouncement(family, context, bindings) {
-    if (context.kind === 'menu' || context.kind === 'battle') {
+    if (context.kind === 'menu' || context.kind === 'battle' || context.kind === 'battleTarget') {
+        const settings = context.kind === 'battleTarget' ? '' :
+            buttonName(family, bindings.settings) + ' opens settings. ';
         const details = bindings.details === null ? '' : `${buttonName(family, bindings.details)} reads details. `;
         const review = context.hasReview && bindings.reviewPrevious != null && bindings.reviewNext != null ?
             `${buttonName(family, bindings.reviewPrevious)} and ${buttonName(family, bindings.reviewNext)} review lines. ` : '';
-        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${details}${review}${buttonName(family, bindings.mode)} cancels.`;
+        return `Mod mode. ${settings}${details}${review}${buttonName(family, bindings.mode)} cancels.`;
     }
     if (context.kind === 'field') {
         if (context.navigationOnly) {
@@ -153,7 +155,8 @@ function createController(host) {
         if (!(pressed & modeBit) && !(previous & modeBit)) {
             const actions = context.navigationOnly ? MOVING_MODE :
                 context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE :
-                (context.kind === 'menu' || context.kind === 'battle') ? MENU_MODE : DIALOGUE_MODE;
+                (context.kind === 'menu' || context.kind === 'battle') ? MENU_MODE :
+                context.kind === 'battleTarget' ? REVIEW_ACTIONS : DIALOGUE_MODE;
             for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
                 (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive) &&
                 (action !== 'beaconStop' || context.beaconActive) &&

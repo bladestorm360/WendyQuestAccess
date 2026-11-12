@@ -1,18 +1,11 @@
 'use strict';
 
+const { battlePresented, drawnText } = require('./presentation');
 const { reviewLines, moveReview } = require('../menus/review');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
 const MAX_OPTIONS = 16;
 
-function drawnText(option, sprite, maximum) {
-    // Sprite_Text publishes its string before repainting the bitmap. A
-    // dirty or hidden label cannot stand in for the actual presentation.
-    if (sprite?.parent !== option || !sprite.worldVisible || !(sprite.worldAlpha > 0) ||
-        sprite.renderable === false || sprite._dirty !== false || !sprite.bitmap?.isReady?.()) return '';
-    const value = sprite._currentString;
-    return typeof value === 'string' && value.length <= maximum ? value : '';
-}
 
 function createBattleFocus(root, host, notifications, preferences) {
     let current = null;
@@ -22,13 +15,7 @@ function createBattleFocus(root, host, notifications, preferences) {
 
     function ready(scene) {
         const battle = root.BattleManager;
-        return !!(scene?._wqaBattleStarted && scene._started && scene._active && scene._fadeDuration === 0 &&
-            scene._fadeOpacity === 0 && scene === host.manager._scene && host.graphics.app?.stage === scene &&
-            !host.manager._nextScene && !host.manager._exiting && !host.manager._wqaNativeAutosaves &&
-            !host.graphics._wqaResize && !scene._wqaSettingsActive && !host.screenFading() && host.hasFocus() &&
-            battle?._phase === 'input' && battle._inputting === true && battle._wqaDialogueBusy === false &&
-            !root.$gameTroop?._interpreter?._list && !scene._wqaBattleInterpreter?._list &&
-            !root.$gameMessage?.isBusy?.() && !scene._itemWindow?.active && !scene._skillWindow?.active);
+        return battle?._phase === 'input' && battle._inputting === true && battlePresented(root, host, scene);
     }
 
     function optionGroup(scene, option) {

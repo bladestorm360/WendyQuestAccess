@@ -9,7 +9,10 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from registration import BATTLE_REL, MANAGERS_REL, WINDOW_REL, battle_notification, managers_notification
+from registration import (
+    ACTION_REL, BATTLE_REL, MANAGERS_REL, WINDOW_REL,
+    action_notification, battle_notification, managers_notification,
+)
 
 decode = runpy.run_path(str(ROOT / 'tools' / 'inspect-plugin.py'))['decode']
 installed = Path(sys.argv[1])
@@ -27,6 +30,28 @@ def sprite_method(source, owner, name):
     if end is None:
         raise ValueError(f'Could not bound {owner}.{name}')
     return source[start:end.start()] + '};'
+
+
+def manager_method(source, name):
+    start = source.index(f"BattleManager['{name}']=function(")
+    end = source.index('},BattleManager', start)
+    return source[start:end + 1] + ';'
+
+
+if sys.argv[2:] == ['targets']:
+    action, _ = decode(action_notification((installed / ACTION_REL).read_bytes()).decode('utf8'))
+    methods = [sprite_method(battle, 'Scene_Battle', 'update')]
+    methods.extend(sprite_method(battle, 'Sprite_Enemy', name) for name in
+                   ('updateUIVisibility', 'updateSelected', 'updateSelectionArrow'))
+    methods.extend(manager_method(battle, name) for name in ('isBusy', 'startAction', 'targetEnemy'))
+    methods.extend(manager_method(action, name) for name in
+                   ('isActionCommand', 'isTargeted', 'ChangeActionTarget', 'ActionCommandOnTargetsUpdated', 'ClearActionTarget'))
+    methods.append(sprite_method(action, 'ActionCommand', 'Cancel'))
+    start = battle.index("Sprite_EnemyGauge['prototype']['drawGaugeRect']=function(")
+    end = battle.index('},Sprite_StarEffect', start)
+    methods.append(battle[start:end + 1] + ';')
+    print(json.dumps(methods))
+    sys.exit(0)
 
 
 methods = [sprite_method(battle, 'Sprite_BattleOption', name) for name in
