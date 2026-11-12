@@ -1,7 +1,8 @@
 'use strict';
 
-const { transferOptions, cauldronIntroductionFinished, SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount } =
-    require('./transfer-events.cjs');
+const { transferOptions, cauldronIntroductionFinished, SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount,
+    worldDiscovery } = require('./transfer-events.cjs');
+const { discoveryEntrance } = require('./world-destinations');
 const { travelMode, vehicleOnMap } = require('./vehicle-navigation');
 const { transferState, gateAllows } = require('./transfer-gates.cjs');
 const { tileKey } = require('./geometry.cjs');
@@ -28,6 +29,27 @@ function liveEntrance(root, event, state, mode) {
         mode, craft, list: page.list };
 }
 
+function liveDiscovery(root, event, target) {
+    const map = root.$gameMap;
+    const id = event?._eventId;
+    if (!target || discoveryEntrance(map._mapId, event) !== target || event._through || event._moveRouteForcing ||
+        event._priorityType !== 0) return null;
+    const entry = root.$dataMap?.events?.[id];
+    const destination = root.$dataMap?.events?.[target];
+    const completion = worldDiscovery(entry, destination, root.$dataCommonEvents);
+    if (!completion || event._x !== entry.x || event._y !== entry.y) return null;
+    return { event: id, mode: 'walk', map: 113, x: event._x, y: event._y, sourceX: event._x, sourceY: event._y,
+        sameScene: true, action: false, list: entry.pages[0].list, discoveryFor: target, completion };
+}
+
+function discoveryComplete(root, { event, completion }) {
+    const discovery = root.$gameMap._events?.[event];
+    if (completion.selfSwitch) return discovery?._pageIndex === 1 &&
+        root.$gameSelfSwitches?.value?.([113, event, completion.selfSwitch]) === true;
+    return (discovery?._pageIndex === 1 || discovery?._erased === true) &&
+        root.$gameSwitches?.value?.(completion.switchId) === true;
+}
+
 function createTransferBookmarks(root, host) {
     let approach = null;
     let pending = null;
@@ -45,7 +67,9 @@ function createTransferBookmarks(root, host) {
     function current(edge, mode = travelMode(root.$gameMap, root.$gamePlayer)) {
         const map = root.$gameMap;
         if (mode !== edge.mode) return false;
-        const entrance = liveEntrance(root, map?._events?.[edge.event], transferState(root), mode);
+        const event = map?._events?.[edge.event];
+        const entrance = edge.discoveryFor ? liveDiscovery(root, event, edge.discoveryFor) :
+            liveEntrance(root, event, transferState(root), mode);
         return !!entrance && entrance.craft === edge.craft && entrance.list === edge.list && entrance.map === edge.map &&
             entrance.x === edge.x && entrance.y === edge.y && entrance.direction === edge.direction &&
             entrance.action === edge.action &&
@@ -61,8 +85,9 @@ function createTransferBookmarks(root, host) {
         if (edge.sameScene) scene._wqaBookmarkEntrance = true;
         if (map !== root.$gameMap || player !== root.$gamePlayer || event !== map._events[edge.event] || !current(edge)) return;
         if (edge.sameScene) {
-            if (player._x !== edge.sourceX || player._y !== edge.sourceY || player._direction !== edge.facing) return;
-            pending = { scene, player, ownerMap: map, map: edge.map, x: edge.x, y: edge.y, bookmark, sameScene: true };
+            if (player._x !== edge.sourceX || player._y !== edge.sourceY || (edge.facing && player._direction !== edge.facing)) return;
+            pending = { scene, player, ownerMap: map, map: edge.map, x: edge.x, y: edge.y, bookmark, sameScene: true,
+                discovery: edge.discoveryFor ? { event: edge.event, completion: edge.completion } : null };
         } else {
             // The native main interpreter must subsequently reserve this exact landing.
             pending = { scene, edge, bookmark, map, player };
@@ -109,7 +134,8 @@ function createTransferBookmarks(root, host) {
         const player = root.$gamePlayer;
         const { bookmark, map, x, y } = landing;
         if ((scene === landing.scene) !== !!landing.sameScene || player !== landing.player || root.$gameMap !== landing.ownerMap ||
-            root.$gameMap._mapId !== map || player._x !== x) return null;
+            root.$gameMap._mapId !== map || player._x !== x ||
+            (landing.discovery && !discoveryComplete(root, landing.discovery))) return null;
         const key = tileKey(map, x, y);
         if (player._y === y) return { ...bookmark, trail: [...bookmark.trail, key] };
         if (!landing.firstCauldronWalk || player._y !== y + 3 || (root.$dataMap?.scrollType & 1) ||
@@ -125,6 +151,20 @@ function createTransferBookmarks(root, host) {
             return liveEntrance(root, map?._events?.[ISLAND_DOCK], null, travelMode(map, root.$gamePlayer));
         },
         matchesState: state => transferState(root).every((value, index) => state[index] === value),
+        discovery(event, target) { return liveDiscovery(root, root.$gameMap._events?.[event], target); },
+        discoveries(entrances) {
+            const map = root.$gameMap;
+            if (map._mapId !== 113) return [];
+            const targets = new Set(entrances.map(edge => edge.event));
+            const active = [];
+            for (const event of map._events) {
+                const target = discoveryEntrance(map._mapId, event);
+                if (!targets.has(target)) continue;
+                const edge = liveDiscovery(root, event, target);
+                if (edge) active.push({ event: edge.event, target });
+            }
+            return active;
+        },
         candidates() {
             const state = transferState(root);
             const map = root.$gameMap;

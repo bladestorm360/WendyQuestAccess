@@ -205,6 +205,40 @@ function recordsWorldPosition(common) {
         variables.every(([index, id]) => list[index].parameters?.[0] === id && list[index].parameters[1] === id);
 }
 
+function worldDiscovery(entry, destination, common) {
+    const [page, completed] = entry?.pages || [];
+    if (entry?.pages?.length !== 2 || !destination || page.trigger !== 1 || page.priorityType !== 0 ||
+        page.moveType !== 0 || page.through || !flagsAre(page)) return null;
+    const { list } = page;
+    const fromBeach = entry.id === 78;
+    const island = entry.id === 90;
+    const hasMessage = entry.id === 75 || entry.id === 92;
+    const sharedSwitch = entry.id === 98 || entry.id === 190;
+    const codes = [...(fromBeach ? [117, 117] : island ? [] : [117]), 249, 357, 657, 657, 657, 213,
+        ...(hasMessage ? [117] : []), sharedSwitch ? 121 : 123, 0];
+    if (list.length !== codes.length || !codes.every((code, index) => rowIs(list[index], code))) return null;
+    if (fromBeach && (!parametersAre(list[0], [138]) || !recordsWorldPosition(common))) return null;
+    if (!island && (!parametersAre(list[fromBeach ? 1 : 0], [131]) || common?.[131]?.list?.length !== 2 ||
+        !rowIs(common[131].list[0], 355) || !rowIs(common[131].list[1], 0))) return null;
+    if (hasMessage && (!parametersAre(list[list.length - 3], [87]) || common?.[87]?.list?.length !== 9 ||
+        ![111, 230, 101, 401, 401, 121, 0, 412, 0].every((code, index) => common[87].list[index].code === code))) return null;
+    const [plugin, command, , parameters] = list[codes.indexOf(357)].parameters;
+    const raw = parameters?.coordinates;
+    if (plugin !== 'Tyruswoo_TileControl' || command !== 'set_tile' || typeof raw !== 'string' || raw.length > 80) return null;
+    let tile;
+    try { tile = JSON.parse(raw); } catch { return null; }
+    if (Number(tile?.x) !== destination.x || Number(tile?.y) !== destination.y || ![2, 3].includes(Number(tile?.z))) return null;
+    const finish = list[list.length - 2];
+    // Both approaches to this Ruins marker share a story switch. The
+    // replacement parallel page only erases its obsolete discovery event.
+    if (sharedSwitch) return completed.trigger === 4 && completed.list.length === 2 &&
+        rowIs(completed.list[0], 214) && rowIs(completed.list[1], 0) && flagsAre(completed, 'switch1Valid') &&
+        completed.conditions.switch1Id === 159 && parametersAre(finish, [159, 159, 0]) ? { switchId: 159 } : null;
+    return completed.list.length === 1 && rowIs(completed.list[0], 0) &&
+        flagsAre(completed, 'selfSwitchValid') && completed.conditions.selfSwitchCh === 'A' &&
+        parametersAre(finish, ['A', 0]) ? { selfSwitch: 'A' } : null;
+}
+
 function worldWalkingEntrance(entry, page, common) {
     if (entry.pages.length !== 1 || page.trigger !== 1 || !flagsAre(page)) return null;
     const { list } = page;
@@ -273,4 +307,4 @@ function cauldronIntroductionFinished(root) {
 }
 
 module.exports = { houseStair, houseBranches, transferOptions, catalogTransferOptions, cauldronIntroductionFinished,
-    SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount };
+    SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount, worldDiscovery };

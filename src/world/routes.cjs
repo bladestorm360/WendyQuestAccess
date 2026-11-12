@@ -191,6 +191,7 @@ function airshipEntranceRoute(world, start, request, area, cancelled) {
     const tiles = interactionTiles(world, cancelled);
     let best = null;
     let chosen = null;
+    let discovery;
     let rank = Infinity;
     // Search ranked walking entrances using the current floor events and
     // landing flags. Once a rank can be reached, compare only its approaches.
@@ -199,14 +200,27 @@ function airshipEntranceRoute(world, start, request, area, cancelled) {
         if (entrance.rank > rank) break;
         const target = { x: request.x, y: request.y, event: entrance.event };
         const ground = groundDistances(world, target, cancelled, tiles);
-        const site = ground && nearestLanding(world, target, ground, cancelled);
+        let site = ground && nearestLanding(world, target, ground, cancelled);
+        let viaDiscovery;
+        if (!site) for (const candidate of request.discoveries || []) {
+            if (cancelled()) return { status: 'cancelled' };
+            if (candidate.target !== entrance.event) continue;
+            const reveal = { ...target, event: candidate.event };
+            const approach = groundDistances(world, reveal, cancelled, tiles);
+            const next = approach && nearestLanding(world, reveal, approach, cancelled);
+            if (next && (!site || next.cost < site.cost)) {
+                site = next;
+                viaDiscovery = candidate.event;
+            }
+        }
         if (site && (!best || site.cost < best.cost)) {
             best = site;
             chosen = entrance.event;
             rank = entrance.rank;
+            discovery = viaDiscovery;
         }
     }
-    const result = flyToLanding(world, start, best, area, cancelled);
+    const result = flyToLanding(world, start, best, area, cancelled, discovery);
     if (result.status === 'ready') result.entrance = chosen;
     return result;
 }
@@ -507,6 +521,18 @@ function entranceRoute(world, start, events, tiles, cancelled) {
     return result;
 }
 
+function transferEntranceRoute(world, start, request, tiles, cancelled) {
+    const direct = entranceRoute(world, start, request.entrances, tiles, cancelled);
+    if (world.mode !== 'walk' || direct.status !== 'unreachable' || !request.discoveries?.length) return direct;
+    const ranks = new Map(request.entrances.map(edge => [edge.event, edge.rank]));
+    const choices = request.discoveries.filter(edge => ranks.has(edge.target))
+        .map(edge => ({ event: edge.event, rank: ranks.get(edge.target) }));
+    if (!choices.length) return direct;
+    const via = entranceRoute(world, start, choices, tiles, cancelled);
+    if (via.status === 'ready') via.discoveryFor = request.discoveries.find(edge => edge.event === via.entrance)?.target;
+    return via;
+}
+
 function shipLandingRoute(world, request, cancelled) {
     if (world.mode !== 'ship') return { status: 'unavailable' };
     const { event, x, y, facing } = request.shipLanding;
@@ -518,7 +544,7 @@ function shipLandingRoute(world, request, cancelled) {
         surface: true, field: true }, cancelled);
     if (sailing.status === 'ready') {
         sailing.entrance = event;
-        if (walking.entrance) sailing.groundEntrance = walking.entrance;
+        if (walking.entrance) sailing.groundEntrance = walking.discoveryFor ?? walking.entrance;
     }
     return sailing;
 }
@@ -533,7 +559,7 @@ function solveWorldRoute(world, request, cancelled = () => false) {
     if (request.shipLanding && request.entrances === undefined) return shipLandingRoute(world, request, cancelled);
     const tiles = interactionTiles(world, cancelled);
     if (request.entrances !== undefined) {
-        const result = entranceRoute(world, start, request.entrances, tiles, cancelled);
+        const result = transferEntranceRoute(world, start, request, tiles, cancelled);
         if (request.shipLanding && request.groundEntrances?.length && ['unavailable', 'unreachable'].includes(result.status))
             return shipLandingRoute(world, { ...request, entrances: request.groundEntrances }, cancelled);
         return result;

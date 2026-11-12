@@ -79,7 +79,9 @@ parentPort.on('message', message => {
                 const entrances = rankEntrances(catalog, map, transfer, manifest.maps, cancelled, live.mode === 'walk');
                 const groundEntrances = transfer.ground && rankEntrances(catalog, map,
                     { ...transfer, candidates: transfer.ground }, manifest.maps, cancelled, false);
-                result = solveRoute(base, live, { ...request, entrances, groundEntrances }, cancelled);
+                const discoveries = Array.isArray(transfer.discoveries) && transfer.discoveries.length <= 24
+                    ? transfer.discoveries : undefined;
+                result = solveRoute(base, live, { ...request, entrances, groundEntrances, discoveries }, cancelled);
             }
             else result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
             const follows = result.status === 'ready' && !result.reenter && (request.beacon === true || request.autowalk === true);

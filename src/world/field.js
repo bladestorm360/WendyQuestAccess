@@ -358,16 +358,29 @@ function createField(root, host, notifications) {
 
     function admitRemoteRoute(job, result) {
         const { bookmark, entrances, ground, island, state, selection } = job.remote;
-        const entrance = island?.event === result.entrance ? island : entrances.find(edge => edge.event === result.entrance);
+        const target = result.discoveryFor ?? result.entrance;
+        const entrance = island?.event === target ? island : entrances.find(edge => edge.event === target);
         if (!entrance || !transfers.matchesState(state)) return false;
         job.target = entrance.event;
         if (result.land) {
-            if (!transfers.current(entrance, 'walk')) return false;
+            if (!transfers.current(entrance, 'walk') ||
+                (result.discovery && !transfers.discovery(result.discovery, entrance.event))) return false;
             job.groundEntrance = entrance;
             job.label = 'Landing toward ' + bookmark.name;
             return true;
         }
         if (!transfers.current(entrance)) return false;
+        if (result.discoveryFor) {
+            const discovery = transfers.discovery(result.entrance, entrance.event);
+            const name = discovery && worldBoundaryName(root, discovery.event);
+            if (!name) return false;
+            job.target = discovery.event;
+            job.entrance = discovery;
+            job.groundEntrance = entrance;
+            job.label = name + ' toward ' + bookmark.name;
+            transfers.arm(job.scene, selection, discovery);
+            return true;
+        }
         if (entrance === island) {
             const walking = ground.find(edge => edge.event === result.groundEntrance);
             if (!walking || !transfers.current(walking, 'walk')) return false;
@@ -397,7 +410,8 @@ function createField(root, host, notifications) {
         const shipLanding = island && { event: island.event, x: island.x, y: island.y, facing: island.facing };
         submit(job, snapshot, { limit: 8, field: true, landing, shipLanding, autowalk: job.autowalk,
             beacon: host.beacon?.enabled() === true, transfer: { map: bookmark.map, point, state, trail,
-                candidates: current.map(copy), ground: island ? ground.map(copy) : undefined } });
+                candidates: current.map(copy), ground: island ? ground.map(copy) : undefined,
+                discoveries: transfers.discoveries(island ? ground : current) } });
     }
 
     function perform(job) {

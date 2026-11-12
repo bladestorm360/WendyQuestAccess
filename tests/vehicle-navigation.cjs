@@ -377,13 +377,15 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         const listen = c.addEventListener;
         c.addEventListener = () => {};
         c.$gameScreen = { _brightness: 255 };
-        for (const [mode, start, target, area, entrance] of [
+        for (const [mode, start, target, area, entrance, reveal] of [
             ['ship', [43, 2], [46, 2], 113],
             ['airship', [44, 29], [43, 28], 113],
             ['ship', [43, 2], [9, 16], 206, 13],
-            ['airship', [3, 29], [7, 2], 161, 76]
+            ['airship', [3, 29], [7, 2], 161, 76],
+            ['ship', [43, 2], [9, 16], 206, 13, 90],
+            ['airship', [43, 28], [1, 8], 176, 122, 124]
         ]) {
-            const landing = begin(113, [221], ['113,75,A', '113,90,A']);
+            const landing = begin(113, [221], reveal === 90 ? ['113,75,A'] : ['113,75,A', '113,90,A']);
             const { player, gameMap, source } = landing;
             const aircraft = mode === 'airship';
             const craft = gameMap.vehicle(mode);
@@ -393,6 +395,12 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             player.setPosition(...start);
             player._vehicleType = mode;
             player._through = aircraft;
+            if (reveal === 124) {
+                const { width, height, data } = landing.map;
+                const region = 5 * width * height + 28 * width + 43;
+                data[region] = 253;
+                c.$gameTileChanges[113] = { [region]: 253 };
+            }
             gameMap.inactiveTime = 0;
             Object.assign(scene, { _wqaFieldReady: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0 });
             const frames = new EventEmitter();
@@ -427,6 +435,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
                 if (aircraft) {
                     assert(output.land);
                     assert.equal(output.entrance, entrance);
+                    assert.equal(output.discovery, reveal);
                 } else {
                     assert.equal(output.entrance, 51);
                     assert.equal(output.groundEntrance, entrance);
@@ -464,25 +473,83 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             assert(!c.Graphics._wqaBookmarkTransferPending);
             assert(field.command('directions'));
             frames.emit('postrender');
-            const walking = packets.pop();
+            let walking = packets.pop();
             assert.equal(walking.live.mode, 'walk');
+            if (reveal) {
+                await followEntrance(reveal, entrance);
+                assert.match(formatSpeech(records.at(-1)), /discovery toward Walking marker/);
+                source.command357 = ([plugin, name, , args]) => {
+                    assert.equal(plugin, 'Tyruswoo_TileControl');
+                    assert.equal(name, 'set_tile');
+                    const { x, y, z } = JSON.parse(args.coordinates);
+                    gameMap.setTileId(+x, +y, +z, args.tileId, args.clearUpperLayers, args.allowAutotiling);
+                    return true;
+                };
+                execute(source);
+                assert(c.$gameSelfSwitches.value([113, reveal, 'A']));
+                const event = gameMap._events[reveal];
+                event.setupPage = () => { event._trigger = event.page().trigger; };
+                event.refresh();
+                source._list = null;
+                scene._wqaFieldReady = true;
+                assert(gameMap._needsTilemapRefresh, 'native set-tile schedules a repaint');
+                field.observeReady(scene);
+                assert(c.Graphics._wqaBookmarkTransferPending, 'handback waits for the discovery tile repaint');
+                gameMap._needsTilemapRefresh = false; // The native tilemap repaint is a fixture stand-in.
+                field.observeReady(scene);
+                assert(!c.Graphics._wqaBookmarkTransferPending);
+                assert(field.command('directions'));
+                frames.emit('postrender');
+                walking = packets.pop();
+            }
             if (entrance) {
-                assert.equal(walking.request.transfer.map, area);
-                let onFoot;
-                await verifyWorker(landing, walking.request, walking.live, output => {
-                    assert.equal(output.status, 'ready');
-                    assert.equal(output.entrance, entrance);
-                    onFoot = output;
-                });
-                worker.emit('message', { ...walking, result: onFoot });
-                follow(landing, onFoot, entrance);
-                assert(c.Graphics._wqaBookmarkTransferPending);
+                await followEntrance(entrance);
                 for (let command = 0; !player.isTransferring() && command < 10; command++) assert(source.executeCommand());
                 assert.deepEqual([player._newMapId, player._newX, player._newY], [area, ...target]);
                 assert(c.Graphics._wqaBookmarkTransferPending);
             } else assert.deepEqual([walking.request.targetX, walking.request.targetY], target);
+
+            async function followEntrance(event, discoveryFor) {
+                assert.equal(walking.request.transfer.map, area);
+                let onFoot;
+                await verifyWorker(landing, walking.request, walking.live, output => {
+                    assert.equal(output.status, 'ready');
+                    assert.equal(output.entrance, event);
+                    assert.equal(output.discoveryFor, discoveryFor);
+                    onFoot = output;
+                });
+                worker.emit('message', { ...walking, result: onFoot });
+                follow(landing, onFoot, event);
+                assert(c.Graphics._wqaBookmarkTransferPending);
+            }
             field.leave(scene);
             c.Graphics._wqaBookmarkTransferPending = false;
+        }
+        for (const id of [98, 190]) {
+            const { gameMap, player, source } = begin(113);
+            const event = gameMap._events[id];
+            const transfers = createTransferBookmarks(c, { graphics: c.Graphics });
+            const candidates = transfers.candidates().entrances;
+            assert.equal(transfers.discoveries(candidates).length, 23);
+            const edge = transfers.discovery(id, 100);
+            assert.equal(edge?.completion.switchId, 159);
+            const marker = { id: 1, revision: 1, trail: [] };
+            c.WendyQuestAccessBookmarkEntranceAccepted = transfers.accepted;
+            c.WendyQuestAccessSceneLeaving = transfers.leave;
+            player.setPosition(event._x, event._y);
+            transfers.arm(scene, marker, edge);
+            player.updateNonmoving(true, false);
+            assert.equal(source._eventId, id);
+            assert(c.Graphics._wqaBookmarkTransferPending);
+            source.command357 = () => true; // Other cases verify the actual tile paint and repaint gate.
+            execute(source);
+            assert(c.$gameSwitches.value(159));
+            event.setupPage = () => { event._trigger = event.page()?.trigger; };
+            event.refresh();
+            assert.equal(event._pageIndex, 1);
+            execute(interpreter(event.list(), id));
+            assert(event._erased);
+            assert.deepEqual(transfers.settle(scene), { ...marker, trail: ['113/' + player._x + '/' + player._y] });
         }
         c.Graphics.app = app;
         c.$gameScreen = screen;
@@ -491,7 +558,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         delete c.WendyQuestAccessBookmarkEntranceAccepted;
         delete c.WendyQuestAccessBookmarkLandingAccepted;
         delete c.WendyQuestAccessBookmarkTransferReserved;
-        console.log('Verified ship and airship landings restore walking bookmarks and continue through the Island and Ruins entrances.');
+        console.log('Verified ship and airship landings preserve walking bookmarks through native discovery and area transfers.');
     }
 
     async function verifyAirship() {
