@@ -1046,13 +1046,45 @@ const interval = setInterval(() => {
         } else if (endingStep === 27 && fs.existsSync(receipt + '.cross-map-arrived')) {
             fs.unlinkSync(receipt + '.cross-map-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
+            fs.writeFileSync(receipt + '.battle-stage', '');
+            const layer = {};
+            const scene = SceneManager._scene = Graphics.app.stage = {
+                _wqaBattleStarted: true, _started: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0, _uiLayer: layer
+            };
+            window.BattleManager = { _phase: 'input', _inputting: true, _wqaDialogueBusy: false };
+            const option = { parent: layer, _hasFocus: true, _animationPosition: 1, _animationPositionTarget: 1,
+                worldVisible: true, worldAlpha: 1, _prerequisitesMet: true };
+            const drawn = value => ({ parent: option, worldVisible: true, worldAlpha: 1, _dirty: false,
+                _currentString: value, bitmap: { isReady: () => true } });
+            option._nameSprite = drawn('Synthetic guard');
+            option._subTextSprite = drawn('Shield raised');
+            option._costTextSprite = drawn('2 MP');
+            option._followTarget = { _battleOptionsActive: 0, battleOptions: [[option]] };
+            WendyQuestAccessBattleFocusReady(scene, option);
+            if (!option._wqaBattleCommandSeen) throw Error('Battle focus did not observe the command');
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 30;
+        } else if (endingStep === 30 && fs.existsSync(receipt + '.battle-autodetail')) {
+            tap('i', 'KeyI');
+            endingStep = 31;
+        } else if (endingStep === 31 && fs.existsSync(receipt + '.battle-details')) {
+            pad();
+            if (padTap(7) !== 1 << 7) throw Error('Battle mod mode did not claim its binding');
+            endingStep = 32;
+        } else if (endingStep === 32 && fs.existsSync(receipt + '.battle-mode')) {
+            if (padTap(15) !== 1 << 15) throw Error('Battle mod mode did not claim the review direction');
+            if (padTap(15) !== 0) throw Error('Battle review did not return to native input');
+            endingStep = 33;
+        } else if (endingStep === 33 && fs.existsSync(receipt + '.battle-review')) {
+            fs.unlinkSync(receipt + '.battle-stage');
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
             WendyQuestAccessTitleReady(title);
             Graphics.app.renderer.emit('postrender');
             tap('v', 'KeyV');
             choose('Speech');
             choose('Speech enabled, on');
-            endingStep++;
+            endingStep = 28;
         } else if (endingStep === 28 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
             if (document.activeElement.textContent !== 'Speech enabled, off') throw Error('The mute switch did not retain focus');
             tap('Escape');
@@ -1107,6 +1139,14 @@ parentPort.on('message', message => {
     if (fs.existsSync(receipt + '.closing-pass')) {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
+        if (fs.existsSync(receipt + '.battle-stage')) {
+            const suffix = message.kind === 'menuFocus' ? 'focus' :
+                message.kind === 'menuDetails' ? (message.append ? 'autodetail' : 'details') :
+                message.kind === 'menuReview' ? 'review' : message.kind === 'controllerStatus' ? 'mode' : '';
+            if (suffix) fs.writeFileSync(receipt + '.battle-' + suffix, speech);
+            parentPort.postMessage('ack');
+            return;
+        }
         if (fs.existsSync(receipt + '.cross-map-stage')) {
             if (message.kind === 'fieldStatus' || message.kind === 'fieldTarget')
                 fs.writeFileSync(receipt + '.cross-map-last', speech);
@@ -1374,6 +1414,10 @@ def main():
             'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
             'cross-map-next': 'Next entrance toward Return marker. Move east to activate.',
             'cross-map-arrived': 'Return marker. you are here.',
+            'battle-focus': 'Battle commands, Synthetic guard, 1 of 1',
+            'battle-autodetail': 'Shield raised. Cost 2 MP',
+            'battle-details': 'Shield raised. Cost 2 MP',
+            'battle-review': 'Cost 2 MP, 2 of 2',
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:

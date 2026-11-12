@@ -245,6 +245,8 @@ def managers_notification(original):
         57606: b'\n' + files_ready('this._scene'),
         58080: b'\n    ' + SCENE_LEAVING,
         59505: b'\n    ' + MAP_LEAVING,
+        62230: b'\n    if(SceneManager._scene?._wqaBattleFocusActive&&this._phase!=="input")'
+               b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);',
         62280: b'        if(SceneManager._scene?._wqaBattleStarted){' + MAP_LEAVING + b'}\n',
     })
 
@@ -307,7 +309,9 @@ def objects_notification(original):
                 b'SceneManager._scene._wqaQuestTracking||SceneManager._scene._wqaQuestNavigation||'
                 b'SceneManager._scene._wqaRouteActive))'
                 b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene);\n        ',  # Accepted event start
-        255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING + b'}',
+        255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING +
+                b'if(SceneManager._scene?._wqaBattleFocusActive)'
+                b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
         257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
@@ -476,7 +480,26 @@ def battle_notification(original):
     # message window can be visible before the battle interpreter is ready.
     ready = (b'this._wqaBattleStarted && BattleManager._wqaDialogueBusy === false && '
              b'this._wqaBattleInterpreter?._waitMode === "message" && this._wqaBattleInterpreter._list')
+    # Option.update already checked native activation and focus after the
+    # sprite advanced. Observe that exact option before native OK dispatch.
+    command_ready = (b'(!this._wqaBattleCommandSeen||this._wqaBattleCommandEnabled!=='
+                     b'(this._prerequisitesMet===true&&!this._isLocked))&&this._animationPositionTarget===1&&'
+                     b'this._nameSprite?._dirty===false&&SceneManager._scene?._wqaBattleStarted&&'
+                     b'BattleManager._phase==="input"&&BattleManager._wqaDialogueBusy===false&&'
+                     b'SceneManager._scene._fadeDuration===0&&SceneManager._scene._fadeOpacity===0&&'
+                     b'!SceneManager._nextScene&&!SceneManager._exiting&&!SceneManager._wqaNativeAutosaves&&'
+                     b'!Graphics._wqaResize&&!SceneManager._scene._wqaSettingsActive&&'
+                     b'Graphics.app?.stage===SceneManager._scene')
+    command_leaving = (b'(this._wqaBattleCommandSeen&&'
+                       b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene,this),')
     return insert(original, BATTLE_SHA, {
+        155370: command_leaving,  # Accepted activation, before native effects
+        155394: b')',
+        156577: command_leaving,  # Native loss of this exact sprite's focus
+        156604: b')',
+        162176: b'((' + command_ready +
+                b')&&globalThis.WendyQuestAccessBattleFocusReady?.(SceneManager._scene,this),',
+        162205: b')',
         193431: b'(this._wqaDialogueBusy=',
         193508: b')',
         241897: b'this._wqaBattleStarted=true;',

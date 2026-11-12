@@ -5,6 +5,7 @@ const { createAudio } = require('./runtime/audio');
 const { createTitleObserver, presented } = require('./frontend/title');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
 const { createMenuObserver } = require('./menus/observer');
+const { createBattleFocus } = require('./battle/focus');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createField } = require('./world/field');
@@ -23,6 +24,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let title = null;
     let files = null;
     let menus = null;
+    let battleFocus = null;
     let quests = null;
     let mapBanner = null;
     let dialogue = null;
@@ -104,6 +106,7 @@ function boot(root, nodeRequire, nodeProcess) {
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
         menus = createMenuObserver(root, host, notifications, () => speechPreferences);
+        battleFocus = createBattleFocus(root, host, notifications, () => speechPreferences);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
@@ -127,7 +130,7 @@ function boot(root, nodeRequire, nodeProcess) {
             const panel = settings?.controllerOwner();
             if (panel?.scene === scene && scene._wqaSettingsActive) return panel;
             if (readyScene()) return frontendControl;
-            const menu = menus.controlOwner(scene);
+            const menu = menus.controlOwner(scene) || battleFocus.controlOwner(scene);
             if (menu) return menu;
             const speaking = dialogue.controllerOwner(scene);
             if (!speaking) {
@@ -143,6 +146,7 @@ function boot(root, nodeRequire, nodeProcess) {
             const record = { kind: 'controllerStatus', name: text };
             if (context.kind === 'field') field.report(text);
             else if (context.kind === 'menu') menus.announce(context, record);
+            else if (context.kind === 'battle') battleFocus.announce(context, record);
             else if (context.kind === 'dialogue') dialogue.announce(context, record);
             else if (context.scene instanceof root.Scene_Title) title.announce(context.scene, record);
             else files.announce(context.scene, record);
@@ -163,7 +167,7 @@ function boot(root, nodeRequire, nodeProcess) {
         settings = createSettingsMenu(root, {
             readyScene() {
                 const scene = host.manager._scene;
-                return readyScene() || ((menus.controlOwner(scene) || field.ready(scene)) ? scene : null);
+                return readyScene() || ((menus.controlOwner(scene) || battleFocus.controlOwner(scene) || field.ready(scene)) ? scene : null);
             },
             fieldReady: field.ready,
             bookmarkContext: field.bookmarkContext,
@@ -208,6 +212,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 title.suspend();
                 files.suspend();
                 menus.suspend(scene);
+                battleFocus.retire(scene);
                 quests.suspend(scene);
                 field.autowalk.stop(scene);
                 field.changed(scene);
@@ -220,7 +225,8 @@ function boot(root, nodeRequire, nodeProcess) {
             repeat() { try { return dialogue.repeatPage(); } catch { return false; } },
             menuCommand(action) {
                 const scene = host.manager._scene;
-                try { return menus.command(menus.controlOwner(scene), action) || quests.command(scene, action); }
+                try { return menus.command(menus.controlOwner(scene), action) ||
+                    battleFocus.command(battleFocus.controlOwner(scene), action) || quests.command(scene, action); }
                 catch { return false; }
             },
             fieldCommand(key) { try { return fieldAction(key); } catch { return false; } }
@@ -240,6 +246,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 else if (action === 'modeEntered') announce(context,
                     modeAnnouncement(family, context, settings.controllerBindings()));
                 else if (context.kind === 'menu') menus.command(context, action);
+                else if (context.kind === 'battle') battleFocus.command(context, action);
                 else if (context.kind === 'field') fieldAction(action);
             }
         });
@@ -258,6 +265,7 @@ function boot(root, nodeRequire, nodeProcess) {
             soundscape.leave();
             audio.retire();
             menus.retire(host.manager._scene);
+            battleFocus.retire(host.manager._scene);
             quests.leave(host.manager._scene);
             controller.reset();
         });
@@ -334,6 +342,11 @@ function boot(root, nodeRequire, nodeProcess) {
         try { menus.observe(scene, kind); } catch { menus.retire(scene); }
     };
     root.WendyQuestAccessMenuLeaving = function (scene) { menus?.retire(scene); };
+
+    root.WendyQuestAccessBattleFocusReady = function (scene, option) {
+        try { battleFocus?.observe(scene, option); } catch { battleFocus?.retire(scene, option); }
+    };
+    root.WendyQuestAccessBattleFocusLeaving = function (scene, option) { battleFocus?.retire(scene, option); };
 
     root.WendyQuestAccessQuestPaint = function (window) {
         try { return quests?.paint(window); } catch { return null; }
@@ -478,6 +491,7 @@ function boot(root, nodeRequire, nodeProcess) {
         title?.leave(scene);
         files?.leave(scene);
         menus?.retire(scene);
+        battleFocus?.retire(scene);
         mapBanner?.leave(scene);
         dialogue?.leave(scene);
         field?.leave(scene);
@@ -505,6 +519,7 @@ function boot(root, nodeRequire, nodeProcess) {
         title?.suspend();
         files?.suspend();
         menus?.retire(scene);
+        battleFocus?.retire(scene);
     };
 
     root.WendyQuestAccessResizeReady = function () {
