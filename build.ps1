@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$PrismArchive)
+param([Parameter(Mandatory)][string]$PrismArchive, [switch]$VerifySpeechPipe)
 
 $ErrorActionPreference = 'Stop'
 $runner = 'D:/Games/Dev/codex/templates/accessibility-mod/scripts/run-build.py'
@@ -9,5 +9,7 @@ if ($LASTEXITCODE -ne 0 -or !$instance) { throw 'Visual Studio x64 C++ build too
 $vcvars = Join-Path $instance 'VC/Auxiliary/Build/vcvars64.bat'
 $payloadBuilder = Join-Path $PSScriptRoot 'tools/build.py'
 
-& python $runner --memory-mb 512 -- python $payloadBuilder --prism-archive $PrismArchive --vcvars $vcvars
+$buildArguments = @('--prism-archive', $PrismArchive, '--vcvars', $vcvars)
+if ($VerifySpeechPipe) { $buildArguments += '--verify-speech-pipe' }
+& python $runner --memory-mb 512 -- python $payloadBuilder @buildArguments
 exit $LASTEXITCODE

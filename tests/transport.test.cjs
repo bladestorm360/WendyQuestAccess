@@ -70,18 +70,47 @@ assert.equal(renderer.counters.dropped, 9, 'renderer caps all outstanding record
 renderer.notifications.close();
 assert.equal(Atomics.load(word, 0), 0);
 assert.equal(commands.length, 1, 'the native caller never waits for a cancellation reply');
-assert.deepEqual(receipts, Array(7).fill('ack'));
-child.stdout.emit('data', 'S\r\n');
-assert.deepEqual(commands, ['SSynthetic command\n', 'C\n'], 'stale title packets were retired');
-child.stdout.emit('data', 'C\r\n');
-for (const message of receipts.splice(0)) transport.emit('message', message);
+assert.deepEqual(receipts, Array(7).fill('discarded'));
+child.stdout.emit('data', 'P\r\n');
+assert.deepEqual(commands, ['SSynthetic command\n', 'N\n'], 'the helper cannot initialize on a retired packet');
+child.stdout.emit('data', 'D\r\n');
+function deliverReceipts() {
+    for (const message of receipts.splice(0)) transport.emit('message', message);
+}
+deliverReceipts();
+assert.equal(renderer.counters.discarded, 8);
+assert.equal(renderer.counters.submitted, 0);
 
 renderer.notifications.open(title);
-assert.equal(commands.length, 3, 'same text is still eligible in the next presentation');
+assert.equal(commands.at(-1), 'SSynthetic command\n', 'the same text is eligible again');
+child.stdout.emit('data', 'P\r\n');
+assert.equal(commands.at(-1), 'Y\n');
+renderer.notifications.close();
+renderer.notifications.open(title);
+child.stdout.emit('data', 'B\r\n');
+assert.equal(commands.at(-1), 'N\n', 'finishing initialization cannot reuse a different live epoch');
+child.stdout.emit('data', 'D\r\n');
+deliverReceipts();
+assert.equal(renderer.counters.discarded, 9);
+assert.equal(commands.at(-1), 'SSynthetic command\n');
+
+child.stdout.emit('data', 'P\r\n');
+assert.equal(commands.at(-1), 'Y\n');
+const providerInProgress = commands.length;
+renderer.notifications.close();
+assert.equal(Atomics.load(word, 0), 0);
+renderer.notifications.open(title);
+assert.equal(commands.length, providerInProgress, 'neither native close nor next focus can send a second provider call');
 child.stdout.emit('data', 'S\r\n');
+assert.equal(commands.at(-1), 'SSynthetic command\n', 'only the new admitted epoch is prepared');
+child.stdout.emit('data', 'P\r\n');
+assert.equal(commands.at(-1), 'Y\n');
+child.stdout.emit('data', 'S\r\n');
+deliverReceipts();
+assert.equal(renderer.counters.submitted, 2, 'provider completions stay distinct from discarded requests');
 child.emit('exit', 3);
 assert.equal(receipts.at(-1), 'failed');
 transport.emit('message', 'failed');
 assert.equal(Atomics.load(word, 0), 0);
 assert.equal(renderer.counters.workerFailures, 1);
-console.log('Verified startup cancellation, eight-record cap, stalled pipe, stale epoch retirement, repeat text and helper failure.');
+console.log('Verified startup cancellation, eight-record cap, retirement before provider work, and native progress during a stalled provider call.');

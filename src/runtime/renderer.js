@@ -14,7 +14,7 @@ function createRenderer(host) {
     let nextSequence = 0;
     let isPresented = null;
     const pending = [];
-    const counters = { dropped: 0, submitted: 0, workerFailures: 0 };
+    const counters = { dropped: 0, discarded: 0, submitted: 0, workerFailures: 0 };
 
     function workerFailed() {
         if (failed) return;
@@ -44,9 +44,10 @@ function createRenderer(host) {
         try {
             worker = host.createWorker(word.buffer);
             worker.on('message', message => {
-                if (message === 'ack') {
+                if (message === 'ack' || message === 'discarded') {
                     if (inFlight > 0) inFlight--;
-                    counters.submitted++;
+                    if (message === 'ack') counters.submitted++;
+                    else counters.discarded++;
                     if (gate.epoch) drain();
                 } else if (message === 'failed') {
                     workerFailed();
@@ -97,8 +98,8 @@ function createRenderer(host) {
             if (!gate || !gate.accepts(epoch) || !gate.close()) return;
             isPresented = null;
             pending.length = 0;
-            // Invalidation is visible to the worker before this message can
-            // run. The message requests interruption of previously posted speech.
+            // Invalidation precedes queue retirement and the helper's next
+            // authorization check. It never waits for a provider reply.
             if (worker && !failed) {
                 try { worker.postMessage({ kind: 'cancel' }); }
                 catch { workerFailed(); }

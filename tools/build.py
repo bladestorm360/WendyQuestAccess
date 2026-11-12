@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import zipfile
 
 
@@ -77,21 +78,25 @@ def stage_prism(archive, payload):
     return headers
 
 
-def compile_speech(archive, vcvars):
+def compile_speech(archive, vcvars, verify_pipe):
     services = OUT / 'wendyquest-access'
     services.mkdir(parents=True, exist_ok=True)
     headers = stage_prism(archive, services)
-    compiler_inputs = {
-        'header': headers,
-        'source': ROOT / 'src' / 'services' / 'windows' / 'speech.cpp',
-        'target': services / 'WendyQuestSpeech.exe',
-        'object': OUT.parent / 'speech.obj'
-    }
+    fixture = OUT.parent / 'speech-pipe-fixture.exe'
+    sources = [(ROOT / 'src/services/windows/speech.cpp', services / 'WendyQuestSpeech.exe', OUT.parent / 'speech.obj')]
+    if verify_pipe:
+        sources.append((ROOT / 'tests/speech-pipe-fixture.cpp', fixture, OUT.parent / 'speech-pipe-fixture.obj'))
     # vcvars owns the compiler environment for this one process tree. Neither
     # the compiler nor the linker uses a shared server or parallel compilation.
-    for path in [vcvars, *compiler_inputs.values()]:
+    for path in (vcvars, headers, *(item for source in sources for item in source)):
         if any(char in str(path) for char in ('"', '%', '!', '\r', '\n')):
             raise ValueError('Unsupported toolchain path characters')
+    compiler_commands = '\n'.join(
+        f'cl /nologo /std:c++17 /MT /O2 /GS /guard:cf /EHsc /W4 /wd4191 /I"{headers}" '
+        f'/Fo"{obj}" /Fe"{target}" "{source}" /link /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /CETCOMPAT\n'
+        'if errorlevel 1 exit /b %errorlevel%'
+        for source, target, obj in sources
+    )
     script = OUT.parent / 'compile-speech.cmd'
     script.write_text(f'''@echo off
 setlocal DisableDelayedExpansion
@@ -101,10 +106,12 @@ set "LINK="
 set "_LINK_="
 call "{vcvars}"
 if errorlevel 1 exit /b %errorlevel%
-cl /nologo /std:c++17 /MT /O2 /GS /guard:cf /EHsc /W4 /wd4191 /I"{headers}" /Fo"{compiler_inputs['object']}" /Fe"{compiler_inputs['target']}" "{compiler_inputs['source']}" /link /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /CETCOMPAT
-exit /b %errorlevel%
+{compiler_commands}
+exit /b 0
 ''', encoding='ascii')
     subprocess.run(['cmd.exe', '/d', '/c', str(script)], cwd=OUT.parent, check=True, timeout=90)
+    if verify_pipe:
+        subprocess.run([sys.executable, str(ROOT / 'tests/speech-pipe.test.py'), str(fixture)], check=True, timeout=40)
     shutil.copyfile(ROOT / 'src' / 'services' / 'speech-worker.cjs', services / 'speech-worker.cjs')
     shutil.copyfile(ROOT / 'src' / 'services' / 'speech-text.cjs', services / 'speech-text.cjs')
 
@@ -113,10 +120,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--prism-archive', type=Path, required=True)
     parser.add_argument('--vcvars', type=Path, required=True)
+    parser.add_argument('--verify-speech-pipe', action='store_true')
     args = parser.parse_args()
     target = bundle()
     subprocess.run(['node', '--check', str(target)], check=True, timeout=20)
-    compile_speech(args.prism_archive.resolve(strict=True), args.vcvars.resolve(strict=True))
+    compile_speech(args.prism_archive.resolve(strict=True), args.vcvars.resolve(strict=True), args.verify_speech_pipe)
     print('Development payload staged at', OUT)
 
 

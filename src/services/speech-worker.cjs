@@ -11,8 +11,8 @@ const word = new Int32Array(workerData);
 const queue = [];
 let child = null;
 let ready = false;
-let writing = false;
-let cancel = false;
+let providerOpened = false;
+let active = null;
 let failed = false;
 let line = '';
 
@@ -26,28 +26,31 @@ function fail() {
 }
 
 function pump() {
-    if (!ready || writing || failed) return;
-    if (cancel) {
-        cancel = false;
-        writing = true;
-        child.stdin.write('C\n');
-        return;
-    }
+    if (!ready || active || failed) return;
     while (queue.length) {
         const message = queue.shift();
         if (Atomics.load(word, 0) !== message.epoch) {
-            parentPort.postMessage('ack');
+            parentPort.postMessage('discarded');
             continue;
         }
         const payload = formatSpeech(message);
-        if (!payload) {
-            parentPort.postMessage('ack');
+        if (!payload || Atomics.load(word, 0) !== message.epoch) {
+            parentPort.postMessage('discarded');
             continue;
         }
-        writing = true;
+        active = { epoch: message.epoch, expected: 'P' };
         child.stdin.write(`S${payload}\n`);
         return;
     }
+}
+
+function grant() {
+    // A pipe write is only preparation. The helper requests a fresh decision
+    // before provider work and again if it just finished initialization.
+    const accepted = Atomics.load(word, 0) === active.epoch;
+    active.expected = 'D';
+    if (accepted) active.expected = providerOpened ? 'S' : 'B';
+    child.stdin.write(accepted ? 'Y\n' : 'N\n');
 }
 
 function begin() {
@@ -65,11 +68,18 @@ function begin() {
         for (let end = line.indexOf('\n'); end >= 0; end = line.indexOf('\n')) {
             const status = line.slice(0, end).trimEnd();
             line = line.slice(end + 1);
-            if (status === 'R' && !ready) ready = true;
-            else if ((status === 'S' || status === 'C') && writing) {
-                writing = false;
-                if (status === 'S') parentPort.postMessage('ack');
-            } else return fail();
+            if (status === 'R' && !ready) {
+                ready = true;
+                continue;
+            }
+            if (status !== active?.expected) return fail();
+            if (status === 'P' || status === 'B') {
+                if (status === 'B') providerOpened = true;
+                grant();
+            } else {
+                active = null;
+                parentPort.postMessage(status === 'S' ? 'ack' : 'discarded');
+            }
         }
         pump();
     });
@@ -80,15 +90,14 @@ parentPort.on('message', message => {
     if (message.kind === 'cancel') {
         while (queue.length) {
             queue.shift();
-            parentPort.postMessage('ack');
+            parentPort.postMessage('discarded');
         }
-        if (child) cancel = true;
     } else if (queue.length < 8 &&
         Number.isInteger(message.epoch) && message.epoch > 0 && Atomics.load(word, 0) === message.epoch) {
         queue.push(message);
         if (!child) begin();
     } else {
-        parentPort.postMessage('ack');
+        parentPort.postMessage('discarded');
     }
     pump();
 });
