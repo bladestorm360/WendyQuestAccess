@@ -3,7 +3,8 @@
 // IDs match the original Windows cue bank. Preparation uses no output.
 const CUE = Object.freeze({ prepare: -1, preview: 0, wallBump: 1, wallBrush: 2,
     beaconPulse: 3, beaconTurn: 4, beaconArrival: 5, caveGo: 6, entityPerson: 7, entityExit: 8,
-    entityDoor: 9, entityStairs: 10, entityTreasure: 11, entityObject: 12, entityCheckpoint: 13 });
+    entityDoor: 9, entityStairs: 10, entityTreasure: 11, entityObject: 12, entityCheckpoint: 13,
+    battleLead: 14, battlePower: 15, battleAccuracy: 16, battleIce: 17 });
 
 function createAudio(host) {
     let generation = null;

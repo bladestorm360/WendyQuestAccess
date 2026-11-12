@@ -41,6 +41,7 @@ def bundle():
         './battle/focus': 'battle/focus.js',
         './battle/targets': 'battle/targets.js',
         './battle/timing': 'battle/timing.js',
+        './battle/timing-cues': 'battle/timing-cues.js',
         './enemy-state': 'battle/enemy-state.js',
         './presentation': 'battle/presentation.js',
         '../battle/presentation': 'battle/presentation.js',

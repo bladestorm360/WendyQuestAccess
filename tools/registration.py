@@ -61,6 +61,7 @@ DEPENDENCIES = {
     Path('package.nw/js/rmmz_sprites.js'): '33440ac9584344c4a9675d0b464f82eb49f5dcde0c23c485edbd385360475ba1',
     SALT_REL: '4d14b04a8980f4a4eb50dfa01d0ab61dd5507c62b65a1cd23b5df1621662e296',
     Path('package.nw/data/States.json'): 'db3264ae4f2436acb247655823b4055ffb1c319a5c709e2f760a37be4cdc4b14',
+    Path('package.nw/data/Skills.json'): '107e79081ab63e78446b7ebcaeb3310bf5ee2d8b9c667ae1d6f63dbc900eac60',
     CAFFEINE_REL: 'e26a883c1d464508d446382ee5be94c5ca7ada1b76ec70e4f9650bdb1f24d48f',
     Path('package.nw/data/CommonEvents.json'): '1884583f50d8e6c37c53c7552df9c6628d59faf0b92ea90d1ed3a65769c0b9d9',
     Path('package.nw/data/Map015.json'): 'f55ea800b85a452dc076ff35a945256a68f4af0e3bacd209924759da9167c6e5',
@@ -99,6 +100,8 @@ BATTLE_BAG_LEAVING = (b'SceneManager._scene?._wqaBattleBagActive&&'
                       b'globalThis.WendyQuestAccessMenuLeaving?.(SceneManager._scene)')
 BATTLE_TIMING_LEAVING = (b'SceneManager._scene?._wqaBattleTimingActive&&'
                          b'globalThis.WendyQuestAccessBattleTimingLeaving?.(SceneManager._scene)')
+BATTLE_CUE_LEAVING = (b'SceneManager._scene?._wqaBattleCueActive&&'
+                      b'globalThis.WendyQuestAccessBattleCueLeaving?.(SceneManager._scene)')
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
@@ -258,6 +261,7 @@ def managers_notification(original):
                b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);'
                b'\n    if(this._phase!=="input")' + BATTLE_BAG_LEAVING + b';'
                b'\n    if(this._phase!=="ActionCommand")' + BATTLE_TIMING_LEAVING + b';'
+               b'\n    if(this._phase!=="input"&&this._phase!=="ActionCommand")' + BATTLE_CUE_LEAVING + b';'
                b'\n    if(this._phase!=="input"&&this._phase!=="ActionCommand")' + BATTLE_TARGET_LEAVING + b';',
         62280: b'        if(SceneManager._scene?._wqaBattleStarted){' + MAP_LEAVING + b'}\n',
     })
@@ -325,7 +329,8 @@ def objects_notification(original):
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING +
                 b'if(SceneManager._scene?._wqaBattleFocusActive)'
                 b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);' +
-                BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';}',
+                BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
+                BATTLE_CUE_LEAVING + b';}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
         257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
@@ -580,10 +585,12 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         162176: b'((' + command_ready +
                 b')&&globalThis.WendyQuestAccessBattleFocusReady?.(SceneManager._scene,this),',
         162205: b')',
-        192463: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';',
+        192463: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
+                BATTLE_CUE_LEAVING + b';',
         193431: b'(this._wqaDialogueBusy=',
         193508: b')',
-        196596: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';',
+        196596: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
+                BATTLE_CUE_LEAVING + b';',
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=undefined;',
         242214: target_update + bag_update + timing_update + dialogue_update(ready),
@@ -602,12 +609,26 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
 
 def action_notification(original):
     timing_leaving = (b'(this._wqaTimingWaiting&&(this._wqaTimingWaiting=false,' + BATTLE_TIMING_LEAVING + b'))')
+    # Both samples follow native geometry and accepted input. The native
+    # generator remains the only owner of elapsed time, pauses and outcomes.
+    cue_sample = b',this._wqaBattleCueActive&&globalThis.WendyQuestAccessBattleCueSample?.(SceneManager._scene,this,'
+    cue_end_sweep = (b'this._wqaBattleCueActive&&'
+                     b'globalThis.WendyQuestAccessBattleCueEndSweep?.(SceneManager._scene,this);')
     return insert(original, ACTION_SHA, {
-        25684: BATTLE_TARGET_LEAVING + b',' + timing_leaving + b',',  # Accepted cancellation
-        48198: BATTLE_TARGET_LEAVING + b';' + timing_leaving + b';',  # Native radial cleanup
+        25684: BATTLE_TARGET_LEAVING + b',' + timing_leaving + b',' + BATTLE_CUE_LEAVING + b',',
+        48198: BATTLE_TARGET_LEAVING + b';' + timing_leaving + b';' + BATTLE_CUE_LEAVING + b';',
         67807: b'if(!this._wqaTimingWaiting&&this===BattleManager._currentActionCommand&&'
                b'SceneManager._scene?._wqaBattleStarted)this._wqaTimingWaiting=true;',  # Ready input loop
-        67814: BATTLE_TARGET_LEAVING + b';' + timing_leaving + b';',  # Native windup starts
+        67814: BATTLE_TARGET_LEAVING + b';' + timing_leaving + b';'
+               b'if(Graphics._wqaBattleCueEnabled&&SceneManager._scene?._wqaBattleStarted)'
+               b'globalThis.WendyQuestAccessBattleCueBegin?.(SceneManager._scene,this);',
+        71224: cue_sample + b'0,_0x279acd,_0x3f6392,this._params.powerCritZoneAmountStart,'
+                b'this._params.powerCritZoneAmountEnd,this._params.powerFailAmount,'
+                b'_0x17f391?_0x1fd196:-1,_0x7de663,_0x2f41e3>0,!!_0x26a0b4.Frosty,_0x21be67)',
+        71232: cue_end_sweep,
+        77631: cue_sample + b'1,_0x1327af,_0x3dbe15,_0x3d8aee,_0x357499,this._params.hitFailAmount,'
+                b'_0x2191e9?_0x8a92bb:-1,_0x44198f,_0x592e0d>0,!!_0x26a0b4.Frosty,_0x197d36)',
+        77639: BATTLE_CUE_LEAVING + b';',
     })
 
 

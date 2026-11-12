@@ -8,7 +8,7 @@ const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLa
 const MAX_OPTIONS = 16;
 
 
-function createBattleFocus(root, host, notifications, preferences) {
+function createBattleFocus(root, host, notifications, preferences, onReady) {
     let current = null;
     let pending = null;
     let renderOwner = null;
@@ -81,6 +81,7 @@ function createBattleFocus(root, host, notifications, preferences) {
         show(page, { kind: 'menuFocus', name, screen, actor, enabled: page.enabled,
             position: choices.indexOf(option) + 1, total: choices.length, indexed: settings.indexing });
         if (lines.length && settings.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
+        onReady?.(scene);
         return true;
     }
 

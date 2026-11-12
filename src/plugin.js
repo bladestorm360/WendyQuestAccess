@@ -8,6 +8,7 @@ const { createMenuObserver } = require('./menus/observer');
 const { createBattleFocus } = require('./battle/focus');
 const { createBattleTargets } = require('./battle/targets');
 const { createBattleTiming } = require('./battle/timing');
+const { createBattleCues } = require('./battle/timing-cues');
 const { partyVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
@@ -30,6 +31,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let battleFocus = null;
     let battleTargets = null;
     let battleTiming = null;
+    let battleCues = null;
     let quests = null;
     let mapBanner = null;
     let dialogue = null;
@@ -65,6 +67,7 @@ function boot(root, nodeRequire, nodeProcess) {
             graphics: root.Graphics,
             window: root,
             hasFocus: () => root.document.hasFocus(),
+            now: () => root.performance.now(),
             screenFading: () => root.$gameScreen?._fadeOutDuration > 0,
             battleDialogueIdle: () => root.BattleManager?._wqaDialogueBusy === false,
             saveInfo: index => root.DataManager.savefileInfo(index),
@@ -111,9 +114,13 @@ function boot(root, nodeRequire, nodeProcess) {
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
         menus = createMenuObserver(root, host, notifications, () => speechPreferences);
-        battleFocus = createBattleFocus(root, host, notifications, () => speechPreferences);
+        battleCues = createBattleCues(root, host, audio, () => audioPreferences);
+        const warmBattleAudio = scene => {
+            try { battleCues.prepare(scene); } catch { battleCues.retire(scene); }
+        };
+        battleFocus = createBattleFocus(root, host, notifications, () => speechPreferences, warmBattleAudio);
         battleTargets = createBattleTargets(root, host, notifications, () => speechPreferences);
-        battleTiming = createBattleTiming(root, host, notifications, battleTargets);
+        battleTiming = createBattleTiming(root, host, notifications, battleTargets, warmBattleAudio);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
@@ -210,9 +217,12 @@ function boot(root, nodeRequire, nodeProcess) {
                 if (master || value.caveTiming !== audioPreferences.caveTiming || value.caveVolume !== audioPreferences.caveVolume)
                     caveTiming.stop();
                 if (master || value.soundscape !== audioPreferences.soundscape) soundscape.leave();
+                if (master || value.battleTiming !== audioPreferences.battleTiming ||
+                    value.battleTimingVolume !== audioPreferences.battleTimingVolume) battleCues.retire();
                 audioPreferences = value;
                 root.Graphics._wqaWallEnabled = value.enabled && value.wall && value.wallVolume > 0;
                 root.Graphics._wqaCaveTimingEnabled = value.enabled && value.caveTiming && value.caveVolume > 0;
+                root.Graphics._wqaBattleCueEnabled = value.enabled && value.battleTiming && value.battleTimingVolume > 0;
                 root.Graphics._wqaSoundscapeEnabled = value.enabled && value.soundscape.enabled && value.soundscape.volume > 0 &&
                     Object.values(value.soundscape.categories).some(category => category.enabled && category.volume > 0);
                 const scene = host.manager._scene;
@@ -236,6 +246,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 battleFocus.retire(scene);
                 battleTargets.retire(scene);
                 battleTiming.retire(scene);
+                battleCues.retire(scene);
                 quests.suspend(scene);
                 field.autowalk.stop(scene);
                 field.changed(scene);
@@ -295,6 +306,7 @@ function boot(root, nodeRequire, nodeProcess) {
             battleFocus.retire(host.manager._scene);
             battleTargets.retire(host.manager._scene);
             battleTiming.retire(host.manager._scene);
+            battleCues.retire(host.manager._scene);
             quests.leave(host.manager._scene);
             controller.reset();
         });
@@ -386,6 +398,17 @@ function boot(root, nodeRequire, nodeProcess) {
         try { battleTiming?.observe(scene, action); } catch { battleTiming?.retire(scene); }
     };
     root.WendyQuestAccessBattleTimingLeaving = function (scene) { battleTiming?.retire(scene); };
+
+    root.WendyQuestAccessBattleCueBegin = function (scene, action) {
+        try { battleCues?.begin(scene, action); } catch { battleCues?.retire(scene); }
+    };
+    root.WendyQuestAccessBattleCueSample = function (scene, action, phase, progress, duration, start, end, limit,
+        iceStart, iceEnd, paused, frosty, accepted) {
+        try { battleCues?.sample(scene, action, phase, progress, duration, start, end, limit, iceStart, iceEnd, paused, frosty, accepted); }
+        catch { battleCues?.retire(scene); }
+    };
+    root.WendyQuestAccessBattleCueEndSweep = function (scene, action) { battleCues?.endSweep(scene, action); };
+    root.WendyQuestAccessBattleCueLeaving = function (scene) { battleCues?.retire(scene); };
 
     root.WendyQuestAccessQuestPaint = function (window) {
         try { return quests?.paint(window); } catch { return null; }
@@ -533,6 +556,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleFocus?.retire(scene);
         battleTargets?.retire(scene);
         battleTiming?.retire(scene);
+        battleCues?.retire(scene);
         mapBanner?.leave(scene);
         dialogue?.leave(scene);
         field?.leave(scene);
@@ -563,6 +587,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleFocus?.retire(scene);
         battleTargets?.retire(scene);
         battleTiming?.retire(scene);
+        battleCues?.retire(scene);
     };
 
     root.WendyQuestAccessResizeReady = function () {

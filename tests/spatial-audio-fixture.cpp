@@ -106,6 +106,19 @@ int wmain(int argc, wchar_t** argv) {
         assert(energy(spatial, 0) > energy(spatial, 1));
     }
 
+    std::array<Stereo, 4> battle_cues{};
+    for (size_t i = 0; i < battle_cues.size(); ++i) {
+        const auto cue = static_cast<Cue>(static_cast<int>(Cue::battle_lead) + i);
+        Stereo spatial{}, back{};
+        auto& ahead = battle_cues[i];
+        assert(stereo_cue(ahead, cue, {0, 0, 1}, 0.65, ready));
+        assert(stereo_cue(back, cue, {0, 0, -1}, 0.65, ready));
+        assert(energy(ahead, 0) > 0 && crossings(back, 0) < crossings(ahead, 0));
+        assert(hrtf.render(spatial, cue, {1, 0.2, 1}, 0.65, ready));
+        assert(energy(spatial, 1) > energy(spatial, 0));
+        for (size_t earlier = 0; earlier < i; ++earlier) assert(battle_cues[earlier] != ahead);
+    }
+
     // The build runner sets SDL_AUDIO_DRIVER=dummy for this process only.
     // The real SDL driver callback consumes the pre-rendered PCM.
     volatile LONG generation = 1;
@@ -124,7 +137,7 @@ int wmain(int argc, wchar_t** argv) {
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     assert(device.submitted() == stopped && device.callbacks() == revoked && !device.publish(1, right));
     InterlockedExchange(&generation, 2);
-    assert(device.publish(2, right));
+    assert(device.publish(2, battle_cues.back()));
     for (int i = 0; i < 40 && device.submitted() == stopped; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     assert(device.submitted() > stopped);
     for (int i = 0; i < 80 && device.submitted() < stopped + render_frames; ++i)

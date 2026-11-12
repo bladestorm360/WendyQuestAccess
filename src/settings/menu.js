@@ -27,12 +27,15 @@ function normalizeAudio(value) {
     const volume = value?.wallVolume;
     const beaconVolume = value?.beaconVolume;
     const caveVolume = value?.caveVolume;
+    const battleVolume = value?.battleTimingVolume;
     return { enabled: value?.enabled !== false, hrtf: value?.hrtf !== false, wall: value?.wall === true,
         wallVolume: Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : 65,
         beacon: value?.beacon === true,
         beaconVolume: Number.isInteger(beaconVolume) && beaconVolume >= 0 && beaconVolume <= 100 ? beaconVolume : 65,
         caveTiming: value?.caveTiming === true,
         caveVolume: Number.isInteger(caveVolume) && caveVolume >= 0 && caveVolume <= 100 ? caveVolume : 65,
+        battleTiming: value?.battleTiming === true,
+        battleTimingVolume: Number.isInteger(battleVolume) && battleVolume >= 0 && battleVolume <= 100 ? battleVolume : 65,
         soundscape: normalizeSoundscape(value?.soundscape) };
 }
 
@@ -283,6 +286,12 @@ function createSettingsMenu(root, host) {
                 update('caveLower', { ...audio, caveVolume: Math.max(0, audio.caveVolume - 10) })),
             caveRaise: button(owner, `Increase cave timing volume, ${audio.caveVolume} percent`, () =>
                 update('caveRaise', { ...audio, caveVolume: Math.min(100, audio.caveVolume + 10) })),
+            battleTiming: button(owner, `Battle timing cues, ${audio.battleTiming ? 'on' : 'off'}`, () =>
+                update('battleTiming', { ...audio, battleTiming: !audio.battleTiming })),
+            battleLower: button(owner, `Decrease battle timing volume, ${audio.battleTimingVolume} percent`, () =>
+                update('battleLower', { ...audio, battleTimingVolume: Math.max(0, audio.battleTimingVolume - 10) })),
+            battleRaise: button(owner, `Increase battle timing volume, ${audio.battleTimingVolume} percent`, () =>
+                update('battleRaise', { ...audio, battleTimingVolume: Math.min(100, audio.battleTimingVolume + 10) })),
             soundscape: button(owner, 'Soundscape', () => showSoundscape(owner))
         };
         const preview = (bearing, cue, gain) => previewAudio(owner, bearing, cue, gain);
@@ -292,6 +301,10 @@ function createSettingsMenu(root, host) {
         button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconTurn', audio.beaconVolume / 100));
         button(owner, 'Preview beacon arrival', () => preview([0, 0, 1], 'beaconArrival', audio.beaconVolume / 100));
         button(owner, 'Preview cave crossing tone', () => preview([0, 0, 1], 'caveGo', audio.caveVolume / 100));
+        button(owner, 'Preview battle lead tone', () => preview([0, 0, 1], 'battleLead', audio.battleTimingVolume / 100));
+        button(owner, 'Preview battle power tone', () => preview([1, 0, 1], 'battlePower', audio.battleTimingVolume / 100));
+        button(owner, 'Preview battle accuracy tone', () => preview([-1, 0, 1], 'battleAccuracy', audio.battleTimingVolume / 100));
+        button(owner, 'Preview battle ice-break tone', () => preview([0, 1, 1], 'battleIce', audio.battleTimingVolume / 100));
         for (const [direction, bearing] of AUDIO_PREVIEWS) {
             button(owner, `Preview ${direction}`, () => preview(bearing));
         }

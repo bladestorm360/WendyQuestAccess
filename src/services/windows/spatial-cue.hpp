@@ -13,7 +13,8 @@ constexpr double rear_pitch = 0.72;
 constexpr double tau = 6.283185307179586;
 enum class Cue : int {
     preview, wall_bump, wall_brush, beacon_pulse, beacon_turn, beacon_arrival, cave_go,
-    entity_person, entity_exit, entity_door, entity_stairs, entity_treasure, entity_object, entity_checkpoint, count
+    entity_person, entity_exit, entity_door, entity_stairs, entity_treasure, entity_object, entity_checkpoint,
+    battle_lead, battle_power, battle_accuracy, battle_ice, count
 };
 
 struct Bearing {
@@ -57,7 +58,17 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
         const auto note = std::min({1.0, segment / 0.003, std::max(0.0, (0.028 - segment) / 0.006)});
         return envelope * note * 0.57 * std::sin(tau * frequency * pitch * segment);
     }
-    if (cue >= Cue::entity_person && cue < Cue::count) {
+    if (cue >= Cue::battle_lead && cue < Cue::count) {
+        const double frequency = cue == Cue::battle_lead ? 440.0 : cue == Cue::battle_power ? 625.0 :
+            cue == Cue::battle_accuracy ? 950.0 : time < 0.022 ? 1360.0 : 1050.0;
+        const auto segment = cue == Cue::battle_ice ? std::fmod(time, 0.022) : time;
+        const double length = cue == Cue::battle_ice ? 0.022 : 0.044;
+        if (time >= 0.044) return 0.0;
+        const auto note = std::min({1.0, segment / 0.003, std::max(0.0, (length - segment) / 0.009)});
+        const auto phase = tau * frequency * pitch * segment;
+        return envelope * note * (0.52 * std::sin(phase) + 0.08 * std::sin(2.0 * phase));
+    }
+    if (cue >= Cue::entity_person && cue <= Cue::entity_checkpoint) {
         // Three short slots permit category rhythms to stay distinct even
         // when the stereo backend lowers every rear-facing cue's pitch.
         constexpr std::array<std::array<double, 3>, 7> notes{{

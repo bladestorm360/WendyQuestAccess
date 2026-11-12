@@ -6,7 +6,7 @@ const START_PROMPT = { kind: 'menuReview', name: 'Confirm to start timing. Confi
 const MAX_TARGET_PAINT_WAIT = 3;
 const MAX_PAINT_ATTEMPTS = 8;
 
-function createBattleTiming(root, host, notifications, targets) {
+function createBattleTiming(root, host, notifications, targets, onReady) {
     let current = null;
     let pending = null;
     let renderOwner = null;
@@ -42,6 +42,7 @@ function createBattleTiming(root, host, notifications, targets) {
             if (count >= MAX_PAINT_ATTEMPTS) action._wqaTimingPromptSeen = true;
             return;
         }
+        onReady?.(scene);
         const appended = targets.appendTiming(scene, action, START_PROMPT);
         if (!appended && root.BattleManager._targets?.length && count < MAX_TARGET_PAINT_WAIT) return;
         const owner = current = { scene, action, epoch: 0 };

@@ -134,10 +134,12 @@ let autowalkStep = 0;
 let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
+let battleAudioStep = 0;
 let audioStarted = 0;
 let wallPreviewStarted = 0;
 let beaconStarted = 0;
 let caveCueStarted = 0;
+let battleCueStarted = 0;
 let soundscapeStarted = 0;
 let crossMapStarted = 0;
 let crossMapLeg = 0;
@@ -288,7 +290,14 @@ function verifySettings() {
     } else if (settingsStep === 16 && menuStatus() === 'Audio settings saved') {
         choose('Preview cave crossing tone');
         settingsStep++;
-    } else if (settingsStep === 17 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+    } else if (settingsStep === 17 && battleAudioStep === 0 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        choose('Battle timing cues, off');
+        battleAudioStep++;
+    } else if (settingsStep === 17 && battleAudioStep === 1 && menuStatus() === 'Audio settings saved') {
+        if (document.activeElement.textContent !== 'Battle timing cues, on') throw Error('Battle cue setting failed');
+        choose('Preview battle ice-break tone');
+        battleAudioStep++;
+    } else if (settingsStep === 17 && battleAudioStep === 2 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         choose('Mod sounds');
         settingsStep++;
     } else if (settingsStep === 18 && menuStatus() === 'Audio settings saved') {
@@ -403,7 +412,7 @@ const interval = setInterval(() => {
             tap('Escape');
             tap('Escape');
             choose('Audio');
-            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 11).map(item => item.textContent);
+            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 14).map(item => item.textContent);
             choose('Soundscape');
             const soundscape = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
             choose('Exits');
@@ -1140,6 +1149,20 @@ const interval = setInterval(() => {
             WendyQuestAccessBattleTargetLeaving(scene);
             WendyQuestAccessBattleTimingLeaving(scene);
             if (scene._wqaBattleTargetControl) throw Error('Retired target still owns controller review');
+            const action = BattleManager._currentActionCommand;
+            action._cancelable = action._wqaTimingWaiting = false;
+            WendyQuestAccessBattleCueBegin(scene, action);
+            if (!action._wqaBattleCueActive) throw Error('Warm battle timing audio did not acquire its action');
+            battleCueStarted = Date.now();
+            WendyQuestAccessBattleCueSample(scene, action, 0, 0.885, 0.8, 0.8, 1, 1, -1, 0, false, false, false);
+            endingStep = 42;
+        } else if (endingStep === 42 && fs.existsSync(receipt + '.battle-cue')) {
+            const cueReceipt = JSON.parse(fs.readFileSync(receipt + '.battle-cue', 'utf8'));
+            fs.writeFileSync(receipt + '.battle-cue-ms', String(cueReceipt.at - battleCueStarted));
+            const scene = SceneManager._scene;
+            WendyQuestAccessBattleCueEndSweep(scene, BattleManager._currentActionCommand);
+            WendyQuestAccessBattleCueLeaving(scene);
+            if (scene._wqaBattleCueActive) throw Error('Battle timing cue did not retire');
             fs.unlinkSync(receipt + '.battle-target-stage');
             fs.writeFileSync(receipt + '.battle-bag-stage', '');
             Object.assign(BattleManager, { _phase: 'input', _targets: [] });
@@ -1361,6 +1384,10 @@ parentPort.postMessage = packet => {
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 6 && active.forward === -1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.cave-cue'), String(packet.status));
     }
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 15 && active.right > 0.9 && active.forward === 1) {
+        fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.battle-cue'),
+            JSON.stringify({ status: packet.status, at: Date.now() }));
+    }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 12 && active.forward === 2) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.soundscape'), String(packet.status));
     }
@@ -1477,6 +1504,9 @@ def main():
         if receipt.with_suffix('.json.beacon').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW route beacon did not publish stereo PCM to SDL')
         beacon_ms = float(receipt.with_suffix('.json.beacon-ms').read_text(encoding='utf8'))
+        battle_cue_ms = float(receipt.with_suffix('.json.battle-cue-ms').read_text(encoding='utf8'))
+        if json.loads(receipt.with_suffix('.json.battle-cue').read_text(encoding='utf8'))['status'] != 1:
+            raise RuntimeError('NW battle timing cue did not submit stereo PCM to SDL')
         if receipt.with_suffix('.json.cave-cue').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL')
         if receipt.with_suffix('.json.soundscape').read_text(encoding='utf8') != '1':
@@ -1548,7 +1578,8 @@ def main():
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
                     'Increase wall volume, 55 percent', 'Navigation beacon, on', 'Decrease beacon volume, 65 percent',
                     'Increase beacon volume, 65 percent', 'Cave timing cues, on', 'Decrease cave timing volume, 65 percent',
-                    'Increase cave timing volume, 65 percent'] or reloaded.get('soundscape') != [
+                    'Increase cave timing volume, 65 percent', 'Battle timing cues, on',
+                    'Decrease battle timing volume, 65 percent', 'Increase battle timing volume, 65 percent'] or reloaded.get('soundscape') != [
                     'Soundscape, on', 'Decrease volume, 35 percent', 'Exits, off']:
             raise RuntimeError(f'NW settings did not survive restart in the isolated profile: {reloaded}')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
@@ -1560,6 +1591,8 @@ def main():
         print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
         print('Verified battle actor, commands, targets, party vitals, rendered Bag items and controller handback.')
+        print('Verified the Battle timing setting, preview and action retirement. '
+              f'Throttled warm battle cue reached silent SDL submission in {battle_cue_ms:.0f} ms.')
         print('Verified the Quests category, packaged route and marker replacement handback.')
         print('Verified controller bookmark naming, keyboard save, native tile arrival, linked event removal and persistence.')
         print('Verified reachable entrance speech, two manual transfers, native loading gates and restored bookmark selection.')

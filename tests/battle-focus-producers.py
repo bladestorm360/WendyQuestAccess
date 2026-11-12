@@ -38,6 +38,40 @@ def manager_method(source, name):
     return source[start:end + 1] + ';'
 
 
+if sys.argv[2:] == ['sweeps']:
+    original_action = (installed / ACTION_REL).read_bytes()
+    action, _ = decode(action_notification(original_action).decode('utf8'))
+    baseline, _ = decode(original_action.decode('utf8'))
+    methods = [sprite_method(action, 'ActionCommandRadial', 'BarParams')]
+    for source, prefix in ((action, 'observed'), (baseline, 'native')):
+        start = source.index('for(;!_0x21be67')
+        end = source.index('_0x28cf50=Lerp', start)
+        power = source[start:end]
+        start = source.index('for(;!_0x197d36')
+        end = source.index("AudioManager['stopSound']", start)
+        accuracy = source[start:end]
+        setup = '''
+const marker = fixture.marker, ice = fixture.ice;
+const _0x26a0b4 = fixture.settings, _0x58262b = Math.PI, _0x448ce3 = Math.PI * 2;
+const _0x574572 = {}, _0x2e26b2 = {};
+'''
+        methods.append(f'ActionCommandRadial.prototype.{prefix}Power = function* (fixture) {{' + setup + '''
+let _0x21be67=false,_0x2ce9ba=0,_0x3f6392=fixture.duration,_0x279acd=0,
+    _0x17f391=!!fixture.settings.Frozen,_0x7de663=fixture.iceEnd,_0x1fd196=fixture.iceStart,
+    _0x2f41e3=0,_0x264dda=0,_0x2d3da7=ice,_0x301a04=ice,_0x4b783f=ice;
+const _0x2b5dae=0,_0x3f7d26=marker,_0xbb5d19=marker,_0x20c7a7=marker;
+''' + power + 'return [_0x279acd,_0x21be67,_0x17f391];};')
+        methods.append(f'ActionCommandRadial.prototype.{prefix}Accuracy = function* (fixture) {{' + setup + '''
+let _0x197d36=false,_0x5499a6=0,_0x3dbe15=fixture.duration,_0x1327af=0,_0x2dcbbd=0,
+    _0x2191e9=!!fixture.settings.Frozen,_0x44198f=fixture.iceEnd,_0x8a92bb=fixture.iceStart,
+    _0x592e0d=0,_0x1ff601=ice,_0x515bfd=ice,_0x20b9fd=ice;
+const _0x3d8aee=fixture.lower,_0x357499=fixture.upper,
+    _0x4a1ae6=0,_0x168297=marker,_0x42d8de=marker,_0x3e17b5=marker;
+''' + accuracy + 'return [_0x1327af,_0x197d36,_0x2191e9];};')
+    print(json.dumps(methods))
+    sys.exit(0)
+
+
 if sys.argv[2:] == ['timing']:
     action, _ = decode(action_notification((installed / ACTION_REL).read_bytes()).decode('utf8'))
     methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]
