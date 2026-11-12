@@ -101,7 +101,7 @@ The **Quests** category adds current-map quest interactions and waypoints from t
 
 Personal bookmarks can mark a tile or an eligible live destination. [Bookmark controls and evidence](bookmarks.md)
 
-Remaining field work includes cross-map routing. A worker disk read already in flight can outlast admission. That and the speech-provider lifecycle remain release gaps. Steam deployment remains pending.
+Remaining field work includes cross-map routing. The [native transfer investigation](cross-map-routing.md) records the ordinary and conditional entrance shapes. A worker disk read already in flight can outlast admission. That and the speech-provider lifecycle remain release gaps. Steam deployment remains pending.
 
 ## Native input boundary for autowalk
 

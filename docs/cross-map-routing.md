@@ -1,0 +1,23 @@
+# Cross-map transfer investigation
+
+## Installed build 26578620
+
+The bounded in-memory scan read the 239 installed map JSON files. It found 1,065 direct native Transfer Player commands. Of these, 1,000 are on ordinary action or touch event pages, and 524 are the first executable command on those pages. A direct command can still be in a choice, an event branch or a developer map. One target coordinate is outside its destination map, at Map 185 event 18 page 0 command 6. Sixteen commands target their own map.
+
+The strict first slice is a direct transfer as the sole executable command on an unconditional, single-page event, from one map to another with an in-bounds landing. This shape accounts for 463 commands and 101 distinct directed map pairs. All 463 use Player Touch and fixed events. Of these, 438 have below-player priority and 25 have normal priority. Those priorities need distinct native entry checks. The next 31 qualifying first-command pages have additional executable commands after the transfer. Common events precede another 220 direct commands on ordinary interaction pages. These shapes need separate qualification before the planner can use them.
+
+To reproduce, enumerate nonempty MapInfos IDs and walk every event page in their corresponding map files under the 384 MB resource runner. Count transfer command 201 in direct designation mode, checking the destination against the target map dimensions. Exclude comment and end rows for the executable command count. For the strict count, require a single event page with no active condition flags, a sole depth-zero transfer, trigger 0, 1 or 2, and a different destination map. Group by source and destination for directed pairs and by native priority for approach classes. This scan uses installed data in memory and records counts and locators only.
+
+| Installed event | Transfer behavior | Routing implication |
+| --- | --- | --- |
+| Salt Caverns 019 events 1 and 2, and Map 020 event 1 | Direct touch transfers to Maps 017 and 020 and a return from 020 to 019. These have normal priority. | Candidate for both directions of the first connected fixture. Confirm actual approach and native accepted transfer from the relevant player positions. |
+| Cauldron exterior 057 event 13 | Four native pages reach layouts 050, 032, 028 and 044. | Choose an edge from the current effective page and the already-qualified native condition. A static map pair would conflate the layouts. |
+| Cauldron exterior 057 event 14 and Map 058 event 16 | Direct touch transfers to 055 have the same page shape. | On Map 058 an intervening guard can take native control before the entrance. Native collision and event order decide the available route. |
+| House 127 event 2 | One page chooses between Maps 195 and 128. | Reuse the specific switch gate. The first transfer in the list is insufficient evidence. |
+| Cave 196 event 20 and 199 events 3 and 26 | Direct touch transfers between cave rooms. | Continue using the existing timed cave guidance and the native ready handback. Static room adjacency supplies neither patrol timing nor a safe crossing. |
+
+## Native ownership and first implementation slice
+
+The native interpreter accepts the active event through `Game_Map.setupStartingMapEvent` in `rmmz_objects.js` at line 6839. `command201` at line 10483 schedules a transfer through `Game_Player.reserveTransfer` at line 8133 and waits for native transfer completion. `Scene_Map.create` at line 763 in `rmmz_scenes.js` starts the map load. `onMapLoaded` at line 783 hands off to `Game_Player.performTransfer` at line 8165 in `rmmz_objects.js`. Directions must retire before event entry and can resume when the new scene passes the existing field gate. [Installed lifecycle evidence](engine-evidence.md#map-entry-ordering-for-the-first-field-checkpoint)
+
+The first connected slice should direct the player to a live, reachable entrance when a selected bookmark is on its directly connected map. Resolve the effective source page and actual approach in the settled scene, use the shared current-map worker, and leave the entrance interaction to native input. Retain only the bookmark and verified transfer identity across the load. After native handback, a fresh request resolves the bookmark on the new map. Exercise the below-player and normal-priority cases, more than one approach to the same map, a mismatched arrival, a changed entrance, a floor-event interruption and a locked conditional exit. Wider routes need qualified connections, return paths, mode transitions and landing-to-exit connectivity. These are investigation findings. Cross-map direction controls and gameplay verification are pending.
