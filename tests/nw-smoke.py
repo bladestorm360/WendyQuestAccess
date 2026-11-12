@@ -166,7 +166,7 @@ if (!restart) {
     if (path.isAbsolute(relative) || relative === '..' || relative.startsWith('..' + path.sep)) {
         throw Error('Synthetic geometry profile escaped the fixture');
     }
-    const geometry = path.join(profile, 'wendyquest-access-geometry');
+    const geometry = path.join(root, 'wendyquest-access-geometry');
     fs.mkdirSync(geometry);
     for (const name of ['1.wqg', '2.wqg', '3.wqg', '196.wqg', 'manifest.json'])
         fs.copyFileSync(path.join(root, 'geometry', name), path.join(geometry, name));

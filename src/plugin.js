@@ -107,7 +107,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 const { Worker } = nodeRequire('worker_threads');
                 const packagePath = path.dirname(nodeProcess.mainModule.filename);
                 const script = path.join(packagePath, 'wendyquest-access', 'route-worker.cjs');
-                const geometryDirectory = path.join(root.nw.App.dataPath, 'wendyquest-access-geometry');
+                const geometryDirectory = path.join(packagePath, 'wendyquest-access-geometry');
                 return new Worker(script, { workerData: { admission, geometryDirectory } });
             },
             createAudioWorker(admission) {

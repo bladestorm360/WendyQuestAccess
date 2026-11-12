@@ -37,11 +37,14 @@ function bake(installed, destination) {
     const data = path.join(game, 'package.nw', 'data');
     const tilesetsBytes = read(path.join(data, 'Tilesets.json'), 2 * 1024 * 1024);
     const tilesets = JSON.parse(tilesetsBytes);
-    const common = JSON.parse(read(path.join(data, 'CommonEvents.json'), 2 * 1024 * 1024));
-    const maps = JSON.parse(read(path.join(data, 'MapInfos.json'), 128 * 1024)).filter(Boolean);
+    const commonBytes = read(path.join(data, 'CommonEvents.json'), 2 * 1024 * 1024);
+    const mapInfosBytes = read(path.join(data, 'MapInfos.json'), 128 * 1024);
+    const common = JSON.parse(commonBytes);
+    const maps = JSON.parse(mapInfosBytes).filter(Boolean);
     if (maps.length !== 239 || new Set(maps.map(map => map.id)).size !== maps.length) throw new Error('Unexpected map catalog');
     fs.mkdirSync(output);
-    const manifest = { build: BUILD, tilesets: digest(tilesetsBytes), maps: {} };
+    const manifest = { build: BUILD, tilesets: digest(tilesetsBytes), commonEvents: digest(commonBytes),
+        mapInfos: digest(mapInfosBytes), maps: {} };
     const transferMaps = new Map();
     let cells = 0;
     for (const { id } of maps) {

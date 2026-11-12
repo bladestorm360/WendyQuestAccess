@@ -901,28 +901,40 @@ def register(original):
     return (text[:end] + insertion + text[end:]).encode('utf8')
 
 
+# Registry activation comes after every producer and runtime file.
+TRANSFORMS = {
+    TITLE_REL: title_notification, MENU_REL: menu_notifications,
+    MANAGERS_REL: managers_notification, SCENES_REL: scenes_notification,
+    CORE_REL: core_notification, WINDOW_REL: window_notification,
+    INPUT_REL: input_notification, TILE_REL: tile_notification,
+    OBJECTS_REL: objects_notification, MAP_REL: map_notification,
+    CANVAS_REL: canvas_notification, WINDOWS_REL: windows_notification,
+    BATTLE_REL: battle_notification, ACTION_REL: action_notification,
+    QUEST_REL: quest_notification, REGISTRY_REL: register,
+}
+
+
+def verify_dependencies(read):
+    for relative, expected in DEPENDENCIES.items():
+        limit = {CAFFEINE_REL: 1_463_068, PIXI_REL: 1_547_074}.get(relative, 1024 * 1024)
+        if hashlib.sha256(read(relative, limit)).hexdigest() != expected:
+            raise ValueError(f'Game dependency does not match the supported Steam build: {relative}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('game_root', type=Path)
     args = parser.parse_args()
-    for relative, expected in DEPENDENCIES.items():
-        dependency = args.game_root / relative
-        limit = {CAFFEINE_REL: 1_463_068, PIXI_REL: 1_547_074}.get(relative, 1024 * 1024)
-        if dependency.stat().st_size > limit or hashlib.sha256(dependency.read_bytes()).hexdigest() != expected:
-            raise ValueError(f'Game dependency does not match the supported Steam build: {relative}')
-    for relative, transform in ((TITLE_REL, title_notification), (MENU_REL, menu_notifications),
-                                (MANAGERS_REL, managers_notification), (SCENES_REL, scenes_notification),
-                                (CORE_REL, core_notification), (WINDOW_REL, window_notification),
-                                (INPUT_REL, input_notification), (TILE_REL, tile_notification),
-                                (OBJECTS_REL, objects_notification), (MAP_REL, map_notification),
-                                (CANVAS_REL, canvas_notification), (WINDOWS_REL, windows_notification),
-                                (BATTLE_REL, battle_notification), (ACTION_REL, action_notification),
-                                (QUEST_REL, quest_notification),
-                                (REGISTRY_REL, register)):
+
+    def read(relative, limit):
         file = args.game_root / relative
-        if file.stat().st_size > 1024 * 1024:
-            raise ValueError('Unsupported game script size')
-        candidate = transform(file.read_bytes())
+        if file.stat().st_size > limit:
+            raise ValueError(f'Unsupported game file size: {relative}')
+        return file.read_bytes()
+
+    verify_dependencies(read)
+    for relative, transform in TRANSFORMS.items():
+        candidate = transform(read(relative, 1024 * 1024))
         subprocess.run(['node', '--check'], input=candidate, check=True, timeout=10)
         print(f'Candidate checked: {relative}')
 
