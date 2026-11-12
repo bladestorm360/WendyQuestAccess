@@ -286,7 +286,7 @@ def objects_notification(original):
         249865: ROUTE_DIRTY + b'\n        ',  # Active event page replacement
         21807: b'\n    ' + MAP_LEAVING,  # Game_Screen fade-out
         217381: b'\n    if(this===$gamePlayer&&Graphics._wqaBookmarkTransferPending)'
-                b'globalThis.WendyQuestAccessBookmarkTransferReserved?.(SceneManager._scene,this,mapId,x,y);\n    '
+                b'globalThis.WendyQuestAccessBookmarkTransferReserved?.(SceneManager._scene,this,mapId,x,y,d);\n    '
                 + MAP_LEAVING,  # Accepted transfer reservation
         231501: MAP_LEAVING + b'\n        ',  # Native aircraft boarding
         231586: MAP_LEAVING + b'\n        ',  # Native ship boarding

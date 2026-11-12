@@ -1,6 +1,7 @@
 'use strict';
 
 const { MAX_CELLS, MAX_EVENTS, tileKey } = require('./geometry.cjs');
+const { validGate, gateAllows } = require('./transfer-gates.cjs');
 
 const MAX_LANDINGS = 1024;
 const MAX_LINKS = 16384;
@@ -32,7 +33,7 @@ function readCatalog(data, maps) {
         for (let i = 0; i < exits.length; i += 2) {
             const [next, gate] = [exits[i], exits[i + 1]];
             if (!Number.isInteger(next) || next < 0 || next >= incoming.length ||
-                !Number.isInteger(gate) || Math.abs(gate) > 2 || ++linkCount > MAX_LINKS)
+                !validGate(gate) || ++linkCount > MAX_LINKS)
                 throw Error('Invalid walking connection');
             incoming[next].push({ previous: index, gate });
         }
@@ -57,8 +58,7 @@ function remainingTransfers(catalog, map, point, state, visited, maps, cancelled
         if (cancelled()) return ranks;
         const node = queue[cursor];
         for (const { previous, gate } of incoming[node]) {
-            if (ranks[previous] || visited.has(landings[previous].key) ||
-                (gate !== 0 && state?.[Math.abs(gate) - 1] !== (gate > 0))) continue;
+            if (ranks[previous] || visited.has(landings[previous].key) || !gateAllows(gate, state)) continue;
             ranks[previous] = ranks[node] + 1;
             queue.push(previous);
         }

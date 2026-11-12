@@ -40,6 +40,23 @@ function terrainDelta(changes, layers, flags, count) {
 
 function bookmarkId(id) { return 'bookmark-' + id; }
 
+function includeSavedBookmarks(snapshot, entries, current) {
+    if (!entries?.length) return snapshot.objects;
+    const local = new Map(snapshot.objects.filter(item => item.category === 'bookmarks').map(item => [item.id, item]));
+    const excluded = new Map(snapshot.eligibleObjects?.filter(item => item.category === 'bookmarks' &&
+        !local.has(item.id) && (!item.quest || current(item.quest))).map(item => [item.id, item]));
+    const items = snapshot.objects.filter(item => item.category !== 'bookmarks');
+    for (const entry of entries) {
+        const id = bookmarkId(entry.id);
+        const nearby = local.get(id);
+        const blocked = excluded.get(id);
+        if (nearby) items.push(nearby);
+        else if (blocked) items.push({ ...blocked, outOfReach: true });
+        else items.push({ id, category: 'bookmarks', name: entry.name, saved: entry });
+    }
+    return items;
+}
+
 function captureWorld(root, routing = true, label, scene, bookmarks = []) {
     const map = root.$gameMap;
     const player = root.$gamePlayer;
@@ -114,4 +131,4 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
     return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles, aircraft: aircraftAt(map) } };
 }
 
-module.exports = { captureWorld, eventTarget, bookmarkId };
+module.exports = { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks };

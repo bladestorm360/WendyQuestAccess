@@ -93,6 +93,7 @@ function formatSpeech(message) {
             if (Number.isInteger(message.dy) && message.dy && Math.abs(message.dy) < 256) {
                 offsets.push(`${Math.abs(message.dy)} ${message.dy < 0 ? 'north' : 'south'}`);
             }
+            if (message.outOfReach === true) offsets.push('out of reach');
             text = name && [category, name, ...offsets].filter(Boolean).join(', ');
             break;
         }

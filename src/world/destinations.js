@@ -72,7 +72,7 @@ function browse(state, snapshot, changes) {
     if (!categories.length) return { status: snapshot.eligibleObjects ? 'No reachable destinations here' : 'No destinations here' };
     const closest = items => {
         let nearest = 0;
-        const distance = item => Math.abs(item.x - snapshot.x) + Math.abs(item.y - snapshot.y);
+        const distance = item => item.saved ? Infinity : Math.abs(item.x - snapshot.x) + Math.abs(item.y - snapshot.y);
         for (let index = 1; index < items.length; index++) if (distance(items[index]) < distance(items[nearest])) nearest = index;
         return nearest;
     };

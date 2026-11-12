@@ -1,6 +1,7 @@
 'use strict';
 
-const { transferOptions, stairState, gateAllows } = require('./transfer-events.cjs');
+const { transferOptions, cauldronIntroductionFinished } = require('./transfer-events.cjs');
+const { transferState, gateAllows } = require('./transfer-gates.cjs');
 const { tileKey } = require('./geometry.cjs');
 
 function liveEntrance(root, event, state) {
@@ -29,9 +30,10 @@ function createTransferBookmarks(root, host) {
     }
 
     function current(edge) {
-        const entrance = liveEntrance(root, root.$gameMap?._events?.[edge.event], stairState(root.$gameSwitches));
+        const entrance = liveEntrance(root, root.$gameMap?._events?.[edge.event], transferState(root));
         return !!entrance && entrance.list === edge.list && entrance.map === edge.map &&
-            entrance.x === edge.x && entrance.y === edge.y && entrance.action === edge.action &&
+            entrance.x === edge.x && entrance.y === edge.y && entrance.direction === edge.direction &&
+            entrance.action === edge.action &&
             entrance.sourceX === edge.sourceX && entrance.sourceY === edge.sourceY;
     }
 
@@ -45,14 +47,16 @@ function createTransferBookmarks(root, host) {
         host.graphics._wqaBookmarkTransferPending = true;
     }
 
-    function reserved(scene, player, map, x, y) {
+    function reserved(scene, player, map, x, y, direction) {
         if (!pending) return;
         const { edge, bookmark } = pending;
         const interpreter = root.$gameMap?._interpreter;
         if (!edge || pending.scene !== scene || pending.player !== player || pending.map !== root.$gameMap ||
             interpreter?._eventId !== edge.event || interpreter._list !== edge.list ||
-            map !== edge.map || x !== edge.x || y !== edge.y) return clear();
-        pending = { scene, player, ownerMap: root.$gameMap, map, x, y, bookmark };
+            map !== edge.map || x !== edge.x || y !== edge.y || direction !== edge.direction) return clear();
+        const firstCauldronWalk = map === 32 && (direction || player._direction) === 2 &&
+            root.$gameSelfSwitches?.value?.([32, 5, 'A']) === false;
+        pending = { scene, player, ownerMap: root.$gameMap, map, x, y, bookmark, firstCauldronWalk };
     }
 
     function settle(scene) {
@@ -60,17 +64,22 @@ function createTransferBookmarks(root, host) {
         const landing = pending;
         clear();
         const player = root.$gamePlayer;
-        if (scene === landing.scene || player !== landing.player || root.$gameMap !== landing.ownerMap ||
-            root.$gameMap._mapId !== landing.map || player._x !== landing.x || player._y !== landing.y) return null;
         const { bookmark, map, x, y } = landing;
-        return { ...bookmark, trail: [...bookmark.trail, tileKey(map, x, y)] };
+        if (scene === landing.scene || player !== landing.player || root.$gameMap !== landing.ownerMap ||
+            root.$gameMap._mapId !== map || player._x !== x) return null;
+        const key = tileKey(map, x, y);
+        if (player._y === y) return { ...bookmark, trail: [...bookmark.trail, key] };
+        if (!landing.firstCauldronWalk || player._y !== y + 3 || (root.$dataMap?.scrollType & 1) ||
+            !cauldronIntroductionFinished(root)) return null;
+        // The intro's native forced route is complete by field readiness.
+        return { ...bookmark, trail: [...bookmark.trail, key, tileKey(map, x, player._y)] };
     }
 
     return {
         clear, current, accepted, reserved, settle,
-        matchesState: state => stairState(root.$gameSwitches).every((value, index) => state[index] === value),
+        matchesState: state => transferState(root).every((value, index) => state[index] === value),
         candidates() {
-            const state = stairState(root.$gameSwitches);
+            const state = transferState(root);
             const entrances = [];
             for (const event of root.$gameMap._events) {
                 const edge = liveEntrance(root, event, state);

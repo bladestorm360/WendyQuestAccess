@@ -1,10 +1,11 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { captureWorld } = require('../src/world/snapshot');
+const { captureWorld, includeSavedBookmarks } = require('../src/world/snapshot');
 const { readBookmarks, changeBookmarks, bookmarkName } = require('../src/world/bookmark-records');
 const { findReachable, solveRoute } = require('../src/world/routes.cjs');
 const { DIRECTIONS } = require('../src/world/geometry.cjs');
+const { browse, createDestinationBrowser } = require('../src/world/destinations');
 
 function walkingPair(fixture, live) {
     const { map, gameMap, player, geometry } = fixture;
@@ -62,6 +63,21 @@ async function verifyBookmarks(c, load, verifyRoute, verifyWorker) {
     const event = salt.gameMap._events[114];
     event._erased = true;
     assert.deepEqual(view().objects.filter(item => item.category === 'bookmarks').map(item => item.name), ['Safe approach']);
+    const everyMode = changeBookmarks(other, { type: 'add', place: { ...point, mode: 'airship' } });
+    const observed = view();
+    const currentPoint = observed.objects.find(item => item.id === 'bookmark-1');
+    observed.eligibleObjects = observed.objects;
+    observed.objects = observed.objects.filter(item => item !== currentPoint);
+    observed.objects = includeSavedBookmarks(observed, everyMode.entries, () => false);
+    const listed = observed.objects.filter(item => item.category === 'bookmarks');
+    assert.deepEqual(listed.map(item => item.id), ['bookmark-1', 'bookmark-2', 'bookmark-3', 'bookmark-4']);
+    assert(listed[0].outOfReach && listed[0].point);
+    assert.deepEqual(listed.slice(1).map(item => [item.saved.kind, item.saved.map, item.saved.mode]),
+        [['entity', 19, 'walk'], ['point', 13, 'walk'], ['point', 19, 'airship']]);
+    const browser = createDestinationBrowser();
+    assert.equal(browse(browser, observed, ['previousCategory']).target.id, 'bookmark-1');
+    for (const id of ['bookmark-2', 'bookmark-3', 'bookmark-4', 'bookmark-1'])
+        assert.equal(browse(browser, observed, ['nextDestination']).target.id, id);
     event._erased = false;
     const availability = { x, y, candidates: [request] };
     assert.equal(findReachable(salt.geometry, snapshot.live, availability).available[0], 1);

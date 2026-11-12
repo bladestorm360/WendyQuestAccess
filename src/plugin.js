@@ -392,8 +392,8 @@ function boot(root, nodeRequire, nodeProcess) {
         try { field?.bookmarkEntranceAccepted(scene, event); } catch { /* Preserve native event acceptance. */ }
     };
 
-    root.WendyQuestAccessBookmarkTransferReserved = function (scene, player, map, x, y) {
-        try { field?.bookmarkTransferReserved(scene, player, map, x, y); } catch { /* Preserve the native transfer. */ }
+    root.WendyQuestAccessBookmarkTransferReserved = function (scene, player, map, x, y, direction) {
+        try { field?.bookmarkTransferReserved(scene, player, map, x, y, direction); } catch { /* Preserve the native transfer. */ }
     };
 
     root.WendyQuestAccessFieldChanged = function (scene) {

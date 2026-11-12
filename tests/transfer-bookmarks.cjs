@@ -69,6 +69,7 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
     const originalMessage = c.$gameMessage;
     const originalInBattle = c.$gameParty.inBattle;
     const originalCommon = c.$dataCommonEvents;
+    const originalSetSelfSwitch = c.$gameSelfSwitches.setValue;
     c.SceneManager._scene = scene;
     c.Graphics.app = { stage: scene };
     c.$gameParty.inBattle = () => false;
@@ -78,6 +79,36 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
     c.WendyQuestAccessBookmarkEntranceAccepted = transfers.accepted;
     c.WendyQuestAccessBookmarkTransferReserved = transfers.reserved;
     c.WendyQuestAccessSceneLeaving = transfers.leave;
+    const marker = { id: 1, revision: 1, trail: [] };
+
+    function reserveSpecial(fixture, event, start, expected) {
+        const { gameMap, player } = fixture;
+        player.setPosition(...start);
+        const edge = transfers.candidates().entrances.find(candidate => candidate.event === event);
+        assert.equal(edge?.map, expected);
+        const request = { x: start[0], y: start[1], event, field: true };
+        const result = solveRoute(fixture.geometry, captureWorld(c).live, request);
+        verifyRoute(fixture, request, result);
+        const interpreter = gameMap._interpreter = Object.assign(new c.Game_Interpreter(), {
+            setup(list, id) {
+                Object.assign(this, { _list: list, _eventId: id, _mapId: gameMap._mapId,
+                    _index: 0, _waitMode: '', _branch: {} });
+                transfers.leave(scene);
+            },
+            setupChild(rows) { assert.equal(rows, common[38].list); },
+            command101() { return true; }
+        });
+        transfers.arm(scene, marker, edge);
+        assert(gameMap.setupStartingMapEvent());
+        assert(c.Graphics._wqaBookmarkTransferPending);
+        for (let count = 0; !player.isTransferring() && count < 32; count++) assert(interpreter.executeCommand());
+        assert(player.isTransferring());
+        assert.deepEqual([player._newMapId, player._newX, player._newY, player._newDirection],
+            [edge.map, edge.x, edge.y, edge.direction]);
+        assert(c.Graphics._wqaBookmarkTransferPending);
+        return edge;
+    }
+
     try {
         const house = load(127);
         house.player.setPosition(3, 3);
@@ -90,12 +121,63 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         assert(transfers.current(opened));
         load(132, { switches: [525] }).player.setPosition(3, 3);
         assert.equal(transfers.candidates().entrances.find(edge => edge.event === 2).map, 203);
-        load(87).player.setPosition(12, 64);
-        assert(!transfers.candidates().entrances.some(edge => edge.event === 91));
-        load(87, { self: ['87,91,A'] }).player.setPosition(12, 64);
-        assert.equal(transfers.candidates().entrances.find(edge => edge.event === 91).map, 205);
-        load(57, { variables: { 4: 3 } }).player.setPosition(7, 4);
-        assert.equal(transfers.candidates().entrances.find(edge => edge.event === 13).map, 44);
+        for (const self of [[], ['87,91,A']]) {
+            const cave = load(87, { self });
+            const edge = reserveSpecial(cave, 91, [12, 64], 205);
+            cave.gameMap._mapId = edge.map;
+            cave.player.setPosition(edge.x, edge.y);
+            assert.deepEqual(transfers.settle({}), { ...marker, trail: ['205/14/4'] });
+        }
+        c.$gameSelfSwitches.setValue = (key, value) => {
+            const before = c.$gameSelfSwitches.value;
+            c.$gameSelfSwitches.value = check => check.join(',') === key.join(',') ? value : before(check);
+        };
+        for (const [progress, expected] of [[-1, 50], [0, 50], [1, 32], [2, 28], [3, 44], [4, 44]]) {
+            reserveSpecial(load(57, { variables: { 4: progress } }), 13, [7, 4], expected);
+            transfers.clear();
+        }
+        for (const [map, id, start, progress, expected] of [[51, 1, [5, 10], 4, 44],
+            [53, 2, [7, 10], 4, 50], [55, 3, [8, 11], 2, 28]]) {
+            reserveSpecial(load(map, { variables: { 4: progress } }), id, start, expected);
+            transfers.clear();
+        }
+        const returnRoom = load(51, { variables: { 4: 1 } });
+        returnRoom.player._direction = 2;
+        const walk = reserveSpecial(returnRoom, 1, [5, 10], 32);
+        const destination = load(32, { variables: { 4: 1 } });
+        c.$gameMap = returnRoom.gameMap;
+        c.$gamePlayer = returnRoom.player;
+        Object.assign(c.$gameMap, { _mapId: 32, _events: destination.gameMap._events, _tileEvents: destination.gameMap._tileEvents,
+            _tilesetId: destination.map.tilesetId, refreshIfNeeded() {} });
+        const player = c.$gamePlayer;
+        player._transferring = false;
+        player._followers = { updateMove() {} };
+        player.setPosition(walk.x, walk.y);
+        player.facing = 2;
+        const intro = c.$gameMap._events[5];
+        const script = Object.assign(new c.Game_Interpreter(), {
+            _list: intro.list(), _eventId: 5, _mapId: 32, _index: 3, _waitMode: '', _branch: {}
+        });
+        assert(script.executeCommand());
+        assert(script.executeCommand());
+        assert.equal(script._waitMode, 'route');
+        for (let tick = 0; tick < 4; tick++) player.updateRoutineMove();
+        assert.deepEqual([player._x, player._y], [walk.x, walk.y + 3]);
+        script._index = 20;
+        assert(script.executeCommand());
+        intro._pageIndex = intro.findProperPageIndex();
+        assert.deepEqual(transfers.settle({}), { ...marker, trail: ['32/17/10', '32/17/13'] });
+
+        const originalLayout = load(50, { variables: { 4: 1 } });
+        originalLayout.player.setPosition(3, 16);
+        const layoutLive = captureWorld(c).live;
+        const candidates = transfers.candidates().entrances.filter(edge => edge.event === 6);
+        const origin = reachableStart(originalLayout, layoutLive, candidates).request;
+        const layoutRequest = { x: origin.x, y: origin.y, field: true, transfer: { map: 32, point: { x: 3, y: 16 },
+            state: [false, false, 1], candidates: candidates.map(({ event, map, x, y }) => ({ event, map, x, y })) } };
+        await verifyWorker(originalLayout, layoutRequest, layoutLive, result => assert.equal(result.entrance, 6));
+        await verifyWorker(originalLayout, { ...layoutRequest, transfer: { ...layoutRequest.transfer, state: [false, false, 0] } },
+            layoutLive, result => assert.equal(result.status, 'unavailable'));
         const lower = load(128, { switches: [503] });
         lower.player.setPosition(1, 6);
         const lowerEntrances = transfers.candidates().entrances;
@@ -182,8 +264,9 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         c.$gameMessage = originalMessage;
         c.$gameParty.inBattle = originalInBattle;
         c.$dataCommonEvents = originalCommon;
+        c.$gameSelfSwitches.setValue = originalSetSelfSwitch;
     }
-    console.log('Verified ranked walking chains, two hidden stair states, direct entrance priority, native reservation and wrong landing retirement.');
+    console.log('Verified ranked walking chains, both house gates, Caffeine discovery, Cauldron branches and intro movement.');
 }
 
 module.exports = { verifyTransferBookmarks };

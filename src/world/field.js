@@ -1,6 +1,7 @@
 'use strict';
 
-const { captureWorld, eventTarget, bookmarkId } = require('./snapshot');
+const { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks } = require('./snapshot');
+const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
 const { createAutowalk } = require('./autowalk');
@@ -269,14 +270,17 @@ function createField(root, host, notifications) {
     }
 
     function select(job, snapshot) {
+        snapshot.objects = includeSavedBookmarks(snapshot, snapshot.bookmarks, quest => questDestinationCurrent(root, job.scene, quest));
         const result = browse(owner.browser, snapshot, job.changes);
         job.quest = result.target?.quest;
         job.scene._wqaQuestNavigation = !!job.quest;
         if (!result.target) return status(job, result.status);
         const { target, category } = result;
         owner.target = target;
+        if (target.saved) return selectSavedBookmark(job, snapshot, target.saved, category);
+        owner.remoteBookmark = null;
         if (job.action !== 'directions') return present(job, { kind: 'fieldTarget', name: target.name, category,
-            dx: target.x - snapshot.x, dy: target.y - snapshot.y });
+            dx: target.x - snapshot.x, dy: target.y - snapshot.y, outOfReach: target.outOfReach });
         if (!timedCave(snapshot.map)) return route(job, snapshot, target);
         const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.event ?? target.id);
         const motion = area ? null : captureMotion(root, host.graphics);
@@ -290,20 +294,25 @@ function createField(root, host, notifications) {
         return host.bookmarks?.().find(entry => entry.id === selection.id && entry.revision === selection.revision);
     }
 
-    function remoteDirections(job) {
-        job.performed = true;
-        const selection = owner.remoteBookmark;
-        const bookmark = savedBookmark(selection);
-        if (!bookmark) {
-            owner.remoteBookmark = null;
-            return status(job, 'The selected bookmark changed. Select it again in settings.');
+    function selectSavedBookmark(job, snapshot, bookmark, category) {
+        const sameMap = bookmark.map === snapshot.map;
+        const sameMode = bookmark.mode === snapshot.mode;
+        const where = (sameMap ? 'Saved here ' : 'Saved on another map, ') + MODES[bookmark.mode] + '.';
+        const display = (category ? category + ', ' : '') + bookmark.name + '. ' + where;
+        if (!sameMap && sameMode && snapshot.mode === 'walk' && !timedCave(snapshot.map)) {
+            if (owner.remoteBookmark?.id !== bookmark.id || owner.remoteBookmark.revision !== bookmark.revision)
+                owner.remoteBookmark = { id: bookmark.id, revision: bookmark.revision, trail: [] };
+            return job.action === 'directions' ? remoteDirections(job, snapshot, bookmark) : status(job, display);
         }
-        if (job.action === 'currentDestination')
-            return status(job, bookmark.name + ', saved on another map. Request directions to its entrance.');
+        owner.remoteBookmark = null;
+        const reason = !sameMode ? ' Use the saved travel mode for directions.' :
+            sameMap ? ' Destination currently unavailable.' : ' Entrance directions are unavailable here.';
+        return status(job, display + reason);
+    }
+
+    function remoteDirections(job, snapshot, bookmark) {
         transfers.clear();
-        const snapshot = captureWorld(root);
-        if (!snapshot || snapshot.mode !== 'walk' || timedCave(snapshot.map))
-            return status(job, 'Entrance directions are unavailable here');
+        const selection = owner.remoteBookmark;
         const { entrances, state } = transfers.candidates();
         if (!entrances.length) return status(job, 'No verified reachable entrance for ' + bookmark.name);
         job.label = 'Entrance for ' + bookmark.name;
@@ -321,14 +330,14 @@ function createField(root, host, notifications) {
         if (navigationRequest(job) && inFlight) return;
         if (movingReport) return present(job, job.text, true);
         if (job.action === 'status') return status(job, job.text);
-        if (owner.remoteBookmark && (job.action === 'directions' || job.action === 'currentDestination'))
-            return remoteDirections(job);
         const routing = job.action === 'directions';
         const timed = timedCave(root.$gameMap._mapId);
         const filtering = !timed && navigationRequest(job) && (!routing || job.changes.length > 0);
         const label = salt.available(job.scene) ? (id, fallback) => salt.label(job.scene, id, fallback) : undefined;
-        const snapshot = captureWorld(root, filtering || (routing && !timed), label, job.scene, host.bookmarks?.());
+        const bookmarks = host.bookmarks?.();
+        const snapshot = captureWorld(root, filtering || (routing && !timed), label, job.scene, bookmarks);
         if (!snapshot) return status(job, 'Map information unavailable');
+        if (navigationRequest(job)) snapshot.bookmarks = bookmarks;
         if (filtering && snapshot.objects.length) {
             job.scene._wqaQuestNavigation = snapshot.objects.some(target => !!target.quest);
             return submit(job, snapshot, { candidates: snapshot.objects.map(destinationRequest) }, true);
@@ -421,10 +430,8 @@ function createField(root, host, notifications) {
     function activateBookmark(scene, entry, remote = false, trail = []) {
         if (owner?.scene !== scene) owner = { scene, browser: createDestinationBrowser() };
         owner.remoteBookmark = remote ? { id: entry.id, revision: entry.revision, trail } : null;
-        if (!remote) {
-            owner.browser.category = 'bookmarks';
-            owner.browser.selections.bookmarks = bookmarkId(entry.id);
-        }
+        owner.browser.category = 'bookmarks';
+        owner.browser.selections.bookmarks = bookmarkId(entry.id);
         owner.target = null;
     }
 

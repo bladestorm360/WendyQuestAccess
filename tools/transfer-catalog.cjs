@@ -2,7 +2,7 @@
 
 const { PASSAGE, indexOf, tileKey } = require('../src/world/geometry.cjs');
 const { walkingLanding } = require('../src/world/routes.cjs');
-const { transferOptions } = require('../src/world/transfer-events.cjs');
+const { catalogTransferOptions } = require('../src/world/transfer-events.cjs');
 const { MAX_LANDINGS, validTile, readCatalog } = require('../src/world/walking-catalog.cjs');
 const { timedCave } = require('../src/world/puzzles/cave');
 
@@ -31,9 +31,8 @@ function transferMap(id, map, geometry, flags, common) {
             if (!page.through && Number.isInteger(flag) && !(flag & 16))
                 barriers.set(cell, (barriers.get(cell) || 0) | (flag & PASSAGE));
         }
-        if (id === 185 || id === 198 || timedCave(id) || pages.length !== 1 ||
-            Object.entries(pages[0].conditions || {}).some(([name, active]) => name.endsWith('Valid') && active)) continue;
-        for (const destination of transferOptions(id, entry, pages[0], common))
+        if (id === 185 || id === 198 || timedCave(id)) continue;
+        for (const destination of catalogTransferOptions(id, entry, common))
             exits.push({ event, ...destination });
     }
     const terrain = Array.from(barriers, ([cell, mask]) =>

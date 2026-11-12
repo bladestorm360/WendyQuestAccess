@@ -51,6 +51,8 @@ def bundle():
         './snapshot': 'world/snapshot.js',
         './transfer-bookmarks': 'world/transfer-bookmarks.js',
         './transfer-events.cjs': 'world/transfer-events.cjs',
+        './transfer-gates.cjs': 'world/transfer-gates.cjs',
+        './bookmark-records': 'world/bookmark-records.js',
         './destinations': 'world/destinations.js',
         './quest-destinations': 'world/quest-destinations.js',
         './local-destinations': 'world/local-destinations.js',
@@ -209,7 +211,7 @@ def main():
     subprocess.run(['node', '--check', str(target)], check=True, timeout=20)
     compile_native(args.prism_archive.resolve(strict=True), args.audio_sdk.resolve(strict=True),
                    args.vcvars.resolve(strict=True), args.verify_speech_pipe, args.verify_audio)
-    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'walking-catalog.cjs'):
+    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'walking-catalog.cjs', 'transfer-gates.cjs'):
         shutil.copyfile(ROOT / 'src' / 'world' / name, OUT / 'wendyquest-access' / name)
     puzzles = OUT / 'wendyquest-access' / 'puzzles'
     puzzles.mkdir(exist_ok=True)

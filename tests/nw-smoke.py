@@ -141,6 +141,7 @@ let caveCueStarted = 0;
 let soundscapeStarted = 0;
 let crossMapStarted = 0;
 let crossMapLeg = 0;
+let bookmarkDirectionsRequested = false;
 let controllerStep = 0;
 let dialoguePadStep = 0;
 let endingStep = 0;
@@ -195,7 +196,7 @@ function installTransferPage(map, destination) {
     Object.setPrototypeOf($gameMap, Game_Map.prototype);
     Object.assign($gameMap, { _mapId: map, _events: [null, event], _interpreter: interpreter,
         events() { return this._events.filter(Boolean); } });
-    $dataMap.events = [null, { name: 'Synthetic transfer', pages: [
+    $dataMap.events = [null, { id: 1, name: 'Synthetic transfer', pages: [
         { trigger: 1, priorityType: 0, moveType: 0, conditions: {}, list }
     ] }];
     $gameParty.inBattle = () => false;
@@ -918,8 +919,8 @@ const interval = setInterval(() => {
             if (document.activeElement.textContent !== 'Keep bookmark') throw Error('Remove did not focus Keep bookmark');
             tap('Escape');
             if (document.activeElement.textContent !== 'Remove bookmark') throw Error('Remove did not restore detail focus');
-            choose('Select for directions');
-            if (document.querySelector('dialog')) throw Error('Bookmark selection did not return to the field');
+            for (let level = 0; level < 4; level++) tap('Escape');
+            if (document.querySelector('dialog')) throw Error('Bookmark management did not return to the field');
             $gamePlayer._realY = $gamePlayer._y = 1;
             Object.setPrototypeOf($gamePlayer, Game_Player.prototype);
             Object.assign($gamePlayer, {
@@ -934,10 +935,21 @@ const interval = setInterval(() => {
             $gameTemp = { isDestinationValid: () => false };
             $gameMap.roundXWithDirection = (x, direction) => x + (direction === 6 ? 1 : direction === 4 ? -1 : 0);
             $gameMap.roundYWithDirection = (y, direction) => y + (direction === 2 ? 1 : direction === 8 ? -1 : 0);
-            tap(String.fromCharCode(92), 'Backslash');
+            padStick(0, 0);
+            padStick(0, -0.8);
+            padStick(0, 0);
             Graphics.app.renderer.emit('postrender');
             endingStep++;
-        } else if (endingStep === 20 && fs.existsSync(receipt + '.bookmark-route')) {
+        } else if (endingStep === 20) {
+            if (!bookmarkDirectionsRequested) {
+                Graphics.app.renderer.emit('postrender');
+                if (!fs.existsSync(receipt + '.bookmark-browse')) return;
+                tap(String.fromCharCode(92), 'Backslash');
+                Graphics.app.renderer.emit('postrender');
+                bookmarkDirectionsRequested = true;
+                return;
+            }
+            if (!fs.existsSync(receipt + '.bookmark-route')) return;
             const scene = SceneManager._scene;
             if (!scene._wqaAutowalkActive || !scene._wqaBeaconActive)
                 throw Error('Bookmark directions did not arm movement and beacon owners');
@@ -959,6 +971,12 @@ const interval = setInterval(() => {
             endingStep++;
         } else if (endingStep === 23 && menuStatus() === 'Bookmark 2 saved.') {
             choose('Bookmark 2, This map, saved on foot');
+            choose('Select for directions');
+            if (document.querySelector('dialog')) throw Error('The optional bookmark shortcut did not return to the field');
+            tap('v', 'KeyV');
+            choose('Navigation');
+            choose('Bookmarks');
+            choose('Bookmark 2, This map, saved on foot');
             choose('Remove bookmark');
             choose('Confirm removal');
             endingStep++;
@@ -970,16 +988,14 @@ const interval = setInterval(() => {
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             SceneManager._scene = Graphics.app.stage = { _wqaFieldReady: true, _active: true, _fadeOpacity: 0, _fadeDuration: 0 };
             installTransferPage(3, 2);
-            tap('v', 'KeyV');
-            choose('Navigation');
-            choose('Bookmarks');
-            choose('Return marker, Map 1, saved on foot');
-            choose('Select for directions');
+            tap('[', 'BracketLeft', { shiftKey: true });
+            Graphics.app.renderer.emit('postrender');
+            endingStep++;
+        } else if (endingStep === 25 && crossMapStarted === 0 && fs.existsSync(receipt + '.cross-map-browse')) {
             crossMapStarted = performance.now();
             tap(String.fromCharCode(92), 'Backslash');
             Graphics.app.renderer.emit('postrender');
             fs.writeFileSync(receipt + '.cross-map-submission-ms', String(performance.now() - crossMapStarted));
-            endingStep++;
         } else if (endingStep === 25 && fs.existsSync(receipt + (crossMapLeg === 0 ? '.cross-map-next' : '.cross-map-entrance'))) {
             if (crossMapLeg === 0)
                 fs.writeFileSync(receipt + '.cross-map-receipt-ms', String(performance.now() - crossMapStarted));
@@ -1051,10 +1067,13 @@ const interval = setInterval(() => {
     }
 }, 40);
 setTimeout(() => {
+    const fs = require('fs');
+    const last = receipt + '.cross-map-last';
     write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, dialoguePadStep, endingStep, restartStep,
+        crossMapLeg, crossMapRequested: crossMapStarted > 0, lastTransferMessage: fs.existsSync(last) ? fs.readFileSync(last, 'utf8') : '',
         status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
     nw.App.quit();
-}, 9500);
+}, 12000);
 ''', encoding='utf8')
     service = app / 'wendyquest-access'
     service.mkdir()
@@ -1089,6 +1108,10 @@ parentPort.on('message', message => {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
         if (fs.existsSync(receipt + '.cross-map-stage')) {
+            if (message.kind === 'fieldStatus' || message.kind === 'fieldTarget')
+                fs.writeFileSync(receipt + '.cross-map-last', speech);
+            if (message.kind === 'fieldStatus' && message.name.startsWith('Bookmarks, Return marker.'))
+                fs.writeFileSync(receipt + '.cross-map-browse', speech);
             if (message.kind === 'routeDirections' && message.name === 'Next entrance toward Return marker')
                 fs.writeFileSync(receipt + '.cross-map-next', speech);
             if (message.kind === 'routeDirections' && message.name === 'Entrance for Return marker')
@@ -1099,6 +1122,8 @@ parentPort.on('message', message => {
             return;
         }
         if (fs.existsSync(receipt + '.bookmark-stage')) {
+            if (message.kind === 'fieldTarget' && message.name === 'Return marker')
+                fs.writeFileSync(receipt + '.bookmark-browse', speech);
             if (message.kind === 'routeDirections' && message.name === 'Return marker')
                 fs.writeFileSync(receipt + '.bookmark-route', speech);
             if (message.kind === 'routeDirections' && message.name === 'At Return marker')
@@ -1191,7 +1216,7 @@ parentPort.on('message', message => {
     shutil.copyfile(ROOT / 'src' / 'runtime' / 'resize-markers.js', app / 'resize-markers.js')
     for name in ('speech-text.cjs', 'dialogue-icons.cjs'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
-    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'walking-catalog.cjs', 'WendyQuestAudio.node'):
+    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'walking-catalog.cjs', 'transfer-gates.cjs', 'WendyQuestAudio.node'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
     shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'audio-worker.cjs', service / 'production-audio-worker.cjs')
     (service / 'audio-worker.cjs').write_text('''
@@ -1238,6 +1263,31 @@ require('./production-audio-worker.cjs');
     return app / 'receipt.json'
 
 
+def run_fixture(launch, runtime, environment):
+    # Chromium children can keep inherited pipes open after a timed-out
+    # parent. File redirection and a tree-scoped stop give the fixture a
+    # finite timeout even when native audio does not shut down.
+    error_log = runtime / 'nw-stderr.log'
+    with error_log.open('wb') as errors:
+        process = subprocess.Popen(launch, cwd=runtime, stdout=subprocess.DEVNULL, stderr=errors, env=environment)
+        try:
+            code = process.wait(timeout=25)
+        except subprocess.TimeoutExpired as failure:
+            if process.poll() is None:
+                taskkill = Path(os.environ['SystemRoot']) / 'System32' / 'taskkill.exe'
+                try:
+                    subprocess.run([str(taskkill), '/PID', str(process.pid), '/T', '/F'], timeout=5,
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   creationflags=subprocess.CREATE_NO_WINDOW)
+                finally:
+                    if process.poll() is None:
+                        process.kill()
+                    process.wait(timeout=5)
+            raise RuntimeError('The standalone NW fixture exceeded its process deadline') from failure
+    with error_log.open('rb') as errors:
+        return code, errors.read(1024)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--archive', type=Path, required=True)
@@ -1255,12 +1305,12 @@ def main():
         receipt = fixture(runtime, args.installed)
         launch = [str(runtime / 'nw.exe'), f'--user-data-dir={runtime / "profile"}']
         environment = {**os.environ, 'SDL_AUDIO_DRIVER': 'dummy'}
-        result = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25, env=environment)
+        result, errors = run_fixture(launch, runtime, environment)
         if not receipt.exists():
-            raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
+            raise RuntimeError(f'NW exited {result} without a receipt: {errors!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 19 or not all(r.get('sameEpoch') for r in records):
+        if result or data.get('error') or len(records) != 19 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
         title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, cave, timed, page, choice, repeat, dialogue_mode, pad_repeat, number = records
         if any(item['name'] != title['name'] for item in (returned_title, controller_title)) or \
@@ -1317,9 +1367,11 @@ def main():
             'quest-nav-route': 'Synthetic quest anchor. 1 east. face east.',
             'quest-nav-unavailable': 'Selected destination is unavailable',
             'bookmark-route': 'Return marker. 1 north.',
+            'bookmark-browse': 'Bookmarks, Return marker, 1 north',
             'bookmark-arrival': 'At Return marker. you are here.',
             'bookmark-entity': 'Objects, Synthetic quest anchor, 2 east',
             'cross-map-entrance': 'Entrance for Return marker. Move east to activate.',
+            'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
             'cross-map-next': 'Next entrance toward Return marker. Move east to activate.',
             'cross-map-arrived': 'Return marker. you are here.',
         }
@@ -1339,9 +1391,9 @@ def main():
         versions = data['versions']
         receipt.unlink()
         receipt.with_suffix('.json.restart').touch()
-        restarted = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25, env=environment)
+        restarted, _ = run_fixture(launch, runtime, environment)
         reloaded = json.loads(receipt.read_text(encoding='utf8')) if receipt.exists() else {}
-        if restarted.returncode or not reloaded.get('speechRestored') or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T',
+        if restarted or not reloaded.get('speechRestored') or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T',
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, RT', 'Next category, Unassigned'] or \
                 reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on',
