@@ -1210,6 +1210,20 @@ const interval = setInterval(() => {
             endingStep = 46;
         } else if (endingStep === 46 && fs.existsSync(receipt + '.battle-radial')) {
             const scene = SceneManager._scene;
+            const field = scene._spriteset._battleField = {};
+            const target = scene._spriteset._enemySprites[0];
+            const popup = { parent: field, _duration: 90, worldVisible: true, worldAlpha: 1, _colorType: 0 };
+            const text = battleText(popup, '17)');
+            text.worldTransform = { tx: 120, ty: 90 };
+            popup._wqaDamageCaption = { text, target: target._enemy };
+            popup._wqaDamageQueued = true;
+            Object.assign(target, { parent: field, _battler: target._enemy, _damages: [popup] });
+            scene._wqaDamageRows = [popup];
+            WendyQuestAccessBattleLogReady(scene, scene._actionLogWindow);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 47;
+        } else if (endingStep === 47 && fs.existsSync(receipt + '.battle-damage')) {
+            const scene = SceneManager._scene;
             fs.writeFileSync(receipt + '.battle-bag-stage', '');
             Object.assign(BattleManager, { _phase: 'input', _targets: [] });
             const item = { name: 'Unpainted item name' };
@@ -1294,7 +1308,8 @@ parentPort.on('message', message => {
             const target = fs.existsSync(receipt + '.battle-target-stage');
             const vitals = message.lines?.[0];
             const suffix = message.kind === 'menuFocus' ? 'focus' :
-                message.kind === 'battleLog' ? (vitals?.startsWith('Power ') ? 'radial' : message.append ? 'log-auto' : 'log-repeat') :
+                message.kind === 'battleLog' ? (vitals?.startsWith('Power ') ? 'radial' :
+                    vitals?.startsWith('Synthetic target, 17 HP damage') ? 'damage' : message.append ? 'log-auto' : 'log-repeat') :
                 message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'hp') :
                     vitals === 'Synthetic companion' ? 'slot2' : message.append ? 'autodetail' : 'details') :
                 message.kind === 'menuReview' ? (target && message.append ? 'timing' : 'review') :
@@ -1588,6 +1603,7 @@ def main():
             'battle-log-auto': 'Synthetic turn result.',
             'battle-log-repeat': 'Synthetic turn result.',
             'battle-radial': 'Power 81%. Accuracy 93%, NICE.',
+            'battle-damage': 'Synthetic target, 17 HP damage, elemental resistance.',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',

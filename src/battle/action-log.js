@@ -1,6 +1,7 @@
 'use strict';
 
 const { battleScenePresented } = require('./presentation');
+const { damageCaption } = require('./damage-popup');
 
 const MAX_PAINTED_ROWS = 8;
 const MAX_HISTORY = 6;
@@ -37,11 +38,23 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         for (const entry of rows) entry.row._wqaLogQueued = false;
     }
 
+    function takeDamage(scene) {
+        const sprites = scene._wqaDamageRows || [];
+        scene._wqaDamageRows = null;
+        return sprites;
+    }
+
+    function releaseDamage(sprites) {
+        for (const sprite of sprites) sprite._wqaDamageQueued = false;
+    }
+
     function retire(scene) {
         if (!scene) return;
         release(take(scene._actionLogWindow));
+        releaseDamage(takeDamage(scene));
         if (pending?.scene === scene) {
             release(pending.rows);
+            releaseDamage(pending.damage);
             pending = null;
         }
         if (current?.scene === scene) {
@@ -71,8 +84,9 @@ function createBattleLog(root, host, notifications, appendToFocus) {
     }
 
     function publish(job) {
-        const { scene, window, rows } = job;
+        const { scene, window, rows, damage } = job;
         release(rows);
+        releaseDamage(damage);
         if (!ready(scene, window) || !Array.isArray(window.items) || window.items.length > MAX_PAINTED_ROWS) return;
         const lines = [];
         const radial = readable(scene._wqaRadialReport);
@@ -87,32 +101,46 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             const text = readable(paint);
             if (text) lines.push(text);
         }
+        for (const sprite of damage) {
+            const caption = damageCaption(scene, host.graphics, sprite);
+            if (!caption) continue;
+            sprite._wqaDamageCaption = null;
+            lines.push(caption);
+        }
         if (!lines.length) return;
         if (history?.scene !== scene) history = { scene, lines: [] };
         history.lines.push(...lines);
         history.lines.splice(0, Math.max(0, history.lines.length - MAX_HISTORY));
-        // A final radial score can share this render with eight native rows.
-        // Keep their order across bounded worker records.
         if (lines.length <= MAX_PAINTED_ROWS) {
             speak(scene, window, lines, true);
         } else {
-            speak(scene, window, lines.slice(0, MAX_PAINTED_ROWS), true);
-            speak(scene, window, lines.slice(MAX_PAINTED_ROWS), true);
+            // The score, log rows and popups share this render. Preserve
+            // their presentation order across bounded worker records.
+            for (let index = 0; index < lines.length; index += MAX_PAINTED_ROWS)
+                speak(scene, window, lines.slice(index, index + MAX_PAINTED_ROWS), true);
         }
     }
 
     return {
         observe(scene, window) {
             const rows = take(window);
-            if (!rows.length && !scene._wqaRadialReport) return;
-            if (!ready(scene, window)) { release(rows); retire(scene); return; }
+            const damage = takeDamage(scene);
+            if (!rows.length && !damage.length && !scene._wqaRadialReport) return;
             const renderer = host.graphics.app?.renderer;
-            if (typeof renderer?.once !== 'function') { release(rows); return; }
+            if (!ready(scene, window) || typeof renderer?.once !== 'function') {
+                release(rows);
+                releaseDamage(damage);
+                retire(scene);
+                return;
+            }
             if (pending && (pending.scene !== scene || pending.window !== window)) retire(pending.scene);
-            if (!pending) pending = { scene, window, rows: [] };
+            if (!pending) pending = { scene, window, rows: [], damage: [] };
             const allowed = MAX_PAINTED_ROWS - pending.rows.length;
             pending.rows.push(...rows.slice(0, allowed));
             release(rows.slice(allowed));
+            const allowedDamage = MAX_PAINTED_ROWS - pending.damage.length;
+            pending.damage.push(...damage.slice(0, allowedDamage));
+            releaseDamage(damage.slice(allowedDamage));
             scene._wqaBattleLogActive = scene._wqaPresentation = true;
             if (rendererOwner === renderer) return;
             rendererOwner = renderer;

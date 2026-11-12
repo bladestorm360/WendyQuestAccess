@@ -6,7 +6,7 @@ function nativeTextHost() {
     function Sprite(bitmap) { this.initialize(bitmap); }
     Sprite.prototype.initialize = function (bitmap) {
         Object.assign(this, { bitmap, children: [], anchor: {}, scale: { x: 1, y: 1 }, x: 0, y: 0,
-            worldVisible: true, worldAlpha: 1 });
+            alpha: 1, worldVisible: true, worldAlpha: 1 });
     };
     Sprite.prototype.update = function () { for (const child of this.children) child.update(); };
     Sprite.prototype.addChild = function (child) { this.children.push(child); child.parent = this; return child; };

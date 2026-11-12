@@ -593,9 +593,9 @@ def battle_notification(original):
             this._fadeDuration === 0 && this._fadeOpacity === 0 && !this._wqaSettingsActive &&
             !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
             !Graphics._wqaResize && Graphics.app?.stage === this) {
-            if (wqaLog._wqaBattleLogRows?.length || this._wqaRadialReport)
+            if (wqaLog._wqaBattleLogRows?.length || this._wqaRadialReport || this._wqaDamageRows?.length)
                 globalThis.WendyQuestAccessBattleLogReady?.(this,wqaLog);
-        } else if (this._wqaBattleLogActive || wqaLog?._wqaBattleLogRows?.length) {
+        } else if (this._wqaBattleLogActive || wqaLog?._wqaBattleLogRows?.length || this._wqaDamageRows?.length) {
             globalThis.WendyQuestAccessBattleLogLeaving?.(this);
         }
     }
@@ -615,6 +615,28 @@ const wqaLogPaint=!_0x560f74._wqaLogSeen&&!_0x560f74._wqaLogQueued&&_0x58412f>0&
     _0x5c4a11.x+_0x5c4a11.width>0&&_0x5c4a11.x<this.contents.width&&
     (this._wqaBattleLogRows?.length||0)<8?
     (this._wqaBattleLogPaint={row:_0x560f74,text:""}):null;
+'''
+    # The native damage setup creates one text sprite for an actual result.
+    # Its last glyph is painted and ready before adding it to the render batch.
+    damage_update = b'''
+if (this._wqaDamageCaption && !this._wqaDamageQueued && this._duration > 0) {
+    const wqaScene=SceneManager._scene;
+    if (wqaScene?._wqaBattleStarted && wqaScene._spriteset?._battleField === this.parent &&
+        BattleManager._wqaBattleSpritesBusy === false && BattleManager._phase !== "ActionCommand" &&
+        !globalThis.$gameTemp?._animationQueue?.length && !wqaScene._spriteset._animationSprites?.length &&
+        !wqaScene._itemWindow?.active && !wqaScene._wqaSettingsActive &&
+        wqaScene._fadeDuration === 0 && wqaScene._fadeOpacity === 0 &&
+        !Graphics._wqaResize && !SceneManager._nextScene && !SceneManager._exiting &&
+        !SceneManager._wqaNativeAutosaves && Graphics.app?.stage === wqaScene &&
+        (wqaScene._wqaDamageRows?.length || 0) < 8) {
+        const wqaText=this._wqaDamageCaption.text;
+        const wqaGlyph=wqaText.children[wqaText._currentString.length-1];
+        if (!wqaText._dirty && wqaGlyph?.alpha > 0 && wqaGlyph.scale.x && wqaGlyph.scale.y) {
+            this._wqaDamageQueued=true;
+            (wqaScene._wqaDamageRows||=[]).push(this);
+        }
+    }
+}
 '''
     # Keep the exact availability and quantity expressions in the native
     # draw calls. Capture them only for a live battle inventory row.
@@ -660,6 +682,9 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         255249: b'):' + original[255216:255249] + b')',
         257237: BATTLE_BAG_LEAVING + b';',  # Native force-hide
         257461: BATTLE_BAG_LEAVING + b';',  # Native cancel or hide
+        274246: b'if(_0x11e1e4&&SceneManager._scene?._wqaBattleStarted)'
+                b'this._wqaDamageCaption={text:_0x11e1e4,target:_0x51b330};',
+        276706: damage_update,
     })
 
 

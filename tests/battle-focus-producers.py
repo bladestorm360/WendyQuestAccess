@@ -43,15 +43,37 @@ def native_text_methods():
     return [sprite_method(text, 'Sprite_Text', name) for name in names]
 
 
+def animated_text_methods():
+    methods = native_text_methods()
+    methods.extend(sprite_method(text, 'Sprite_Text', name) for name in ('GetText', 'StartTextAnimation'))
+    animation = sprite_method(text, 'Sprite_Text', 'updateAnimation')
+    methods.append(animation.split(',VFXBody', 1)[0] + ';')
+    return methods
+
+
+if sys.argv[2:] == ['damage']:
+    methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]
+    methods.extend(animated_text_methods())
+    damage_names = ('initialize', 'setup', 'setupCriticalEffect', 'createMiss', 'createDigits',
+                    'createChildSprite', 'update', 'updateChild', 'updateFlash', 'updateOpacity', 'isPlaying')
+    methods.extend(sprite_method(battle, 'Sprite_Damage', name) for name in damage_names)
+    sprites = (installed / 'package.nw/js/rmmz_sprites.js').read_text(encoding='utf-8-sig')
+    for name in ('setupDamagePopup', 'createDamageSprite', 'updateDamagePopup'):
+        start = sprites.index(f'Sprite_Battler.prototype.{name} = function(')
+        end = sprites.index('\n};', start) + 3
+        methods.append(sprites[start:end])
+    baseline_update = sprite_method(untouched, 'Sprite_Damage', 'update')
+    methods.append(baseline_update.replace("['update']", "['fixtureNativeUpdate']", 1))
+    print(json.dumps(methods))
+    sys.exit(0)
+
+
 if sys.argv[2:] == ['radial-result']:
     original_action = (installed / ACTION_REL).read_bytes()
     action, _ = decode(action_notification(original_action).decode('utf8'))
     baseline, _ = decode(original_action.decode('utf8'))
     methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]
-    methods.extend(native_text_methods())
-    methods.extend(sprite_method(text, 'Sprite_Text', name) for name in ('GetText', 'StartTextAnimation'))
-    animation = sprite_method(text, 'Sprite_Text', 'updateAnimation')
-    methods.append(animation.split(',VFXBody', 1)[0] + ';')
+    methods.extend(animated_text_methods())
     for source, prefix in ((action, 'observed'), (baseline, 'native')):
         feedback_names = ('CreateFeedbackText', 'ShowFeedbackText', 'ShowNormalFeedbackText',
                           'ShowFrozenFeedbackText', 'CleanUp')
