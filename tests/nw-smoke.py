@@ -7,6 +7,7 @@ the installed open-source PIXI runtime and a silent speech worker receipt.
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path, PurePosixPath
 import shutil
 import struct
@@ -117,6 +118,7 @@ let fieldStep = 0;
 let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
+let audioStarted = 0;
 let controllerStep = 0;
 let dialoguePadStep = 0;
 let nativeZ = 0;
@@ -201,6 +203,26 @@ function verifySettings() {
     } else if (settingsStep === 7 && menuStatus() === 'Navigation keyboard saved') {
         tap('Escape');
         if (document.activeElement.textContent !== 'Navigation keyboard') throw Error('Navigation parent focus was lost');
+        choose('Audio');
+        if (document.activeElement.textContent !== 'Mod sounds, on') throw Error('Sound defaults were not applied');
+        audioStarted = performance.now();
+        choose('Preview ahead');
+        settingsStep++;
+    } else if (settingsStep === 8 && menuStatus() === 'Preview uses HRTF.') {
+        require('fs').writeFileSync(receipt + '.audio-init-ms', String(performance.now() - audioStarted));
+        choose('HRTF');
+        settingsStep++;
+    } else if (settingsStep === 9 && menuStatus() === 'Audio settings saved') {
+        choose('Preview behind');
+        settingsStep++;
+    } else if (settingsStep === 10 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        choose('Mod sounds');
+        settingsStep++;
+    } else if (settingsStep === 11 && menuStatus() === 'Audio settings saved') {
+        choose('Preview right');
+        if (menuStatus() !== 'Mod sounds are off.') throw Error('The sound switch did not prevent preview');
+        tap('Escape');
+        if (document.activeElement.textContent !== 'Audio') throw Error('Audio parent focus was lost');
         key('keydown', 'Escape', 'Escape');
         if (document.querySelector('dialog') || SceneManager._scene._wqaSettingsActive) throw Error('Modal did not close');
         key('keydown', 'z', 'KeyZ', true);
@@ -273,14 +295,17 @@ const interval = setInterval(() => {
             tap('Escape');
             choose('Navigation keyboard');
             const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 3).map(item => item.textContent);
-            write({ bindings, controller, navigation });
+            tap('Escape');
+            choose('Audio');
+            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
+            write({ bindings, controller, navigation, audio });
             clearInterval(interval);
             nw.App.quit();
         }
         return;
     }
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
-        if (settingsStep < 8) return verifySettings();
+        if (settingsStep < 12) return verifySettings();
         if (!require('fs').existsSync(receipt + '.returned-title')) return;
         if (controllerStep < 13) return verifyController();
         if (!require('fs').existsSync(receipt + '.controller-returned-title')) return;
@@ -451,7 +476,7 @@ setTimeout(() => {
     write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, dialoguePadStep,
         status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
     nw.App.quit();
-}, 5000);
+}, 7000);
 ''', encoding='utf8')
     service = app / 'wendyquest-access'
     service.mkdir()
@@ -501,9 +526,10 @@ parentPort.on('message', message => {
     shutil.copyfile(ROOT / 'src' / 'runtime' / 'resize-markers.js', app / 'resize-markers.js')
     for name in ('speech-text.cjs', 'dialogue-icons.cjs'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
-    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs'):
+    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'audio-worker.cjs', 'WendyQuestAudio.node'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
-    shutil.copytree(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'puzzles', service / 'puzzles')
+    for directory in ('puzzles', 'audio-deps'):
+        shutil.copytree(ROOT / '.build' / 'payload' / 'wendyquest-access' / directory, service / directory)
     geometry = app / 'geometry'
     geometry.mkdir()
     synthetic = struct.pack('<4sHHHBBI', b'WQG1', 1, 3, 2, 0, 0, 0) + bytes([15] * 6)
@@ -533,7 +559,8 @@ def main():
                   else 'differs from installed', flush=True)
         receipt = fixture(runtime, args.installed)
         launch = [str(runtime / 'nw.exe'), f'--user-data-dir={runtime / "profile"}']
-        result = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25)
+        environment = {**os.environ, 'SDL_AUDIO_DRIVER': 'dummy'}
+        result = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25, env=environment)
         if not receipt.exists():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
@@ -561,6 +588,7 @@ def main():
             raise RuntimeError(f'NW fixture did not publish the timed route preview: {data}')
         cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
+        audio_ms = float(receipt.with_suffix('.json.audio-init-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
@@ -573,19 +601,21 @@ def main():
         versions = data['versions']
         receipt.unlink()
         receipt.with_suffix('.json.restart').touch()
-        restarted = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25)
+        restarted = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25, env=environment)
         reloaded = json.loads(receipt.read_text(encoding='utf8')) if receipt.exists() else {}
         if restarted.returncode or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T',
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Right trigger', 'Next category, Unassigned'] or \
                 reloaded.get('navigation') != ['Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
-                                               'Next destination, N']:
+                                               'Next destination, N'] or reloaded.get('audio') != ['Mod sounds, off', 'HRTF, off']:
             raise RuntimeError('NW settings did not survive restart in the isolated profile')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic renderer command and cold worker submission: {submit_ms:.1f} ms.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
+        print(f'Verified native HRTF and stereo preview on the silent SDL driver and settings persistence. '
+              f'Throttled cold HRTF status observed after {audio_ms:.1f} ms with 40 ms polling.')
 
 
 if __name__ == '__main__':

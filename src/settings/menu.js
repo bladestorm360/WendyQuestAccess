@@ -10,12 +10,21 @@ const { FIELD_ACTIONS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
     puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance' });
 const POINTER_EVENTS = ['mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
+const AUDIO_PREVIEWS = [
+    ['ahead', [0, 0, 1]], ['left', [-1, 0, 0]], ['right', [1, 0, 0]],
+    ['behind', [0, 0, -1]], ['above', [0, 1, 0]]
+];
+
+function normalizeAudio(value) {
+    return { enabled: value?.enabled !== false, hrtf: value?.hrtf !== false };
+}
 
 function createSettingsMenu(root, host) {
     let session = null;
     let keys = normalizeKeys(DEFAULT_KEYS);
     let pad = normalizeController();
     let navigation = normalizeNavigation();
+    let audio = normalizeAudio();
     let storage = null;
     let loading = true;
     let saving = false;
@@ -28,11 +37,12 @@ function createSettingsMenu(root, host) {
     let heldMouse = false;
 
     openSettings(root.indexedDB).then(async database => {
-        const [keyboard, controller, savedNavigation] = await Promise.all([
-            database.read(), database.read('controller'), database.read('navigation')]);
+        const [keyboard, controller, savedNavigation, savedAudio] = await Promise.all([
+            database.read(), database.read('controller'), database.read('navigation'), database.read('audio')]);
         keys = normalizeKeys(keyboard);
         pad = normalizeController(controller);
         navigation = normalizeNavigation(savedNavigation);
+        audio = normalizeAudio(savedAudio);
         host.controllerChanged();
         storage = database;
     }).catch(() => {}).finally(() => {
@@ -50,16 +60,20 @@ function createSettingsMenu(root, host) {
     }
 
     function showRoot(owner, selection = 'keyboard') {
+        if (owner.group === 'audio') host.audioStop(owner.scene);
         owner.group = false;
         owner.capture = null;
         owner.heading.textContent = 'WendyQuest accessibility settings';
         owner.status.textContent = '';
         owner.contents.textContent = '';
-        const keyboard = button(owner, 'Keyboard bindings', () => showKeyboard(owner));
-        const controller = button(owner, 'Controller bindings', () => showController(owner));
-        const field = button(owner, 'Navigation keyboard', () => showNavigation(owner));
+        const groups = {
+            keyboard: button(owner, 'Keyboard bindings', () => showKeyboard(owner)),
+            controller: button(owner, 'Controller bindings', () => showController(owner)),
+            navigation: button(owner, 'Navigation keyboard', () => showNavigation(owner)),
+            audio: button(owner, 'Audio', () => showAudio(owner))
+        };
         button(owner, 'Close settings', () => close(owner.scene, true));
-        (selection === 'controller' ? controller : selection === 'navigation' ? field : keyboard).focus();
+        (groups[selection] || groups.keyboard).focus();
     }
 
     function status(owner, message) {
@@ -70,13 +84,18 @@ function createSettingsMenu(root, host) {
         if (loading || saving) return false;
         const isController = key === 'controller';
         const isNavigation = key === 'navigation';
-        const previous = isController ? pad : isNavigation ? navigation : keys;
+        const isAudio = key === 'audio';
+        const previous = isController ? pad : isNavigation ? navigation : isAudio ? audio : keys;
         const origin = owner?.group;
         function apply(value) {
             if (isController) {
                 pad = value;
                 host.controllerChanged();
             } else if (isNavigation) navigation = value;
+            else if (isAudio) {
+                audio = value;
+                host.audioStop(owner.scene);
+            }
             else keys = value;
         }
         function refresh(message) {
@@ -90,7 +109,8 @@ function createSettingsMenu(root, host) {
             refresh('Changed for this session. Settings storage is unavailable.');
             return true;
         }
-        const subject = isController ? 'Controller settings' : isNavigation ? 'Navigation keyboard' : 'Keyboard bindings';
+        const subject = { controller: 'Controller settings', navigation: 'Navigation keyboard',
+            audio: 'Audio settings', keyboard: 'Keyboard bindings' }[key];
         saving = true;
         refresh(`Saving ${subject.toLowerCase()}`);
         storage.save(next, key).then(() => {
@@ -112,6 +132,30 @@ function createSettingsMenu(root, host) {
         if (owner.group === 'controller') showController(owner, selection);
         else if (owner.group === 'keyboard') showKeyboard(owner, selection);
         else if (owner.group === 'navigation') showNavigation(owner, selection);
+        else if (owner.group === 'audio') showAudio(owner, selection);
+    }
+
+    function showAudio(owner, selection = 'enabled') {
+        owner.group = 'audio';
+        owner.selected = selection;
+        owner.capture = null;
+        owner.heading.textContent = 'Audio';
+        owner.status.textContent = loading ? 'Loading settings' : '';
+        owner.contents.textContent = '';
+        const enabled = button(owner, `Mod sounds, ${audio.enabled ? 'on' : 'off'}`, () =>
+            change(owner, { ...audio, enabled: !audio.enabled }, 'enabled', 'audio'));
+        const hrtf = button(owner, `HRTF, ${audio.hrtf ? 'on' : 'off'}`, () =>
+            change(owner, { ...audio, hrtf: !audio.hrtf }, 'hrtf', 'audio'));
+        for (const [direction, bearing] of AUDIO_PREVIEWS) {
+            button(owner, `Preview ${direction}`, () => {
+                if (loading || saving) return;
+                if (!audio.enabled) return status(owner, 'Mod sounds are off.');
+                status(owner, 'Preparing audio preview.');
+                if (!host.previewAudio(owner, audio.hrtf, bearing, text => status(owner, text))) status(owner, '');
+            });
+        }
+        button(owner, 'Back', () => showRoot(owner, 'audio'));
+        (selection === 'hrtf' ? hrtf : enabled).focus();
     }
 
     function showNavigation(owner, selection = 'layout') {
@@ -260,6 +304,7 @@ function createSettingsMenu(root, host) {
     function close(scene, resume = false) {
         if (!session || session.scene !== scene) return;
         const retired = session;
+        host.audioStop(scene);
         // Take the last native physical sample before handing back control.
         // Boundary-driven retirement bypasses this call and stays synchronous.
         if (resume) {

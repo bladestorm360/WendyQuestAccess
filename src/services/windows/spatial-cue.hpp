@@ -1,0 +1,57 @@
+#pragma once
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+
+namespace wqa::audio {
+constexpr int rate = 48000;
+constexpr int cue_frames = 4320;
+constexpr int render_frames = cue_frames + 256;
+constexpr double rear_pitch = 0.72;
+constexpr double tau = 6.283185307179586;
+
+struct Bearing {
+    double right;
+    double up;
+    double forward;
+};
+using Stereo = std::array<std::int16_t, render_frames * 2>;
+
+inline Bearing normalized(Bearing p) {
+    const auto length = std::hypot(p.right, p.up, p.forward);
+    if (!std::isfinite(length) || length < 1e-6) return {0, 0, 1};
+    return {p.right / length, p.up / length, p.forward / length};
+}
+
+// Original preview timbre. Attack and release prevent discontinuities at the
+// cue boundaries. Cue generation never runs from the device callback.
+inline double preview_sample(int frame, double pitch) {
+    const auto attack = std::min(1.0, frame / 192.0);
+    const auto release = std::min(1.0, (cue_frames - 1 - frame) / 960.0);
+    const auto phase = tau * 660.0 * pitch * frame / rate;
+    return std::min(attack, release) * (0.52 * std::sin(phase) + 0.17 * std::sin(2 * phase));
+}
+
+inline std::int16_t sample16(double value) {
+    return static_cast<std::int16_t>(std::lround(std::clamp(value, -1.0, 1.0) * 32767.0));
+}
+
+template<class Ready>
+bool stereo_preview(Stereo& output, Bearing bearing, double gain, Ready ready) {
+    const auto horizontal = std::hypot(bearing.right, bearing.forward);
+    const auto pan = horizontal < 1e-6 ? 0.0 : bearing.right / horizontal;
+    const auto left = gain * std::sqrt(std::max(0.0, (1.0 - pan) * 0.5));
+    const auto right = gain * std::sqrt(std::max(0.0, (1.0 + pan) * 0.5));
+    const auto pitch = bearing.forward < 0.0 ? rear_pitch : 1.0;
+    for (int i = 0; i < cue_frames; ++i) {
+        if ((i % 128) == 0 && !ready()) return false;
+        const auto sample = preview_sample(i, pitch);
+        output[i * 2] = sample16(sample * left);
+        output[i * 2 + 1] = sample16(sample * right);
+    }
+    std::fill(output.begin() + cue_frames * 2, output.end(), std::int16_t{0});
+    return ready();
+}
+}

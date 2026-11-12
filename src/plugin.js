@@ -1,6 +1,7 @@
 'use strict';
 
 const { createRenderer } = require('./runtime/renderer');
+const { createAudio } = require('./runtime/audio');
 const { createTitleObserver, presented } = require('./frontend/title');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
 const { createMapBannerObserver } = require('./world/map-banner');
@@ -14,6 +15,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let files = null;
     let mapBanner = null;
     let dialogue = null;
+    let audio = null;
     let field = null;
     let settings = null;
     let settingsScene = null;
@@ -67,9 +69,17 @@ function boot(root, nodeRequire, nodeProcess) {
                 const script = path.join(packagePath, 'wendyquest-access', 'route-worker.cjs');
                 const geometryDirectory = path.join(root.nw.App.dataPath, 'wendyquest-access-geometry');
                 return new Worker(script, { workerData: { admission, geometryDirectory } });
+            },
+            createAudioWorker(admission) {
+                const path = nodeRequire('path');
+                const { Worker } = nodeRequire('worker_threads');
+                const packagePath = path.dirname(nodeProcess.mainModule.filename);
+                const script = path.join(packagePath, 'wendyquest-access', 'audio-worker.cjs');
+                return new Worker(script, { workerData: admission });
             }
         };
         const { notifications } = createRenderer(host);
+        audio = createAudio(host);
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
         mapBanner = createMapBannerObserver(host, notifications);
@@ -112,6 +122,11 @@ function boot(root, nodeRequire, nodeProcess) {
             fieldReady: field.ready,
             nativeButton,
             controllerChanged: () => controller?.reset(),
+            audioStop: audio.retire,
+            previewAudio(owner, hrtf, bearing, report) {
+                return audio.preview(owner.scene, hrtf, bearing, () =>
+                    owner.group === 'audio' && controlContext() === owner && !host.screenFading(), report);
+            },
             suspend(scene) {
                 setSettingsScene(null);
                 title.suspend();
@@ -151,7 +166,10 @@ function boot(root, nodeRequire, nodeProcess) {
             controller.disconnect(event.gamepad.index);
             if (root.Input?._wqaSettingsPads) delete root.Input._wqaSettingsPads[event.gamepad.index];
         });
-        for (const type of ['blur', 'pagehide']) root.addEventListener(type, controller.reset);
+        for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+            audio.retire();
+            controller.reset();
+        });
         root.Graphics._wqaFrontEndObserved = true;
     }
 
@@ -205,6 +223,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFilesLeaving = function (scene) {
+        audio?.retire(scene);
         if (settingsScene === scene) setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
         controller?.reset();
@@ -259,6 +278,7 @@ function boot(root, nodeRequire, nodeProcess) {
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
     root.WendyQuestAccessSceneLeaving = function (scene) {
+        audio?.retire(scene);
         if (settingsScene === scene) setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
         controller?.reset();
@@ -278,6 +298,7 @@ function boot(root, nodeRequire, nodeProcess) {
         filesWaiting = null;
         fieldWaiting = null;
         const scene = root.SceneManager._scene;
+        audio?.retire(scene);
         setSettingsScene(null);
         if (scene) scene._wqaControllerReady = false;
         controller?.reset();
