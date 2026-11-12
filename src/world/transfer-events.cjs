@@ -196,6 +196,36 @@ function shipPort(entry, page, common) {
         ? { ...edge, facing: port.facing, name: port.name } : null;
 }
 
+function recordsWorldPosition(common) {
+    const list = common?.[138]?.list;
+    const codes = [355, 108, 408, 122, 122, 122, 122, 122, 108, 408, 122, 122, 0];
+    const variables = [[3, 82], [4, 83], [5, 84], [6, 85], [7, 84], [10, 30], [11, 31]];
+    return list?.length === codes.length && codes.every((code, index) => rowIs(list[index], code)) &&
+        /^console\.log\("[^"\\\r\n]{1,96}"\);?$/.test(list[0].parameters?.[0]) &&
+        variables.every(([index, id]) => list[index].parameters?.[0] === id && list[index].parameters[1] === id);
+}
+
+function worldWalkingEntrance(entry, page, common) {
+    if (entry.pages.length !== 1 || page.trigger !== 1 || !flagsAre(page)) return null;
+    const { list } = page;
+    if (list.length < 3 || !rowIs(list[0], 117) || !parametersAre(list[0], [138]) ||
+        !rowIs(list[1], 201) || !recordsWorldPosition(common)) return null;
+    const edge = transferTo(list[1], 113);
+    if (list.length === 3 && rowIs(list[2], 0)) return edge;
+    // Secret Island turns on its visited flag after the native reservation.
+    return entry.id === 13 && list.length === 4 && landingIs(edge, 206, 9, 16) &&
+        rowIs(list[2], 121) && parametersAre(list[2], [619, 619, 0]) && rowIs(list[3], 0) ? edge : null;
+}
+
+function islandReturn(entry, page) {
+    const { list } = page;
+    if (![2, 3, 4, 5, 6, 8].includes(entry.id) || entry.pages.length !== 1 || page.priorityType !== 0 ||
+        page.trigger !== 1 || !flagsAre(page) || list.length !== 3 || !rowIs(list[0], 122) ||
+        !parametersAre(list[0], [81, 81, 0, 0, 2]) || !rowIs(list[1], 201) || !rowIs(list[2], 0)) return null;
+    const edge = transferTo(list[1], 206);
+    return landingIs(edge, 113, 48, 7) && edge.direction === 0 ? edge : null;
+}
+
 function transferOptions(map, entry, page, common) {
     if (!page || ![0, 1].includes(page.trigger) || page.moveType !== 0 || page.through ||
         ![0, 1].includes(page.priorityType) || /^(?:test|debug|developer)/i.test(entry.name || '') ||
@@ -206,6 +236,8 @@ function transferOptions(map, entry, page, common) {
     if (map === 87 && entry.id === 91) return caffeineEntrance(page, index);
     const special = cauldronSpecial(map, entry.id, page, index, common);
     if (special !== undefined) return special;
+    const world = map === 113 ? worldWalkingEntrance(entry, page, common) : map === 206 ? islandReturn(entry, page) : null;
+    if (world) return [world];
     const commands = page.list.filter(row => ![0, 108, 408].includes(row.code));
     if (commands.length === 2 && callsStairSound(commands[0]) && commands[0].indent === 0 && audioOnly(common)) commands.shift();
     const destination = commands.length === 1 && commands[0].indent === 0 && transferTo(commands[0], map);

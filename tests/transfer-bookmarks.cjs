@@ -81,7 +81,7 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
     c.WendyQuestAccessSceneLeaving = transfers.leave;
     const marker = { id: 1, revision: 1, trail: [] };
 
-    function reserveSpecial(fixture, event, start, expected) {
+    function reserveSpecial(fixture, event, start, expected, commonId = 38) {
         const { gameMap, player } = fixture;
         player.setPosition(...start);
         const edge = transfers.candidates().entrances.find(candidate => candidate.event === event);
@@ -95,7 +95,7 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
                     _index: 0, _waitMode: '', _branch: {} });
                 transfers.leave(scene);
             },
-            setupChild(rows) { assert.equal(rows, common[38].list); },
+            setupChild(rows) { assert.equal(rows, common[commonId].list); },
             command101() { return true; }
         });
         transfers.arm(scene, marker, edge);
@@ -192,6 +192,44 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         });
         await verifyWorker(lower, { ...toSecret, transfer: { ...toSecret.transfer, state: [false, false] } },
             lowerLive, output => assert.equal(output.status, 'unavailable'));
+        const ruinsMaps = new Set([161, 162, ...Array.from({ length: 17 }, (_, index) => index + 164), 207, 208]);
+        const world = load(113, { self: ['113,75,A', '113,90,A'] });
+        world.player.setPosition(1, 1);
+        const worldEntrances = transfers.candidates().entrances;
+        assert.equal(worldEntrances.filter(edge => ruinsMaps.has(edge.map)).length, 21);
+        assert(worldEntrances.some(edge => edge.event === 1 && edge.map === 13));
+        assert(!worldEntrances.some(edge => [30, 31].includes(edge.event)), 'ship ports stay out of walking plans');
+        for (const [event, destination] of [[76, 161], [13, 206]]) {
+            const origin = load(113, { self: ['113,75,A', '113,90,A'] });
+            origin.player.setPosition(1, 1);
+            const options = transfers.candidates().entrances;
+            const target = options.find(edge => edge.event === event);
+            assert.equal(target?.map, destination);
+            const live = captureWorld(c).live;
+            const { request: { x, y } } = reachableStart(origin, live, [target]);
+            await verifyWorker(origin, { x, y, field: true, transfer: { map: destination,
+                point: { x: target.x, y: target.y }, candidates: options.map(({ event, map, x, y }) => ({ event, map, x, y })) } },
+            live, result => assert.equal(result.entrance, event));
+            const edge = reserveSpecial(origin, event, [x, y], destination, 138);
+            origin.gameMap._mapId = edge.map;
+            origin.player.setPosition(edge.x, edge.y);
+            assert.deepEqual(transfers.settle({}), { ...marker, trail: [edge.map + '/' + edge.x + '/' + edge.y] });
+        }
+        const island = load(206);
+        const variableWriter = c.$gameVariables.setValue;
+        const written = [];
+        try {
+            c.$gameVariables.setValue = (id, value) => written.push([id, value]);
+            const back = reserveSpecial(island, 4, [9, 16], 113);
+            assert.deepEqual(written, [[81, 2]]);
+            island.gameMap._mapId = back.map;
+            island.player.setPosition(back.x, back.y);
+            assert.deepEqual(transfers.settle({}), { ...marker, trail: ['113/48/7'] });
+        } finally {
+            c.$gameVariables.setValue = variableWriter;
+        }
+        console.log('Verified 21 Lost Ruins entrances, native world reservations, and Secret Island entry and return.');
+
         for (const [origin, destination, expectNormal] of [[19, 20, true], [17, 113, false]]) {
             const fixture = load(origin);
             const { gameMap, player } = fixture;
