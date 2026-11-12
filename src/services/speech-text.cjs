@@ -54,6 +54,29 @@ function formatSpeech(message) {
         case 'controllerStatus':
         case 'fieldStatus':
         case 'mapBanner': text = label(message); break;
+        case 'menuFocus': {
+            const name = label(message);
+            if (!name) return '';
+            const parts = [message.screen === 'Menu' || message.screen === 'Inventory' ? message.screen : '', name];
+            if (Number.isSafeInteger(message.quantity) && message.quantity >= 0) parts.push(String(message.quantity));
+            if (message.equipped === true) parts.push('equipped');
+            if (message.enabled === false) parts.push('unavailable');
+            if (message.indexed && message.position > 0 && message.position <= message.total &&
+                Number.isInteger(message.total) && message.total <= 256) parts.push(`${message.position} of ${message.total}`);
+            text = parts.filter(Boolean).join(', ');
+            break;
+        }
+        case 'menuReview':
+            text = label(message);
+            if (text && message.indexed && message.position > 0 && message.position <= message.total &&
+                Number.isInteger(message.total) && message.total <= 8) text += `, ${message.position} of ${message.total}`;
+            break;
+        case 'menuDetails':
+            if (!Array.isArray(message.lines) || message.lines.length > 8 ||
+                !message.lines.every(line => typeof line === 'string' && line.length <= 96)) return '';
+            limit = 512;
+            text = message.lines.join('. ');
+            break;
         case 'fieldTarget': {
             const name = label(message);
             const category = typeof message.category === 'string' && message.category.length <= 32 ? message.category : '';

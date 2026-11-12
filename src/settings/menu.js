@@ -1,6 +1,6 @@
 'use strict';
 
-const { DEFAULT_KEYS, PUZZLE_KEYS, keyName, nativeConflict, normalizeKeys, puzzleGesture } = require('./keyboard');
+const { DEFAULT_KEYS, PUZZLE_KEYS, REVIEW_KEYS, keyName, nativeConflict, normalizeKeys, puzzleGesture, reviewGesture } = require('./keyboard');
 const { openSettings } = require('./storage');
 const { ACTIONS, DEFAULTS: NAVIGATION_DEFAULTS, LAYOUT_NAMES, navigationGesture, nativeNavigationConflict,
     normalizeNavigation, navigationAction, gestureName } = require('./navigation-keys');
@@ -9,7 +9,9 @@ const { FIELD_ACTIONS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
 const { SOUNDSCAPE, normalizeSoundscape } = require('./soundscape-preferences');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
-    puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance' });
+    puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance',
+    details: 'Read details', reviewPrevious: 'Previous review line', reviewNext: 'Next review line',
+    reviewFirst: 'First review line', reviewLast: 'Last review line' });
 const POINTER_EVENTS = ['mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
 const AUDIO_PREVIEWS = [
     ['ahead', [0, 0, 1]], ['left', [-1, 0, 0]], ['right', [1, 0, 0]],
@@ -36,7 +38,7 @@ function createSettingsMenu(root, host) {
     let pad = normalizeController();
     let navigation = normalizeNavigation();
     let audio = normalizeAudio();
-    let speech = { enabled: true };
+    let speech = { enabled: true, autodetail: false, indexing: false };
     let storage = null;
     let loading = true;
     let saving = false;
@@ -57,7 +59,8 @@ function createSettingsMenu(root, host) {
         pad = normalizeController(controller);
         navigation = normalizeNavigation(savedNavigation, [keys.puzzleGuide, keys.puzzleStop]);
         audio = normalizeAudio(savedAudio);
-        speech = { enabled: savedSpeech?.enabled !== false };
+        speech = { enabled: savedSpeech?.enabled !== false, autodetail: savedSpeech?.autodetail === true,
+            indexing: savedSpeech?.indexing === true };
         host.controllerChanged();
         host.navigationChanged(navigation);
         host.audioChanged(audio);
@@ -158,25 +161,30 @@ function createSettingsMenu(root, host) {
     function showGroup(owner, selection) {
         if (owner.group === 'controller') showController(owner, selection);
         else if (owner.group === 'keyboard') showKeyboard(owner, selection);
-        else if (owner.group === 'speech') showSpeech(owner);
+        else if (owner.group === 'speech') showSpeech(owner, selection);
         else if (owner.group === 'navigation') showNavigation(owner, selection);
         else if (owner.group === 'audio') showAudio(owner, selection);
         else if (owner.group === 'soundscape') showSoundscape(owner, selection);
         else if (owner.group === 'soundscapeCategory') showSoundscape(owner, selection, owner.category);
     }
 
-    function showSpeech(owner) {
+    function showSpeech(owner, selection = 'enabled') {
         owner.group = 'speech';
-        owner.selected = 'enabled';
+        owner.selected = selection;
         owner.capture = null;
         owner.heading.textContent = 'Speech';
         owner.status.textContent = loading ? 'Loading settings' : '';
         owner.contents.textContent = '';
-        const enabled = button(owner, `Speech enabled, ${speech.enabled ? 'on' : 'off'}`, () =>
-            change(owner, { ...speech, enabled: !speech.enabled }, 'enabled', 'speech'));
-        enabled.setAttribute('aria-pressed', String(speech.enabled));
+        const labels = { enabled: 'Speech enabled', autodetail: 'Autodetail', indexing: 'Menu indexing' };
+        let focused;
+        for (const [key, name] of Object.entries(labels)) {
+            const item = button(owner, `${name}, ${speech[key] ? 'on' : 'off'}`, () =>
+                change(owner, { ...speech, [key]: !speech[key] }, key, 'speech'));
+            item.setAttribute('aria-pressed', String(speech[key]));
+            if (selection === key || !focused) focused = item;
+        }
         button(owner, 'Back', () => showRoot(owner, 'speech'));
-        enabled.focus();
+        focused.focus();
     }
 
     function previewAudio(owner, bearing, cue, gain) {
@@ -332,10 +340,10 @@ function createSettingsMenu(root, host) {
         for (const action of Object.keys(LABELS)) {
             const binding = keys[action];
             const occupied = PUZZLE_KEYS[action] && (nativeConflict(root, binding) || navigationAction(navigation, binding));
-            const item = button(owner, `${LABELS[action]}, ${binding ?? 'unassigned'}${occupied ? ', in use elsewhere' : ''}`, () => {
+            const item = button(owner, `${LABELS[action]}, ${binding?.replace('Arrow', '') ?? 'unassigned'}${occupied ? ', in use elsewhere' : ''}`, () => {
                 if (loading || saving) return;
                 owner.capture = owner.selected = action;
-                const available = { settings: 'a letter or F8', puzzleGuide: 'Shift and a letter',
+                const available = REVIEW_KEYS[action] ? 'Shift and an arrow or letter' : { settings: 'a letter or F8', puzzleGuide: 'Shift and a letter',
                     puzzleStop: 'Ctrl and a letter' }[action] || 'a letter';
                 status(owner, `Press ${available} for ${LABELS[action].toLowerCase()}. Press Escape to cancel.`);
             });
@@ -500,9 +508,21 @@ function createSettingsMenu(root, host) {
             change(owner, { ...keys, [action]: gesture }, action);
             return;
         }
+        if (REVIEW_KEYS[action]) {
+            const review = reviewGesture(event);
+            if (!review) return;
+            if ((!review.includes('Arrow') && nativeConflict(root, review, event.keyCode)) ||
+                Object.keys(REVIEW_KEYS).some(other => other !== action && keys[other] === review)) {
+                status(owner, `${review.replace('Arrow', '')} is already in use. Choose another key.`);
+                return;
+            }
+            change(owner, { ...keys, [action]: review }, action);
+            return;
+        }
         if (!key || (key === 'F8' && action !== 'settings')) return;
         const other = action === 'settings' ? 'repeat' : 'settings';
         if (nativeConflict(root, key, event.keyCode) || key === keys[other] ||
+            (action === 'settings' && key === keys.details) ||
             (action === 'settings' && navigationAction(navigation, key))) {
             status(owner, `${key} is already in use. Choose another key.`);
             return;
@@ -544,6 +564,17 @@ function createSettingsMenu(root, host) {
             return;
         }
         if (event.repeat || event.target?.closest?.('input, textarea, select, [contenteditable]')) return;
+        const key = keyName(event);
+        const review = reviewGesture(event);
+        const menuAction = review ? Object.keys(REVIEW_KEYS).find(action => keys[action] === review &&
+            (review.includes('Arrow') || !nativeConflict(root, review, event.keyCode))) :
+            key && key === keys.details && !nativeConflict(root, key, event.keyCode) ? 'details' : '';
+        if (menuAction && host.menuCommand(menuAction)) {
+            if (physical && held.size < 64) held.add(physical);
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
         const gesture = navigationGesture(event);
         const action = navigationAction(navigation, gesture);
         if (action && !nativeNavigationConflict(root, gesture, event.keyCode) && host.fieldCommand(action)) return;
@@ -555,7 +586,6 @@ function createSettingsMenu(root, host) {
             event.stopPropagation();
             return;
         }
-        const key = keyName(event);
         if (!key || nativeConflict(root, key, event.keyCode)) return;
         if (key === keys.repeat && host.repeat()) return;
         const recover = key === 'F8' && (nativeConflict(root, keys.settings) ||

@@ -4,6 +4,7 @@ const { createRenderer } = require('./runtime/renderer');
 const { createAudio } = require('./runtime/audio');
 const { createTitleObserver, presented } = require('./frontend/title');
 const { createFilesObserver, fileWindow, isReady } = require('./frontend/files');
+const { createMenuObserver } = require('./menus/observer');
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createField } = require('./world/field');
 const { createWallAudio } = require('./world/wall-audio');
@@ -17,6 +18,7 @@ const { createController, modeAnnouncement } = require('./settings/controller');
 function boot(root, nodeRequire, nodeProcess) {
     let title = null;
     let files = null;
+    let menus = null;
     let mapBanner = null;
     let dialogue = null;
     let audio = null;
@@ -90,10 +92,12 @@ function boot(root, nodeRequire, nodeProcess) {
         const { notifications } = speech;
         let audioPreferences = {};
         let navigationPreferences = {};
+        let speechPreferences = {};
         host.navigationPreferences = () => navigationPreferences;
         audio = createAudio(host);
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
+        menus = createMenuObserver(root, host, notifications, () => speechPreferences);
         mapBanner = createMapBannerObserver(host, notifications);
         dialogue = createDialogueObserver(host, notifications);
         field = createField(root, host, notifications);
@@ -116,6 +120,8 @@ function boot(root, nodeRequire, nodeProcess) {
             const panel = settings?.controllerOwner();
             if (panel?.scene === scene && scene._wqaSettingsActive) return panel;
             if (readyScene()) return frontendControl;
+            const menu = menus.controlOwner(scene);
+            if (menu) return menu;
             const speaking = dialogue.controllerOwner(scene);
             if (!speaking) return field.controlOwner(scene);
             speaking.puzzleActive = field.puzzleActive(scene);
@@ -125,6 +131,7 @@ function boot(root, nodeRequire, nodeProcess) {
             if (controlContext() !== context) return;
             const record = { kind: 'controllerStatus', name: text };
             if (context.kind === 'field') field.report(text);
+            else if (context.kind === 'menu') menus.announce(context, record);
             else if (context.kind === 'dialogue') dialogue.announce(context, record);
             else if (context.scene instanceof root.Scene_Title) title.announce(context.scene, record);
             else files.announce(context.scene, record);
@@ -143,13 +150,14 @@ function boot(root, nodeRequire, nodeProcess) {
         settings = createSettingsMenu(root, {
             readyScene() {
                 const scene = host.manager._scene;
-                return readyScene() || (field.ready(scene) ? scene : null);
+                return readyScene() || ((menus.controlOwner(scene) || field.ready(scene)) ? scene : null);
             },
             fieldReady: field.ready,
             nativeButton,
             controllerChanged: () => controller?.reset(),
             navigationChanged(value) { navigationPreferences = value; },
             speechChanged(value, owner) {
+                speechPreferences = value;
                 speech.setSpeechEnabled(value.enabled, () => owner && controlContext() === owner &&
                     owner.scene._wqaSettingsActive && !host.screenFading());
             },
@@ -184,6 +192,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 setSettingsScene(null);
                 title.suspend();
                 files.suspend();
+                menus.suspend(scene);
                 field.autowalk.stop(scene);
                 field.changed(scene);
                 scene._wqaPresentation = true;
@@ -193,6 +202,10 @@ function boot(root, nodeRequire, nodeProcess) {
             capturePads: () => root.Input?._pollGamepads?.(),
             resume(scene) { if (host.manager._scene === scene) root.WendyQuestAccessResizeReady(); },
             repeat() { try { return dialogue.repeatPage(); } catch { return false; } },
+            menuCommand(action) {
+                try { return menus.command(menus.controlOwner(host.manager._scene), action); }
+                catch { return false; }
+            },
             fieldCommand(key) { try { return fieldAction(key); } catch { return false; } }
         });
         controller = createController({
@@ -209,6 +222,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 else if (action === 'modeLeft') announce(context, 'Mod mode off');
                 else if (action === 'modeEntered') announce(context,
                     modeAnnouncement(family, context, settings.controllerBindings()));
+                else if (context.kind === 'menu') menus.command(context, action);
                 else if (context.kind === 'field') fieldAction(action);
             }
         });
@@ -226,6 +240,7 @@ function boot(root, nodeRequire, nodeProcess) {
             caveTiming.stop();
             soundscape.leave();
             audio.retire();
+            menus.retire(host.manager._scene);
             controller.reset();
         });
         root.addEventListener('focus', () => {
@@ -295,6 +310,12 @@ function boot(root, nodeRequire, nodeProcess) {
         if (scene?._wqaFileKind) scene._wqaPresentation = false;
         files?.leave(scene);
     };
+
+    root.WendyQuestAccessMenuReady = function (scene, kind) {
+        if (!menus || root.SceneManager._scene !== scene) return;
+        try { menus.observe(scene, kind); } catch { menus.retire(scene); }
+    };
+    root.WendyQuestAccessMenuLeaving = function (scene) { menus?.retire(scene); };
 
     root.WendyQuestAccessMapBannerReady = function (scene, revision) {
         try {
@@ -412,6 +433,7 @@ function boot(root, nodeRequire, nodeProcess) {
         if (fieldWaiting === scene) fieldWaiting = null;
         title?.leave(scene);
         files?.leave(scene);
+        menus?.retire(scene);
         mapBanner?.leave(scene);
         dialogue?.leave(scene);
         field?.leave(scene);
@@ -437,6 +459,7 @@ function boot(root, nodeRequire, nodeProcess) {
         field?.leave(scene);
         title?.suspend();
         files?.suspend();
+        menus?.retire(scene);
     };
 
     root.WendyQuestAccessResizeReady = function () {

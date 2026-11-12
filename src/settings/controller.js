@@ -1,14 +1,21 @@
 'use strict';
 
-const { MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, BINDABLE_MASK, buttonBit, controllerFamily, buttonName,
+const { MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, REVIEW_ACTIONS, BINDABLE_MASK, buttonBit, controllerFamily, buttonName,
     recoveryMask } = require('./controller-bindings');
 const QUEUE_LIMIT = 4;
 const FIELD_MODE = ['settings', ...FIELD_MODE_ACTIONS];
 const MOVING_MODE = ['beaconStop'];
 const FRONT_MODE = ['settings'];
 const DIALOGUE_MODE = ['repeat', 'puzzleStop'];
+const MENU_MODE = ['settings', ...REVIEW_ACTIONS];
 
 function modeAnnouncement(family, context, bindings) {
+    if (context.kind === 'menu') {
+        const details = bindings.details === null ? '' : `${buttonName(family, bindings.details)} reads details. `;
+        const review = context.hasReview && bindings.reviewPrevious != null && bindings.reviewNext != null ?
+            `${buttonName(family, bindings.reviewPrevious)} and ${buttonName(family, bindings.reviewNext)} review lines. ` : '';
+        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${details}${review}${buttonName(family, bindings.mode)} cancels.`;
+    }
     if (context.kind === 'field') {
         if (context.navigationOnly) {
             const stop = bindings.beaconStop === null ? '' : `${buttonName(family, bindings.beaconStop)} stops autowalk. `;
@@ -144,10 +151,12 @@ function createController(host) {
         // all native controls neutral while the deliberate mode is active.
         if (!(pressed & modeBit) && !(previous & modeBit)) {
             const actions = context.navigationOnly ? MOVING_MODE :
-                context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE : DIALOGUE_MODE;
+                context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE :
+                context.kind === 'menu' ? MENU_MODE : DIALOGUE_MODE;
             for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
                 (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive) &&
-                (action !== 'beaconStop' || context.beaconActive)) {
+                (action !== 'beaconStop' || context.beaconActive) &&
+                (!action.startsWith('review') || context.hasReview)) {
                 mode = null;
                 queue(index, device, action);
                 break;

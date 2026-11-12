@@ -3,12 +3,14 @@
 const CONTROLLER_DEFAULTS = Object.freeze({ enabled: true, mode: 8, settings: 9, repeat: 0,
     previous: 12, next: 13, confirm: 0, back: 1, recovery: Object.freeze([10, 11]),
     previousDestination: 20, nextDestination: 21, previousCategory: 22, nextCategory: 23, directions: 6,
-    currentDestination: 0, puzzleGuide: 4, puzzleStop: 5, beaconToggle: 6, wallToggle: 21, beaconStop: 20 });
+    currentDestination: 0, puzzleGuide: 4, puzzleStop: 5, beaconToggle: 6, wallToggle: 21, beaconStop: 20,
+    details: 0, reviewPrevious: 12, reviewNext: 13, reviewFirst: 14, reviewLast: 15 });
 const MODE_ACTIONS = ['mode', 'settings', 'repeat'];
 const MENU_ACTIONS = ['previous', 'next', 'confirm', 'back'];
 const FIELD_ACTIONS = ['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory', 'directions'];
 const FIELD_MODE_ACTIONS = ['currentDestination', 'puzzleGuide', 'puzzleStop', 'beaconToggle', 'wallToggle', 'beaconStop'];
-const RECOVERY_CONFLICTS = [...MODE_ACTIONS, ...FIELD_MODE_ACTIONS, ...FIELD_ACTIONS];
+const REVIEW_ACTIONS = ['details', 'reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast'];
+const RECOVERY_CONFLICTS = [...MODE_ACTIONS, ...FIELD_MODE_ACTIONS, ...FIELD_ACTIONS, ...REVIEW_ACTIONS];
 const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mod settings', repeat: 'Repeat dialogue',
     previous: 'Previous settings item', next: 'Next settings item', confirm: 'Activate settings item',
     back: 'Back in settings', recovery: 'Toggle controller support', previousDestination: 'Previous destination',
@@ -16,7 +18,9 @@ const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mo
     directions: 'Directions', currentDestination: 'Read selected destination in mod mode',
     puzzleGuide: 'Start or review puzzle guidance in mod mode', puzzleStop: 'Stop puzzle guidance in mod mode',
     beaconToggle: 'Toggle navigation beacon in mod mode', wallToggle: 'Toggle wall sounds in mod mode',
-    beaconStop: 'Stop current navigation in mod mode' });
+    beaconStop: 'Stop current navigation in mod mode', details: 'Read details in mod mode',
+    reviewPrevious: 'Previous review line in mod mode', reviewNext: 'Next review line in mod mode',
+    reviewFirst: 'First review line in mod mode', reviewLast: 'Last review line in mod mode' });
 const BUTTONS = ['South button', 'East button', 'West button', 'North button', 'Left bumper', 'Right bumper',
     'Left trigger', 'Right trigger', 'Left center button', 'Right center button', 'Left stick click', 'Right stick click',
     'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', null, null, null, null,
@@ -31,7 +35,7 @@ function buttonBit(button) { return Number.isInteger(button) && BUTTONS[button] 
 const BINDABLE_MASK = BUTTONS.reduce((mask, name, index) => name ? mask | 1 << index : mask, 0);
 
 function canUnassign(action) {
-    return action === 'repeat' || FIELD_MODE_ACTIONS.includes(action) || FIELD_ACTIONS.includes(action);
+    return action === 'repeat' || FIELD_MODE_ACTIONS.includes(action) || FIELD_ACTIONS.includes(action) || REVIEW_ACTIONS.includes(action);
 }
 
 function controllerFamily(id) {
@@ -57,11 +61,14 @@ function bindingAllowed(action, value, bindings, nativeButton) {
     if (FIELD_ACTIONS.includes(action)) return value !== bindings.mode && !nativeButton(value) &&
         FIELD_ACTIONS.every(other => other === action || bindings[other] !== value);
     if (action === 'mode' && (nativeButton(value) ||
-        FIELD_MODE_ACTIONS.some(other => bindings[other] === value) || FIELD_ACTIONS.some(other => bindings[other] === value))) return false;
+        FIELD_MODE_ACTIONS.some(other => bindings[other] === value) || FIELD_ACTIONS.some(other => bindings[other] === value) ||
+        REVIEW_ACTIONS.some(other => bindings[other] === value))) return false;
+    if (REVIEW_ACTIONS.includes(action)) return value !== bindings.mode && value !== bindings.settings &&
+        REVIEW_ACTIONS.every(other => other === action || bindings[other] !== value);
     if (FIELD_MODE_ACTIONS.includes(action)) return value !== bindings.mode && value !== bindings.settings &&
         (action !== 'puzzleStop' || value !== bindings.repeat) &&
         FIELD_MODE_ACTIONS.every(other => other === action || bindings[other] !== value);
-    if (action === 'settings' && FIELD_MODE_ACTIONS.some(other => bindings[other] === value)) return false;
+    if (action === 'settings' && [...FIELD_MODE_ACTIONS, ...REVIEW_ACTIONS].some(other => bindings[other] === value)) return false;
     if (action === 'repeat' && value === bindings.puzzleStop) return false;
     const group = MODE_ACTIONS.includes(action) ? MODE_ACTIONS : MENU_ACTIONS;
     return group.every(other => other === action || bindings[other] !== value);
@@ -78,7 +85,7 @@ function normalizeController(saved) {
             for (let index = 0; index < group.length; index++) result[group[index]] = candidate[index];
         }
     }
-    for (const action of [...FIELD_ACTIONS, ...FIELD_MODE_ACTIONS]) result[action] = null;
+    for (const action of [...FIELD_ACTIONS, ...FIELD_MODE_ACTIONS, ...REVIEW_ACTIONS]) result[action] = null;
     if (Array.isArray(saved?.recovery) && bindingAllowed('recovery', saved.recovery, result, () => false)) {
         result.recovery = saved.recovery.slice();
     } else if (MODE_ACTIONS.some(action => result.recovery.includes(result[action]))) {
@@ -101,8 +108,16 @@ function normalizeController(saved) {
         result[action] = preferred === null ? null : [preferred, ...alternatives].find(value =>
             bindingAllowed(action, value, result, () => false)) ?? null;
     }
+    for (const action of REVIEW_ACTIONS) {
+        const preferred = saved?.[action];
+        if (bindingAllowed(action, preferred, result, () => false)) result[action] = preferred;
+    }
+    for (const action of REVIEW_ACTIONS) {
+        if (saved?.[action] !== null && result[action] === null &&
+            bindingAllowed(action, CONTROLLER_DEFAULTS[action], result, () => false)) result[action] = CONTROLLER_DEFAULTS[action];
+    }
     return result;
 }
 
-module.exports = { CONTROLLER_DEFAULTS, MODE_ACTIONS, MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, ACTION_NAMES, buttonBit, controllerFamily,
+module.exports = { CONTROLLER_DEFAULTS, MODE_ACTIONS, MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, REVIEW_ACTIONS, ACTION_NAMES, buttonBit, controllerFamily,
     buttonName, recoveryMask, bindingAllowed, normalizeController, BINDABLE_MASK, canUnassign };

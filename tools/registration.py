@@ -156,6 +156,17 @@ def menu_notifications(original):
     # Build 26578620. Offsets refer to completed native draw or accepted
     # native actions. Existing event arguments and call order are preserved.
     return insert(original, MENU_SHA, {
+        9404: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
+        12930: b'globalThis.WendyQuestAccessMenuReady?.(this,1);',
+        20002: b'globalThis.WendyQuestAccessMenuReady?.(this,2);',
+        25165: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
+        34744: b'const wqaRedraw=SceneManager._scene?._wqaMenuActive&&'
+               b'SceneManager._scene._itemWindow===this&&this._index===_0x14af0d;',
+        35932: b'if(wqaRedraw)this._wqaMenuRowPaint=(this._wqaMenuRowPaint||0)+1;',
+        39079: b'if(SceneManager._scene?._itemWindow===this&&'
+               b'SceneManager._scene._equipStatusWindow===this.statusWindow){'
+               b'this.statusWindow._wqaMenuCompareItem=_0x204675;this.statusWindow._wqaMenuCompareActor=_0x1d24e1;}',
+        79513: b'this._wqaMenuHelpPaint=(this._wqaMenuHelpPaint||0)+1;',
         91658: b'this._wqaFileKind=4;',
         92959: FILES_LEAVING,
         97879: b'(' + FILES_LEAVING,

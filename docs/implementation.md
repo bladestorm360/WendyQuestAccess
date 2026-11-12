@@ -36,6 +36,10 @@ The worker and native pipe fixtures verified the eight-record limit, startup pre
 
 The Audio settings group uses a separate worker and a small Windows Node-API addon, with SDL3 for output and OpenAL Soft loopback for HRTF. The renderer revokes preview and field audio generations directly. The Soundscape submenu manages category output through the same worker and uses active navigation targets with additional native presentation checks. [Controls, ABI and output lifecycle](audio.md) · [Entity eligibility and verification](soundscape.md)
 
+## Native menu review
+
+The pause and inventory menus publish after the native render. Read details and line review use the current item's painted description and comparison. Autodetail and indexing are independent Speech settings. [Controls, native producers and quest tracker trace](menus.md)
+
 ## Reproduction
 
 - Build with `build.ps1 -PrismArchive <official prism-windows-x64.zip for v0.18.3> -VerifySpeechPipe -VerifyAudio`. The entry point uses the machine-wide bounded runner and VS x64 compiler. It stages the plugin, helper, addon and attributed speech/audio dependencies in `.build/payload` for development. The default audio SDK inputs come from the approved local FFPR `third_party` directory. Use `-AudioSdkRoot` for equivalent pinned local inputs. The Steam install is outside the build's output scope. The upstream PRISM header emits C4309 under MSVC v145. The binary builds and resolves the expected PRISM API. [Builder and input checks](../tools/build.py) · [Audio evidence](audio.md)
@@ -45,6 +49,7 @@ The Audio settings group uses a separate worker and a small Windows Node-API add
 - Run `WendyQuestSpeech.exe --check` under the bounded runner from the payload directory. It returns `R` after opening the packaged PRISM backend. No helper call timing or audible response was measured. Required exact payload security and local deployment checks remain open until the full candidate is ready.
 - Run `tests/transport.test.cjs` with Node under the bounded runner. The actual renderer and worker exercise an eight-record cap, queue retirement, stale grants before provider initialization and after it, a held provider call, a new generation and failed helper handback. Run `build.ps1` with `-VerifySpeechPipe` to compile the production pipe protocol with a silent provider and test the native branch and malformed grants. The test executable lives outside the payload. The packaged helper also passed a silent `--check` and discarded a request refused before any provider grant. Neither fixture measures audible latency or actual game responsiveness.
 - Run `tests/input.test.cjs` with Node and the installed root under the bounded runner. It loads the shipped keyboard handlers, transformed scene update and controller poll functions into a VM. It checks the retail/test F8 guard, normal native update order, modal scene suspension, unblocked native startup and controller press/release handback, including a close between ordinary polls. The developer tool action and connected device are stand-ins. [Source locations](engine-evidence.md#producer-and-input-map)
+- Run `tests/menu.test.cjs` with Node and the installed root under the bounded runner. It exercises the installed pause and item update methods, current help and comparison producers, Save closure and review cursor restoration. The corresponding NW.js test exercises the packaged keyboard and controller input and the stored speech preferences. [Menu tests and remaining verification](menus.md#verification-and-remaining-coverage)
 
 ## File selector, details and deletion
 

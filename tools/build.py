@@ -32,6 +32,8 @@ def bundle():
         './gate': 'runtime/gate.js',
         './frontend/title': 'frontend/title.js',
         './frontend/files': 'frontend/files.js',
+        './menus/observer': 'menus/observer.js',
+        './review': 'menus/review.js',
         './options': 'frontend/options.js',
         './world/map-banner': 'world/map-banner.js',
         './world/field': 'world/field.js',

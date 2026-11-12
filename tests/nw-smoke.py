@@ -138,6 +138,7 @@ let dialoguePadStep = 0;
 let endingStep = 0;
 let restartStep = 0;
 let restartSettings;
+let nativeMenuArrows = 0;
 let nativeZ = 0;
 const restart = require('fs').existsSync(receipt + '.restart');
 if (!restart) {
@@ -154,6 +155,7 @@ if (!restart) {
     for (const name of ['1.wqg', '196.wqg', 'manifest.json']) fs.copyFileSync(path.join(root, 'geometry', name), path.join(geometry, name));
 }
 document.addEventListener('keydown', event => { if (event.code === 'KeyZ') nativeZ++; });
+document.addEventListener('keydown', event => { if (event.code === 'ArrowDown') nativeMenuArrows++; });
 function key(type, key, code, repeat = false, modifiers = {}) {
     document.dispatchEvent(new KeyboardEvent(type, { key, code, repeat, bubbles: true, cancelable: true, ...modifiers }));
 }
@@ -379,6 +381,9 @@ const interval = setInterval(() => {
             const mute = document.activeElement;
             if (mute.textContent !== 'Speech enabled, off' || mute.getAttribute('aria-pressed') !== 'false')
                 throw Error('The persisted speech switch was not accessible while muted');
+            const speechChoices = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
+            if (!speechChoices.includes('Autodetail, on') || !speechChoices.includes('Menu indexing, on'))
+                throw Error('The independent menu speech preferences were not restored');
             restartSettings = { bindings, controller, navigation, audio, soundscape };
             fs.writeFileSync(receipt + '.allow-restoration', '');
             pad();
@@ -669,6 +674,55 @@ const interval = setInterval(() => {
         if (endingStep === 0) {
             fs.writeFileSync(receipt + '.closing-pass', '');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const layer = {};
+            const item = { name: 'Synthetic supply' };
+            const visible = { parent: layer, active: true, worldVisible: true, worldAlpha: 1, openness: 255,
+                contentsOpacity: 255, contents: { isReady: () => true }, innerWidth: 200, innerHeight: 120 };
+            const scene = SceneManager._scene = Graphics.app.stage = {
+                _started: true, _active: true, _fadeOpacity: 0, _fadeDuration: 0, _windowLayer: layer,
+                _itemWindow: { ...visible, _index: 0, _data: [item], isFocused: true,
+                    itemRect: () => ({ x: 0, y: 0, width: 100, height: 30 }),
+                    itemIsEquipment: () => false, isEnabled: () => true, needsNumber: () => true },
+                _helpWindow: { ...visible, _selectedItem: item, _wqaMenuHelpPaint: 1,
+                    _text: 'Visible first line\\nVisible second line' }
+            };
+            $gameParty = { numItems: () => 3 };
+            WendyQuestAccessMenuReady(scene, 2);
+            Graphics.app.renderer.emit('postrender');
+            endingStep++;
+        } else if (endingStep === 1 && fs.existsSync(receipt + '.menuFocus')) {
+            tap('i', 'KeyI');
+            endingStep++;
+        } else if (endingStep === 2 && fs.existsSync(receipt + '.menuDetails')) {
+            tap('ArrowDown', 'ArrowDown', { shiftKey: true });
+            if (nativeMenuArrows !== 0) throw Error('The review chord reached native selection');
+            tap('ArrowDown', 'ArrowDown');
+            if (nativeMenuArrows !== 1) throw Error('An ordinary arrow did not reach the native menu');
+            endingStep++;
+        } else if (endingStep === 3 && fs.existsSync(receipt + '.menu-review-second')) {
+            pad();
+            if (padTap(7) !== 1 << 7) throw Error('Menu mod mode did not claim its binding');
+            endingStep++;
+        } else if (endingStep === 4 && fs.existsSync(receipt + '.menu-mode')) {
+            if (padTap(14) !== 1 << 14) throw Error('Menu review did not consume the controller direction');
+            endingStep++;
+        } else if (endingStep === 5 && fs.existsSync(receipt + '.menu-review-first')) {
+            tap('v', 'KeyV');
+            choose('Speech');
+            choose('Autodetail, off');
+            endingStep++;
+        } else if (endingStep === 6 && menuStatus() === 'Speech settings saved') {
+            choose('Menu indexing, off');
+            endingStep++;
+        } else if (endingStep === 7 && menuStatus() === 'Speech settings saved') {
+            tap('Escape');
+            tap('Escape');
+            fs.writeFileSync(receipt + '.menu-autodetail', '');
+            WendyQuestAccessMenuReady(SceneManager._scene, 2);
+            Graphics.app.renderer.emit('postrender');
+            endingStep++;
+        } else if (endingStep === 8 && fs.existsSync(receipt + '.menuDetails-auto')) {
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
             const scene = SceneManager._scene = Graphics.app.stage = new Scene_Title();
             WendyQuestAccessTitleReady(scene);
             Graphics.app.renderer.emit('postrender');
@@ -676,13 +730,13 @@ const interval = setInterval(() => {
             choose('Speech');
             choose('Speech enabled, on');
             endingStep++;
-        } else if (endingStep === 1 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
+        } else if (endingStep === 9 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
             if (document.activeElement.textContent !== 'Speech enabled, off') throw Error('The mute switch did not retain focus');
             tap('Escape');
             choose('Audio');
             choose('Preview right');
             endingStep++;
-        } else if (endingStep === 2 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        } else if (endingStep === 10 && menuStatus() === 'Preview uses stereo and rear pitch.') {
             fs.writeFileSync(receipt + '.muted-preview', '');
             clearInterval(interval);
             nw.App.quit();
@@ -725,6 +779,15 @@ parentPort.on('message', message => {
         return;
     }
     if (fs.existsSync(receipt + '.closing-pass')) {
+        const speech = formatSpeech(message);
+        const automatic = fs.existsSync(receipt + '.menu-autodetail');
+        if (message.kind === 'menuFocus' || message.kind === 'menuDetails') {
+            fs.writeFileSync(receipt + '.' + message.kind + (automatic ? '-auto' : ''), speech);
+        }
+        if (message.kind === 'menuReview') fs.writeFileSync(receipt +
+            (message.position === 1 ? '.menu-review-first' : '.menu-review-second'), speech);
+        if (message.kind === 'controllerStatus' && message.name.includes('reads details'))
+            fs.writeFileSync(receipt + '.menu-mode', speech);
         parentPort.postMessage('ack');
         return;
     }
@@ -880,6 +943,17 @@ def main():
             raise RuntimeError('NW ambient object cue did not publish stereo PCM to SDL')
         if not receipt.with_suffix('.json.muted-preview').is_file():
             raise RuntimeError('NW sound preview was unavailable with speech disabled')
+        expected_menu = {
+            'menuFocus': 'Inventory, Synthetic supply, 3',
+            'menuDetails': 'Visible first line. Visible second line',
+            'menu-review-first': 'Visible first line',
+            'menu-review-second': 'Visible second line',
+            'menuFocus-auto': 'Inventory, Synthetic supply, 3, 1 of 1',
+            'menuDetails-auto': 'Visible first line. Visible second line',
+        }
+        for name, speech in expected_menu.items():
+            if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:
+                raise RuntimeError(f'NW menu output failed for {name}')
         cave_cue_ms = float(receipt.with_suffix('.json.cave-cue-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
@@ -913,6 +987,7 @@ def main():
         print('Verified native autowalk dispatch, both narration settings, spoken arrival and explicit cancellation.')
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
+        print('Verified native-menu plugin focus, keyboard and controller review, Autodetail and indexing persistence.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '
