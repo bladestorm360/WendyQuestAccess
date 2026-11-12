@@ -1101,6 +1101,26 @@ const interval = setInterval(() => {
             if (padTap(15) !== 0) throw Error('Battle review did not return to native input');
             endingStep = 33;
         } else if (endingStep === 33 && fs.existsSync(receipt + '.battle-review')) {
+            const scene = SceneManager._scene;
+            const layer = scene._windowLayer = {};
+            BattleManager._wqaBattleSpritesBusy = false;
+            const row = { pos: 1 };
+            const log = scene._actionLogWindow = { parent: layer, worldVisible: true, worldAlpha: 1, openness: 255,
+                contentsOpacity: 255, contents: { isReady: () => true }, items: [row],
+                _wqaBattleLogRows: [{ row, text: 'Synthetic turn result.' }] };
+            WendyQuestAccessBattleLogReady(scene, log);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 43;
+        } else if (endingStep === 43 && fs.existsSync(receipt + '.battle-log-auto')) {
+            tap('t', 'KeyT');
+            endingStep = 44;
+        } else if (endingStep === 44 && fs.existsSync(receipt + '.battle-log-repeat')) {
+            fs.unlinkSync(receipt + '.battle-log-repeat');
+            pad();
+            if (padTap(7) !== 1 << 7 || padTap(3) !== 1 << 3) throw Error('Battle results controller action was not claimed');
+            if (padTap(3) !== 0) throw Error('Battle results action did not return to native input');
+            endingStep = 45;
+        } else if (endingStep === 45 && fs.existsSync(receipt + '.battle-log-repeat')) {
             tap('h', 'KeyH');
             endingStep = 37;
         } else if (endingStep === 37 && fs.existsSync(receipt + '.battle-hp')) {
@@ -1248,6 +1268,7 @@ parentPort.on('message', message => {
             const target = fs.existsSync(receipt + '.battle-target-stage');
             const vitals = message.lines?.[0];
             const suffix = message.kind === 'menuFocus' ? 'focus' :
+                message.kind === 'battleLog' ? (message.append ? 'log-auto' : 'log-repeat') :
                 message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'hp') :
                     vitals === 'Synthetic companion' ? 'slot2' : message.append ? 'autodetail' : 'details') :
                 message.kind === 'menuReview' ? (target && message.append ? 'timing' : 'review') :
@@ -1538,6 +1559,8 @@ def main():
             'cross-map-arrived': 'Return marker. you are here.',
             'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',
             'battle-hp': 'Synthetic hero. HP 8 of 14',
+            'battle-log-auto': 'Synthetic turn result.',
+            'battle-log-repeat': 'Synthetic turn result.',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',

@@ -4,7 +4,7 @@ const CONTROLLER_DEFAULTS = Object.freeze({ enabled: true, mode: 8, settings: 9,
     previous: 12, next: 13, confirm: 0, back: 1, recovery: Object.freeze([10, 11]),
     previousDestination: 20, nextDestination: 21, previousCategory: 22, nextCategory: 23, directions: 6,
     currentDestination: 0, puzzleGuide: 4, puzzleStop: 5, beaconToggle: 6, wallToggle: 21, beaconStop: 20,
-    details: 0, reviewPrevious: 12, reviewNext: 13, reviewFirst: 14, reviewLast: 15, battleVitals: 2,
+    details: 0, reviewPrevious: 12, reviewNext: 13, reviewFirst: 14, reviewLast: 15, battleVitals: 2, battleLog: 3,
     questDetails: 3, questPrevious: 12, questNext: 13, questFirst: 14, questLast: 15 });
 const MODE_ACTIONS = ['mode', 'settings', 'repeat'];
 const MENU_ACTIONS = ['previous', 'next', 'confirm', 'back'];
@@ -12,7 +12,7 @@ const FIELD_ACTIONS = ['previousDestination', 'nextDestination', 'previousCatego
 const FIELD_MODE_ACTIONS = ['currentDestination', 'puzzleGuide', 'puzzleStop', 'beaconToggle', 'wallToggle', 'beaconStop',
     'questDetails', 'questPrevious', 'questNext', 'questFirst', 'questLast'];
 const REVIEW_ACTIONS = ['details', 'reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast'];
-const BATTLE_REVIEW_ACTIONS = [...REVIEW_ACTIONS, 'battleVitals'];
+const BATTLE_REVIEW_ACTIONS = [...REVIEW_ACTIONS, 'battleVitals', 'battleLog'];
 const RECOVERY_CONFLICTS = [...MODE_ACTIONS, ...FIELD_MODE_ACTIONS, ...FIELD_ACTIONS, ...BATTLE_REVIEW_ACTIONS];
 const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mod settings', repeat: 'Repeat dialogue',
     previous: 'Previous settings item', next: 'Next settings item', confirm: 'Activate settings item',
@@ -22,7 +22,7 @@ const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mo
     puzzleGuide: 'Start or review puzzle guidance in mod mode', puzzleStop: 'Stop puzzle guidance in mod mode',
     beaconToggle: 'Toggle navigation beacon in mod mode', wallToggle: 'Toggle wall sounds in mod mode',
     beaconStop: 'Stop current navigation in mod mode', details: 'Read details in mod mode',
-    battleVitals: 'Read active battle vitals in mod mode',
+    battleVitals: 'Read active battle vitals in mod mode', battleLog: 'Read recent battle results in mod mode',
     reviewPrevious: 'Previous review line in mod mode', reviewNext: 'Next review line in mod mode',
     reviewFirst: 'First review line in mod mode', reviewLast: 'Last review line in mod mode',
     questDetails: 'Read quest details in mod mode', questPrevious: 'Previous quest line in mod mode',

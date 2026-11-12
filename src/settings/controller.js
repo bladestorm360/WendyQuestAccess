@@ -10,6 +10,7 @@ const FRONT_MODE = ['settings'];
 const DIALOGUE_MODE = ['repeat', 'puzzleStop'];
 const MENU_MODE = ['settings', ...REVIEW_ACTIONS];
 const BATTLE_MODE = ['settings', ...BATTLE_REVIEW_ACTIONS];
+const TARGET_MODE = [...REVIEW_ACTIONS, 'battleVitals'];
 
 function modeAnnouncement(family, context, bindings) {
     if (context.kind === 'menu' || context.kind === 'battle' || context.kind === 'battleTarget') {
@@ -17,10 +18,12 @@ function modeAnnouncement(family, context, bindings) {
             buttonName(family, bindings.settings) + ' opens settings. ';
         const vitals = context.kind !== 'menu' && bindings.battleVitals != null ?
             buttonName(family, bindings.battleVitals) + ' reads vitals. ' : '';
+        const log = context.kind === 'battle' && bindings.battleLog != null ?
+            buttonName(family, bindings.battleLog) + ' reads recent results. ' : '';
         const details = bindings.details === null ? '' : `${buttonName(family, bindings.details)} reads details. `;
         const review = context.hasReview && bindings.reviewPrevious != null && bindings.reviewNext != null ?
             `${buttonName(family, bindings.reviewPrevious)} and ${buttonName(family, bindings.reviewNext)} review lines. ` : '';
-        return `Mod mode. ${settings}${vitals}${details}${review}${buttonName(family, bindings.mode)} cancels.`;
+        return `Mod mode. ${settings}${vitals}${log}${details}${review}${buttonName(family, bindings.mode)} cancels.`;
     }
     if (context.kind === 'field') {
         if (context.navigationOnly) {
@@ -160,7 +163,7 @@ function createController(host) {
             const actions = context.navigationOnly ? MOVING_MODE :
                 context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE :
                 context.kind === 'menu' ? MENU_MODE : context.kind === 'battle' ? BATTLE_MODE :
-                context.kind === 'battleTarget' ? BATTLE_REVIEW_ACTIONS : DIALOGUE_MODE;
+                context.kind === 'battleTarget' ? TARGET_MODE : DIALOGUE_MODE;
             for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
                 (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive) &&
                 (action !== 'beaconStop' || context.beaconActive) &&

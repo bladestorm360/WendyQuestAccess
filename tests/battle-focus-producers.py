@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from registration import (
     ACTION_REL, BATTLE_REL, MANAGERS_REL, SCENES_REL, STATS_REL, WINDOW_REL, WINDOWS_REL,
-    action_notification, battle_notification, managers_notification, scenes_notification,
+    action_notification, battle_notification, managers_notification, scenes_notification, windows_notification,
 )
 
 decode = runpy.run_path(str(ROOT / 'tools' / 'inspect-plugin.py'))['decode']
@@ -36,6 +36,33 @@ def manager_method(source, name):
     start = source.index(f"BattleManager['{name}']=function(")
     end = source.index('},BattleManager', start)
     return source[start:end + 1] + ';'
+
+
+if sys.argv[2:] == ['log']:
+    stock = windows_notification((installed / WINDOWS_REL).read_bytes()).decode('utf8')
+    methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]
+    methods.extend(sprite_method(battle, 'Window_BattleActionLog', name) for name in (
+        'pushMessage', 'update', 'updateItemQueue', 'updateMessages', 'getItemRect', 'refresh', 'paint',
+        'itemAlpha', 'drawItem', 'itemPushCooldown', 'itemIntroTime', 'itemFadeTime', 'itemHPadding',
+        'getItemMaxX', 'getItemX', 'getItemTargetY', 'getItemY', 'getItemPos', 'itemWidth', 'maxItemHeight',
+        'itemHeight', 'maxVisibleItems'))
+    start = stock.index('Window_Base.prototype._wqaRecordPaint = function')
+    end = stock.index('\n};', start) + 3
+    methods.append(stock[start:end])
+    for name in ('drawTextEx', 'createTextState', 'processAllText', 'flushTextState', 'createTextBuffer',
+                 'convertEscapeCharacters', 'processCharacter', 'processControlCharacter', 'processNewLine',
+                 'obtainEscapeCode', 'obtainEscapeParam', 'processEscapeCharacter', 'processColorChange', 'processDrawIcon',
+                 'drawIcon'):
+        start = stock.index(f'Window_Base.prototype.{name} = function(')
+        end = stock.index('\n};', start) + 3
+        methods.append(stock[start:end])
+    start = stock.index('Window_BattleLog.prototype.showAnimation = function(')
+    end = stock.index('\n};', start) + 3
+    methods.append(stock[start:end])
+    baseline_draw = sprite_method(untouched, 'Window_BattleActionLog', 'drawItem')
+    methods.append(baseline_draw.replace("['drawItem']", "['fixtureNativeDraw']", 1))
+    print(json.dumps(methods))
+    sys.exit(0)
 
 
 if sys.argv[2:] == ['sweeps']:

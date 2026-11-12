@@ -80,6 +80,13 @@ function formatSpeech(message) {
             text = [name, objective].filter(Boolean).join('. ');
             break;
         }
+        case 'battleLog':
+            if (!Array.isArray(message.lines) || !message.lines.length || message.lines.length > 8 ||
+                !message.lines.every(line => typeof line === 'string' && line.length <= 192)) return '';
+            limit = 768;
+            text = message.lines.map(dialogueText).filter(Boolean)
+                .map(line => /[.!?]$/.test(line) ? line : line + '.').join(' ');
+            break;
         case 'menuDetails':
             if (!Array.isArray(message.lines) || message.lines.length > 8 ||
                 !message.lines.every(line => typeof line === 'string' && line.length <= 96)) return '';

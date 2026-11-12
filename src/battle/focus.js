@@ -120,7 +120,12 @@ function createBattleFocus(root, host, notifications, preferences, onReady) {
             else return false;
             return true;
         },
-        announce(page, record) { if (page === current && live(page)) show(page, record); }
+        announce(page, record) { if (page === current && live(page)) show(page, record); },
+        appendFeedback(scene, record) {
+            if (current?.scene !== scene || !live(current)) return false;
+            notifications.focus(current.epoch, { ...record, append: true });
+            return true;
+        }
     };
 }
 

@@ -102,6 +102,8 @@ BATTLE_TIMING_LEAVING = (b'SceneManager._scene?._wqaBattleTimingActive&&'
                          b'globalThis.WendyQuestAccessBattleTimingLeaving?.(SceneManager._scene)')
 BATTLE_CUE_LEAVING = (b'SceneManager._scene?._wqaBattleCueActive&&'
                       b'globalThis.WendyQuestAccessBattleCueLeaving?.(SceneManager._scene)')
+BATTLE_LOG_LEAVING = (b'SceneManager._scene?._wqaBattleLogActive&&'
+                      b'globalThis.WendyQuestAccessBattleLogLeaving?.(SceneManager._scene)')
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
@@ -277,6 +279,8 @@ def scenes_notification(original):
 
 def objects_notification(original):
     return insert(original, OBJECTS_SHA, {
+        2915: b'        if(SceneManager._scene?._wqaBattleStarted){BattleManager._wqaBattleSpritesBusy=undefined;'
+              + BATTLE_LOG_LEAVING + b';}\n',
         178811: b'\n    ' + ROUTE_DIRTY,  # Tileset replacement
         180829: b'if(this===$gameMap&&SceneManager._scene?._wqaCaveGuideActive&&SceneManager._scene._wqaFieldReady&&'
                 b'!SceneManager._nextScene&&Graphics.app?.stage===SceneManager._scene&&!$gamePlayer._transferring)'
@@ -330,7 +334,7 @@ def objects_notification(original):
                 b'if(SceneManager._scene?._wqaBattleFocusActive)'
                 b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);' +
                 BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
-                BATTLE_CUE_LEAVING + b';}',
+                BATTLE_CUE_LEAVING + b';' + BATTLE_LOG_LEAVING + b';}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
         257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
@@ -343,7 +347,10 @@ def objects_notification(original):
 def windows_notification(original):
     paint = (Path(__file__).resolve().parents[1] / 'src/dialogue/paint-markers.js').read_bytes()
     return insert(original, WINDOWS_SHA, {
-        6945: b'    if (this._wqaChoicePaint) textState._wqaPaint = this._wqaChoicePaint;\n',
+        6945: b'    if (this._wqaChoicePaint) textState._wqaPaint = this._wqaChoicePaint;\n'
+              b'    else if (this._wqaBattleLogPaint) textState._wqaPaint = this._wqaBattleLogPaint;\n',
+        162511: b'    if(SceneManager._scene?._wqaBattleStarted&&SceneManager._scene._logWindow===this){'
+                b'BattleManager._wqaBattleSpritesBusy=undefined;' + BATTLE_LOG_LEAVING + b';}\n',
         7547: b'\n        if (text && (textState._wqaMessage || textState._wqaPaint)) this._wqaRecordPaint(textState, text);',
         7872: b'\n' + paint + b'\n',
         11423: b'\n        if (textState._wqaMessage || textState._wqaPaint) '
@@ -564,6 +571,38 @@ def battle_notification(original):
         }
     }
 '''
+    log_update = b'''
+    {
+        const wqaLog = this._actionLogWindow;
+        if (wqaLog && this._wqaBattleStarted && BattleManager._wqaBattleSpritesBusy === false &&
+            BattleManager._phase !== 'ActionCommand' && !globalThis.$gameTemp?._animationQueue?.length &&
+            !this._spriteset?._animationSprites?.length && !this._itemWindow?.active &&
+            this._fadeDuration === 0 && this._fadeOpacity === 0 && !this._wqaSettingsActive &&
+            !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
+            !Graphics._wqaResize && Graphics.app?.stage === this) {
+            if (wqaLog?._wqaBattleLogRows?.length)
+                globalThis.WendyQuestAccessBattleLogReady?.(this,wqaLog);
+        } else if (this._wqaBattleLogActive || wqaLog?._wqaBattleLogRows?.length) {
+            globalThis.WendyQuestAccessBattleLogLeaving?.(this);
+        }
+    }
+'''
+    log_paint = b'''
+const wqaLogScene=SceneManager._scene;
+const wqaLogPaint=!_0x560f74._wqaLogSeen&&!_0x560f74._wqaLogQueued&&_0x58412f>0&&
+    wqaLogScene?._wqaBattleStarted&&wqaLogScene._actionLogWindow===this&&
+    BattleManager._wqaBattleSpritesBusy===false&&BattleManager._phase!=="ActionCommand"&&
+    !globalThis.$gameTemp?._animationQueue?.length&&!wqaLogScene._spriteset?._animationSprites?.length&&
+    !wqaLogScene._itemWindow?.active&&!wqaLogScene._wqaSettingsActive&&
+    wqaLogScene._fadeDuration===0&&wqaLogScene._fadeOpacity===0&&
+    !Graphics._wqaResize&&!SceneManager._nextScene&&!SceneManager._exiting&&
+    !SceneManager._wqaNativeAutosaves&&Graphics.app?.stage===wqaLogScene&&
+    this.visible&&this.openness===255&&this.contentsOpacity>0&&
+    _0x5c4a11.y+_0x5c4a11.height>0&&_0x5c4a11.y<this.contents.height&&
+    _0x5c4a11.x+_0x5c4a11.width>0&&_0x5c4a11.x<this.contents.width&&
+    (this._wqaBattleLogRows?.length||0)<8?
+    (this._wqaBattleLogPaint={row:_0x560f74,text:""}):null;
+'''
     # Keep the exact availability and quantity expressions in the native
     # draw calls. Capture them only for a live battle inventory row.
     bag_row = b'''
@@ -587,13 +626,17 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         162205: b')',
         192463: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
                 BATTLE_CUE_LEAVING + b';',
-        193431: b'(this._wqaDialogueBusy=',
+        193431: b'(this._wqaDialogueBusy=(this._wqaBattleSpritesBusy=',
+        193465: b')',
         193508: b')',
         196596: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
-                BATTLE_CUE_LEAVING + b';',
+                BATTLE_CUE_LEAVING + b';' + BATTLE_LOG_LEAVING + b';',
         241897: b'this._wqaBattleStarted=true;',
-        241953: b'BattleManager._wqaDialogueBusy=undefined;',
-        242214: target_update + bag_update + timing_update + dialogue_update(ready),
+        241953: b'BattleManager._wqaDialogueBusy=BattleManager._wqaBattleSpritesBusy=undefined;',
+        242214: target_update + bag_update + timing_update + log_update + dialogue_update(ready),
+        247196: log_paint,
+        247397: b'if(wqaLogPaint){this._wqaBattleLogPaint=null;if(wqaLogPaint.text){'
+                b'wqaLogPaint.row._wqaLogQueued=true;(this._wqaBattleLogRows||=[]).push(wqaLogPaint);}}',
         253388: bag_row,
         253468: b'(wqaBagRow?(wqaBagRow.enabled=',
         253501: b'):' + original[253468:253501] + b')',
