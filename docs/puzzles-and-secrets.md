@@ -11,6 +11,8 @@ This is a build 26578620 engineering register. It identifies mechanics and sourc
 
 For Salt Caverns, recover the exact condition interpreter for stock variable comparisons, custom `executeEvent` order, flood fill settling and event-page refresh. Feed a worker the same current connectivity used by spoken directions, beacon and audio. For stealth, recover the actual contact/detection shapes, patrol and forced movement semantics, authored routes, enemy/body position, lighting/reveal rule and time base; do not infer sight cones or guaranteed safe timings from an event name. Use a bounded time-sensitive preview only after state/clock evidence supports it. Give short cues near the relevant decision and let the player move using native controls. Final gameplay confirmation should include success and a deliberate recoverable miss so both feedback paths can be checked.
 
+Offline collision fixtures now reach the Salt Caverns clue and check the terrain after event 36's native flood writes. The route fixture also reaches a distraction crystal from the map 200 entry and confirms the native interaction approach. These scenarios cover movement and interaction for their supplied states. Stealth timing, all progression branches and player guidance still need implementation and verification. [Route and terrain evidence](navigation.md#offline-evidence-and-limits)
+
 ## Objects, secrets and prerequisites
 
 | Area | Current finding | Planned coverage |

@@ -134,6 +134,8 @@ def main():
     target = bundle()
     subprocess.run(['node', '--check', str(target)], check=True, timeout=20)
     compile_speech(args.prism_archive.resolve(strict=True), args.vcvars.resolve(strict=True), args.verify_speech_pipe)
+    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs'):
+        shutil.copyfile(ROOT / 'src' / 'world' / name, OUT / 'wendyquest-access' / name)
     print('Development payload staged at', OUT)
 
 

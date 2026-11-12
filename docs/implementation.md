@@ -86,6 +86,8 @@ The epoch closes before an accepted transfer reservation, main interpreter setup
 
 The installed-method fixture exercises Salt Caverns and the secret cave with their actual display names, plus the unnamed opening and reset maps. It checks late and out-of-order artwork, autosave success and failure, native fade, pending render invalidation, repeated presentation, event preload, idle cue, battle entry, transfer and both resize routes. The generated bundle passed the matching hidden NW host with a silent worker receipt. These tests use renderer, storage and asset stand-ins for the game-specific paths. Audible output, live map responsiveness, Steam Cloud behavior and quiescence of already-started speech remain unverified. [Installed map lifecycle](engine-evidence.md#map-entry-ordering-for-the-first-field-checkpoint).
 
+The packaged route worker now has local geometry and installed-method collision fixtures for ordinary maps, tile edits, boats and puzzle rooms. Live map admission and spoken route commands remain open. [Navigation implementation and evidence](navigation.md)
+
 ## Map dialogue and choices
 
 `MapScene` creates each message page and applies its special text handling before drawing. The [paint markers](../src/dialogue/paint-markers.js) retain only successful text and icon draws for tagged message pages and choice rows. Native layout measurements do not produce speech. The captured fragments already include variable substitutions and exclude control escapes. A page's next spoken segment ends at a native pause or completed text. Advancing the page retires the old epoch before native input processing. A pause inside a page can resume with the later rendered words. Repeated text remains eligible on a new native page.

@@ -9,6 +9,7 @@ import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import shutil
+import struct
 import subprocess
 import tempfile
 import zipfile
@@ -109,6 +110,27 @@ let controllerStep = 0;
 let dialoguePadStep = 0;
 let nativeZ = 0;
 const restart = require('fs').existsSync(receipt + '.restart');
+if (!restart) {
+    const path = require('path');
+    const root = path.dirname(receipt);
+    const admission = new Int32Array(new SharedArrayBuffer(4));
+    Atomics.store(admission, 0, 1);
+    const { Worker } = require('worker_threads');
+    const route = new Worker(path.join(root, 'wendyquest-access', 'route-worker.cjs'),
+        { workerData: { geometryDirectory: path.join(root, 'geometry'), admission: admission.buffer } });
+    route.once('error', error => { write({ error: error.message }); nw.App.quit(); });
+    route.once('message', ({ sequence, result }) => {
+        if (sequence !== 17 || result.status !== 'ready' || result.distance !== 2 ||
+            result.arrival.x !== 2 || result.arrival.y !== 0 || result.legs.length !== 1 || result.legs[0].direction !== 6) {
+            write({ error: 'Synthetic route worker returned an incorrect route' });
+            nw.App.quit();
+        } else require('fs').writeFileSync(receipt + '.route', '');
+        route.terminate();
+    });
+    route.postMessage({ epoch: 1, sequence: 17, map: 1,
+        live: { terrain: [], events: [], vehicles: [], mode: 'walk' },
+        request: { x: 0, y: 0, targetX: 2, targetY: 0 } });
+}
 document.addEventListener('keydown', event => { if (event.code === 'KeyZ') nativeZ++; });
 function key(type, key, code, repeat = false) {
     document.dispatchEvent(new KeyboardEvent(type, { key, code, repeat, bubbles: true, cancelable: true }));
@@ -294,7 +316,10 @@ const interval = setInterval(() => {
         WendyQuestAccessDialogueReady(scene);
         Graphics.app.renderer.emit('postrender');
     }
-    if (require('fs').existsSync(receipt)) { clearInterval(interval); nw.App.quit(); }
+    if (require('fs').existsSync(receipt) && require('fs').existsSync(receipt + '.route')) {
+        clearInterval(interval);
+        nw.App.quit();
+    }
 }, 40);
 setTimeout(() => {
     write({ error: 'No worker receipt', versions: process.versions, shared: typeof SharedArrayBuffer });
@@ -339,6 +364,15 @@ parentPort.on('message', message => {
     shutil.copyfile(ROOT / 'src' / 'runtime' / 'resize-markers.js', app / 'resize-markers.js')
     for name in ('speech-text.cjs', 'dialogue-icons.cjs'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
+    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs'):
+        shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
+    geometry = app / 'geometry'
+    geometry.mkdir()
+    synthetic = struct.pack('<4sHHHBBI', b'WQG1', 1, 3, 2, 0, 0, 0) + bytes([15] * 6)
+    (geometry / '1.wqg').write_bytes(synthetic)
+    (geometry / 'manifest.json').write_text(json.dumps({
+        'build': '26578620', 'maps': {'1': {'geometry': hashlib.sha256(synthetic).hexdigest()}}
+    }), encoding='utf8')
     return app / 'receipt.json'
 
 
@@ -390,7 +424,7 @@ def main():
         if restarted.returncode or reloaded.get('bindings') != ['Open mod settings, J', 'Repeat dialogue, T'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Left trigger']:
             raise RuntimeError('NW settings did not survive restart in the isolated profile')
-        print(f"Verified hidden window resize, persistent keyboard/controller settings and dialogue repeat in NW {versions.get('nw', VERSION)}, "
+        print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
 
 
