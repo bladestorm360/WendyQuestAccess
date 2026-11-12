@@ -99,11 +99,11 @@ assert.equal(commands.at(-1), 'SSynthetic command\n');
 
 child.stdout.emit('data', 'P\r\n');
 assert.equal(commands.at(-1), 'Y\n');
-const providerInProgress = commands.length;
+const grantInTransit = commands.length;
 renderer.notifications.close();
 assert.equal(Atomics.load(word, 0), 0);
 const latest = renderer.notifications.open(title);
-assert.equal(commands.length, providerInProgress, 'neither native close nor next focus can send a second provider call');
+assert.equal(commands.length, grantInTransit, 'native close cannot retract a grant already sent or send a second call');
 child.stdout.emit('data', 'S\r\n');
 assert.equal(commands.at(-1), 'SSynthetic command\n', 'only the new admitted epoch is prepared');
 child.stdout.emit('data', 'P\r\n');
@@ -208,4 +208,40 @@ startup.notifications.focus(liveStartup, title);
 assert.equal(startupPackets[2].name, title.name);
 assert.equal(startupPackets[2].brailleOnly, undefined);
 assert.equal(startupCommands.at(-1), 'SSynthetic command\n');
-console.log('Verified startup preference gating, bounded speech, safe stop and retirement, live braille, and fresh unmute without replay.');
+function verifyRouteReadRetirement(stopDuring, expected) {
+    const worker = new EventEmitter();
+    const operations = [];
+    const results = [];
+    const admission = new Int32Array(new SharedArrayBuffer(4));
+    const manifest = Buffer.from(JSON.stringify({ build: '26578620', maps: { 19: { geometry: 'fixture-hash' } } }));
+    function operation(name) {
+        operations.push(name);
+        if (name === stopDuring) Atomics.store(admission, 0, 0);
+    }
+    worker.postMessage = value => results.push(value);
+    const disk = {
+        openSync(file) { operation('open ' + path.basename(file)); return 1; },
+        fstatSync() { operation('stat'); return { size: manifest.length }; },
+        readSync(_handle, bytes) { operation('read'); return manifest.copy(bytes); },
+        closeSync() { operation('close'); }
+    };
+    const source = path.join(__dirname, '..', 'src', 'world', 'route-worker.cjs');
+    vm.runInNewContext(fs.readFileSync(source, 'utf8'), {
+        Buffer,
+        require(name) {
+            if (name === 'worker_threads')
+                return { parentPort: worker, workerData: { admission: admission.buffer, geometryDirectory: 'fixture' } };
+            if (name === 'fs') return disk;
+            return require(name.startsWith('./') ? path.join(path.dirname(source), name) : name);
+        }
+    }, { timeout: 150 });
+    Atomics.store(admission, 0, 1);
+    worker.emit('message', { epoch: 1, sequence: 1, map: 19, live: {}, request: {} });
+    assert.deepEqual(operations, expected);
+    assert.deepEqual(results.map(value => value.result.status), ['cancelled']);
+}
+
+verifyRouteReadRetirement('open manifest.json', ['open manifest.json', 'close']);
+verifyRouteReadRetirement('stat', ['open manifest.json', 'stat', 'close']);
+verifyRouteReadRetirement('read', ['open manifest.json', 'stat', 'read', 'close']);
+console.log('Verified startup preference gating, bounded speech, stop, braille, fresh unmute, and retirement between route reads.');

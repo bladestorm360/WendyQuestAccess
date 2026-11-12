@@ -17,12 +17,14 @@ let walking;
 let cachedId = 0;
 let cachedGeometry = null;
 
-function readBounded(name, limit) {
-    const file = path.join(directory, name);
-    const handle = fs.openSync(file, 'r');
+function readBounded(name, limit, cancelled) {
+    if (cancelled()) return null;
+    const handle = fs.openSync(path.join(directory, name), 'r');
     try {
+        if (cancelled()) return null;
         const size = fs.fstatSync(handle).size;
         if (!Number.isSafeInteger(size) || size < 1 || size > limit) throw new Error('Invalid map geometry size');
+        if (cancelled()) return null;
         const bytes = Buffer.allocUnsafe(size);
         if (fs.readSync(handle, bytes, 0, size, 0) !== size) throw new Error('Incomplete map geometry');
         return bytes;
@@ -31,17 +33,21 @@ function readBounded(name, limit) {
     }
 }
 
-function geometry(id) {
+function geometry(id, cancelled) {
     if (id === cachedId) return cachedGeometry;
     if (!manifest) {
-        const source = JSON.parse(readBounded('manifest.json', 128 * 1024));
+        const bytes = readBounded('manifest.json', 128 * 1024, cancelled);
+        if (!bytes || cancelled()) return null;
+        const source = JSON.parse(bytes);
         if (source.build !== BUILD || !source.maps) throw new Error('Unsupported map geometry build');
         manifest = source;
     }
     const expected = manifest.maps[id]?.geometry;
     if (!expected) throw new Error('Map geometry is unavailable');
-    const bytes = readBounded(`${id}.wqg`, HEADER + MAX_CELLS);
+    const bytes = readBounded(`${id}.wqg`, HEADER + MAX_CELLS, cancelled);
+    if (!bytes || cancelled()) return null;
     if (createHash('sha256').update(bytes).digest('hex') !== expected) throw new Error('Map geometry changed');
+    if (cancelled()) return null;
     cachedGeometry = decodeMap(id, bytes);
     cachedId = id;
     return cachedGeometry;
@@ -68,8 +74,10 @@ parentPort.on('message', message => {
     const cancelled = () => Atomics.load(admission, 0) !== epoch;
     let result;
     try {
-        if (!cancelled()) {
-            const base = geometry(map);
+        // A retired cold job can close its current file handle and return.
+        // Each subsequent disk operation and the solver need current admission.
+        const base = !cancelled() && geometry(map, cancelled);
+        if (base && !cancelled()) {
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
             if (request.candidates !== undefined) result = findReachable(base, live, request, cancelled);

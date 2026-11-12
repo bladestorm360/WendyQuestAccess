@@ -53,3 +53,20 @@ At 19:24:55 UTC, Microsoft Defender found no threats in the exact staged payload
 | `bake-world.cjs` | `544f28ae4fc3c4ea8b767f6157b895835af26b72fd82dc5fe45f29e2f65720b6` |
 
 The exact Steam target still verifies as stock. The protected-phase requirement remains the deployment blocker. [Output lifetime and current limit](implementation.md#speech-service) · [Exact payload hashes](audio.md#dependencies-and-payload-check)
+
+## Transition verification candidate
+
+November 12, 2026, 19:29 UTC, Steam build 26578620. Plan SHA-256 `5fe488f65fb9b64bfeced09cd0fffc5d700a7d3cff8d9cadbab98a9a874abc9e` supersedes the previous development plan. The native build and device fixtures, deterministic transport and geometry-read retirement, the full world fixture, matching NW smoke, all 16 registration candidates and isolated installer passed. The worker now checks admission before starting the next filesystem operation. The geometry remained 239 maps and 191,235 cells.
+
+The current NW fixture measured cross-map submission and handback at 1.3 and 0.1 ms, with a silent speech receipt at 39.4 ms under 40 ms polling. Cave and timed review both enqueued in 1.0 ms. Warm battle audio reached silent SDL in 1 ms. Cold HRTF status appeared at 663.1 ms. The two capped world runs measured the full 57-destination worker batch at 11.62 and 175.12 ms with different concurrent workloads. These are worker completion times. Measure end-to-end responsiveness with the real game and devices.
+
+Microsoft Defender found no threats in the exact payload, local plan and geometry, or installer scripts at 19:29:53 UTC. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.267.0. The three installer source hashes match the previous candidate. The binaries remain unsigned. The Steam installation still verifies as stock. [Remaining transition decision](implementation.md#work-in-progress-when-a-native-transition-starts) · [Latest mod hashes](audio.md#dependencies-and-payload-check)
+
+## Gameplay confirmation after installation
+
+Start from Steam after the installer reports **Installed and verified**. Use the earliest scenario you can reach. Allow 20–30 minutes for the early smoke pass, excluding story progression. Report the control you pressed, the last spoken words and what the game did. Prioritize delayed input, stale speech or sound over a missing optional detail.
+
+1. At the title, move focus and listen for the selected command. Open **F8 → Speech**, mute, then restore it. Reopen settings to verify the saved choice and normal focus. Use **R** on the first dialogue page, advance it and confirm repeat follows the new page.
+2. On the first settled map, save a location under **F8 → Navigation → Bookmarks**. Return to the map and find it in the **Bookmarks** pathfinder category. Request directions and go through a nearby entrance. Once control returns, request directions again. Confirm the old map or route stays silent. If you use a controller, check View plus a review button returns control to native input. [Bookmark controls](bookmarks.md) · [Field controls](navigation.md#destination-controls-in-the-development-build)
+3. Before the first timed attack, enable **Battle timing cues** in Audio. Test the preview, then listen for the lead and tap cues, confirm and repeat for accuracy. Later try the frozen cue. Confirm the result is available after the timing input ends. Compare stereo and HRTF through headphones. [Battle timing](battle.md#radial-timing-tones)
+4. In Salt Caverns, use **Shift+G** for the guide. Check a wrong step, its reset, and the correct progression when possible. On later cavern map boards, press **I** and review the displayed trails. In the secret cave, check the first checkpoint, one patrol capture and the return. Use the warning sign and active route cues before timed crossings. Progress to the chamber and credits when the game allows. [Puzzle and secret controls](puzzles-and-secrets.md) · [Map review](navigation.md#displayed-maps-and-ruins-markers) · [Credits review](menus.md#ending-and-credits)
