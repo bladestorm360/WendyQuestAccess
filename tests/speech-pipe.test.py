@@ -7,13 +7,14 @@ import sys
 from threading import Thread
 
 
-def verify(path):
-    with subprocess.Popen([path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
+def verify(path, available):
+    argv = [path] if available else [path, '--unavailable']
+    with subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
                           encoding='ascii', creationflags=subprocess.CREATE_NO_WINDOW) as child:
         replies = Queue()
 
         def read_replies():
-            for _ in range(32):
+            for _ in range(48):
                 line = child.stdout.readline()
                 if not line:
                     break
@@ -33,6 +34,30 @@ def verify(path):
 
         try:
             expect('R')
+            if not available:
+                send('Lcheck provider capabilities')
+                expect('P')
+                send('Y')
+                expect('I')
+                send('K')
+                expect('C')
+                send('N')
+                expect('D')
+                send('Sspeech is still available')
+                expect('P')
+                send('Y')
+                expect('O')
+                send('K')
+                expect('S')
+                send('Q')
+                expect('P')
+                send('Y')
+                expect('U')
+                return
+            send('Q')
+            expect('P')
+            send('Y')
+            expect('Q')
             send('Sretired before helper admission')
             expect('P')
             send('N')
@@ -57,6 +82,26 @@ def verify(path):
             expect('A')
             send('K')
             expect('S')
+            send('Q')
+            expect('P')
+            send('N')
+            expect('D')
+            send('Q')
+            expect('P')
+            send('Y')
+            expect('X')
+            send('K')
+            expect('Q')
+            send('Lmuted text is braille only')
+            expect('P')
+            send('Y')
+            expect('L')
+            send('K')
+            expect('S')
+            send('Q')
+            expect('P')
+            send('Y')
+            expect('Q')
             send('Smalformed authorization')
             expect('P')
             send('Yextra')
@@ -66,8 +111,10 @@ def verify(path):
             if child.poll() is None:
                 child.kill()
             reader.join(timeout=5)
-    print('Verified actual helper admission and initialization boundaries with a silent provider fixture.')
 
 
 if __name__ == '__main__':
-    verify(Path(sys.argv[1]).resolve(strict=True))
+    fixture = Path(sys.argv[1]).resolve(strict=True)
+    verify(fixture, True)
+    verify(fixture, False)
+    print('Verified helper admission, stop and braille delivery, unsupported features, and no cold stop.')

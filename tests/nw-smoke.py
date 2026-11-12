@@ -135,6 +135,9 @@ let caveCueStarted = 0;
 let soundscapeStarted = 0;
 let controllerStep = 0;
 let dialoguePadStep = 0;
+let endingStep = 0;
+let restartStep = 0;
+let restartSettings;
 let nativeZ = 0;
 const restart = require('fs').existsSync(receipt + '.restart');
 if (!restart) {
@@ -343,11 +346,17 @@ function verifyController() {
 Input.keyMapper[87] = 'up';
 const interval = setInterval(() => {
     if (restart) {
-        if (!document.querySelector('dialog')) {
-            tap('v', 'KeyV');
-            if (document.querySelector('dialog')) choose('Keyboard bindings');
-        }
-        if (document.querySelector('dialog') && menuStatus() !== 'Loading settings') {
+        const fs = require('fs');
+        if (fs.existsSync(receipt + '.unexpected-speech')) throw Error('Speech started before the saved mute was restored');
+        if (restartStep === 0 && fs.existsSync(receipt + '.muted-title')) {
+            pad();
+            if (padTap(7) !== 1 << 7) throw Error('Muted title did not admit the controller mode binding');
+            restartStep++;
+        } else if (restartStep === 1 && fs.existsSync(receipt + '.muted-mode')) {
+            if (padTap(9) !== 1 << 9) throw Error('Muted controller mode did not open settings');
+            restartStep++;
+        } else if (restartStep === 2 && document.querySelector('dialog')) {
+            choose('Keyboard bindings');
             const bindings = Array.from(document.querySelectorAll('dialog button')).slice(0, 4).map(item => item.textContent);
             tap('Escape');
             choose('Controller bindings');
@@ -363,7 +372,28 @@ const interval = setInterval(() => {
             const soundscape = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
             choose('Exits');
             soundscape.push(document.activeElement.textContent);
-            write({ bindings, controller, navigation, audio, soundscape });
+            tap('Escape');
+            tap('Escape');
+            tap('Escape');
+            choose('Speech');
+            const mute = document.activeElement;
+            if (mute.textContent !== 'Speech enabled, off' || mute.getAttribute('aria-pressed') !== 'false')
+                throw Error('The persisted speech switch was not accessible while muted');
+            restartSettings = { bindings, controller, navigation, audio, soundscape };
+            fs.writeFileSync(receipt + '.allow-restoration', '');
+            pad();
+            padTap(0);
+            restartStep++;
+        } else if (restartStep === 3 && menuStatus() === 'Speech settings saved') {
+            if (document.activeElement.textContent !== 'Speech enabled, on' ||
+                document.activeElement.getAttribute('aria-pressed') !== 'true') throw Error('Speech recovery lost focus or state');
+            tap('Escape');
+            if (document.activeElement.textContent !== 'Speech') throw Error('Speech submenu lost parent focus');
+            tap('Escape');
+            Graphics.app.renderer.emit('postrender');
+            restartStep++;
+        } else if (restartStep === 4 && fs.existsSync(receipt + '.restored-title')) {
+            write({ ...restartSettings, speechRestored: true });
             clearInterval(interval);
             nw.App.quit();
         }
@@ -634,13 +664,33 @@ const interval = setInterval(() => {
         WendyQuestAccessDialogueReady(scene);
         Graphics.app.renderer.emit('postrender');
     }
-    if (require('fs').existsSync(receipt) && require('fs').existsSync(receipt + '.route-2')) {
-        clearInterval(interval);
-        nw.App.quit();
+    const fs = require('fs');
+    if (fs.existsSync(receipt) && fs.existsSync(receipt + '.route-2')) {
+        if (endingStep === 0) {
+            fs.writeFileSync(receipt + '.closing-pass', '');
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const scene = SceneManager._scene = Graphics.app.stage = new Scene_Title();
+            WendyQuestAccessTitleReady(scene);
+            Graphics.app.renderer.emit('postrender');
+            tap('v', 'KeyV');
+            choose('Speech');
+            choose('Speech enabled, on');
+            endingStep++;
+        } else if (endingStep === 1 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
+            if (document.activeElement.textContent !== 'Speech enabled, off') throw Error('The mute switch did not retain focus');
+            tap('Escape');
+            choose('Audio');
+            choose('Preview right');
+            endingStep++;
+        } else if (endingStep === 2 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+            fs.writeFileSync(receipt + '.muted-preview', '');
+            clearInterval(interval);
+            nw.App.quit();
+        }
     }
 }, 40);
 setTimeout(() => {
-    write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, dialoguePadStep,
+    write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, dialoguePadStep, endingStep, restartStep,
         status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
     nw.App.quit();
 }, 7000);
@@ -655,6 +705,29 @@ const records = [];
 parentPort.on('message', message => {
     const receipt = require('path').join(__dirname, '..', 'receipt.json');
     if (message.kind === 'cancel') return;
+    if (message.kind === 'silence') {
+        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch) {
+            fs.writeFileSync(receipt + '.silenced', '');
+            parentPort.postMessage('silenced');
+        }
+        return;
+    }
+    if (fs.existsSync(receipt + '.restart')) {
+        if (message.brailleOnly) {
+            if (message.kind === 'title') fs.writeFileSync(receipt + '.muted-title', '');
+            if (message.kind === 'controllerStatus') fs.writeFileSync(receipt + '.muted-mode', '');
+        } else if (!fs.existsSync(receipt + '.allow-restoration')) {
+            fs.writeFileSync(receipt + '.unexpected-speech', '');
+        } else if (message.kind === 'title') {
+            fs.writeFileSync(receipt + '.restored-title', '');
+        }
+        parentPort.postMessage('ack');
+        return;
+    }
+    if (fs.existsSync(receipt + '.closing-pass')) {
+        parentPort.postMessage('ack');
+        return;
+    }
     if (message.kind === 'routeDirections' && message.name === 'At Synthetic wall') {
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
             fs.writeFileSync(receipt + '.autowalk', formatSpeech(message));
@@ -805,6 +878,8 @@ def main():
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL')
         if receipt.with_suffix('.json.soundscape').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW ambient object cue did not publish stereo PCM to SDL')
+        if not receipt.with_suffix('.json.muted-preview').is_file():
+            raise RuntimeError('NW sound preview was unavailable with speech disabled')
         cave_cue_ms = float(receipt.with_suffix('.json.cave-cue-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
@@ -820,9 +895,9 @@ def main():
         receipt.with_suffix('.json.restart').touch()
         restarted = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25, env=environment)
         reloaded = json.loads(receipt.read_text(encoding='utf8')) if receipt.exists() else {}
-        if restarted.returncode or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T',
+        if restarted.returncode or not reloaded.get('speechRestored') or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T',
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
-                reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Right trigger', 'Next category, Unassigned'] or \
+                reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, RT', 'Next category, Unassigned'] or \
                 reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on',
                                                'Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
                                                'Next destination, N'] or reloaded.get('audio') != [
@@ -831,12 +906,13 @@ def main():
                     'Increase beacon volume, 65 percent', 'Cave timing cues, on', 'Decrease cave timing volume, 65 percent',
                     'Increase cave timing volume, 65 percent'] or reloaded.get('soundscape') != [
                     'Soundscape, on', 'Decrease volume, 35 percent', 'Exits, off']:
-            raise RuntimeError('NW settings did not survive restart in the isolated profile')
+            raise RuntimeError(f'NW settings did not survive restart in the isolated profile: {reloaded}')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic renderer command and cold worker submission: {submit_ms:.1f} ms.')
         print('Verified native autowalk dispatch, both narration settings, spoken arrival and explicit cancellation.')
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
+        print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '

@@ -86,7 +86,8 @@ function boot(root, nodeRequire, nodeProcess) {
                 return new Worker(script, { workerData: admission });
             }
         };
-        const { notifications } = createRenderer(host);
+        const speech = createRenderer(host, !!root.indexedDB);
+        const { notifications } = speech;
         let audioPreferences = {};
         let navigationPreferences = {};
         host.navigationPreferences = () => navigationPreferences;
@@ -148,6 +149,11 @@ function boot(root, nodeRequire, nodeProcess) {
             nativeButton,
             controllerChanged: () => controller?.reset(),
             navigationChanged(value) { navigationPreferences = value; },
+            speechChanged(value, owner) {
+                speech.setSpeechEnabled(value.enabled, () => owner && controlContext() === owner &&
+                    owner.scene._wqaSettingsActive && !host.screenFading());
+            },
+            retireSpeechSilence: speech.retireSilence,
             audioStop: audio.retire,
             audioChanged(value) {
                 const master = value.enabled !== audioPreferences.enabled || value.hrtf !== audioPreferences.hrtf;

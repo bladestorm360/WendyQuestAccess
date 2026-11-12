@@ -37,8 +37,10 @@ public:
         shutdown_ = symbol<decltype(shutdown_)>("prism_shutdown");
         output_ = symbol<decltype(output_)>("prism_backend_output");
         speak_ = symbol<decltype(speak_)>("prism_backend_speak");
+        braille_ = symbol<decltype(braille_)>("prism_backend_braille");
+        stop_ = symbol<decltype(stop_)>("prism_backend_stop");
         if (!configInit || !initialize || !acquire || !features || !pausePoll ||
-            !release_ || !shutdown_ || !output_ || !speak_) return false;
+            !release_ || !shutdown_ || !output_ || !speak_ || !braille_ || !stop_) return false;
 
         auto config = configInit();
         // No availability callback is installed. Select once on the owner and
@@ -57,6 +59,12 @@ public:
         return speak_(backend_, text, interrupt) == PRISM_OK;
     }
 
+    bool hasBraille() const { return (capabilities_ & PRISM_BACKEND_SUPPORTS_BRAILLE) != 0; }
+    bool braille(const char* text) const { return hasBraille() && braille_(backend_, text) == PRISM_OK; }
+    bool stop() const {
+        return (capabilities_ & PRISM_BACKEND_SUPPORTS_STOP) && stop_(backend_) == PRISM_OK;
+    }
+
 private:
     template <typename Fn> Fn symbol(const char* name) const {
         // Win32 GetProcAddress returns FARPROC. The pinned PRISM header supplies
@@ -72,6 +80,8 @@ private:
     decltype(&prism_shutdown) shutdown_ = nullptr;
     decltype(&prism_backend_output) output_ = nullptr;
     decltype(&prism_backend_speak) speak_ = nullptr;
+    decltype(&prism_backend_braille) braille_ = nullptr;
+    decltype(&prism_backend_stop) stop_ = nullptr;
 };
 
 } // namespace

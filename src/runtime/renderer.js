@@ -4,7 +4,7 @@ const { createGate } = require('./gate');
 
 const MAX_PENDING = 8;
 
-function createRenderer(host) {
+function createRenderer(host, waitForSpeechPreference = false) {
     let gate = null;
     let word = null;
     let worker = null;
@@ -12,9 +12,14 @@ function createRenderer(host) {
     let scheduled = false;
     let inFlight = 0;
     let nextSequence = 0;
+    let nextContext = 0;
+    let context = 0;
     let isPresented = null;
+    let speechEnabled = waitForSpeechPreference ? null : true;
+    let brailleAvailable = true;
+    let outputStarted = false;
     const pending = [];
-    const counters = { dropped: 0, discarded: 0, submitted: 0, workerFailures: 0 };
+    const counters = { dropped: 0, discarded: 0, submitted: 0, silenced: 0, silenceUnavailable: 0, workerFailures: 0 };
 
     function workerFailed() {
         if (failed) return;
@@ -22,15 +27,18 @@ function createRenderer(host) {
         counters.workerFailures++;
         pending.length = 0;
         if (gate) gate.close();
-        isPresented = null;
+        // Feature observers keep their context and review even if output fails.
     }
 
     function drain() {
-        while (worker && inFlight < MAX_PENDING && pending.length) {
-            const request = pending.shift();
-            if (!gate.accepts(request.epoch)) continue;
+        while (worker && gate?.domain === 'frontend' && inFlight < MAX_PENDING && pending.length) {
+            const record = pending.shift();
             try {
-                worker.postMessage(request);
+                // A retained logical context can begin a fresh transport
+                // sequence after mute. Its first record has no prior output.
+                if (!outputStarted && record.append) record.append = false;
+                worker.postMessage({ ...record, epoch: gate.epoch, ...(speechEnabled ? {} : { brailleOnly: true }) });
+                outputStarted = true;
                 inFlight++;
             } catch {
                 workerFailed();
@@ -40,7 +48,8 @@ function createRenderer(host) {
 
     function start() {
         scheduled = false;
-        if (failed || worker || !gate.epoch || !isPresented()) return;
+        if (failed || worker || !pending.length || gate?.domain !== 'frontend') return;
+        if (!isPresented?.()) return retireOutput();
         try {
             worker = host.createWorker(word.buffer);
             worker.on('message', message => {
@@ -48,7 +57,14 @@ function createRenderer(host) {
                     if (inFlight > 0) inFlight--;
                     if (message === 'ack') counters.submitted++;
                     else counters.discarded++;
-                    if (gate.epoch) drain();
+                    drain();
+                } else if (message === 'noBraille') {
+                    brailleAvailable = false;
+                    if (speechEnabled === false) pending.length = 0;
+                } else if (message === 'silenced') {
+                    counters.silenced++;
+                } else if (message === 'silenceUnavailable') {
+                    counters.silenceUnavailable++;
                 } else if (message === 'failed') {
                     workerFailed();
                 }
@@ -62,13 +78,25 @@ function createRenderer(host) {
         }
     }
 
-    function submit(epoch, focused) {
-        if (failed || !gate.accepts(epoch)) return;
-        if (pending.length + inFlight >= MAX_PENDING) {
-            counters.dropped++;
+    function readyOutput() {
+        if (failed || speechEnabled === null || !pending.length) return;
+        if (speechEnabled === false && !brailleAvailable) {
+            pending.length = 0;
             return;
         }
-        pending.push({ kind: 'title', ...focused, epoch, sequence: ++nextSequence });
+        if (!gate) {
+            try {
+                word = host.makeWord();
+                gate = createGate(word);
+            } catch {
+                workerFailed();
+                return;
+            }
+        }
+        if (gate.domain !== 'frontend' && !gate.open('frontend')) {
+            pending.length = 0;
+            return;
+        }
         drain();
         if (!worker && !scheduled) {
             scheduled = true;
@@ -76,38 +104,65 @@ function createRenderer(host) {
         }
     }
 
+    function submit(token, focused) {
+        if (failed || !context || token !== context || (speechEnabled === false && !brailleAvailable)) return;
+        if (pending.length + inFlight >= MAX_PENDING) {
+            counters.dropped++;
+            return;
+        }
+        pending.push({ kind: 'title', ...focused, sequence: ++nextSequence });
+        readyOutput();
+    }
+
+    function retireOutput() {
+        pending.length = 0;
+        outputStarted = false;
+        // Publish the invalid epoch before sending a bounded cancellation.
+        if (!gate?.close() || !worker || failed) return;
+        try { worker.postMessage({ kind: 'cancel' }); }
+        catch { workerFailed(); }
+    }
+
+    function setSpeechEnabled(enabled, maySilence) {
+        if (enabled === speechEnabled) return;
+        const previous = speechEnabled;
+        speechEnabled = enabled;
+        if (previous === null) {
+            if (!isPresented?.()) pending.length = 0;
+            readyOutput();
+            return;
+        }
+        retireOutput();
+        // Explicit mute may stop a provider that is already open. The worker
+        // serializes it with any output call, and settings can retire its grant.
+        if (enabled || !worker || failed || !maySilence?.()) return;
+        const epoch = gate.open('silence');
+        if (!epoch) return;
+        try { worker.postMessage({ kind: 'silence', epoch }); }
+        catch { workerFailed(); }
+    }
+
     const notifications = {
         open(focused, ready = host.titleStillReady) {
-            if (failed) return 0;
-            if (!gate) {
-                try {
-                    word = host.makeWord();
-                    gate = createGate(word);
-                } catch {
-                    workerFailed();
-                    return 0;
-                }
-            }
-            if (gate.epoch) notifications.close(gate.epoch);
-            const epoch = gate.open('frontend');
+            if (nextContext >= 0x7ffffffe) return 0;
+            retireOutput();
+            const token = context = ++nextContext;
             isPresented = ready;
-            submit(epoch, focused);
-            return epoch;
+            submit(token, focused);
+            return token;
         },
-        close(epoch = gate && gate.epoch) {
-            if (!gate || !gate.accepts(epoch) || !gate.close()) return;
+        close(token = context) {
+            if (!context || token !== context) return;
+            context = 0;
             isPresented = null;
-            pending.length = 0;
-            // Invalidation precedes queue retirement and the helper's next
-            // authorization check. It never waits for a provider reply.
-            if (worker && !failed) {
-                try { worker.postMessage({ kind: 'cancel' }); }
-                catch { workerFailed(); }
-            }
+            if (gate?.domain !== 'silence') retireOutput();
         },
         focus: submit
     };
-    return { notifications, counters };
+    return {
+        notifications, counters, setSpeechEnabled,
+        retireSilence() { if (gate?.domain === 'silence') retireOutput(); }
+    };
 }
 
 module.exports = { createRenderer };

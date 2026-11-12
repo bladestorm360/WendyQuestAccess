@@ -36,6 +36,7 @@ function createSettingsMenu(root, host) {
     let pad = normalizeController();
     let navigation = normalizeNavigation();
     let audio = normalizeAudio();
+    let speech = { enabled: true };
     let storage = null;
     let loading = true;
     let saving = false;
@@ -48,18 +49,22 @@ function createSettingsMenu(root, host) {
     let heldMouse = false;
 
     openSettings(root.indexedDB).then(async database => {
-        const [keyboard, controller, savedNavigation, savedAudio] = await Promise.all([
-            database.read(), database.read('controller'), database.read('navigation'), database.read('audio')]);
+        // A failed read for another settings group cannot erase a saved mute.
+        const results = await Promise.allSettled([
+            database.read(), database.read('controller'), database.read('navigation'), database.read('audio'), database.read('speech')]);
+        const [keyboard, controller, savedNavigation, savedAudio, savedSpeech] = results.map(result => result.value);
         keys = normalizeKeys(keyboard);
         pad = normalizeController(controller);
         navigation = normalizeNavigation(savedNavigation, [keys.puzzleGuide, keys.puzzleStop]);
         audio = normalizeAudio(savedAudio);
+        speech = { enabled: savedSpeech?.enabled !== false };
         host.controllerChanged();
         host.navigationChanged(navigation);
         host.audioChanged(audio);
         storage = database;
     }).catch(() => {}).finally(() => {
         loading = false;
+        host.speechChanged(speech);
         if (session?.group) showGroup(session, session.selected);
     });
 
@@ -82,6 +87,7 @@ function createSettingsMenu(root, host) {
         const groups = {
             keyboard: button(owner, 'Keyboard bindings', () => showKeyboard(owner)),
             controller: button(owner, 'Controller bindings', () => showController(owner)),
+            speech: button(owner, 'Speech', () => showSpeech(owner)),
             navigation: button(owner, 'Navigation', () => showNavigation(owner)),
             audio: button(owner, 'Audio', () => showAudio(owner))
         };
@@ -98,7 +104,8 @@ function createSettingsMenu(root, host) {
         const isController = key === 'controller';
         const isNavigation = key === 'navigation';
         const isAudio = key === 'audio';
-        const previous = isController ? pad : isNavigation ? navigation : isAudio ? audio : keys;
+        const isSpeech = key === 'speech';
+        const previous = isController ? pad : isNavigation ? navigation : isAudio ? audio : isSpeech ? speech : keys;
         const origin = owner?.group;
         function apply(value) {
             if (isController) {
@@ -112,8 +119,10 @@ function createSettingsMenu(root, host) {
                 audio = value;
                 if (owner) host.audioStop(owner.scene);
                 host.audioChanged(audio);
-            }
-            else keys = value;
+            } else if (isSpeech) {
+                speech = value;
+                host.speechChanged(speech, owner);
+            } else keys = value;
         }
         function refresh(message) {
             if (owner && session === owner) {
@@ -127,7 +136,7 @@ function createSettingsMenu(root, host) {
             return true;
         }
         const subject = { controller: 'Controller settings', navigation: 'Navigation settings',
-            audio: 'Audio settings', keyboard: 'Keyboard bindings' }[key];
+            audio: 'Audio settings', speech: 'Speech settings', keyboard: 'Keyboard bindings' }[key];
         saving = true;
         refresh(`Saving ${subject.toLowerCase()}`);
         storage.save(next, key).then(() => {
@@ -149,10 +158,25 @@ function createSettingsMenu(root, host) {
     function showGroup(owner, selection) {
         if (owner.group === 'controller') showController(owner, selection);
         else if (owner.group === 'keyboard') showKeyboard(owner, selection);
+        else if (owner.group === 'speech') showSpeech(owner);
         else if (owner.group === 'navigation') showNavigation(owner, selection);
         else if (owner.group === 'audio') showAudio(owner, selection);
         else if (owner.group === 'soundscape') showSoundscape(owner, selection);
         else if (owner.group === 'soundscapeCategory') showSoundscape(owner, selection, owner.category);
+    }
+
+    function showSpeech(owner) {
+        owner.group = 'speech';
+        owner.selected = 'enabled';
+        owner.capture = null;
+        owner.heading.textContent = 'Speech';
+        owner.status.textContent = loading ? 'Loading settings' : '';
+        owner.contents.textContent = '';
+        const enabled = button(owner, `Speech enabled, ${speech.enabled ? 'on' : 'off'}`, () =>
+            change(owner, { ...speech, enabled: !speech.enabled }, 'enabled', 'speech'));
+        enabled.setAttribute('aria-pressed', String(speech.enabled));
+        button(owner, 'Back', () => showRoot(owner, 'speech'));
+        enabled.focus();
     }
 
     function previewAudio(owner, bearing, cue, gain) {
@@ -418,6 +442,7 @@ function createSettingsMenu(root, host) {
         if (!session || session.scene !== scene) return;
         const retired = session;
         host.audioStop(scene);
+        host.retireSpeechSilence();
         // Take the last native physical sample before handing back control.
         // Boundary-driven retirement bypasses this call and stays synchronous.
         if (resume) {

@@ -9,13 +9,17 @@ bool hold(char marker) {
 }
 
 struct Provider {
+    bool available;
     bool open() { return hold('I'); }
+    bool hasBraille() const { return available; }
     bool output(const char*, bool interrupt) { return hold(interrupt ? 'O' : 'A'); }
+    bool braille(const char*) { return available && hold('L'); }
+    bool stop() { return available && hold('X'); }
 };
 
 } // namespace
 
-int main() {
-    Provider provider;
+int main(int argc, char**) {
+    Provider provider{argc == 1};
     return wqa::serveSpeech(provider);
 }

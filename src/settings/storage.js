@@ -6,10 +6,16 @@ function openSettings(indexedDB) {
     return new Promise((resolve, reject) => {
         if (!indexedDB) return reject(Error('Settings storage unavailable'));
         const request = indexedDB.open('wendyquest-access', 1);
+        let blocked = false;
         request.onupgradeneeded = () => request.result.createObjectStore('preferences');
         request.onerror = () => reject(request.error);
+        request.onblocked = () => {
+            blocked = true;
+            reject(Error('Settings storage is blocked'));
+        };
         request.onsuccess = () => {
             const database = request.result;
+            if (blocked) return database.close();
             database.onversionchange = () => database.close();
             resolve({
                 read(key = 'keyboard') {

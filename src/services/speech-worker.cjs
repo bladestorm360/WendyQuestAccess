@@ -12,7 +12,9 @@ const queue = [];
 let child = null;
 let ready = false;
 let providerOpened = false;
+let brailleAvailable = true;
 let active = null;
+let silence = 0;
 let failed = false;
 let line = '';
 
@@ -20,6 +22,7 @@ function fail() {
     if (failed) return;
     failed = true;
     queue.length = 0;
+    silence = 0;
     if (child) child.stdin.end();
     parentPort.postMessage('failed');
     parentPort.close();
@@ -27,9 +30,18 @@ function fail() {
 
 function pump() {
     if (!ready || active || failed) return;
+    if (silence) {
+        const epoch = silence;
+        silence = 0;
+        if (providerOpened && Atomics.load(word, 0) === epoch) {
+            active = { epoch, expected: 'P', silence: true };
+            child.stdin.write('Q\n');
+            return;
+        }
+    }
     while (queue.length) {
         const message = queue.shift();
-        if (Atomics.load(word, 0) !== message.epoch) {
+        if (Atomics.load(word, 0) !== message.epoch || (message.brailleOnly === true && !brailleAvailable)) {
             parentPort.postMessage('discarded');
             continue;
         }
@@ -38,8 +50,9 @@ function pump() {
             parentPort.postMessage('discarded');
             continue;
         }
-        active = { epoch: message.epoch, expected: 'P' };
-        child.stdin.write(`${message.append === true ? 'A' : 'S'}${payload}\n`);
+        active = { epoch: message.epoch, expected: 'P', braille: message.brailleOnly === true };
+        const command = active.braille ? 'L' : message.append === true ? 'A' : 'S';
+        child.stdin.write(`${command}${payload}\n`);
         return;
     }
 }
@@ -47,9 +60,8 @@ function pump() {
 function grant() {
     // A pipe write is only preparation. The helper requests a fresh decision
     // before provider work and again if it just finished initialization.
-    const accepted = Atomics.load(word, 0) === active.epoch;
-    active.expected = 'D';
-    if (accepted) active.expected = providerOpened ? 'S' : 'B';
+    const accepted = Atomics.load(word, 0) === active.epoch && (!active.braille || brailleAvailable);
+    active.expected = accepted ? (active.silence ? 'Q' : providerOpened ? 'S' : 'B') : 'D';
     child.stdin.write(accepted ? 'Y\n' : 'N\n');
 }
 
@@ -72,13 +84,26 @@ function begin() {
                 ready = true;
                 continue;
             }
-            if (status !== active?.expected) return fail();
-            if (status === 'P' || status === 'B') {
-                if (status === 'B') providerOpened = true;
+            const expected = active?.expected;
+            const noBraille = status === 'C' && expected === 'B';
+            const silenceUnavailable = status === 'U' && expected === 'Q';
+            const brailleRejected = status === 'D' && expected === 'S' && active?.braille;
+            if (status !== expected && !noBraille && !silenceUnavailable && !brailleRejected) return fail();
+            if (status === 'P' || status === 'B' || noBraille) {
+                if (status !== 'P') {
+                    providerOpened = true;
+                    if (noBraille) {
+                        brailleAvailable = false;
+                        parentPort.postMessage('noBraille');
+                    }
+                }
                 grant();
             } else {
+                const control = active.silence;
                 active = null;
-                parentPort.postMessage(status === 'S' ? 'ack' : 'discarded');
+                if (control) {
+                    if (status !== 'D') parentPort.postMessage(status === 'Q' ? 'silenced' : 'silenceUnavailable');
+                } else parentPort.postMessage(status === 'S' ? 'ack' : 'discarded');
             }
         }
         pump();
@@ -88,10 +113,14 @@ function begin() {
 parentPort.on('message', message => {
     if (failed || !message) return;
     if (message.kind === 'cancel') {
+        silence = 0;
         while (queue.length) {
             queue.shift();
             parentPort.postMessage('discarded');
         }
+    } else if (message.kind === 'silence') {
+        if (child && Number.isInteger(message.epoch) && message.epoch > 0 && Atomics.load(word, 0) === message.epoch)
+            silence = message.epoch;
     } else if (queue.length < 8 &&
         Number.isInteger(message.epoch) && message.epoch > 0 && Atomics.load(word, 0) === message.epoch) {
         queue.push(message);

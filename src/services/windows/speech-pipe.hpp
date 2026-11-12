@@ -28,17 +28,20 @@ template <typename Speech>
 int serveSpeech(Speech& speech) {
     if (!reply('R')) return 4;
     bool opened = false;
+    bool spoke = false;
     // At most 512 UTF-16 units, up to three UTF-8 bytes per unit, plus framing.
     std::array<char, 1600> line{};
     while (std::fgets(line.data(), static_cast<int>(line.size()), stdin)) {
         const auto length = std::strlen(line.data());
-        if (length < 3 || line[length - 1] != '\n' || (line[0] != 'S' && line[0] != 'A')) return 5;
+        const auto command = line[0];
+        if (length < 2 || line[length - 1] != '\n' ||
+            (command == 'Q' ? length != 2 : length < 3 || (command != 'S' && command != 'A' && command != 'L'))) return 5;
         line[length - 1] = '\0';
         auto grant = requestGrant('P');
-        if (grant == Grant::accepted && !opened) {
+        if (grant == Grant::accepted && !opened && command != 'Q') {
             if (!speech.open()) return 3;
             opened = true;
-            grant = requestGrant('B');
+            grant = requestGrant(speech.hasBraille() ? 'B' : 'C');
         }
         if (grant == Grant::end) break;
         if (grant == Grant::invalid) return 5;
@@ -46,7 +49,20 @@ int serveSpeech(Speech& speech) {
             if (!reply('D')) break;
             continue;
         }
-        if (!speech.output(line.data() + 1, line[0] == 'S')) return 6;
+        if (command == 'Q') {
+            // Explicit silence never opens a provider or cancels unrelated
+            // accessibility output before this helper has spoken.
+            const bool stopped = !spoke || speech.stop();
+            if (stopped) spoke = false;
+            if (!reply(stopped ? 'Q' : 'U')) break;
+            continue;
+        }
+        if (command == 'L') {
+            if (!reply(speech.braille(line.data() + 1) ? 'S' : 'D')) break;
+            continue;
+        }
+        if (!speech.output(line.data() + 1, command == 'S')) return 6;
+        spoke = true;
         if (!reply('S')) break;
     }
     return 0;
