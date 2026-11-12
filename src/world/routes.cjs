@@ -340,6 +340,10 @@ function reachableApproaches(world, start, tiles, cancelled) {
 function approachAvailable(world, start, candidate, tiles, approaches, cancelled) {
     const { reached, events } = approaches;
     const stops = tiles.touch;
+    if (candidate.targetX !== undefined) {
+        const cell = indexOf(world, candidate.targetX, candidate.targetY);
+        return cell >= 0 && reached[cell] && (!stops[cell] || cell === start);
+    }
     if (candidate.vehicle || candidate.waypoint) {
         const goals = routeGoals(world, candidate, cancelled, tiles);
         return goals?.some((goal, cell) => goal && reached[cell] && (!stops[cell] || cell === start));
@@ -357,7 +361,7 @@ function approachAvailable(world, start, candidate, tiles, approaches, cancelled
 
 function flightApproaches(world, tiles, candidates, cancelled) {
     const available = new Uint8Array(candidates.length);
-    if (!world.hasLandings || !world.cells.some(value => value & LAND)) return available;
+    const landingAvailable = world.hasLandings && world.cells.some(value => value & LAND);
     const connected = new Map();
     const discoveries = new Map();
     for (const event of world.events) {
@@ -376,14 +380,17 @@ function flightApproaches(world, tiles, candidates, cancelled) {
         if (cancelled()) return null;
         const candidate = candidates[index];
         const id = candidate.event;
-        if (candidate.nearestLanding || (Number.isInteger(id) && !candidate.waypoint &&
-            (canReach(id) || discoveries.get(id)?.some(canReach)))) available[index] = 1;
+        if (indexOf(world, candidate.targetX, candidate.targetY) >= 0 ||
+            (landingAvailable && (candidate.nearestLanding || (Number.isInteger(id) && !candidate.waypoint &&
+                (canReach(id) || discoveries.get(id)?.some(canReach)))))) available[index] = 1;
     }
     return available;
 }
 
 function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () => false) {
-    if (!Array.isArray(candidates) || candidates.length > MAX_EVENTS * 2 + 4) return { status: 'unavailable' };
+    // One ordinary and one quest entry per event, vehicle entries and up
+    // to 64 saved bookmarks.
+    if (!Array.isArray(candidates) || candidates.length > MAX_EVENTS * 2 + 4 + 64) return { status: 'unavailable' };
     const world = composeWorld(geometry, snapshot, cancelled);
     if (!world) return { status: 'cancelled' };
     const start = indexOf(world, x, y);

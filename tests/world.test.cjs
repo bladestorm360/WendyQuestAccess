@@ -19,6 +19,7 @@ const { verifyAutowalk } = require('./autowalk.cjs');
 const { verifySoundscape } = require('./soundscape.cjs');
 const { verifyQuestDestinations } = require('./quest-destinations.cjs');
 const { verifyReachability } = require('./reachability.cjs');
+const { verifyBookmarks } = require('./bookmarks.cjs');
 const { copyPatrol } = require('../src/world/puzzles/patrol-motion.cjs');
 const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../src/world/puzzles/motion-world.cjs');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
@@ -923,6 +924,7 @@ async function main() {
     verifyRoute(secret, distraction, solveRoute(secret.geometry, snapshot(secret), distraction));
     await verifyReachability(c, load, verifyWorker);
     await verifyQuestDestinations(c, game, read, load, verifyRoute, verifyWorker);
+    await verifyBookmarks(c, load, verifyRoute, verifyWorker);
     console.log(`Verified ${compared} directed movement comparisons across authored maps and dynamic cases.`);
     console.log('Verified native Map 196 patrol contact, catch-page handback, checkpoint floor trigger and bounded warning sign route.');
 }

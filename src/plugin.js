@@ -99,6 +99,7 @@ function boot(root, nodeRequire, nodeProcess) {
         let navigationPreferences = {};
         let speechPreferences = {};
         host.navigationPreferences = () => navigationPreferences;
+        host.bookmarks = () => settings?.bookmarkEntries() || [];
         audio = createAudio(host);
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
@@ -165,6 +166,8 @@ function boot(root, nodeRequire, nodeProcess) {
                 return readyScene() || ((menus.controlOwner(scene) || field.ready(scene)) ? scene : null);
             },
             fieldReady: field.ready,
+            bookmarkContext: field.bookmarkContext,
+            selectBookmark: field.selectBookmark,
             nativeButton,
             controllerChanged: () => controller?.reset(),
             navigationChanged(value) { navigationPreferences = value; },

@@ -7,6 +7,7 @@ const { ACTIONS, DEFAULTS: NAVIGATION_DEFAULTS, LAYOUT_NAMES, navigationGesture,
 const { FIELD_ACTIONS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
     normalizeController, canUnassign } = require('./controller-bindings');
 const { SOUNDSCAPE, normalizeSoundscape } = require('./soundscape-preferences');
+const { createBookmarkMenu } = require('./bookmark-menu');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
     puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance',
@@ -49,11 +50,21 @@ function createSettingsMenu(root, host) {
     const heldTouches = new Set();
     let mouseDown = false;
     let heldMouse = false;
+    const bookmarks = createBookmarkMenu(root, {
+        button, status,
+        active: owner => session === owner,
+        back: owner => showNavigation(owner, 'bookmarks'),
+        select(owner, entry) {
+            if (host.selectBookmark(owner.scene, entry)) close(owner.scene, true);
+            else status(owner, 'This bookmark is unavailable here.');
+        }
+    });
 
     openSettings(root.indexedDB).then(async database => {
         // A failed read for another settings group cannot erase a saved mute.
         const results = await Promise.allSettled([
-            database.read(), database.read('controller'), database.read('navigation'), database.read('audio'), database.read('speech')]);
+            database.read(), database.read('controller'), database.read('navigation'), database.read('audio'),
+            database.read('speech'), database.read('bookmarks')]);
         const [keyboard, controller, savedNavigation, savedAudio, savedSpeech] = results.map(result => result.value);
         keys = normalizeKeys(keyboard);
         pad = normalizeController(controller);
@@ -64,8 +75,9 @@ function createSettingsMenu(root, host) {
         host.controllerChanged();
         host.navigationChanged(navigation);
         host.audioChanged(audio);
+        bookmarks.load(database, results[5]);
         storage = database;
-    }).catch(() => {}).finally(() => {
+    }).catch(() => bookmarks.load(null)).finally(() => {
         loading = false;
         host.speechChanged(speech);
         if (session?.group) showGroup(session, session.selected);
@@ -163,6 +175,7 @@ function createSettingsMenu(root, host) {
         else if (owner.group === 'keyboard') showKeyboard(owner, selection);
         else if (owner.group === 'speech') showSpeech(owner, selection);
         else if (owner.group === 'navigation') showNavigation(owner, selection);
+        else if (owner.group === 'bookmarks') bookmarks.show(owner);
         else if (owner.group === 'audio') showAudio(owner, selection);
         else if (owner.group === 'soundscape') showSoundscape(owner, selection);
         else if (owner.group === 'soundscapeCategory') showSoundscape(owner, selection, owner.category);
@@ -308,6 +321,8 @@ function createSettingsMenu(root, host) {
             });
             if (selection === action) focused = item;
         }
+        const savedPlaces = button(owner, 'Bookmarks', () => bookmarks.show(owner));
+        if (selection === 'bookmarks') focused = savedPlaces;
         button(owner, 'Reset this navigation keymap', () => change(owner,
             normalizeNavigation({ ...navigation, bindings: { ...bindings, [layout]: { ...NAVIGATION_DEFAULTS[layout] } } },
                 [keys.puzzleGuide, keys.puzzleStop]), selection, 'navigation'));
@@ -419,6 +434,7 @@ function createSettingsMenu(root, host) {
 
     function back(owner) {
         if (owner.capture) showGroup(owner, owner.selected);
+        else if (owner.group === 'bookmarks') bookmarks.back(owner);
         else if (owner.unbinding) showController(owner);
         else if (owner.group === 'soundscapeCategory') showSoundscape(owner, owner.category);
         else if (owner.group === 'soundscape') {
@@ -449,6 +465,8 @@ function createSettingsMenu(root, host) {
     function close(scene, resume = false) {
         if (!session || session.scene !== scene) return;
         const retired = session;
+        bookmarks.retire(retired);
+        for (const pressed of down) held.add(pressed);
         host.audioStop(scene);
         host.retireSpeechSilence();
         // Take the last native physical sample before handing back control.
@@ -468,7 +486,8 @@ function createSettingsMenu(root, host) {
         const dialog = document.createElement('dialog');
         if (typeof dialog.showModal !== 'function') return false;
         const owner = { kind: 'settings', scene, family, dialog, heading: document.createElement('h1'),
-            contents: document.createElement('div'), status: document.createElement('p') };
+            contents: document.createElement('div'), status: document.createElement('p'),
+            bookmarkContext: host.bookmarkContext(scene) };
         owner.heading.id = 'wqa-settings-heading';
         dialog.setAttribute('aria-labelledby', owner.heading.id);
         owner.status.setAttribute('role', 'status');
@@ -543,6 +562,7 @@ function createSettingsMenu(root, host) {
         if (owner) {
             event.stopPropagation();
             const goBack = event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+            if (!goBack && bookmarks.textInput(owner, event)) return;
             if (goBack || owner.capture) {
                 const key = keyName(event);
                 const gesture = navigationGesture(event);
@@ -652,6 +672,7 @@ function createSettingsMenu(root, host) {
     return {
         open,
         controllerOwner: () => session,
+        bookmarkEntries: bookmarks.entries,
         controllerBindings: () => pad,
         toggleController,
         toggleFieldAudio,

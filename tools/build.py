@@ -62,6 +62,8 @@ def bundle():
         './dialogue/observer': 'dialogue/observer.js',
         './number-entry': 'dialogue/number-entry.js',
         './settings/menu': 'settings/menu.js',
+        './bookmark-menu': 'settings/bookmark-menu.js',
+        '../world/bookmark-records': 'world/bookmark-records.js',
         './keyboard': 'settings/keyboard.js',
         './navigation-keys': 'settings/navigation-keys.js',
         './storage': 'settings/storage.js',

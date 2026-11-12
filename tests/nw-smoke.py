@@ -368,6 +368,11 @@ const interval = setInterval(() => {
             tap('Escape');
             choose('Navigation');
             const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 5).map(item => item.textContent);
+            choose('Bookmarks');
+            const bookmarks = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
+            if (bookmarks.join('|') !== 'Return marker, Map 1, saved on foot|Back')
+                throw Error('The saved and removed bookmarks were not restored correctly on the title screen');
+            tap('Escape');
             tap('Escape');
             choose('Audio');
             const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 11).map(item => item.textContent);
@@ -859,6 +864,81 @@ const interval = setInterval(() => {
             endingStep++;
         } else if (endingStep === 16 && fs.existsSync(receipt + '.quest-nav-unavailable')) {
             fs.unlinkSync(receipt + '.quest-navigation-stage');
+            fs.writeFileSync(receipt + '.bookmark-stage', '');
+            tap('v', 'KeyV');
+            choose('Navigation');
+            choose('Bookmarks');
+            choose('Save current location');
+            endingStep++;
+        } else if (endingStep === 17 && menuStatus() === 'Bookmark 1 saved.') {
+            choose('Bookmark 1, This map, saved on foot');
+            choose('Rename bookmark');
+            choose('Clear name');
+            choose('Choose character');
+            choose('A through F');
+            pad();
+            padTap(0);
+            endingStep++;
+        } else if (endingStep === 18 && menuStatus() === 'Name a') {
+            const input = document.querySelector('dialog input');
+            if (input.value !== 'a') throw Error('The controller character did not enter the bookmark name');
+            input.value = 'Return marker';
+            for (const type of ['keydown', 'keyup'])
+                input.dispatchEvent(new KeyboardEvent(type, { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true }));
+            endingStep++;
+        } else if (endingStep === 19 && menuStatus() === 'Bookmark name saved.') {
+            choose('Remove bookmark');
+            if (document.activeElement.textContent !== 'Keep bookmark') throw Error('Remove did not focus Keep bookmark');
+            tap('Escape');
+            if (document.activeElement.textContent !== 'Remove bookmark') throw Error('Remove did not restore detail focus');
+            choose('Select for directions');
+            if (document.querySelector('dialog')) throw Error('Bookmark selection did not return to the field');
+            $gamePlayer._realY = $gamePlayer._y = 1;
+            Object.setPrototypeOf($gamePlayer, Game_Player.prototype);
+            Object.assign($gamePlayer, {
+                isMoving: () => false, canMove: () => true, getInputDirection: () => 0,
+                canPass: () => true, canStartLocalEvents: () => true, findEventsAt: () => [],
+                executeMove(direction) {
+                    if (direction !== 8 || this._y !== 1) throw Error('Bookmark dispatched the wrong native move');
+                    this._realY = this._y = 0;
+                    this._movementSuccess = true;
+                }
+            });
+            $gameTemp = { isDestinationValid: () => false };
+            $gameMap.roundXWithDirection = (x, direction) => x + (direction === 6 ? 1 : direction === 4 ? -1 : 0);
+            $gameMap.roundYWithDirection = (y, direction) => y + (direction === 2 ? 1 : direction === 8 ? -1 : 0);
+            tap(String.fromCharCode(92), 'Backslash');
+            Graphics.app.renderer.emit('postrender');
+            endingStep++;
+        } else if (endingStep === 20 && fs.existsSync(receipt + '.bookmark-route')) {
+            const scene = SceneManager._scene;
+            if (!scene._wqaAutowalkActive || !scene._wqaBeaconActive)
+                throw Error('Bookmark directions did not arm movement and beacon owners');
+            $gamePlayer.moveByInput();
+            if ($gamePlayer._y !== 0 || !scene._wqaAutowalkActive) throw Error('Autowalk did not reach the bookmark');
+            $gamePlayer.moveByInput();
+            if (scene._wqaAutowalkActive) throw Error('Autowalk did not retire at the bookmark');
+            Graphics.app.renderer.emit('postrender');
+            endingStep++;
+        } else if (endingStep === 21 && fs.existsSync(receipt + '.bookmark-arrival')) {
+            tap('[', 'BracketLeft', { shiftKey: true });
+            Graphics.app.renderer.emit('postrender');
+            endingStep++;
+        } else if (endingStep === 22 && fs.existsSync(receipt + '.bookmark-entity')) {
+            tap('v', 'KeyV');
+            choose('Navigation');
+            choose('Bookmarks');
+            choose('Bookmark current destination');
+            endingStep++;
+        } else if (endingStep === 23 && menuStatus() === 'Bookmark 2 saved.') {
+            choose('Bookmark 2, This map, saved on foot');
+            choose('Remove bookmark');
+            choose('Confirm removal');
+            endingStep++;
+        } else if (endingStep === 24 && menuStatus() === 'Bookmark removed.') {
+            if (Array.from(document.querySelectorAll('dialog button')).some(item => item.textContent.startsWith('Bookmark 2,')))
+                throw Error('Removed bookmark stayed in the list');
+            fs.unlinkSync(receipt + '.bookmark-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
             WendyQuestAccessTitleReady(title);
@@ -867,13 +947,13 @@ const interval = setInterval(() => {
             choose('Speech');
             choose('Speech enabled, on');
             endingStep++;
-        } else if (endingStep === 17 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
+        } else if (endingStep === 25 && menuStatus() === 'Speech settings saved' && fs.existsSync(receipt + '.silenced')) {
             if (document.activeElement.textContent !== 'Speech enabled, off') throw Error('The mute switch did not retain focus');
             tap('Escape');
             choose('Audio');
             choose('Preview right');
             endingStep++;
-        } else if (endingStep === 18 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        } else if (endingStep === 26 && menuStatus() === 'Preview uses stereo and rear pitch.') {
             fs.writeFileSync(receipt + '.muted-preview', '');
             clearInterval(interval);
             nw.App.quit();
@@ -884,7 +964,7 @@ setTimeout(() => {
     write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, dialoguePadStep, endingStep, restartStep,
         status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
     nw.App.quit();
-}, 8000);
+}, 9500);
 ''', encoding='utf8')
     service = app / 'wendyquest-access'
     service.mkdir()
@@ -918,6 +998,16 @@ parentPort.on('message', message => {
     if (fs.existsSync(receipt + '.closing-pass')) {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
+        if (fs.existsSync(receipt + '.bookmark-stage')) {
+            if (message.kind === 'routeDirections' && message.name === 'Return marker')
+                fs.writeFileSync(receipt + '.bookmark-route', speech);
+            if (message.kind === 'routeDirections' && message.name === 'At Return marker')
+                fs.writeFileSync(receipt + '.bookmark-arrival', speech);
+            if (message.kind === 'fieldTarget' && message.name.includes('Synthetic quest anchor'))
+                fs.writeFileSync(receipt + '.bookmark-entity', speech);
+            parentPort.postMessage('ack');
+            return;
+        }
         if (fs.existsSync(receipt + '.quest-navigation-stage')) {
             if (message.kind === 'fieldTarget') fs.writeFileSync(receipt + '.quest-nav-target', speech);
             if (message.kind === 'routeDirections') fs.writeFileSync(receipt + '.quest-nav-route', speech);
@@ -1118,6 +1208,9 @@ def main():
             'quest-nav-target': 'Quests, Synthetic quest anchor, 2 east',
             'quest-nav-route': 'Synthetic quest anchor. 1 east. face east.',
             'quest-nav-unavailable': 'Selected destination is unavailable',
+            'bookmark-route': 'Return marker. 1 north.',
+            'bookmark-arrival': 'At Return marker. you are here.',
+            'bookmark-entity': 'Objects, Synthetic quest anchor, 2 east',
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:
@@ -1158,6 +1251,7 @@ def main():
         print('Verified saved mute before title speech, audio preview during mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
         print('Verified the Quests category, packaged route and marker replacement handback.')
+        print('Verified controller bookmark naming, keyboard save, native tile arrival, linked event removal and persistence.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '

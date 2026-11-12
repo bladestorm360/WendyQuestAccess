@@ -45,11 +45,11 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
     function capture(scene, motion, target) {
         if (!ready(scene) || !audio.isPrepared(preferences().hrtf)) return null;
         const map = root.$gameMap;
-        const event = map._events[target.id];
-        if (!event || event._erased) return null;
+        const event = target.point ? null : map._events[target.event ?? target.id];
+        if (!target.point && (!event || event._erased)) return null;
         // Native object and route references stay in this renderer record.
         // The worker only gets the existing numeric snapshot and command copy.
-        return { scene, map, event, page: event._pageIndex, tx: event._x, ty: event._y, motion,
+        return { scene, map, event, page: event?._pageIndex, tx: event?._x, ty: event?._y, motion,
             player: root.$gamePlayer, refs: motion.patrols.map(actor => {
                 const native = map._events[actor.id];
                 return { id: actor.id, native, route: native._moveRoute, original: native._originalMoveRoute,
@@ -78,8 +78,8 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
     function live(state) {
         const { scene, map, player, event } = state;
         return owner === state && ready(scene) && map === root.$gameMap && player === root.$gamePlayer &&
-            player._x === state.x && player._y === state.y && map._events[event._eventId] === event && !event._erased &&
-            event._pageIndex === state.page && event._x === state.tx && event._y === state.ty;
+            player._x === state.x && player._y === state.y && (!event || (map._events[event._eventId] === event &&
+                !event._erased && event._pageIndex === state.page && event._x === state.tx && event._y === state.ty));
     }
 
     function verifiedAt(state, now) {

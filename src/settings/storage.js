@@ -32,6 +32,29 @@ function openSettings(indexedDB) {
                         transaction.onabort = () => failed(transaction.error);
                         transaction.objectStore('preferences').put(value, key);
                     });
+                },
+                edit(key, change) {
+                    const transaction = database.transaction('preferences', 'readwrite');
+                    const store = transaction.objectStore('preferences');
+                    const result = new Promise((saved, failed) => {
+                        let next;
+                        let error;
+                        transaction.oncomplete = () => saved(next);
+                        transaction.onabort = () => failed(error || transaction.error || Error('Change cancelled'));
+                        const entry = store.get(key);
+                        entry.onsuccess = () => {
+                            try {
+                                next = change(entry.result);
+                                store.put(next, key);
+                            } catch (failure) {
+                                error = failure;
+                                transaction.abort();
+                            }
+                        };
+                    });
+                    return { result, abort() {
+                        try { transaction.abort(); } catch { /* The transaction already finished. */ }
+                    } };
                 }
             });
         };

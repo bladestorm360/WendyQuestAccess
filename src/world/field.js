@@ -1,6 +1,6 @@
 'use strict';
 
-const { captureWorld } = require('./snapshot');
+const { captureWorld, eventTarget, bookmarkId } = require('./snapshot');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
 const { createAutowalk } = require('./autowalk');
@@ -159,7 +159,8 @@ function createField(root, host, notifications) {
                 if (result.land && !canLand(root.$gameMap, result.arrival.x, result.arrival.y))
                     return status(job, 'Landing site changed. Request directions again.');
                 if (!result.reenter) host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
-                    warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type, job.quest);
+                    warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type,
+                    { quest: job.quest, point: job.point });
                 follow(job, result, { kind: 'routeDirections', name: job.label,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
                     reenter: result.reenter === true, board: !!job.vehicle, land: result.land === true,
@@ -224,10 +225,19 @@ function createField(root, host, notifications) {
         }
     }
 
+    function destinationRequest(target) {
+        if (target.point) return { targetX: target.x, targetY: target.y };
+        return { event: target.nearestLanding ? undefined : (target.event ?? target.id),
+            vehicle: target.vehicle, entryDirection: target.entryDirection, waypoint: target.quest?.waypoint === true,
+            nearestLanding: target.nearestLanding === true };
+    }
+
     function route(job, snapshot, target, area, motion) {
         job.label = target.name;
         job.area = area;
-        job.target = target.id;
+        const destination = destinationRequest(target);
+        job.target = destination.event;
+        job.point = target.point === true;
         job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
         job.nearestLanding = target.nearestLanding === true;
         job.autowalk = !timedCave(snapshot.map) && preferences().autowalk;
@@ -236,10 +246,9 @@ function createField(root, host, notifications) {
             host.caveTiming?.warm(job.scene);
             job.timing = host.caveTiming?.capture(job.scene, motion, target);
         }
-        submit(job, snapshot, { event: target.nearestLanding ? undefined : target.id,
-            limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship',
-            surface: snapshot.mode !== 'walk', vehicle: target.vehicle, entryDirection: target.entryDirection,
-            waypoint: target.quest?.waypoint === true,
+        submit(job, snapshot, { ...destination,
+            limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
+            surface: snapshot.mode !== 'walk',
             beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk, timingCue: !!job.timing });
     }
 
@@ -249,10 +258,11 @@ function createField(root, host, notifications) {
         job.scene._wqaQuestNavigation = !!job.quest;
         if (!result.target) return status(job, result.status);
         const { target, category } = result;
+        owner.target = target;
         if (job.action !== 'directions') return present(job, { kind: 'fieldTarget', name: target.name, category,
             dx: target.x - snapshot.x, dy: target.y - snapshot.y });
         if (!timedCave(snapshot.map)) return route(job, snapshot, target);
-        const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.id);
+        const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.event ?? target.id);
         const motion = area ? null : captureMotion(root, host.graphics);
         if (!area && !motion) return status(job, 'Patrol timing is unavailable here');
         const terrain = captureWorld(root);
@@ -270,15 +280,11 @@ function createField(root, host, notifications) {
         const timed = timedCave(root.$gameMap._mapId);
         const filtering = !timed && navigationRequest(job) && (!routing || job.changes.length > 0);
         const label = salt.available(job.scene) ? (id, fallback) => salt.label(job.scene, id, fallback) : undefined;
-        const snapshot = captureWorld(root, filtering || (routing && !timed), label, job.scene);
+        const snapshot = captureWorld(root, filtering || (routing && !timed), label, job.scene, host.bookmarks?.());
         if (!snapshot) return status(job, 'Map information unavailable');
         if (filtering && snapshot.objects.length) {
             job.scene._wqaQuestNavigation = snapshot.objects.some(target => !!target.quest);
-            return submit(job, snapshot, { candidates: snapshot.objects.map(target => ({
-                event: target.nearestLanding ? undefined : target.id, vehicle: target.vehicle,
-                entryDirection: target.entryDirection, waypoint: target.quest?.waypoint === true,
-                nearestLanding: target.nearestLanding === true
-            })) }, true);
+            return submit(job, snapshot, { candidates: snapshot.objects.map(destinationRequest) }, true);
         }
         job.performed = true;
         if (job.action === 'puzzleGuide') {
@@ -361,6 +367,37 @@ function createField(root, host, notifications) {
     return {
         ready,
         autowalk,
+        bookmarkContext(scene) {
+            if (!ready(scene)) return null;
+            const map = root.$gameMap;
+            const data = root.$dataMap;
+            const { _x: x, _y: y } = root.$gamePlayer;
+            if (!data || !Number.isInteger(x) || x < 0 || x >= data.width ||
+                !Number.isInteger(y) || y < 0 || y >= data.height) return null;
+            const mode = travelMode(map, root.$gamePlayer);
+            const point = { kind: 'point', map: map._mapId, mode, x, y };
+            const target = owner?.scene === scene ? owner.target : null;
+            if (!Number.isInteger(target?.id) || owner.browser.category !== target.category ||
+                owner.browser.selections[target.category] !== target.id) return { point };
+            const event = map._events?.[target.id];
+            const entry = data.events?.[target.id];
+            const page = entry?.pages?.[event?._pageIndex];
+            if (!event || event._erased || !(page?.list?.length >= 2)) return { point };
+            const current = target.quest ? questDestinationCurrent(root, scene, target.quest) :
+                eventTarget(root, mode, event, entry, page)?.category === target.category;
+            return current ? { point, entity: { kind: 'entity', map: point.map, mode,
+                event: target.id, category: target.category } } : { point };
+        },
+        selectBookmark(scene, entry) {
+            const map = root.$gameMap;
+            if (scene !== host.manager._scene || !scene._wqaSettingsActive || map?._mapId !== entry.map ||
+                travelMode(map, root.$gamePlayer) !== entry.mode) return false;
+            if (owner?.scene !== scene) owner = { scene, browser: createDestinationBrowser() };
+            owner.browser.category = 'bookmarks';
+            owner.browser.selections.bookmarks = bookmarkId(entry.id);
+            owner.target = null;
+            return true;
+        },
         questRefresh(scene) {
             if (active?.scene !== scene || !scene._wqaQuestNavigation) return;
             autowalk.stop(scene);

@@ -38,7 +38,9 @@ function terrainDelta(changes, layers, flags, count) {
     return terrain.subarray(0, changedCount);
 }
 
-function captureWorld(root, routing = true, label, scene) {
+function bookmarkId(id) { return 'bookmark-' + id; }
+
+function captureWorld(root, routing = true, label, scene, bookmarks = []) {
     const map = root.$gameMap;
     const player = root.$gamePlayer;
     const data = root.$dataMap;
@@ -92,6 +94,16 @@ function captureWorld(root, routing = true, label, scene) {
     if (mode === 'walk') objects.push(...boardingTargets(map));
     if (mode === 'airship') objects.push({ id: 517, x: player._x, y: player._y, name: 'Nearest landing site',
         category: 'vehicles', nearestLanding: true });
+    for (const bookmark of bookmarks) {
+        if (bookmark.map !== id || bookmark.mode !== mode) continue;
+        const label = { id: bookmarkId(bookmark.id), category: 'bookmarks', name: bookmark.name };
+        if (bookmark.kind === 'point' && bookmark.x < width && bookmark.y < height)
+            objects.push({ ...label, x: bookmark.x, y: bookmark.y, point: true });
+        if (bookmark.kind === 'entity') {
+            const current = objects.find(item => item.id === bookmark.event && item.category === bookmark.category);
+            if (current) objects.push({ ...current, ...label, event: current.id });
+        }
+    }
     const snapshot = { map: id, mode, x: player._x, y: player._y, objects };
     if (!routing) return snapshot;
     const vehicles = [];
@@ -102,4 +114,4 @@ function captureWorld(root, routing = true, label, scene) {
     return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles, aircraft: aircraftAt(map) } };
 }
 
-module.exports = { captureWorld, eventTarget };
+module.exports = { captureWorld, eventTarget, bookmarkId };

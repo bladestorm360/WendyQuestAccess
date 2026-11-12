@@ -25,7 +25,7 @@ function createAutowalk(root, ready, preferences, report) {
         const target = targetAt(map, job);
         if (!preferences().autowalk || !ready(scene) || map.isAnyEventStarting?.() ||
             player._x !== job.x || player._y !== job.y || !Array.isArray(map._events) || map._events.length > MAX_EVENTS + 1 ||
-            (!target && !job.nearestLanding) || target?._erased ||
+            (!target && !job.nearestLanding && !job.point) || target?._erased ||
             Object.prototype.toString.call(course) !== '[object Uint8Array]' || course.length !== result.distance ||
             course.length >= MAX_CELLS || !Number.isInteger(arrival?.x) || !Number.isInteger(arrival?.y)) return false;
         stop();

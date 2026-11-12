@@ -99,7 +99,9 @@ Build with `build.ps1`, then run `tests/world.test.cjs` with Node under the boun
 
 The **Quests** category adds current-map quest interactions and waypoints from the native marker producer. It uses the same movement graph and retires the route before a native marker rebuild. The entity soundscape uses the ordinary active target producer. Salt Caverns uses the shared Objects and Exits categories, settled terrain and route invalidation. [Quest destinations](quests.md#following-quest-markers) · [Entity soundscape](soundscape.md) · [Salt Caverns guide](puzzles-and-secrets.md#salt-caverns-guide)
 
-Remaining field work includes bookmarks and cross-map routing. A worker disk read already in flight can outlast admission. That and the speech-provider lifecycle remain release gaps. Steam deployment remains pending.
+Personal bookmarks can mark a tile or an eligible live destination. [Bookmark controls and evidence](bookmarks.md)
+
+Remaining field work includes cross-map routing. A worker disk read already in flight can outlast admission. That and the speech-provider lifecycle remain release gaps. Steam deployment remains pending.
 
 ## Native input boundary for autowalk
 

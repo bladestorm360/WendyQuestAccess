@@ -1,7 +1,7 @@
 'use strict';
 
 const CATEGORY_LABELS = Object.freeze({ objects: 'Objects', people: 'People', merchants: 'Merchants', exits: 'Exits',
-    treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests' });
+    treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
 
 function eventName(entry) {
     const raw = typeof entry.name === 'string' ? entry.name.trim() : '';
