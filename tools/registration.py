@@ -60,6 +60,7 @@ DEPENDENCIES = {
     MESSAGE_OWNER_REL: '26e0230f7bcf8a425ad4c128c728cb0d74d8589d1a07d9d3026edbc2b09c7ce0',
     Path('package.nw/js/rmmz_sprites.js'): '33440ac9584344c4a9675d0b464f82eb49f5dcde0c23c485edbd385360475ba1',
     SALT_REL: '4d14b04a8980f4a4eb50dfa01d0ab61dd5507c62b65a1cd23b5df1621662e296',
+    Path('package.nw/data/States.json'): 'db3264ae4f2436acb247655823b4055ffb1c319a5c709e2f760a37be4cdc4b14',
     CAFFEINE_REL: 'e26a883c1d464508d446382ee5be94c5ca7ada1b76ec70e4f9650bdb1f24d48f',
     Path('package.nw/data/CommonEvents.json'): '1884583f50d8e6c37c53c7552df9c6628d59faf0b92ea90d1ed3a65769c0b9d9',
     Path('package.nw/data/Map015.json'): 'f55ea800b85a452dc076ff35a945256a68f4af0e3bacd209924759da9167c6e5',

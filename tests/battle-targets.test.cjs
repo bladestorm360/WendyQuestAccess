@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { createBattleTargets } = require('../src/battle/targets');
@@ -11,6 +12,7 @@ const { formatSpeech } = require('../src/services/speech-text.cjs');
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
     path.join(__dirname, 'battle-focus-producers.py'), process.argv[2], 'targets'],
 { encoding: 'utf8', timeout: 7000, maxBuffer: 64 * 1024 }));
+const states = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/States.json'), 'utf8'));
 const renderer = new EventEmitter();
 const input = new Set();
 const scene = { _active: true, _started: true, _wqaBattleStarted: false, _fadeDuration: 0, _fadeOpacity: 0,
@@ -31,13 +33,15 @@ let cancellations = 0;
 const sprites = [];
 const c = vm.createContext({
     Scene_Battle: function () {}, Scene_Message: function () {}, Sprite_Enemy: function () {},
-    Sprite_EnemyGauge: function () {}, ActionCommand: function () {},
+    Sprite_EnemyGauge: function () {}, Sprite_StateIcon: function () {}, ActionCommand: function () {},
     ActionCommandResult: function () { this.Cancel = () => {}; },
     a2_0x990531() { throw Error('Unresolved battle property'); },
     a0_0x453a8f() { throw Error('Unresolved action property'); },
     SceneManager: { _scene: scene }, Graphics: { app: { stage: scene, renderer } }, BattleManager: battle,
     $gameScreen: { update() {} }, $gameTimer: { update() {} }, $gameMessage: { isBusy: () => false },
-    $gameTroop: { _interpreter: {}, members: () => enemies },
+    $gameTroop: { _interpreter: {}, members: () => enemies }, $dataStates: states,
+    ImageManager: { iconWidth: 32, iconHeight: 32 }, Game_BattlerBase: { ICON_BUFF_START: 32, ICON_DEBUFF_START: 48 },
+    TextManager: { param: index => index === 2 ? 'Attack' : '' },
     AudioManager: { playSe() {} }, Input: { isTriggered: key => input.delete(key) },
     BattleHelper: { CanSelectEnemy: () => true, GetAliveEnemySprites: () => sprites.filter(sprite => sprite._enemy.isAlive()),
         HideAllSelectionArrow() {} },
@@ -132,6 +136,35 @@ sprites[1]._gaugeSprite.drawGaugeRect(0, 0, 64, 5);
 assert.equal(displayedFill, 22);
 assert.match(messages.at(-1), /HP about 35 percent/);
 
+const selectedSprite = sprites[1];
+const selectedEnemy = selectedSprite._enemy;
+let activeIcon = 65;
+selectedEnemy.isActor = () => false;
+selectedEnemy.allIcons = () => [activeIcon];
+const icon = selectedSprite._stateIconSprite = Object.assign(new c.Sprite_StateIcon(), visible(selectedSprite), {
+    _battler: selectedEnemy, _animationIndex: 0, setFrame(x, y, width, height) { this._frame = { x, y, width, height }; }
+});
+Object.assign(icon.bitmap, { width: 576, height: 720 });
+icon.updateIcon();
+icon.updateFrame();
+assert(observer.command(page, 'details'));
+assert.match(messages.at(-1), /Frozen or frosted/);
+activeIcon = states.find(state => state?.name === 'Burning').iconIndex;
+icon.updateIcon();
+assert(observer.command(page, 'details'));
+assert.doesNotMatch(messages.at(-1), /Burning|Frozen/);
+icon.updateFrame();
+assert(observer.command(page, 'details'));
+assert.match(messages.at(-1), /Burning/);
+activeIcon = 42;
+icon.updateIcon();
+icon.updateFrame();
+assert(observer.command(page, 'details'));
+assert.match(messages.at(-1), /Attack up, strong/);
+icon.worldVisible = false;
+assert(observer.command(page, 'details'));
+assert.doesNotMatch(messages.at(-1), /Attack/);
+
 battle._targets = nativeTargets(enemies[0], enemies[1], enemies[0]);
 scene.update();
 draw();
@@ -153,5 +186,5 @@ battle._subject.currentAction = () => { assert.equal(scene._wqaBattleTargetActiv
 battle.startAction();
 draw();
 assert.equal(liveContexts.size, 0, 'accepted native action cancels pending render');
-console.log('Verified native battle target rendering, directional change, repeat hits, HP fill, cancellation and handback.');
+console.log('Verified native battle target rendering, directional change, repeat hits, HP fill, rendered status icons, cancellation and handback.');
 console.log('Throttled target selection through a synthetic render and formatted receipt', first.toFixed(2), 'ms.');

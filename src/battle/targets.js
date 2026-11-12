@@ -1,6 +1,7 @@
 'use strict';
 
 const { battlePresented, drawnText, visibleSprite } = require('./presentation');
+const { enemyState } = require('./enemy-state');
 const { reviewLines, moveReview } = require('../menus/review');
 
 const MAX_SPRITES = 8; // Installed troop data tops out at five.
@@ -75,7 +76,11 @@ function createBattleTargets(root, host, notifications, preferences) {
     }
 
     function setDetails(page) {
-        page.lines = reviewLines(page.rows.map(row => gaugeLine(row.sprite, row.name)));
+        page.lines = reviewLines(page.rows.map(row => {
+            const hp = gaugeLine(row.sprite, row.name);
+            const state = enemyState(root, row.sprite);
+            return state ? (hp || row.name) + ', ' + state : hp;
+        }));
         page.position = Math.min(page.position, Math.max(0, page.lines.length - 1));
         page.hasReview = page.lines.length > 0;
     }

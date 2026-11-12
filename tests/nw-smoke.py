@@ -1109,6 +1109,10 @@ const interval = setInterval(() => {
             sprite._selectorIcon = drawn(sprite._selectorIconPivot);
             sprite._gaugeSprite = { ...drawn(sprite), _statusType: 'hp', _battler: enemy, gaugeRate: () => 0.5 };
             sprite._gaugeSprite.bitmap.width = 64;
+            window.ImageManager = { iconWidth: 32, iconHeight: 32 };
+            sprite._stateIconSprite = { ...drawn(sprite), _battler: enemy, _iconIndex: 65,
+                _frame: { x: 32, y: 128, width: 32, height: 32 },
+                bitmap: { width: 576, height: 720, isReady: () => true } };
             scene._spriteset._enemySprites = [sprite];
             Object.assign(BattleManager, { _phase: 'ActionCommand', _targets: [enemy],
                 _currentActionCommand: { _cancelable: true, _coroutineContainer: {} } });
@@ -1500,8 +1504,8 @@ def main():
             'battle-details': 'Shield raised. Cost 2 MP',
             'battle-review': 'Cost 2 MP, 2 of 2',
             'battle-target-focus': 'Target, Synthetic target, 1 of 1',
-            'battle-target-autodetail': 'Synthetic target, HP about 50 percent',
-            'battle-target-details': 'Synthetic target, HP about 50 percent',
+            'battle-target-autodetail': 'Synthetic target, HP about 50 percent, Frozen or frosted',
+            'battle-target-details': 'Synthetic target, HP about 50 percent, Frozen or frosted',
             'battle-bag-focus': 'Battle Bag, Synthetic item effect, 4, 1 of 1',
             'battle-bag-autodetail': 'Synthetic item effect',
             'battle-bag-details': 'Synthetic item effect',

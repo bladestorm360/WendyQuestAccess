@@ -73,6 +73,11 @@ if sys.argv[2:] == ['targets']:
     methods.extend(manager_method(action, name) for name in
                    ('isActionCommand', 'isTargeted', 'ChangeActionTarget', 'ActionCommandOnTargetsUpdated', 'ClearActionTarget'))
     methods.append(sprite_method(action, 'ActionCommand', 'Cancel'))
+    sprites = (installed / 'package.nw/js/rmmz_sprites.js').read_text(encoding='utf-8-sig')
+    for name in ('updateIcon', 'updateFrame', 'shouldDisplay'):
+        start = sprites.index(f'Sprite_StateIcon.prototype.{name} = function(')
+        end = sprites.index('\n};', start) + 3
+        methods.append(sprites[start:end])
     start = battle.index("Sprite_EnemyGauge['prototype']['drawGaugeRect']=function(")
     end = battle.index('},Sprite_StarEffect', start)
     methods.append(battle[start:end + 1] + ';')
