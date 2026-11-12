@@ -23,6 +23,7 @@ function boot(root, nodeRequire, nodeProcess) {
             graphics: root.Graphics,
             window: root,
             hasFocus: () => root.document.hasFocus(),
+            battleDialogueIdle: () => root.BattleManager?._wqaDialogueBusy === false,
             saveInfo: index => root.DataManager.savefileInfo(index),
             actor: id => root.$dataActors?.[id],
             variable: id => root.$gameVariables?.value(id),

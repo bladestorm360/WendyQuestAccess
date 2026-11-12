@@ -1,5 +1,7 @@
 'use strict';
 
+const { readNumberFocus } = require('./number-entry');
+
 function visible(scene, window) {
     return window?.parent && window.parent === scene._windowLayer && window.worldVisible &&
         window.worldAlpha > 0 && window.openness === 255;
@@ -9,6 +11,7 @@ function createDialogueObserver(host, notifications) {
     let current = null;
 
     function leave(scene) {
+        if (scene?._messageWindow?._wqaAutoPaint) scene._messageWindow._wqaAutoPaint = null;
         if (current?.scene !== scene) return;
         const epoch = current.epoch;
         current = null;
@@ -23,27 +26,44 @@ function createDialogueObserver(host, notifications) {
         return current === context && scene === host.manager._scene && scene._messageWindow === window &&
             scene._active && !host.manager._nextScene && !host.manager._exiting &&
             !host.manager._wqaNativeAutosaves && !host.graphics._wqaResize &&
+            (!scene._wqaBattleStarted || (host.battleDialogueIdle() &&
+                scene._wqaBattleInterpreter?._waitMode === 'message' && scene._wqaBattleInterpreter._list)) &&
             host.graphics.app?.stage === scene && host.hasFocus();
+    }
+
+    function submit(context, record) {
+        if (context.epoch) notifications.focus(context.epoch, record);
+        else context.epoch = notifications.open(record, () => currentScene(context));
     }
 
     function publish(context) {
         const { scene, window } = context;
         if (!currentScene(context)) return leave(scene);
-        const paint = window._wqaDialoguePaint;
+        const autoPaint = window._wqaAutoPaint;
+        const paint = window._wqaDialoguePaint || autoPaint;
         const choices = window._choiceListWindow;
+        const number = window._numberInputWindow;
         const pageVisible = visible(scene, window) && window.contentsOpacity > 0;
+        if (!context.epoch && (!paint || (autoPaint && !pageVisible)) && !choices?.active && !number?.active) {
+            return leave(scene);
+        }
         const name = window._nameSprite;
         if (pageVisible && paint && paint.end > paint.spoken) {
-            if (window._faceBitmap || (name?._currentString && name._animationRunning)) return;
+            if (window._faceBitmap || (!autoPaint && name?._currentString && name._animationRunning)) return;
             const text = paint.text.slice(paint.spoken, paint.end);
             const speaker = !paint.spoken && name?.worldVisible && name.worldAlpha > 0 &&
-                typeof name._currentString === 'string' && name._currentString.length <= 96 ? name._currentString : '';
+                !name._animationRunning && typeof name._currentString === 'string' &&
+                name._currentString.length <= 96 ? name._currentString : '';
             paint.spoken = paint.end;
-            const record = { kind: 'dialoguePage', text, speaker };
-            if (context.epoch) notifications.focus(context.epoch, record);
-            else context.epoch = notifications.open(record, () => currentScene(context));
+            window._wqaAutoPaint = null;
+            submit(context, { kind: 'dialoguePage', text, speaker });
         }
 
+        if (number?.active && visible(scene, number) && number.contentsOpacity > 0) {
+            const record = readNumberFocus(number);
+            if (record) submit(context, { ...record, append: record.first && !!context.epoch });
+            return;
+        }
         if (!choices?.active || !visible(scene, choices) || choices.contentsOpacity <= 0) return;
         const index = choices._index;
         if (!Number.isInteger(index) || index < -1 || choices._wqaChoiceShown === index) return;
@@ -51,10 +71,7 @@ function createDialogueObserver(host, notifications) {
         if (index >= 0 && row?.index !== index) return;
         const first = choices._wqaChoiceShown === null;
         choices._wqaChoiceShown = index;
-        const record = { kind: 'dialogueChoice', text: row?.text || '', first,
-            append: first && !!context.epoch };
-        if (context.epoch) notifications.focus(context.epoch, record);
-        else context.epoch = notifications.open(record, () => currentScene(context));
+        submit(context, { kind: 'dialogueChoice', text: row?.text || '', first, append: first && !!context.epoch });
     }
 
     function observe(scene) {

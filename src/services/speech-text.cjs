@@ -84,6 +84,15 @@ function formatSpeech(message) {
             limit = 512;
             break;
         }
+        case 'numberEntry': {
+            const { position, length, digit, digits, first } = message;
+            if (!Number.isInteger(position) || !Number.isInteger(length) || length < 1 || length > 16 ||
+                position < 1 || position > length || typeof digit !== 'string' || !/^[0-9]$/.test(digit)) return '';
+            const focus = `Digit ${position} of ${length}, ${digit}`;
+            text = first && typeof digits === 'string' && /^[0-9]{1,16}$/.test(digits) && digits.length === length
+                ? `Number entry. ${digits.split('').join(', ')}. ${focus}` : focus;
+            break;
+        }
         case 'deletePrompt': {
             const name = label(message);
             text = name && `${name}? Choose Delete or Cancel`;

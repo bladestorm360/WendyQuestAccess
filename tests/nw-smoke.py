@@ -100,6 +100,7 @@ Graphics._wqaFinishResize(transition, true, 440, 320);
 let fileShown = false;
 let mapShown = false;
 let dialogueShown = false;
+let numberShown = false;
 const interval = setInterval(() => {
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
         fileShown = true;
@@ -136,6 +137,17 @@ const interval = setInterval(() => {
         WendyQuestAccessDialogueReady(scene);
         Graphics.app.renderer.emit('postrender');
     }
+    if (!numberShown && require('fs').existsSync(receipt + '.choice')) {
+        numberShown = true;
+        WendyQuestAccessSceneLeaving(SceneManager._scene);
+        const layer = {};
+        const number = { parent: layer, worldVisible: true, worldAlpha: 1, openness: 255, contentsOpacity: 255,
+            active: true, _index: 1, _wqaNumberDrawn: '07', _wqaNumberChange: 0, _wqaNumberShownChange: null };
+        const scene = { _active: true, _windowLayer: layer, _messageWindow: { _numberInputWindow: number } };
+        SceneManager._scene = Graphics.app.stage = scene;
+        WendyQuestAccessDialogueReady(scene);
+        Graphics.app.renderer.emit('postrender');
+    }
     if (require('fs').existsSync(receipt)) { clearInterval(interval); nw.App.quit(); }
 }, 40);
 setTimeout(() => {
@@ -160,7 +172,8 @@ parentPort.on('message', message => {
     if (message.kind === 'title') fs.writeFileSync(receipt + '.title', '');
     if (message.kind === 'saveSlot') fs.writeFileSync(receipt + '.slot', '');
     if (message.kind === 'mapBanner') fs.writeFileSync(receipt + '.map', '');
-    if (message.kind === 'dialogueChoice') {
+    if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
+    if (message.kind === 'numberEntry') {
         fs.writeFileSync(receipt + '.tmp', JSON.stringify({ versions: process.versions, records }));
         fs.renameSync(receipt + '.tmp', receipt);
     }
@@ -194,9 +207,9 @@ def main():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 5 or not all(r.get('sameEpoch') for r in records):
+        if result.returncode or data.get('error') or len(records) != 6 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, slot, banner, page, choice = records
+        title, slot, banner, page, choice, number = records
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
                 banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:4]}) != 4:
@@ -204,8 +217,11 @@ def main():
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
+        if number['kind'] != 'numberEntry' or number.get('speech') != 'Number entry. 0, 7. Digit 2 of 2, 7' or \
+                number['epoch'] in {record['epoch'] for record in records[:-1]}:
+            raise RuntimeError(f'NW fixture did not deliver the padded number in a fresh epoch: {data}')
         versions = data['versions']
-        print(f"Verified hidden window resize, title, save slot, map banner and dialogue in NW {versions.get('nw', VERSION)}, "
+        print(f"Verified hidden window resize, title, save slot, map banner, dialogue and number entry in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
 
 

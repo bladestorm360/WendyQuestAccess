@@ -10,9 +10,11 @@ The following lifecycle checkpoint took about 15 minutes elapsed. It added a fro
 
 The visible location increment is implemented and offline-verified. It uses the actual banner draw, current map presentation and native retirement routes. The named puzzle rooms passed, along with the unnamed opening and reset states. The remaining field reserve covers independent movement, location on unnamed playable maps, live obstacle changes and startup/idle recovery. For puzzle clues, the next presentation slice traces the custom message page, name and choices while keeping field work retired during dialogue. [Map banner verification](implementation.md#map-location-banner).
 
+The number-entry, automatic-close and battle-message increment adds offline coverage for authored digit prompts, a timed map line and troop dialogue. It took about 20 minutes elapsed through the bounded fixtures. Text review, remaining input reachability, battle action presentation and the provider lifecycle remain independent work. [Dialogue verification](implementation.md#map-dialogue-and-choices).
+
 ## Initial feature inventory
 
-The launch/front-end and speech transport rows are **in progress**. Native Options, the map banner and the first dialogue and choice presentation are implemented and offline-verified within their respective rows. The dialogue row remains **in progress** while battle context, auto-closing pages, number entry, text review and native input variants are open. Other rows are **not started** for implementation. A missing producer is an investigation item before declaring a feature inapplicable.
+The launch/front-end and speech transport rows are **in progress**. Native Options, the map banner, dialogue pages, choices and number entry have implemented and offline-verified slices. The dialogue row remains **in progress** while text review, actual audio confirmation and remaining input reachability are open. Troop dialogue has a fixture. The other combat producers are **not started**. A missing producer is an investigation item before declaring a feature inapplicable.
 
 | Scope / checkpoint | Player task and known producer | Acceptance and open question |
 | --- | --- | --- |

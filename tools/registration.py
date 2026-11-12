@@ -23,6 +23,7 @@ WINDOWS_REL = Path('package.nw/js/rmmz_windows.js')
 MAP_REL = Path('package.nw/js/plugins/MapScene.js')
 OBJECTS_REL = Path('package.nw/js/rmmz_objects.js')
 CANVAS_REL = Path('package.nw/js/plugins/CanvasScaler.js')
+BATTLE_REL = Path('package.nw/js/plugins/BattleSceneArranger.js')
 STATS_REL = Path('package.nw/js/plugins/WendyQuest.js')
 TITLE_SHA = 'a3c35f004b66a6d4e7a918e36b8bc7e48f2383875165ce1c00ae1a5a031e5634'
 REGISTRY_SHA = '083317d6b2ee7ba9655762dee7671564a64b0bba82bb33d8cbacd52a7e7b3ab7'
@@ -38,6 +39,7 @@ WINDOWS_SHA = '7bd37af5d4d55d2aedad4d2cb1e14d2ff3ff8eefa261f865ef805b7e8981fd59'
 MAP_SHA = 'aff25c073cffce32857bb654d0ae30938f10ddfa534cfc0cb80ebb078a4aaf64'
 OBJECTS_SHA = 'b9da176c2041866df643b7d62b36d99d67bf1b44216deb52568adbd08264848a'
 CANVAS_SHA = '713457886c5589be41d137d81b327947e37b19707c2f30c5da1b1ff43a9d8ccf'
+BATTLE_SHA = 'b6e5b59162e89c38e4d24c55ea622846509ac6d77e91ec0e24c0bb745fd0eab5'
 STATS_SHA = 'da3c0950cf9a0559f21fce2df1bbc608a5fee28398dd233c032279178b6a18f9'
 DEPENDENCIES = {
     STATS_REL: STATS_SHA,
@@ -48,9 +50,13 @@ FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene)
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue)'
-MAP_LEAVING = (b'if' + FIELD_WATCHED + b'{globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene);}')
+AUTO_DISCARD = (b'SceneManager._scene?._messageWindow?._wqaAutoPaint&&'
+                b'(SceneManager._scene._messageWindow._wqaAutoPaint=null)')
+MAP_LEAVING = (AUTO_DISCARD + b';if' + FIELD_WATCHED +
+               b'{globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene);}')
 DIALOGUE_LEAVING = (b'if(SceneManager._scene?._wqaDialogue){'
                     b'globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene);}')
+DIALOGUE_HOST = b'(SceneManager._scene?._wqaMapRestored||SceneManager._scene?._wqaBattleStarted)'
 AUTOSAVE_DONE = (b'if(wqaAutosave){wqaAutosave=false;SceneManager._wqaNativeAutosaves--;}')
 PLUGIN = {'name': 'WendyQuestAccess', 'status': True, 'description': 'WendyQuest accessibility support',
           'parameters': {}}
@@ -130,6 +136,7 @@ def managers_notification(original):
         57606: b'\n' + files_ready('this._scene'),
         58080: b'\n    ' + SCENE_LEAVING,
         59505: b'\n    ' + MAP_LEAVING,
+        62280: b'        if(SceneManager._scene?._wqaBattleStarted){' + MAP_LEAVING + b'}\n',
     })
 
 
@@ -144,9 +151,13 @@ def objects_notification(original):
     return insert(original, OBJECTS_SHA, {
         21807: b'\n    ' + MAP_LEAVING,  # Game_Screen fade-out
         217381: b'\n    ' + MAP_LEAVING,  # Accepted transfer reservation
-        255063: b'\n    if(this===$gameMap?._interpreter){' + MAP_LEAVING + b'}',
+        255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING + b'}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
         255696: MAP_LEAVING + b'\n                ',  # Picture preload
+        257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
+                + MAP_LEAVING + b'SceneManager._scene._wqaBattleInterpreter=null;}',
+        258782: b'\n    if(waitMode==="message"&&SceneManager._scene?._wqaBattleStarted)'
+                b'SceneManager._scene._wqaBattleInterpreter=this;',
     })
 
 
@@ -158,23 +169,64 @@ def windows_notification(original):
         7872: b'\n' + paint + b'\n',
         11423: b'\n        if (textState._wqaMessage || textState._wqaPaint) '
                b'this._wqaRecordPaint(textState, "\\x01" + iconIndex + "\\x02");',
-        127397: b'    if (SceneManager._scene?._wqaMapRestored && SceneManager._scene._messageWindow === this._messageWindow) {\n'
+        127397: b'    if (' + DIALOGUE_HOST + b' && SceneManager._scene._messageWindow === this._messageWindow) {\n'
                 b'        this._wqaChoiceRows = [];\n        this._wqaChoiceShown = null;\n    }\n',
         131029: b'    if (this._wqaChoiceRows) this._wqaChoicePaint = { index, text: "" };\n',
         131102: b'\n    if (this._wqaChoicePaint) {\n        this._wqaChoiceRows[index % 16] = this._wqaChoicePaint;\n'
                 b'        this._wqaChoicePaint = null;\n    }',
         131394: b'    ' + DIALOGUE_LEAVING + b'\n',
         131562: b'    ' + DIALOGUE_LEAVING + b'\n',
-        144815: b'    ' + DIALOGUE_LEAVING + b'\n    this._wqaDialoguePaint = null;\n',
+        132508: b'    if (' + DIALOGUE_HOST + b' && SceneManager._scene._messageWindow === this._messageWindow) {\n'
+                b'        this._wqaNumberDrawn = "";\n        this._wqaNumberChange = 0;\n'
+                b'        this._wqaNumberShownChange = null;\n    }\n',
+        136455: b'\n    if (this._wqaNumberChange !== undefined) this._wqaNumberChange++;',
+        136784: b'    ' + DIALOGUE_LEAVING + b'\n',
+        137309: b'\n    if (this._wqaNumberChange !== undefined) {\n'
+                b'        if (index === 0) { this._wqaNumberPaintCount = 0; this._wqaNumberDrawn = ""; }\n'
+                b'        if (index === this._wqaNumberPaintCount && s.length === this._maxDigits && s.length <= 16 &&\n'
+                b'            ++this._wqaNumberPaintCount === s.length) this._wqaNumberDrawn = s;\n    }',
+        144815: b'    ' + DIALOGUE_LEAVING + b'\n    this._wqaDialoguePaint = this._wqaAutoPaint = null;\n',
         145641: b'\n            ' + DIALOGUE_LEAVING +
                 b'\n            if (this._wqaDialoguePaint) this._wqaDialoguePaint.end = 0;',
+        # The automatic-close path leaves the contents intact until the
+        # native close animation. Only a subsequent full render may use them.
+        147570: b'            const wqaAuto = this._wqaDialoguePaint;\n',
+        147606: b'\n            if (wqaAuto && wqaAuto.end > wqaAuto.spoken) this._wqaAutoPaint = wqaAuto;',
     })
 
 
+def dialogue_update(context_ready):
+    return b'''
+    {
+        const wqaMessage = this._messageWindow;
+        if (wqaMessage?._wqaAutoPaint && wqaMessage.openness !== 255) wqaMessage._wqaAutoPaint = null;
+        const wqaAuto = wqaMessage?._wqaAutoPaint;
+        const wqaPaint = wqaMessage?._wqaDialoguePaint || wqaAuto;
+        const wqaChoice = wqaMessage?._choiceListWindow;
+        const wqaNumber = wqaMessage?._numberInputWindow;
+        const wqaPageWaiting = wqaPaint && wqaPaint.end > wqaPaint.spoken && wqaMessage.openness === 255;
+        const wqaChoiceWaiting = wqaChoice?._wqaChoiceRows && wqaChoice.active &&
+            wqaChoice.openness === 255 && wqaChoice._wqaChoiceShown !== wqaChoice._index &&
+            (wqaChoice._index === -1 || wqaChoice._wqaChoiceRows[wqaChoice._index % 16]?.index === wqaChoice._index);
+        const wqaNumberWaiting = wqaNumber?.active && wqaNumber.openness === 255 && wqaNumber._wqaNumberDrawn &&
+            (wqaNumber._wqaNumberShownIndex !== wqaNumber._index ||
+                wqaNumber._wqaNumberShownChange !== wqaNumber._wqaNumberChange);
+        if ((wqaPageWaiting || wqaChoiceWaiting || wqaNumberWaiting) && !this._wqaDialoguePending &&
+            __WQA_CONTEXT__ && this._started && this._active &&
+            this._fadeDuration === 0 && this._fadeOpacity === 0 && !($gameScreen._fadeOutDuration > 0) &&
+            this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
+            !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this &&
+            (!wqaPageWaiting || (!wqaMessage._faceBitmap &&
+                (wqaAuto || !(wqaMessage._nameSprite?._currentString && wqaMessage._nameSprite._animationRunning)) &&
+                (!wqaMessage._slicedSprite?.visible || (wqaMessage._slicedSpriteFull && wqaMessage._slicedSpriteFaded)))))
+            globalThis.WendyQuestAccessDialogueReady?.(this);
+    }
+'''.replace(b'__WQA_CONTEXT__', context_ready)
+
+
 def map_notification(original):
-    # Before a mod callback, rely on the native map update's completed
-    # restoration, control and asset flags. While no banner can be published
-    # or retired, the native update reaches only the outer scalar checks.
+    # Native map updates call the mod only after the current scene, window,
+    # and control state meet the presentation's own readiness conditions.
     banner_update = b'''
     {
         const wqaWindow = this._mapNameWindow;
@@ -196,30 +248,10 @@ def map_notification(original):
         }
     }
 '''
-    dialogue_update = b'''
-    {
-        const wqaMessage = this._messageWindow;
-        const wqaPaint = wqaMessage?._wqaDialoguePaint;
-        const wqaChoice = wqaMessage?._choiceListWindow;
-        const wqaPageWaiting = wqaPaint && wqaPaint.end > wqaPaint.spoken && wqaMessage.openness === 255;
-        const wqaChoiceWaiting = wqaChoice?._wqaChoiceRows && wqaChoice.active &&
-            wqaChoice.openness === 255 && wqaChoice._wqaChoiceShown !== wqaChoice._index &&
-            (wqaChoice._index === -1 || wqaChoice._wqaChoiceRows[wqaChoice._index % 16]?.index === wqaChoice._index);
-        if ((wqaPageWaiting || wqaChoiceWaiting) && !this._wqaDialoguePending &&
-            this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
-            this._fadeDuration === 0 && this._fadeOpacity === 0 && this.srcWendy && this.srcStones &&
-            $gameMap.inactiveTime < 30 && !$gamePlayer._transferring && !($gameScreen._fadeOutDuration > 0) &&
-            this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
-            !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this &&
-            (!wqaPageWaiting || (!wqaMessage._faceBitmap &&
-                !(wqaMessage._nameSprite?._currentString && wqaMessage._nameSprite._animationRunning) &&
-                (!wqaMessage._slicedSprite?.visible || (wqaMessage._slicedSpriteFull && wqaMessage._slicedSpriteFaded)))))
-            globalThis.WendyQuestAccessDialogueReady?.(this);
-    }
-'''
     return insert(original, MAP_SHA, {
         59596: b'this._wqaMapRestored=true;',
-        62779: banner_update + dialogue_update,
+        62779: banner_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
+                                               b'this.srcStones && $gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),
         69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
         86279: b'if(SceneManager._scene?._mapNameWindow===this){' + MAP_LEAVING + b'}'
                b'const wqaRevision=(this._wqaBannerRevision||0)+1;'
@@ -232,8 +264,22 @@ def map_notification(original):
         91226: b'this._wqaDialoguePaint&&(this.pause||(_0x56fdd1.index>=_0x56fdd1.text.length&&!this._waitCount))&&'
                b'(this._wqaDialoguePaint.end=this._wqaDialoguePaint.text.length),',
         96226: MAP_LEAVING + b'this._wqaDialoguePaint=null;_0x380ef0._wqaPaint=null;'
-               b'_0x380ef0._wqaMessage=SceneManager._scene?._wqaMapRestored===true&&'
+               b'_0x380ef0._wqaMessage=' + DIALOGUE_HOST + b'&&'
                b'SceneManager._scene._messageWindow===this;',
+    })
+
+
+def battle_notification(original):
+    # Use the busy result already queried by the native battle update. A
+    # message window can be visible before the battle interpreter is ready.
+    ready = (b'this._wqaBattleStarted && BattleManager._wqaDialogueBusy === false && '
+             b'this._wqaBattleInterpreter?._waitMode === "message" && this._wqaBattleInterpreter._list')
+    return insert(original, BATTLE_SHA, {
+        193431: b'(this._wqaDialogueBusy=',
+        193508: b')',
+        241897: b'this._wqaBattleStarted=true;',
+        241953: b'BattleManager._wqaDialogueBusy=undefined;',
+        242214: dialogue_update(ready),
     })
 
 
@@ -274,7 +320,7 @@ def window_notification(original):
 def canvas_notification(original):
     # CanvasScaler has its own resize listener and can rebuild the scene.
     return insert(original, CANVAS_SHA, {
-        7221: FIELD_WATCHED + b'&&'
+        7221: AUTO_DISCARD + b',' + FIELD_WATCHED + b'&&'
               b'globalThis.WendyQuestAccessSceneLeaving?.(SceneManager._scene),',
     })
 
@@ -310,6 +356,7 @@ def main():
                                 (CORE_REL, core_notification), (WINDOW_REL, window_notification),
                                 (OBJECTS_REL, objects_notification), (MAP_REL, map_notification),
                                 (CANVAS_REL, canvas_notification), (WINDOWS_REL, windows_notification),
+                                (BATTLE_REL, battle_notification),
                                 (REGISTRY_REL, register)):
         file = args.game_root / relative
         if file.stat().st_size > 1024 * 1024:
