@@ -12,6 +12,7 @@ const { bake } = require('../tools/bake-world.cjs');
 const { bakeMap, decodeMap, composeWorld, indexOf, DIRECTIONS, step, surface } = require('../src/world/geometry.cjs');
 const { solveRoute } = require('../src/world/routes.cjs');
 const { warningApproach, captureMotion } = require('../src/world/puzzles/cave');
+const { verifyCaveProgression } = require('./cave-progression.cjs');
 const { copyPatrol } = require('../src/world/puzzles/patrol-motion.cjs');
 const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../src/world/puzzles/motion-world.cjs');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
@@ -26,7 +27,7 @@ const data = path.join(game, 'package.nw', 'data');
 const read = name => JSON.parse(fs.readFileSync(path.join(data, name), 'utf8'));
 const tilesets = read('Tilesets.json');
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning', path.join(__dirname, 'world-producers.py'), game],
-    { encoding: 'utf8', timeout: 7000, maxBuffer: 96000 }));
+    { encoding: 'utf8', timeout: 7000, maxBuffer: 128000 }));
 const c = vm.createContext({
     a15_0x363c12() { throw new Error('Unresolved movement property'); },
     _0x34cc1b() { throw new Error('Unresolved tile property'); },
@@ -144,8 +145,10 @@ function verifyRoute(fixture, request, result) {
     if (request.event) {
         Object.assign(player, { _x: x, _y: y, facing: result.arrival.facing });
         for (const event of gameMap.events()) event._starting = false;
-        if (player.facing === null) player.checkEventTriggerHere([0]);
-        else player.checkEventTriggerThere([0, 1, 2]);
+        const trigger = gameMap._events[request.event]._trigger;
+        if (player.facing === null) player.checkEventTriggerHere(trigger === 0 ? [0] : [1, 2]);
+        else if (trigger === 0) player.checkEventTriggerThere([0, 1, 2]);
+        else player.checkEventTriggerTouch(gameMap.roundXWithDirection(x, player.facing), gameMap.roundYWithDirection(y, player.facing));
         const first = gameMap.events().find(event => event.isStarting());
         assert.equal(first?._eventId, request.event);
     } else assert.deepEqual([x, y], [request.targetX, request.targetY]);
@@ -898,6 +901,7 @@ async function main() {
     verifyWallFeedback();
     await verifyNativeBeacon();
     verifyNativePatrolMotion();
+    verifyCaveProgression(c, load, snapshot, verifyRoute);
     await verifyCrossingPreview();
     await verifyLiveCrossing();
     await verifyWarningApproach();

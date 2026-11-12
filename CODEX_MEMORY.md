@@ -1,5 +1,7 @@
 # WendyQuest project memory
 
+The [native cave progression checkpoint](docs/puzzles-and-secrets.md#cave-progression-and-chamber) follows the live-cue checkpoint verified on private `refs/heads/main` at `03fd8cefc1a33996be0c064bfcf58e36908a685a`. It connects the island entrance, active floor mechanisms, chase handback and chamber. Continue with the broader puzzle and secret audit, including Cauldron classification. [Work estimates and remaining gates](docs/feature-checkpoint.md)
+
 Reviewed November 11, 2026. Full mod implementation is active. The title, file selector, retry, Options, visible map banner and map dialogue have build-matched native producer fixtures. Deployment and gameplay confirmation remain open.
 
 - [Feasibility, recommendation and work estimates](docs/feasibility.md)

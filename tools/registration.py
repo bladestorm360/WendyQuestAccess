@@ -54,9 +54,12 @@ DEPENDENCIES = {
     SALT_REL: '4d14b04a8980f4a4eb50dfa01d0ab61dd5507c62b65a1cd23b5df1621662e296',
     Path('package.nw/data/CommonEvents.json'): '1884583f50d8e6c37c53c7552df9c6628d59faf0b92ea90d1ed3a65769c0b9d9',
     Path('package.nw/data/Map196.json'): 'bb3dbeb99080470bc3c009ece7b6e5a60aa99d1fad6cfc71fa95b6a8e9a788e8',
+    Path('package.nw/data/Map197.json'): '473add1cb944e63f0fb5b077689bf3e525d7a93068e6b03f86e9e9421f80c0b9',
     Path('package.nw/data/Map199.json'): 'ba3fc58a0d8c1c0d71dc2de23010a6e35a7c3c6bd37925becb1fee86adb7998e',
     Path('package.nw/data/Map200.json'): '7b9894f8c5548d3534e4cd14e9c007a8a8ea594acf8352182f91277b4531f0fa',
     Path('package.nw/data/Map201.json'): '3d6cde06daacedebc77a44ee826816890128646ea9c68115404405b7ff14ad21',
+    Path('package.nw/data/Map202.json'): 'd35c539b94ed69ca161d4c1a4e30778c1ce8ea70fefef1931b11f4bd480f32f7',
+    Path('package.nw/data/Map206.json'): '89dadfb242c46f0945edc42c900e967b5fe1e6e9415b60f63cc7129795c69f47',
     Path('package.nw/js/plugins/UIGeneral.js'): '9a282cc96ee2edb4777fc18228d4a5976e2ad7546d50df72a6d0429bc6af9b0e',
     Path('package.nw/img/system/IconSet.png'): '709b556b0c2b217436172d90d7d8af4c722ce421aa19f504261ee72607f5203e',
 }
@@ -182,6 +185,9 @@ def scenes_notification(original):
 def objects_notification(original):
     return insert(original, OBJECTS_SHA, {
         178811: b'\n    ' + ROUTE_DIRTY,  # Tileset replacement
+        180829: b'if(this===$gameMap&&SceneManager._scene?._wqaCaveGuideActive&&SceneManager._scene._wqaFieldReady&&'
+                b'!SceneManager._nextScene&&Graphics.app?.stage===SceneManager._scene&&!$gamePlayer._transferring)'
+                b'globalThis.WendyQuestAccessCaveEventAccepted?.(SceneManager._scene,event);\n            ',
         185272: b'\n    if(this._priorityType!==priorityType){' + ACTOR_DIRTY + beacon_actor() + b'}',
         188368: b'\n    ' + ACTOR_DIRTY + beacon_actor(),  # Position and copyPosition
         188538: b'\n    if(this._x!==character._x||this._y!==character._y){' + ACTOR_DIRTY + beacon_actor() + b'}',
@@ -325,7 +331,9 @@ def map_notification(original):
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
         !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
     if (this._wqaFieldReady) {
-        if (!Graphics._wqaFrontEndObserved || (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||
+        if (!Graphics._wqaFrontEndObserved || (Graphics._wqaCaveProgressPending && !$gameMap._interpreter?._list &&
+            $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||
+            (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||
             (!wqaWasFieldReady && (Graphics._wqaWallEnabled || Graphics._wqaCaveTimingEnabled)))
             globalThis.WendyQuestAccessFieldReady?.(this);
         if (this._wqaBeaconDue && Graphics.frameCount >= this._wqaBeaconDue &&

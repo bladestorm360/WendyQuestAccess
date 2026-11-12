@@ -243,7 +243,13 @@ function createField(root, host, notifications) {
         },
         dialoguePresented(scene, paint) { guideFor(scene)?.presented(scene, paint); },
         puzzleActive(scene) { return salt.active(scene) || cave.active(scene); },
-        observeRecovery(scene) { if (ready(scene)) cave.recover(scene); },
+        caveEventAccepted: cave.accepted,
+        observeCaveReady(scene) {
+            if (!ready(scene)) return;
+            cave.recover(scene);
+            const outcome = cave.settleProgress(scene);
+            if (outcome && !active) command('status', outcome);
+        },
         command,
         report(text) { return command('status', text); },
         changed: retire,

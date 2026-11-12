@@ -496,6 +496,36 @@ async function verifyCaveGuide() {
         f.tick();
     }
 
+    {
+        const room = mapData(206);
+        const f = await enter(room, 206);
+        const { c, scene } = f;
+        const map = c.$gameMap;
+        c.$gameParty = { inBattle: () => false };
+        installInterpreterConstructor(c);
+        selectRoom(f, room, scene, 206, 17, 7);
+        assert.match(review(f), /Cave entrance selected/);
+        const event = map._events[11];
+        const list = room.events[11].pages[0].list;
+        Object.assign(event, { _starting: true, eventId: () => 11, list: () => list });
+        map.fixtureEvents = [event];
+        assert(map.setupStartingMapEvent());
+        assert(c.Graphics._wqaCaveProgressPending);
+        assert.equal(f.epoch(), 0, 'event setup retires the previous review');
+        map.fixtureEvents = [];
+        const source = map._interpreter;
+        source._index = 2;
+        assert(source.executeCommand());
+        const landed = await moveToReservedMap(f);
+        assert(c.Graphics._wqaCaveProgressPending, 'the transfer retains the pending result until settlement');
+        assert(!tapPuzzleKey(f, 'g', { shiftKey: true }));
+        source._list = null;
+        settle(f, landed);
+        assert(!c.Graphics._wqaCaveProgressPending);
+        assert.match(review(f), /Entered the patrol rooms/);
+        assert(!describe(f).some(line => line === 'Entered the patrol rooms.'), 'arrival waits for guide review');
+    }
+
     for (const scenario of [
         { checkpoint: 0 }, { checkpoint: 1 }, { checkpoint: 2 }, { checkpoint: 3 },
         { checkpoint: 1, stop: true }, { checkpoint: 1, wrongLanding: true }

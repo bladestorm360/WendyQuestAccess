@@ -43,6 +43,7 @@ def bundle():
         './destinations': 'world/destinations.js',
         './puzzles/salt-caverns': 'world/puzzles/salt-caverns.js',
         './puzzles/cave': 'world/puzzles/cave.js',
+        './cave-progression': 'world/puzzles/cave-progression.js',
         './patrol-motion.cjs': 'world/puzzles/patrol-motion.cjs',
         './geometry.cjs': 'world/geometry.cjs',
         './dialogue/observer': 'dialogue/observer.js',

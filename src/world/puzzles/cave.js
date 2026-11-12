@@ -1,6 +1,7 @@
 'use strict';
 
 const { copyPatrol, TIMING_CUE, STAMP_WIDTH, matchesMotionStamp } = require('./patrol-motion.cjs');
+const { CHASES, corridorMap, caveDestination, createCaveProgress } = require('./cave-progression');
 
 const ROOMS = Object.freeze({
     196: { patrols: [4, 5, 6, 7, 12, 13, 14, 15, 17, 18], checkpoints: [21], sign: 2 },
@@ -14,8 +15,6 @@ const LANDING_COMMANDS = [33, 37, 41, 45];
 const WARNING_APPROACH = Object.freeze([6, 38, 22, 51]);
 const DISTRACTIONS = { 4: [5, 25], 9: [10, 6], 16: [19, 8], 17: [19, 25], 18: [19, 45] };
 const RETURN_ROUTES = { 16: [19, 0], 17: [19, 19], 18: [19, 45] };
-const CHASES = { 3: [4, 4], 8: [9, 3], 10: [11, 3], 12: [13, 3], 14: [24, 3],
-    15: [26, 3], 16: [27, 3], 17: [28, 3], 18: [29, 3] };
 
 function timedCave(map) { return Number.isInteger(map) && !!ROOMS[map]; }
 
@@ -200,9 +199,10 @@ function patrolInView(room, map, data, scene, screen, x, y) {
 function createCaveGuide(root, graphics) {
     const visits = new WeakMap();
     const pending = new WeakMap();
+    const progress = createCaveProgress(root, graphics);
 
     function available(scene) {
-        return !!(scene?._wqaMapRestored && !scene._wqaBattleStarted && timedCave(root.$gameMap?._mapId));
+        return !!(scene?._wqaMapRestored && !scene._wqaBattleStarted && corridorMap(root.$gameMap?._mapId));
     }
 
     function visit(scene) {
@@ -214,9 +214,18 @@ function createCaveGuide(root, graphics) {
         return state;
     }
 
+    function activate(scene) {
+        const state = visit(scene);
+        state.active = true;
+        scene._wqaCaveGuideActive = scene._wqaPresentation = true;
+        return state;
+    }
+
     function presented(scene, paint) {
         if (!available(scene) || scene._wqaTerrainWork || paint.end !== paint.text.length || paint.end > 384) return;
         const map = root.$gameMap;
+        const room = ROOMS[map._mapId];
+        if (!room) return;
         const source = root.$gameMessage?.interpreter;
         if (!source?._list || source._mapId !== map._mapId || source._waitMode !== 'message') return;
         const common = root.$dataCommonEvents?.[CAPTURE_EVENT]?.list;
@@ -224,6 +233,7 @@ function createCaveGuide(root, graphics) {
             const state = visit(scene);
             state.captured = true;
             state.outcome = 'The patrol caught you.';
+            progress.cancel();
             if (state.active) {
                 // Use the pinned native branch only to recognize its later
                 // visible landing. The checkpoint variable is never reported.
@@ -236,7 +246,6 @@ function createCaveGuide(root, graphics) {
             }
             return;
         }
-        const room = ROOMS[map._mapId];
         const id = source._eventId;
         const pages = root.$dataMap?.events?.[id]?.pages;
         if (room.checkpoints.includes(id) && source._index === 9 && source._list === pages?.[0]?.list) {
@@ -259,38 +268,58 @@ function createCaveGuide(root, graphics) {
             const point = root.$dataMap?.events?.[id];
             return point?.x === landing.x && point.y === landing.y;
         });
-        const state = visit(scene);
-        state.active = true;
+        const state = activate(scene);
         state.outcome = checkpoint ? 'Returned to a checkpoint after capture.' : 'Returned after capture.';
     }
 
     function review(scene, objects, x, y) {
         const map = root.$gameMap;
         const room = ROOMS[map._mapId];
-        const state = visit(scene);
-        state.active = true;
-        const target = !state.sign && room.sign && warningApproach(map, x, y, room.sign) &&
-            objects.find(item => item.id === room.sign);
+        const state = activate(scene);
+        if (!room) {
+            const hints = {
+                206: [11, 'Get directions to the cave entrance and use the native entry prompt when it appears.'],
+                202: [4, 'Get directions to the chamber entrance. The stairs may start a scene.'],
+                197: [11, 'Get directions to the statue. The island exit is in Exits.']
+            };
+            const [id, hint] = hints[map._mapId];
+            const target = objects.find(item => item.id === id);
+            return { target, text: [state.outcome, target ? `${target.name} selected.` : '', hint].filter(Boolean).join(' ') };
+        }
+        const target = !state.sign && room.sign && warningApproach(map, x, y, room.sign) && objects.find(item => item.id === room.sign);
         const patrol = patrolInView(room, map, root.$dataMap, scene, graphics.app?.renderer?.screen, x, y);
         const hint = target ? 'Warning sign selected. Get directions, then use the action button at the sign.' :
-            map._mapId === 200 ? 'Find distraction crystals and checkpoints in Objects.' : 'Avoid contact with patrols.';
+            { 199: 'Objects lists patrol line floor triggers. The next room is in Exits.',
+                200: 'Find distraction crystals and checkpoints in Objects.',
+                201: 'Objects lists chase floor triggers. Find the staircase passage in Exits.' }[map._mapId] ||
+                'Avoid contact with patrols.';
         const text = ['Secret cave.', state.outcome, hint, patrol || 'No patrol in view at this check.'].filter(Boolean).join(' ');
         return { target, text };
     }
 
     return {
         available, presented, recover, review,
+        accepted(scene, event) { if (available(scene) && visits.get(scene)?.active) progress.accepted(scene, event); },
+        settleProgress(scene) {
+            const result = progress.settle(scene);
+            if (!result || !available(scene)) return '';
+            activate(scene).outcome = result.outcome;
+            // Arrival stays in review so it cannot replace the native map name.
+            return result.arrived ? '' : result.outcome;
+        },
         active(scene) { return visits.get(scene)?.active === true; },
         stop(scene) {
             const state = visits.get(scene);
             const waiting = pending.delete(root.$gameMap);
+            const progression = progress.cancel();
             if (waiting) graphics._wqaCaveRecoveryPending = false;
-            if (!state?.active) return waiting;
+            if (!state?.active) return waiting || progression;
             state.active = false;
+            scene._wqaCaveGuideActive = false;
             return true;
         }
     };
 }
 
-module.exports = { createCaveGuide, timedCave, checkpointTarget, warningApproach, captureMotion,
+module.exports = { createCaveGuide, timedCave, checkpointTarget, caveDestination, warningApproach, captureMotion,
     TIMING_CUE, STAMP_WIDTH, matchesMotionStamp };

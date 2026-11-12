@@ -41,7 +41,8 @@ for relative, transform, names in [
     (SCENES_REL, scenes_notification, ['Scene_Base.prototype.startFadeOut']),
     (OBJECTS_REL, objects_notification, ['Game_Player.prototype.reserveTransfer', 'Game_Screen.prototype.startFadeOut',
                                         'Game_Interpreter.prototype.setup', 'Game_Interpreter.prototype.loadImages',
-                                        'Game_CharacterBase.prototype.setPosition', 'Game_CharacterBase.prototype.moveStraight']),
+                                        'Game_CharacterBase.prototype.setPosition', 'Game_CharacterBase.prototype.moveStraight',
+                                        'Game_Map.prototype.setupStartingMapEvent']),
 ]:
     source = transform((PLUGINS.parent.parent / relative.relative_to('package.nw')).read_bytes()).decode('utf8')
     methods.extend(between(source, f'{name} = function(', '\n};') + '\n};' for name in names)

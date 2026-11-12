@@ -2,7 +2,7 @@
 
 const { surface, MAX_CELLS, CELL_BITS } = require('./geometry.cjs');
 const { destination } = require('./destinations');
-const { checkpointTarget } = require('./puzzles/cave');
+const { checkpointTarget, caveDestination } = require('./puzzles/cave');
 
 const MAX_EVENTS = 512;
 
@@ -63,7 +63,7 @@ function captureWorld(root, routing = true, label) {
                 tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action });
         }
         const target = action && (checkpointTarget(id, eventId, pageIndex, trigger)
-            ? { name: 'Checkpoint', category: 'objects' } : destination(entry, page, trigger));
+            ? { name: 'Checkpoint', category: 'objects' } : caveDestination(id, event, entry, page) || destination(entry, page, trigger));
         if (target) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
