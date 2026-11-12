@@ -1322,6 +1322,40 @@ const interval = setInterval(() => {
         } else if (endingStep === 54 && fs.existsSync(receipt + '.shop-quantity-details')) {
             fs.unlinkSync(receipt + '.shop-quantity-stage');
             fs.unlinkSync(receipt + '.shop-stage');
+            fs.writeFileSync(receipt + '.menu-vitals-stage', '');
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const scene = SceneManager._scene = Graphics.app.stage = { _active: true, _started: true,
+                _fadeDuration: 0, _fadeOpacity: 0, _windowLayer: {} };
+            scene._commandWindow = { parent: scene._windowLayer, active: true, worldVisible: true, worldAlpha: 1,
+                openness: 255, contentsOpacity: 255, contents: { isReady: () => true },
+                _index: 0, _list: [{ symbol: 'save', name: 'Save' }], innerWidth: 120, innerHeight: 80,
+                itemRect: () => ({ x: 0, y: 0, width: 100, height: 32 }) };
+            const visible = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
+            const hud = scene._wqaMenuStatus = scene._statusWindow = { ...visible(scene), offsetY: 0, states: [],
+                battler: { actor: () => ({ name: 'Synthetic menu hero' }) } };
+            for (const [key, value] of Object.entries({ _numberSprite: '8', _totalSprite: '14', _dividerSprite: '/',
+                _FPSprite: '3', _totalSpriteFP: '5', _dividerSpriteFP: '/', levelNumberSprite: '7' }))
+                hud[key] = battleText(hud, value);
+            hud._HPIcon = visible(hud);
+            hud._FPIcon = visible(hud);
+            hud.levelMetreSprite = visible(hud);
+            const mask = hud.fillXPMask = { parent: hud, geometry: { graphicsData: [
+                { shape: { x: -39, y: 98, width: 32, height: 16 } }
+            ] } };
+            hud.levelMetreFillSprite = { ...visible(hud), mask };
+            WendyQuestAccessMenuReady(scene, 1);
+            Graphics.app.renderer.emit('postrender');
+            tap('h', 'KeyH');
+            endingStep = 56;
+        } else if (endingStep === 56 && fs.existsSync(receipt + '.menu-vitals-hp')) {
+            pad();
+            if (padTap(7) !== 1 << 7) throw Error('Menu vitals mod mode did not claim the binding');
+            endingStep = 57;
+        } else if (endingStep === 57 && fs.existsSync(receipt + '.menu-vitals-mode')) {
+            if (padTap(2) !== 1 << 2 || padTap(2) !== 0) throw Error('Menu vitals did not return to native input');
+            endingStep = 58;
+        } else if (endingStep === 58 && fs.existsSync(receipt + '.menu-vitals-full')) {
+            fs.unlinkSync(receipt + '.menu-vitals-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
             WendyQuestAccessTitleReady(title);
@@ -1384,6 +1418,14 @@ parentPort.on('message', message => {
     if (fs.existsSync(receipt + '.closing-pass')) {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
+        if (fs.existsSync(receipt + '.menu-vitals-stage')) {
+            if (message.kind === 'menuDetails')
+                fs.writeFileSync(receipt + (message.lines.length > 2 ? '.menu-vitals-full' : '.menu-vitals-hp'), speech);
+            if (message.kind === 'controllerStatus' && speech.includes('X reads vitals'))
+                fs.writeFileSync(receipt + '.menu-vitals-mode', speech);
+            parentPort.postMessage('ack');
+            return;
+        }
         if (fs.existsSync(receipt + '.shop-stage')) {
             const quantity = fs.existsSync(receipt + '.shop-quantity-stage');
             if (message.kind === 'menuFocus') fs.writeFileSync(receipt + (quantity ? '.shop-quantity' : '.shop-focus'), speech);
@@ -1710,6 +1752,8 @@ def main():
             'shop-details': 'Shown effect. Owned 2. Balance 12 Gold',
             'shop-quantity': 'Purchase quantity, Synthetic shop item, quantity 3, Total 57 Gold',
             'shop-quantity-details': 'Quantity 3, total 57 Gold. Shown effect. Owned 2. Balance 12 Gold',
+            'menu-vitals-hp': 'Synthetic menu hero. HP 8 of 14',
+            'menu-vitals-full': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',

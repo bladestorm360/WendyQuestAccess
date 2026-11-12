@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
-const { partyVitals, portraitActor } = require('../src/battle/party-vitals');
+const { partyVitals, portraitActor, menuVitals } = require('../src/battle/party-vitals');
 const { nativeTextHost } = require('./native-text-host.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { normalizeKeys } = require('../src/settings/keyboard');
@@ -41,7 +41,10 @@ Object.assign(RadialStatus.prototype, {
 });
 host.Bitmap.load = () => ready;
 const c = vm.createContext({ ...host, RadialStatus, ImageManager: { iconWidth: 32, iconHeight: 32 },
-    a23_0x243974() { throw Error('Unresolved native HUD property'); } });
+    Scene_Map: function () {}, Scene_Menu: function () {}, Scene_Item: function () {}, SceneManager: {},
+    Graphics: { boxWidth: 640, boxXOffset: 0, boxYOffset: 0 }, $gameParty: { battleMembers: () => [actor] },
+    a23_0x243974() { throw Error('Unresolved native HUD property'); },
+    a16_0x55d438() { throw Error('Unresolved native menu property'); } });
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 
 const hud = scene._statusWindow = Object.assign(new RadialStatus(), { parent: scene, y: 0, offsetY: 0,
@@ -94,6 +97,55 @@ assert.equal(read(companion), actors[2].name + '. Companion skills unavailable')
 companion.bitmap = null;
 assert.equal(read(companion), '');
 
+Sprite.prototype.show = function () { this.worldVisible = true; };
+Sprite.prototype.hide = function () { this.worldVisible = false; };
+c.RadialStatus = function () {
+    const next = new RadialStatus();
+    Object.assign(next, { offsetY: 0, states: [], stateIcons: {}, iconBitmap: ready, iconBaseX: -128,
+        iconBaseY: 120, iconYStep: 2, currentXPFill: 0.61,
+        fillMask: { clear() {} }, fillFPMask: { clear() {} }, currentHPFill: 0, currentFPFill: 0 });
+    for (const field of ['_numberSprite', '_totalSprite', '_dividerSprite', '_FPSprite', '_totalSpriteFP',
+        '_dividerSpriteFP', 'levelNumberSprite'])
+        next[field] = next.addChild(new SpriteText().setText(field.includes('divider') ? '/' : '4'));
+    for (const field of ['_HPIcon', '_FPIcon', 'backSprite', 'levelMetreSprite', 'levelMetreFillSprite'])
+        next[field] = next.addChild(new Sprite(ready));
+    const mask = next.fillXPMask = next.addChild(new Sprite());
+    Object.assign(mask, { geometry: { graphicsData: [] }, beginFill() {}, endFill() {},
+        clear() { this.geometry.graphicsData.length = 0; },
+        drawRect(x, y, width, height) { this.geometry.graphicsData.push({ shape: { x, y, width, height } }); }
+    });
+    next.levelMetreFillSprite.mask = mask;
+    next.UpdateMask = next.fixtureUpdateMask;
+    next.InitScene();
+    return next;
+};
+let menuRead = 0;
+for (const kind of [c.Scene_Menu, c.Scene_Item]) {
+    Object.setPrototypeOf(kind.prototype, Sprite.prototype);
+    const menu = c.SceneManager._scene = Object.assign(new kind(), { children: [] });
+    menu.createStatusWindow();
+    const status = menu._statusWindow;
+    assert.equal(status.battler, actor);
+    assert.equal(menu._wqaMenuStatus, status);
+    status.update();
+    const start = performance.now();
+    assert.equal(formatSpeech(menuVitals(menu, graphics)),
+        actors[1].name + '. HP 19 of 24. FP 3 of 7. Level 4, experience bar 59 percent. Momentum 1 of 2');
+    menuRead += performance.now() - start;
+    status.currentXPFill = 1;
+    assert.match(formatSpeech(menuVitals(menu, graphics)), /59 percent/, 'the unpainted value cannot change speech');
+    status.UpdateMask();
+    assert.match(formatSpeech(menuVitals(menu, graphics)), /experience bar full/);
+    status.currentXPFill = 0;
+    status.UpdateMask();
+    assert.match(formatSpeech(menuVitals(menu, graphics)), /experience bar empty/);
+    status.levelMetreFillSprite.worldVisible = false;
+    assert.doesNotMatch(formatSpeech(menuVitals(menu, graphics)), /experience bar/);
+    assert.equal(formatSpeech(menuVitals(menu, graphics, true)), actors[1].name + '. HP 19 of 24');
+    status.offsetY = -4;
+    assert.equal(menuVitals(menu, graphics), null);
+}
+
 const keys = normalizeKeys({ details: 'H', battleSlot1: '7' });
 assert.equal(keys.details, 'H');
 assert.equal(keys.battleHP, null);
@@ -104,3 +156,5 @@ assert.equal(normalizeController({ details: 2 }).battleVitals, null);
 assert.equal(normalizeController({ battleVitals: 4 }).battleVitals, 4);
 console.log('Verified installed radial HUD paint, party identity, states, momentum and hidden values.');
 console.log('Throttled rendered vitals read and formatted receipt', measured.toFixed(2), 'ms.');
+console.log('Verified installed pause and Inventory HUD ownership and painted experience geometry.');
+console.log('Throttled two menu vitals reads through formatted receipt', menuRead.toFixed(2), 'ms.');

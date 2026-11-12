@@ -68,6 +68,43 @@ function statusLines(hud, graphics) {
     return lines;
 }
 
+function experience(hud) {
+    const bar = hud.levelMetreSprite;
+    const fill = hud.levelMetreFillSprite;
+    const mask = hud.fillXPMask;
+    if (!visibleSprite(hud, bar) || !visibleSprite(hud, fill) || !mask || mask.parent !== hud ||
+        fill.mask !== mask || !Array.isArray(mask.geometry?.graphicsData)) return '';
+    const shapes = mask.geometry.graphicsData;
+    if (!shapes.length) return 'experience bar empty';
+    const shape = shapes[0]?.shape;
+    const height = shape?.height;
+    // The installed HUD clips the XP art with one 32-pixel-high mask.
+    if (shapes.length !== 1 || !Number.isInteger(height) || height < 0 || height > 32 ||
+        shape.x !== -39 || shape.width !== 32 || shape.y !== 114 - height) return '';
+    if (!height) return 'experience bar empty';
+    return height === 32 ? 'experience bar full' :
+        'experience bar ' + Math.round(100 * height / 32) + ' percent';
+}
+
+function hudVitals(hud, graphics, name, hpOnly, includeExperience = false) {
+    const hp = pairedValue(hud, 'HP', hud._HPIcon, hud._numberSprite, hud._dividerSprite, hud._totalSprite);
+    if (hpOnly && !hp) return null;
+    const fp = !hpOnly && pairedValue(hud, 'FP', hud._FPIcon, hud._FPSprite, hud._dividerSpriteFP, hud._totalSpriteFP);
+    const level = !hpOnly && number(hud, hud.levelNumberSprite);
+    const progress = level && includeExperience && experience(hud);
+    const lines = reviewLines([name, hp, fp, level && 'Level ' + level + (progress ? ', ' + progress : ''),
+        !hpOnly && momentum(hud), ...(hpOnly ? [] : statusLines(hud, graphics))]);
+    return lines.length > 1 ? { kind: 'menuDetails', lines } : null;
+}
+
+function menuVitals(scene, graphics, hpOnly) {
+    const hud = scene._statusWindow;
+    if (scene._wqaMenuStatus !== hud || !visibleSprite(scene, hud) || hud.offsetY !== 0 || !hud.battler) return null;
+    const name = hud.battler.actor?.()?.name;
+    return hudVitals(hud, graphics, typeof name === 'string' && name.length <= 48 && name ? name : 'Party status',
+        hpOnly, true);
+}
+
 function partyVitals(scene, graphics, sprite, hpOnly = false) {
     const displayed = portraitActor(scene, sprite);
     if (!displayed) return null;
@@ -84,13 +121,7 @@ function partyVitals(scene, graphics, sprite, hpOnly = false) {
             (hpOnly ? 'HP unavailable' : 'Vitals unavailable')]) };
     }
     if (!open || hud.battler !== displayed.actor) return null;
-    const hp = pairedValue(hud, 'HP', hud._HPIcon, hud._numberSprite, hud._dividerSprite, hud._totalSprite);
-    if (hpOnly && !hp) return null;
-    const fp = !hpOnly && pairedValue(hud, 'FP', hud._FPIcon, hud._FPSprite, hud._dividerSpriteFP, hud._totalSpriteFP);
-    const level = !hpOnly && number(hud, hud.levelNumberSprite);
-    const lines = reviewLines([displayed.name, hp, fp, level && 'Level ' + level,
-        !hpOnly && momentum(hud), ...(hpOnly ? [] : statusLines(hud, graphics))]);
-    return lines.length > 1 ? { kind: 'menuDetails', lines } : null;
+    return hudVitals(hud, graphics, displayed.name, hpOnly);
 }
 
-module.exports = { portraitActor, partyVitals };
+module.exports = { portraitActor, partyVitals, menuVitals };

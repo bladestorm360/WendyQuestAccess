@@ -9,6 +9,7 @@ const MOVING_MODE = ['beaconStop'];
 const FRONT_MODE = ['settings'];
 const DIALOGUE_MODE = ['repeat', 'puzzleStop'];
 const MENU_MODE = ['settings', ...REVIEW_ACTIONS];
+const MENU_VITALS_MODE = [...MENU_MODE, 'battleVitals'];
 const BATTLE_MODE = ['settings', ...BATTLE_REVIEW_ACTIONS];
 const TARGET_MODE = [...REVIEW_ACTIONS, 'battleVitals'];
 
@@ -16,7 +17,7 @@ function modeAnnouncement(family, context, bindings) {
     if (context.kind === 'menu' || context.kind === 'battle' || context.kind === 'battleTarget') {
         const settings = context.kind === 'battleTarget' ? '' :
             buttonName(family, bindings.settings) + ' opens settings. ';
-        const vitals = context.kind !== 'menu' && bindings.battleVitals != null ?
+        const vitals = (context.kind !== 'menu' || context.vitals) && bindings.battleVitals != null ?
             buttonName(family, bindings.battleVitals) + ' reads vitals. ' : '';
         const log = context.kind === 'battle' && bindings.battleLog != null ?
             buttonName(family, bindings.battleLog) + ' reads recent results. ' : '';
@@ -162,7 +163,8 @@ function createController(host) {
         if (!(pressed & modeBit) && !(previous & modeBit)) {
             const actions = context.navigationOnly ? MOVING_MODE :
                 context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE :
-                context.kind === 'menu' ? MENU_MODE : context.kind === 'battle' ? BATTLE_MODE :
+                context.kind === 'menu' ? (context.vitals ? MENU_VITALS_MODE : MENU_MODE) :
+                context.kind === 'battle' ? BATTLE_MODE :
                 context.kind === 'battleTarget' ? TARGET_MODE : DIALOGUE_MODE;
             for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
                 (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive) &&

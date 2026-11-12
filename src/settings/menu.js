@@ -12,7 +12,7 @@ const { createBookmarkMenu } = require('./bookmark-menu');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
     puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance',
-    details: 'Read details', battleHP: 'Read active HP in battle', battleSlot1: 'Read party slot 1 in battle',
+    details: 'Read details', battleHP: 'Read active HP', battleSlot1: 'Read party slot 1',
     battleSlot2: 'Read party slot 2 in battle', reviewPrevious: 'Previous review line', reviewNext: 'Next review line',
     reviewFirst: 'First review line', reviewLast: 'Last review line' });
 const BATTLE_ACTIONS = Object.keys(BATTLE_KEYS);

@@ -11,7 +11,7 @@ const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createBattleLog } = require('./battle/action-log');
 const { createRadialResult } = require('./battle/radial-result');
-const { partyVitals } = require('./battle/party-vitals');
+const { partyVitals, menuVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createField } = require('./world/field');
@@ -192,8 +192,16 @@ function boot(root, nodeRequire, nodeProcess) {
         }
         function battleVitalsAction(action, context) {
             const scene = host.manager._scene;
-            const owner = context || battleFocus.controlOwner(scene) || battleTargets.controlOwner(scene);
+            const owner = context || battleFocus.controlOwner(scene) || battleTargets.controlOwner(scene) ||
+                menus.controlOwner(scene);
             if (!owner || owner.scene !== scene) return false;
+            if (owner.kind === 'menu') {
+                if (!owner.vitals || action === 'battleSlot2') return false;
+                const record = menuVitals(scene, host.graphics, action === 'battleHP');
+                if (!record) return false;
+                menus.announce(owner, record);
+                return true;
+            }
             const main = scene._spriteset?._actorSprites?.[0];
             const active = owner.kind === 'battle' ? owner.option._followTarget :
                 main?._actor === root.BattleManager?._subject ? main : null;

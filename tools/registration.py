@@ -184,6 +184,7 @@ def menu_notifications(original):
         12025: b',this._wqaMenuSave&&(this._wqaMenuSave.banner=_0x385754)',
         12368: b'if(this._wqaMenuSave?.banner===_0x385754)this._wqaMenuSave.bannerDone=true;',
         12930: b'globalThis.WendyQuestAccessMenuReady?.(this,1);',
+        14319: b'this._wqaMenuStatus=_0x3c6ae6;',
         16877: b'let wqaShopGold,wqaShopCurrency;',
         16937: b'(wqaShopGold=',
         16961: b')',
@@ -193,6 +194,7 @@ def menu_notifications(original):
                b'this._wqaShopGold={contents:this.contents,value:wqaShopGold,currency:wqaShopCurrency};',
         20002: b'globalThis.WendyQuestAccessMenuReady?.(this,2);',
         25165: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
+        27347: b'this._wqaMenuStatus=_0x20357e;',
         34744: b'const wqaRedraw=SceneManager._scene?._wqaMenuActive&&'
                b'SceneManager._scene._itemWindow===this&&this._index===_0x14af0d;',
         35932: b'if(wqaRedraw)this._wqaMenuRowPaint=(this._wqaMenuRowPaint||0)+1;',

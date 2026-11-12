@@ -10,8 +10,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from registration import (
-    ACTION_REL, BATTLE_REL, MANAGERS_REL, SCENES_REL, STATS_REL, WINDOW_REL, WINDOWS_REL,
-    action_notification, battle_notification, managers_notification, scenes_notification, windows_notification,
+    ACTION_REL, BATTLE_REL, MANAGERS_REL, MENU_REL, SCENES_REL, STATS_REL, WINDOW_REL, WINDOWS_REL,
+    action_notification, battle_notification, managers_notification, menu_notifications, scenes_notification,
+    windows_notification,
 )
 
 decode = runpy.run_path(str(ROOT / 'tools' / 'inspect-plugin.py'))['decode']
@@ -203,7 +204,12 @@ if sys.argv[2:] == ['bag']:
 if sys.argv[2:] == ['vitals']:
     hud, _ = decode((installed / STATS_REL).read_text(encoding='utf-8-sig'))
     methods = [sprite_method(hud, 'RadialStatus', name) for name in
-               ('SetBattler', 'SetFPText', 'AddState', 'SetStateFrame', 'RemoveState', 'UpdateStateIconPositions')]
+               ('SetBattler', 'SetFPText', 'AddState', 'SetStateFrame', 'RemoveState', 'UpdateStateIconPositions',
+                'InitScene', 'SetHomePosition')]
+    methods.append(sprite_method(hud, 'RadialStatus', 'UpdateMask').replace(
+        "['UpdateMask']", "['fixtureUpdateMask']", 1))
+    menu, _ = decode(menu_notifications((installed / MENU_REL).read_bytes()).decode('utf8'))
+    methods.extend(sprite_method(menu, owner, 'createStatusWindow') for owner in ('Scene_Menu', 'Scene_Item'))
     methods.extend(native_text_methods())
     print(json.dumps(methods))
     sys.exit(0)

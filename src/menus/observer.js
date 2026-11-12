@@ -169,6 +169,7 @@ function createMenuObserver(root, host, notifications, preferences) {
         if (same) page.position = Math.min(previous.position, Math.max(0, lines.length - 1));
         if (previous) retire(previous.scene);
         current = page;
+        page.vitals = screen <= 2 && !!scene._wqaMenuStatus && scene._wqaMenuStatus === scene._statusWindow;
         if (screen === 3) {
             scene._wqaBattleBagActive = true;
             window._wqaBattleBagPresented = page.bagRow;

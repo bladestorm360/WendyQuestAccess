@@ -22,7 +22,7 @@ const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mo
     puzzleGuide: 'Start or review puzzle guidance in mod mode', puzzleStop: 'Stop puzzle guidance in mod mode',
     beaconToggle: 'Toggle navigation beacon in mod mode', wallToggle: 'Toggle wall sounds in mod mode',
     beaconStop: 'Stop current navigation in mod mode', details: 'Read details in mod mode',
-    battleVitals: 'Read active battle vitals in mod mode', battleLog: 'Read recent battle results in mod mode',
+    battleVitals: 'Read current vitals in mod mode', battleLog: 'Read recent battle results in mod mode',
     reviewPrevious: 'Previous review line in mod mode', reviewNext: 'Next review line in mod mode',
     reviewFirst: 'First review line in mod mode', reviewLast: 'Last review line in mod mode',
     questDetails: 'Read quest details in mod mode', questPrevious: 'Previous quest line in mod mode',
