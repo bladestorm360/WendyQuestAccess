@@ -80,6 +80,8 @@ Vehicle-to-area bookmark routing is implemented and offline-verified for the shi
 
 Native world discovery handback is implemented and offline-verified. The installed cases covered first Secret Island and Lost Ruins entry, both shared-switch approaches, native repaint gating and the exact next reservation. The bounded build, matching hidden NW regression and exact staged payload scan passed. The increment took about twelve minutes elapsed. World routing remains **in progress** for additional quest-conditioned and facing-conditioned world entrances, and live timing. [Discovery controls and evidence](cross-map-routing.md#native-discovery-on-a-bookmark-route)
 
+Quest-conditioned world entrance pages are implemented and offline-verified. The increment covered four marker page changes with fixed landings, both Nuggedor story layouts, five additional world entrances and eight Breaded Bay returns. The bounded build, installed methods, isolated NW.js smoke and exact-payload scan passed. The next world slice covers entrances whose native reservation depends on approach direction. [Quest-conditioned entrances](cross-map-routing.md#quest-conditioned-world-entrances)
+
 ## Initial feature inventory
 
 The launch/front-end and speech transport rows are **in progress**. Native Options, the map banner, dialogue pages, choices and number entry have implemented and offline-verified slices. The dialogue row remains **in progress** while text review, actual audio confirmation and remaining input reachability are open. Troop dialogue has a fixture. The other combat producers are **not started**. A missing producer is an investigation item before declaring a feature inapplicable.

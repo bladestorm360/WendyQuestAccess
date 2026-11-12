@@ -230,6 +230,30 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         }
         console.log('Verified 21 Lost Ruins entrances, native world reservations, and Secret Island entry and return.');
 
+        for (const [event, switchId, progress, destination] of [[18, 0, 0, 60], [18, 71, 0, 60],
+            [46, 0, 3, 59], [46, 0, 4, 45], [52, 0, 0, 209], [69, 0, 0, 85]]) {
+            const variant = load(113, { switches: [switchId], variables: { 5: progress } });
+            variant.player.setPosition(1, 1);
+            const { entrances, state } = transfers.candidates();
+            const edge = entrances.find(candidate => candidate.event === event);
+            assert.equal(edge?.map, destination);
+            const live = captureWorld(c).live;
+            const { request: { x, y } } = reachableStart(variant, live, [edge]);
+            if (event === 46) await verifyWorker(variant, { x, y, field: true, transfer: { map: destination,
+                state, candidates: [{ event, map: edge.map, x: edge.x, y: edge.y }] } }, live,
+            result => assert.equal(result.entrance, 46));
+            reserveSpecial(variant, event, [x, y], destination, 138);
+            transfers.clear();
+        }
+        const bay = load(49);
+        bay.player.setPosition(1, 1);
+        const bayExits = transfers.candidates().entrances.filter(edge => edge.map === 113);
+        assert.equal(bayExits.filter(edge => edge.x === 39 && edge.y === 9).length, 8);
+        const bayStart = reachableStart(bay, captureWorld(c).live, bayExits);
+        reserveSpecial(bay, bayStart.result.entrance, [bayStart.request.x, bayStart.request.y], 113);
+        transfers.clear();
+        console.log('Verified quest marker pages, Nuggedor story variants, and eight Breaded Bay exits.');
+
         for (const [origin, destination, expectNormal] of [[19, 20, true], [17, 113, false]]) {
             const fixture = load(origin);
             const { gameMap, player } = fixture;

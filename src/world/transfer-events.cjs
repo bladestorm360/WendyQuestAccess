@@ -1,7 +1,8 @@
 'use strict';
 
 const { MAX_CELLS } = require('./geometry.cjs');
-const { HOUSE_SWITCHES, CAULDRON_VARIABLE, STAGE, ALL_STAGES, cauldronGate } = require('./transfer-gates.cjs');
+const { HOUSE_SWITCHES, CAULDRON_VARIABLE, NUGGEDOR_VARIABLE, NUGGEDOR_THRESHOLD, NUGGEDOR_BEFORE, NUGGEDOR_AFTER,
+    STAGE, ALL_STAGES, cauldronGate } = require('./transfer-gates.cjs');
 
 const STAIRS = {
     127: { switchId: HOUSE_SWITCHES[0], gate: 1, condition: 0, open: 2, closed: 6, secretMap: 195, floorMap: 128, floor: 'Third floor' },
@@ -239,6 +240,67 @@ function worldDiscovery(entry, destination, common) {
         parametersAre(finish, ['A', 0]) ? { selfSwitch: 'A' } : null;
 }
 
+const WORLD_MARKERS = { 18: [71, 60, 1, 14], 29: [73, 49, 26, 9], 41: [70, 62, 22, 26], 42: [72, 61, 13, 18] };
+const WORLD_MARKER_CLEAR = { 52: [209, 6, 14], 69: [85, 25, 1], 70: [85, 1, 15] };
+
+function recordsPositionAt(list, index, common) {
+    return rowIs(list[index], 117) && parametersAre(list[index], [138]) && recordsWorldPosition(common);
+}
+
+function worldQuestEntrance(entry, page, index, common) {
+    if (page.trigger !== 1) return null;
+    const { list } = page;
+    const marker = WORLD_MARKERS[entry.id];
+    if (marker && entry.pages.length === 2 && page.priorityType === 0) {
+        const [switchId, map, x, y] = marker;
+        const edge = transferTo(list[1], 113);
+        if (!landingIs(edge, map, x, y) || !rowIs(list[1], 201)) return null;
+        if (index === 0) return flagsAre(page) && list.length === 8 && recordsPositionAt(list, 0, common) &&
+            rowIs(list[2], 357) && questCommand(list[2], 'questMarker') &&
+            [3, 4, 5, 6].every(at => rowIs(list[at], 657)) && rowIs(list[7], 0) ? edge : null;
+        return flagsAre(page, 'switch1Valid') && page.conditions.switch1Id === switchId && list.length === 3 &&
+            rowIs(list[0], 357) && questCommand(list[0], 'disableAutoMarker') && rowIs(list[2], 0) ? edge : null;
+    }
+    if (entry.id === 46 && entry.pages.length === 2 && page.priorityType === 0 && recordsPositionAt(list, 0, common)) {
+        if (index === 0) {
+            const edge = transferTo(list[1], 113);
+            return flagsAre(page) && list.length === 3 && rowIs(list[1], 201) && rowIs(list[2], 0) &&
+                landingIs(edge, 59, 10, 1) ? { ...edge, gate: NUGGEDOR_BEFORE } : null;
+        }
+        const edge = transferTo(list[6], 113);
+        return flagsAre(page, 'variableValid') && page.conditions.variableId === NUGGEDOR_VARIABLE &&
+            page.conditions.variableValue === NUGGEDOR_THRESHOLD && list.length === 8 &&
+            rowIs(list[1], 357) && questCommand(list[1], 'questMarker') && [2, 3, 4, 5].every(at => rowIs(list[at], 657)) &&
+            rowIs(list[6], 201) && rowIs(list[7], 0) && landingIs(edge, 45, 10, 1) ? { ...edge, gate: NUGGEDOR_AFTER } : null;
+    }
+    if (entry.pages.length !== 1 || !flagsAre(page)) return null;
+    const clear = WORLD_MARKER_CLEAR[entry.id];
+    if (clear) {
+        const edge = transferTo(list[2], 113);
+        return list.length === 4 && rowIs(list[0], 357) && questCommand(list[0], 'disableAutoMarker') &&
+            recordsPositionAt(list, 1, common) && rowIs(list[2], 201) && rowIs(list[3], 0) &&
+            landingIs(edge, ...clear) ? edge : null;
+    }
+    if (entry.id === 21) {
+        const route = list[1]?.parameters?.[1];
+        const edge = transferTo(list[3], 113);
+        // The authored route clears through mode without moving the player.
+        return list.length === 5 && recordsPositionAt(list, 0, common) && rowIs(list[1], 205) &&
+            list[1].parameters[0] === -1 && route?.wait === true && !route.repeat && !route.skippable &&
+            route.list?.length === 2 && route.list[0].code === 38 && route.list[1].code === 0 &&
+            rowIs(list[2], 505) && rowIs(list[3], 201) && rowIs(list[4], 0) && landingIs(edge, 26, 1, 22) ? edge : null;
+    }
+    if (entry.id === 25) {
+        const edge = transferTo(list[10], 113);
+        const codes = [117, 111, 357, 657, 357, 657, 657, 123, 0, 412, 201, 0];
+        return list.length === codes.length && codes.every((code, at) => rowIs(list[at], code, at >= 2 && at <= 8 ? 1 : 0)) &&
+            recordsPositionAt(list, 0, common) && parametersAre(list[1], [2, 'A', 1]) &&
+            questCommand(list[2], 'completeQuest') && questCommand(list[4], 'startQuest') &&
+            parametersAre(list[7], ['A', 0]) && landingIs(edge, 94, 38, 15) ? edge : null;
+    }
+    return null;
+}
+
 function worldWalkingEntrance(entry, page, common) {
     if (entry.pages.length !== 1 || page.trigger !== 1 || !flagsAre(page)) return null;
     const { list } = page;
@@ -260,6 +322,15 @@ function islandReturn(entry, page) {
     return landingIs(edge, 113, 48, 7) && edge.direction === 0 ? edge : null;
 }
 
+function bayReturn(entry, page) {
+    const { list } = page;
+    if (entry.id < 3 || entry.id > 10 || entry.pages.length !== 1 || page.trigger !== 1 || page.priorityType !== 0 ||
+        !flagsAre(page) || list.length !== 3 || !rowIs(list[0], 357) || !questCommand(list[0], 'disableAutoMarker') ||
+        !rowIs(list[1], 201) || !rowIs(list[2], 0)) return null;
+    const edge = transferTo(list[1], 49);
+    return landingIs(edge, 113, 39, 9) && edge.direction === 0 ? edge : null;
+}
+
 function transferOptions(map, entry, page, common) {
     if (!page || ![0, 1].includes(page.trigger) || page.moveType !== 0 || page.through ||
         ![0, 1].includes(page.priorityType) || /^(?:test|debug|developer)/i.test(entry.name || '') ||
@@ -270,7 +341,8 @@ function transferOptions(map, entry, page, common) {
     if (map === 87 && entry.id === 91) return caffeineEntrance(page, index);
     const special = cauldronSpecial(map, entry.id, page, index, common);
     if (special !== undefined) return special;
-    const world = map === 113 ? worldWalkingEntrance(entry, page, common) : map === 206 ? islandReturn(entry, page) : null;
+    const world = map === 113 ? worldQuestEntrance(entry, page, index, common) || worldWalkingEntrance(entry, page, common) :
+        map === 206 ? islandReturn(entry, page) : map === 49 ? bayReturn(entry, page) : null;
     if (world) return [world];
     const commands = page.list.filter(row => ![0, 108, 408].includes(row.code));
     if (commands.length === 2 && callsStairSound(commands[0]) && commands[0].indent === 0 && audioOnly(common)) commands.shift();
@@ -283,6 +355,12 @@ function catalogTransferOptions(map, entry, common) {
     if (map === 87 && entry.id === 91 && pages.length === 2) {
         const first = transferOptions(map, entry, pages[0], common);
         return first.length && transferOptions(map, entry, pages[1], common).length ? first : [];
+    }
+    if (map === 113 && pages.length === 2 && (WORLD_MARKERS[entry.id] || entry.id === 46)) {
+        const [before, after] = pages.map(page => transferOptions(map, entry, page, common)[0]);
+        if (!before || !after) return [];
+        if (entry.id === 46) return [before, after];
+        return landingIs(after, before.map, before.x, before.y) && before.direction === after.direction ? [before] : [];
     }
     if (map === 57 && entry.id === 13 && pages.length === LAYOUTS.length) {
         const variants = pages.map(page => transferOptions(map, entry, page, common));
