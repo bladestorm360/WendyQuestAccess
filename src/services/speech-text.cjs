@@ -92,7 +92,9 @@ function formatSpeech(message) {
             const parts = directions.length ? [directions.join(', ')] : [];
             const facing = HEADINGS[message.facing];
             const boundary = HEADINGS[message.boundary];
+            const activate = HEADINGS[message.activate];
             if (message.more) parts.push('More directions available');
+            else if (activate) parts.push(`Move ${activate} to activate`);
             else if (boundary) parts.push(`${label({ name: message.boundaryName }) || 'Floor event'} one tile ${boundary}`);
             else if (message.reenter === true) parts.push('Walk off this tile and back to activate');
             else if (message.board === true && facing) parts.push(`face ${facing} and press the action button`);

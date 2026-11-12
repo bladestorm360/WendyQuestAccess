@@ -16,7 +16,7 @@ const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mo
     directions: 'Directions', currentDestination: 'Read selected destination in mod mode',
     puzzleGuide: 'Start or review puzzle guidance in mod mode', puzzleStop: 'Stop puzzle guidance in mod mode',
     beaconToggle: 'Toggle navigation beacon in mod mode', wallToggle: 'Toggle wall sounds in mod mode',
-    beaconStop: 'Stop the current beacon in mod mode' });
+    beaconStop: 'Stop current navigation in mod mode' });
 const BUTTONS = ['South button', 'East button', 'West button', 'North button', 'Left bumper', 'Right bumper',
     'Left trigger', 'Right trigger', 'Left center button', 'Right center button', 'Left stick click', 'Right stick click',
     'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', null, null, null, null,

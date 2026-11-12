@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import zipfile
 
@@ -20,6 +21,8 @@ VERSION = '0.48.4'
 ARCHIVE_HASH = '1731a5ed81139a63a5d1d7e7c521b5f08add023ffe4b719d06796a1ba77dc8a3'
 PIXI_HASH = '6eca31989af44e87ac64319da69b9e484a7fdf0cbbdcaf3cd85869362588cee1'
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from registration import OBJECTS_REL, objects_notification
 
 
 def sha(path):
@@ -60,8 +63,13 @@ def fixture(runtime, installed):
     }), encoding='utf8')
     (app / 'index.html').write_text('''<!doctype html><title>WendyQuest Access Offline Fixture</title>
 <script src="pixi.js"></script><script src="fixture.js"></script><script src="plugin.js"></script><script src="resize-markers.js"></script>
+<script src="native-movement.js"></script>
 <script src="run.js"></script>
 ''', encoding='utf8')
+    objects = objects_notification((installed / OBJECTS_REL).read_bytes()).decode('utf8')
+    start = objects.index('Game_Player.prototype.moveByInput = function(')
+    end = objects.index('\n};', start) + 3
+    (app / 'native-movement.js').write_text('function Game_Player() {}\n' + objects[start:end], encoding='utf8')
     (app / 'fixture.js').write_text('''
 const receipt = require('path').join(require('path').dirname(process.mainModule.filename), 'receipt.json');
 const write = data => require('fs').writeFileSync(receipt, JSON.stringify(data));
@@ -83,7 +91,7 @@ var SceneManager = { _scene: new Scene_Title() };
 var Graphics = { app: { stage: SceneManager._scene, renderer: new (require('events').EventEmitter)() } };
 const nativeSelect = SceneManager._scene._commandWindow.select;
 var DataManager = { savefileInfo: () => null };
-var $gameMap, $gamePlayer, $gameScreen, $dataMap, $dataTilesets, $gameTileChanges;
+var $gameMap, $gamePlayer, $gameScreen, $gameTemp, $dataMap, $dataTilesets, $gameTileChanges;
 var $dataSystem = { tileSize: 32 };
 var Input = { keyMapper: { 90: 'ok' }, clear() {} };
 Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 3: 'menu', 9: 'menu', 12: 'up', 13: 'down' };
@@ -115,6 +123,7 @@ let caveRoute = false;
 let dialogueShown = false;
 let routeRequested = false;
 let fieldStep = 0;
+let autowalkStep = 0;
 let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
@@ -195,17 +204,17 @@ function verifySettings() {
         if (document.activeElement.textContent !== 'Stop puzzle guidance, Ctrl+U') throw Error('Puzzle binding did not retain focus');
         tap('Escape');
         if (document.activeElement.textContent !== 'Keyboard bindings') throw Error('Parent focus not restored');
-        choose('Navigation keyboard');
+        choose('Navigation');
         choose('Navigation keymap');
         settingsStep++;
-    } else if (settingsStep === 6 && menuStatus() === 'Navigation keyboard saved') {
+    } else if (settingsStep === 6 && menuStatus() === 'Navigation settings saved') {
         if (document.activeElement.textContent !== 'Navigation keymap, Brackets and backslash') throw Error('Layout did not change');
         choose('Next destination');
         tap('n', 'KeyN');
         settingsStep++;
-    } else if (settingsStep === 7 && menuStatus() === 'Navigation keyboard saved') {
+    } else if (settingsStep === 7 && menuStatus() === 'Navigation settings saved') {
         tap('Escape');
-        if (document.activeElement.textContent !== 'Navigation keyboard') throw Error('Navigation parent focus was lost');
+        if (document.activeElement.textContent !== 'Navigation') throw Error('Navigation parent focus was lost');
         choose('Audio');
         if (document.activeElement.textContent !== 'Mod sounds, on') throw Error('Sound defaults were not applied');
         audioStarted = performance.now();
@@ -324,8 +333,8 @@ const interval = setInterval(() => {
             const buttons = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
             const controller = [...buttons.slice(0, 2), buttons.find(item => item.startsWith('Next category, '))];
             tap('Escape');
-            choose('Navigation keyboard');
-            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 3).map(item => item.textContent);
+            choose('Navigation');
+            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 5).map(item => item.textContent);
             tap('Escape');
             choose('Audio');
             const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 11).map(item => item.textContent);
@@ -421,13 +430,69 @@ const interval = setInterval(() => {
         padTap(6);
     }
     if (fieldStep === 5) Graphics.app.renderer.emit('postrender');
-    if (!caveShown && require('fs').existsSync(receipt + '.route-2')) {
+    if (autowalkStep < 7 && require('fs').existsSync(receipt + '.route-2')) {
+        const scene = SceneManager._scene;
+        if (autowalkStep === 0) {
+            tap('v', 'KeyV');
+            if (!document.querySelector('dialog') || !scene._wqaSettingsActive) throw Error('Field settings did not open');
+            if (scene._wqaBeaconActive) throw Error('The settings modal retained the route beacon');
+            choose('Navigation');
+            choose('Autowalk, off');
+            autowalkStep++;
+        } else if (autowalkStep === 1 && menuStatus() === 'Navigation settings saved') {
+            tap('Escape');
+            tap('Escape');
+            if (document.querySelector('dialog')) throw Error('Field settings did not return control');
+            Object.setPrototypeOf($gamePlayer, Game_Player.prototype);
+            Object.assign($gamePlayer, {
+                isMoving: () => false, canMove: () => true, getInputDirection: () => 0,
+                canStartLocalEvents: () => true, findEventsAt: () => [],
+                executeMove(direction) {
+                    if (direction !== 6 || this._x !== 0) throw Error('Unexpected native movement dispatch');
+                    this._realX = this._x = 1;
+                    this._movementSuccess = true;
+                }
+            });
+            $gameTemp = { isDestinationValid: () => false };
+            tap(String.fromCharCode(92), 'Backslash');
+            Graphics.app.renderer.emit('postrender');
+            autowalkStep++;
+        } else if (autowalkStep === 2 && scene._wqaAutowalkActive) {
+            $gamePlayer.moveByInput();
+            if ($gamePlayer._x !== 1 || !scene._wqaAutowalkActive) throw Error('The directions key did not follow its course');
+            $gamePlayer.moveByInput();
+            if (scene._wqaAutowalkActive) throw Error('The route did not retire at arrival');
+            Graphics.app.renderer.emit('postrender');
+            autowalkStep++;
+        } else if (autowalkStep === 3 && require('fs').existsSync(receipt + '.autowalk')) {
+            tap('v', 'KeyV');
+            choose('Navigation');
+            choose('Speak autowalk path, off');
+            autowalkStep++;
+        } else if (autowalkStep === 4 && menuStatus() === 'Navigation settings saved') {
+            tap('Escape');
+            tap('Escape');
+            $gamePlayer._realX = $gamePlayer._x = 0;
+            tap(String.fromCharCode(92), 'Backslash');
+            Graphics.app.renderer.emit('postrender');
+            autowalkStep++;
+        } else if (autowalkStep === 5 && require('fs').existsSync(receipt + '.autowalk-path')) {
+            if (!scene._wqaAutowalkActive) throw Error('The narrated route did not arm');
+            $gamePlayer._realX = -0.5;
+            tap('V', 'KeyV', { shiftKey: true });
+            Graphics.app.renderer.emit('postrender');
+            if (scene._wqaAutowalkActive) throw Error('The stop command did not retire the moving route');
+            $gamePlayer._realX = $gamePlayer._x;
+            $gamePlayer.moveByInput();
+            if ($gamePlayer._x !== 0) throw Error('The stopped route dispatched movement');
+            autowalkStep++;
+        } else if (autowalkStep === 6 && require('fs').existsSync(receipt + '.autowalk-stop')) {
+            autowalkStep++;
+        }
+        return;
+    }
+    if (!caveShown && autowalkStep === 7) {
         caveShown = true;
-        tap('v', 'KeyV');
-        if (!document.querySelector('dialog') || !SceneManager._scene._wqaSettingsActive) throw Error('Field settings did not open');
-        if (SceneManager._scene._wqaBeaconActive) throw Error('The settings modal retained the route beacon');
-        tap('Escape');
-        if (document.querySelector('dialog')) throw Error('Field settings did not return control');
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         const tilemap = new PIXI.Container();
         Object.assign(tilemap, { tileWidth: 32, tileHeight: 32, origin: new PIXI.Point(),
@@ -547,6 +612,20 @@ const records = [];
 parentPort.on('message', message => {
     const receipt = require('path').join(__dirname, '..', 'receipt.json');
     if (message.kind === 'cancel') return;
+    if (message.kind === 'routeDirections' && message.name === 'At Synthetic wall') {
+        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
+            fs.writeFileSync(receipt + '.autowalk', formatSpeech(message));
+        parentPort.postMessage('ack');
+        return;
+    }
+    if ((message.kind === 'routeDirections' && message.name === 'Synthetic wall' && fs.existsSync(receipt + '.autowalk')) ||
+        (message.kind === 'fieldStatus' && message.name === 'Autowalk stopped.')) {
+        const suffix = message.kind === 'routeDirections' ? '.autowalk-path' : '.autowalk-stop';
+        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
+            fs.writeFileSync(receipt + suffix, formatSpeech(message));
+        parentPort.postMessage('ack');
+        return;
+    }
     records.push({ sameEpoch: Atomics.load(new Int32Array(workerData), 0) === message.epoch,
         epoch: message.epoch, name: message.name, kind: message.kind, slot: message.slot, empty: message.empty,
         text: message.text, append: message.append, speech: formatSpeech(message) });
@@ -660,6 +739,11 @@ def main():
                for item in (route, pad_route)):
             raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
+        if receipt.with_suffix('.json.autowalk').read_text(encoding='utf8') != 'At Synthetic wall. face east.':
+            raise RuntimeError('NW autowalk did not announce its verified arrival')
+        if receipt.with_suffix('.json.autowalk-path').read_text(encoding='utf8') != 'Synthetic wall. 1 east. face east.' or \
+                receipt.with_suffix('.json.autowalk-stop').read_text(encoding='utf8') != 'Autowalk stopped.':
+            raise RuntimeError('NW autowalk narration or explicit stop failed')
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
             raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
         if timed['kind'] != 'timedCue' or timed.get('speech') != 'One tile south on the tone.':
@@ -691,7 +775,8 @@ def main():
         if restarted.returncode or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T',
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Right trigger', 'Next category, Unassigned'] or \
-                reloaded.get('navigation') != ['Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
+                reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on',
+                                               'Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
                                                'Next destination, N'] or reloaded.get('audio') != [
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
                     'Increase wall volume, 55 percent', 'Navigation beacon, on', 'Decrease beacon volume, 65 percent',
@@ -701,6 +786,7 @@ def main():
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic renderer command and cold worker submission: {submit_ms:.1f} ms.')
+        print('Verified native autowalk dispatch, both narration settings, spoken arrival and explicit cancellation.')
         print(f'Throttled cave review from key press through postrender speech enqueue: {cave_ms:.1f} ms.')
         print(f'Throttled timed preview from key press through postrender worker enqueue: {timed_ms:.1f} ms.')
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '

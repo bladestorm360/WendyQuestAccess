@@ -86,6 +86,8 @@ function boot(root, nodeRequire, nodeProcess) {
         };
         const { notifications } = createRenderer(host);
         let audioPreferences = {};
+        let navigationPreferences = {};
+        host.navigationPreferences = () => navigationPreferences;
         audio = createAudio(host);
         title = createTitleObserver(host, notifications);
         files = createFilesObserver(host, notifications);
@@ -142,6 +144,7 @@ function boot(root, nodeRequire, nodeProcess) {
             fieldReady: field.ready,
             nativeButton,
             controllerChanged: () => controller?.reset(),
+            navigationChanged(value) { navigationPreferences = value; },
             audioStop: audio.retire,
             audioChanged(value) {
                 const master = value.enabled !== audioPreferences.enabled || value.hrtf !== audioPreferences.hrtf;
@@ -167,6 +170,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 setSettingsScene(null);
                 title.suspend();
                 files.suspend();
+                field.autowalk.stop(scene);
                 field.changed(scene);
                 scene._wqaPresentation = true;
                 root.Input?.clear();
@@ -336,14 +340,24 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFieldMove = function (scene, direction, succeeded) {
+        try { field?.autowalk.moved(scene, direction, succeeded); } catch { field?.autowalk.stop(scene); }
         try { beacon?.moved(scene, direction, succeeded); } catch { beacon?.stop(scene); }
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
     };
     root.WendyQuestAccessFieldEvent = function (scene) {
         caveTiming?.stop(scene);
-        if (scene?._wqaCaveReview) field?.changed(scene);
+        const stopped = field?.autowalk.stop(scene);
+        if (stopped || scene?._wqaCaveReview) field?.changed(scene);
         beacon?.stop(scene);
         wall?.interrupt(scene);
+    };
+    root.WendyQuestAccessAutowalkInput = function (scene, player, direction, manual) {
+        try { return field?.autowalk.input(scene, player, direction, manual) ?? direction; }
+        catch {
+            field?.autowalk.stop(scene);
+            beacon?.stop(scene);
+            return direction;
+        }
     };
     root.WendyQuestAccessWallExpire = function (scene) { wall?.expire(scene); };
     root.WendyQuestAccessCaveTimingUpdate = function (scene) {

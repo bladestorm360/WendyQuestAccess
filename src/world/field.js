@@ -3,6 +3,7 @@
 const { captureWorld } = require('./snapshot');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
+const { createAutowalk } = require('./autowalk');
 const { browse, createDestinationBrowser } = require('./destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
@@ -20,6 +21,12 @@ function createField(root, host, notifications) {
     let speech = 0;
     let renderOwner = null;
     let control = null;
+    const preferences = host.navigationPreferences;
+    const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed) => {
+        if (failed) host.beacon?.stop(scene);
+        if (record && scene === host.manager._scene) command('navigationReport', record);
+        else if (failed) retire(scene);
+    });
 
     function guideFor(scene) {
         if (salt.available(scene)) return salt;
@@ -52,13 +59,33 @@ function createField(root, host, notifications) {
         speech = 0;
     }
 
-    function present(job, record) {
-        if (active !== job || !ready(job.scene)) return;
-        speech = notifications.open(record, () => active === job && ready(job.scene) &&
+    function present(job, record, moving = false) {
+        if (active !== job || !ready(job.scene, moving)) return;
+        speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.scene._wqaPreviewUntil || host.graphics.frameCount < job.scene._wqaPreviewUntil));
     }
 
     function status(job, name) { present(job, { kind: 'fieldStatus', name }); }
+
+    function follow(job, result, record) {
+        if (job.autowalk && autowalk.start(job, result, record)) {
+            // The movement owner now watches native outcomes. Ordinary
+            // position notifications must leave its path narration admitted.
+            job.scene._wqaRouteActive = false;
+            if (preferences().speakAutowalkPath) {
+                if (result.autowalkStop) {
+                    const legs = record.legs.slice();
+                    if (!record.more) {
+                        const last = legs.pop();
+                        if (last?.tiles > 1) legs.push({ ...last, tiles: last.tiles - 1 });
+                    }
+                    present(job, { ...record, legs, more: result.autowalkMore, activate: result.autowalkStop }, true);
+                } else present(job, record, true);
+            }
+            return;
+        }
+        present(job, record);
+    }
 
     function received(packet) {
         const job = inFlight;
@@ -104,12 +131,12 @@ function createField(root, host, notifications) {
                     return status(job, 'Landing site changed. Request directions again.');
                 if (!result.reenter) host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
                     warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type);
-                present(job, { kind: 'routeDirections', name: job.label,
+                follow(job, result, { kind: 'routeDirections', name: job.label,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
                     reenter: result.reenter === true, board: !!job.vehicle, land: result.land === true,
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
             }
-            else if (result?.status === 'interrupted') present(job, { kind: 'routeDirections', name: job.label,
+            else if (result?.status === 'interrupted') follow(job, result, { kind: 'routeDirections', name: job.label,
                 legs: result.legs, boundary: result.boundary, boundaryName: worldBoundaryName(root, result.boundaryEvent),
                 more: result.more === true });
             else if (result?.status === 'approachBlocked') status(job, 'A floor event blocks the approach to ' + job.label);
@@ -151,6 +178,7 @@ function createField(root, host, notifications) {
             job.y = snapshot.y;
             job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
             job.nearestLanding = target.nearestLanding === true;
+            job.autowalk = !timedCave(snapshot.map) && preferences().autowalk;
             job.motionFrame = motion?.frame;
             if (motion) {
                 host.caveTiming?.warm(job.scene);
@@ -162,7 +190,8 @@ function createField(root, host, notifications) {
                 request: { x: snapshot.x, y: snapshot.y, event: target.nearestLanding ? undefined : target.id,
                     limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship',
                     surface: snapshot.mode !== 'walk', vehicle: target.vehicle, entryDirection: target.entryDirection,
-                    beacon: !motion && host.beacon?.enabled() === true, timingCue: !!job.timing } }, [snapshot.live.terrain.buffer]);
+                    beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk,
+                    timingCue: !!job.timing } }, [snapshot.live.terrain.buffer]);
         } catch {
             if (admission) Atomics.store(admission, 0, 0);
             inFlight = null;
@@ -171,9 +200,11 @@ function createField(root, host, notifications) {
     }
 
     function perform(job) {
-        if (active !== job || !ready(job.scene)) return;
+        const movingReport = job.action === 'navigationReport';
+        if (active !== job || !ready(job.scene, movingReport)) return;
         if (job.action === 'directions' && inFlight) return;
         job.performed = true;
+        if (movingReport) return present(job, job.text, true);
         if (job.action === 'status') return status(job, job.text);
         const routing = job.action === 'directions';
         const timed = timedCave(root.$gameMap._mapId);
@@ -216,12 +247,22 @@ function createField(root, host, notifications) {
         });
     }
 
-    for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => { if (owner) retire(owner.scene); });
+    for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+        autowalk.stop();
+        if (owner) retire(owner.scene);
+    });
+    function pendingAutowalk(scene) {
+        return active?.scene === scene && active.action === 'directions' && preferences().autowalk &&
+            !timedCave(root.$gameMap._mapId);
+    }
     function command(action, text) {
         const scene = host.manager._scene;
         if (action === 'beaconStop') {
-            if (!ready(scene, true) || !host.beacon?.stop(scene)) return false;
-            command('status', 'Beacon stopped.');
+            if (!ready(scene, true)) return false;
+            const walking = autowalk.stop(scene) || pendingAutowalk(scene);
+            const beaming = host.beacon?.stop(scene);
+            if (!walking && !beaming) return false;
+            command('navigationReport', { kind: 'fieldStatus', name: walking ? 'Autowalk stopped.' : 'Beacon stopped.' });
             return true;
         }
         if (action === 'puzzleStop') {
@@ -237,9 +278,11 @@ function createField(root, host, notifications) {
             return true;
         }
         const puzzle = action === 'puzzleGuide' && guideFor(scene);
-        if ((!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' && action !== 'status' && !puzzle) ||
-            !ready(scene) || sequence >= 0x7ffffffe) return false;
+        const reporting = action === 'navigationReport';
+        if ((!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' &&
+            action !== 'status' && !reporting && !puzzle) || !ready(scene, reporting) || sequence >= 0x7ffffffe) return false;
         if (BROWSE.has(action) || action === 'directions' || puzzle) {
+            autowalk.stop(scene);
             host.beacon?.stop(scene);
             host.caveTiming?.cancelPlan(scene);
         }
@@ -251,20 +294,24 @@ function createField(root, host, notifications) {
         // Patrol steps between the key press and the rendered frame are
         // expected. Their new sprite positions belong to the requested sample.
         scene._wqaCaveReview = timedCave(root.$gameMap._mapId);
-        scene._wqaRouteActive = !scene._wqaCaveReview;
+        scene._wqaRouteActive = !scene._wqaCaveReview && !autowalk.active(scene);
         scene._wqaPresentation = true;
         afterRender();
         return true;
     }
     return {
         ready,
+        autowalk,
         controlOwner(scene) {
-            if (!ready(scene)) return null;
+            const settled = ready(scene);
+            if (!settled && (!autowalk.active(scene) || !ready(scene, true))) return null;
             if (control?.scene !== scene) control = { kind: 'field', scene };
+            control.navigationOnly = !settled;
             control.puzzle = !!guideFor(scene);
             control.puzzleActive = salt.active(scene) || cave.active(scene) || !!host.caveTiming?.active(scene) ||
                 (active?.scene === scene && active.action === 'directions' && timedCave(root.$gameMap._mapId));
-            control.beaconActive = host.beacon?.active(scene);
+            control.autowalkActive = autowalk.active(scene) || pendingAutowalk(scene);
+            control.beaconActive = control.autowalkActive || host.beacon?.active(scene);
             return control;
         },
         dialoguePresented(scene, paint) { guideFor(scene)?.presented(scene, paint); },
@@ -277,13 +324,22 @@ function createField(root, host, notifications) {
             if (outcome && !active) command('status', outcome);
         },
         command,
-        report(text) { return command('status', text); },
-        changed: retire,
+        report(text) {
+            const scene = host.manager._scene;
+            return autowalk.active(scene) ? command('navigationReport', { kind: 'fieldStatus', name: text }) :
+                command('status', text);
+        },
+        changed(scene) {
+            autowalk.dirty(scene);
+            retire(scene);
+        },
         controlLost(scene) {
+            autowalk.stop(scene);
             retire(scene);
             if (control?.scene === scene) control = null;
         },
         leave(scene) {
+            autowalk.stop(scene);
             if (scene) scene._wqaFieldReady = false;
             retire(scene);
             if (owner?.scene === scene) owner = null;

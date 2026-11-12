@@ -5,7 +5,7 @@ const ROUTE_ACTIONS = { previousDestination: 'Previous destination', nextDestina
     nextCategory: 'Next category' };
 const AUDIO_KEYS = { beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
 const ACTIONS = Object.freeze({ ...ROUTE_ACTIONS, beaconToggle: 'Toggle navigation beacon',
-    wallToggle: 'Toggle wall sounds', beaconStop: 'Stop the current beacon' });
+    wallToggle: 'Toggle wall sounds', beaconStop: 'Stop current navigation' });
 const LAYOUT_NAMES = Object.freeze({ letters: 'Letters', brackets: 'Brackets and backslash' });
 const DEFAULTS = Object.freeze({
     letters: Object.freeze({ previousDestination: 'J', nextDestination: 'L', currentDestination: 'K', directions: 'P',
@@ -55,7 +55,8 @@ function normalizeNavigation(saved, reserved = []) {
         }
         bindings[layout] = proposed;
     }
-    return { layout: saved?.layout === 'brackets' ? 'brackets' : 'letters', bindings };
+    return { layout: saved?.layout === 'brackets' ? 'brackets' : 'letters', bindings, autowalk: saved?.autowalk === true,
+        speakAutowalkPath: saved?.speakAutowalkPath === true };
 }
 
 function navigationAction(settings, gesture) {

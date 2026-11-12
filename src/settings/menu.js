@@ -52,6 +52,7 @@ function createSettingsMenu(root, host) {
         navigation = normalizeNavigation(savedNavigation, [keys.puzzleGuide, keys.puzzleStop]);
         audio = normalizeAudio(savedAudio);
         host.controllerChanged();
+        host.navigationChanged(navigation);
         host.audioChanged(audio);
         storage = database;
     }).catch(() => {}).finally(() => {
@@ -78,7 +79,7 @@ function createSettingsMenu(root, host) {
         const groups = {
             keyboard: button(owner, 'Keyboard bindings', () => showKeyboard(owner)),
             controller: button(owner, 'Controller bindings', () => showController(owner)),
-            navigation: button(owner, 'Navigation keyboard', () => showNavigation(owner)),
+            navigation: button(owner, 'Navigation', () => showNavigation(owner)),
             audio: button(owner, 'Audio', () => showAudio(owner))
         };
         button(owner, 'Close settings', () => close(owner.scene, true));
@@ -100,7 +101,10 @@ function createSettingsMenu(root, host) {
             if (isController) {
                 pad = value;
                 host.controllerChanged();
-            } else if (isNavigation) navigation = value;
+            } else if (isNavigation) {
+                navigation = value;
+                host.navigationChanged(navigation);
+            }
             else if (isAudio) {
                 audio = value;
                 if (owner) host.audioStop(owner.scene);
@@ -119,7 +123,7 @@ function createSettingsMenu(root, host) {
             refresh('Changed for this session. Settings storage is unavailable.');
             return true;
         }
-        const subject = { controller: 'Controller settings', navigation: 'Navigation keyboard',
+        const subject = { controller: 'Controller settings', navigation: 'Navigation settings',
             audio: 'Audio settings', keyboard: 'Keyboard bindings' }[key];
         saving = true;
         refresh(`Saving ${subject.toLowerCase()}`);
@@ -201,12 +205,17 @@ function createSettingsMenu(root, host) {
         owner.group = 'navigation';
         owner.selected = selection;
         owner.capture = null;
-        owner.heading.textContent = 'Navigation keyboard';
+        owner.heading.textContent = 'Navigation';
         owner.status.textContent = loading ? 'Loading settings' : '';
         owner.contents.textContent = '';
         const { layout, bindings } = navigation;
-        let focused = button(owner, `Navigation keymap, ${LAYOUT_NAMES[layout]}`, () => change(owner,
+        const autowalk = button(owner, `Autowalk, ${navigation.autowalk ? 'on' : 'off'}`, () => change(owner,
+            { ...navigation, autowalk: !navigation.autowalk }, 'autowalk', 'navigation'));
+        const narration = button(owner, `Speak autowalk path, ${navigation.speakAutowalkPath ? 'on' : 'off'}`, () => change(owner,
+            { ...navigation, speakAutowalkPath: !navigation.speakAutowalkPath }, 'speakAutowalkPath', 'navigation'));
+        const keymap = button(owner, `Navigation keymap, ${LAYOUT_NAMES[layout]}`, () => change(owner,
             { ...navigation, layout: layout === 'letters' ? 'brackets' : 'letters' }, 'layout', 'navigation'));
+        let focused = { autowalk, speakAutowalkPath: narration }[selection] || keymap;
         for (const [action, name] of Object.entries(ACTIONS)) {
             const gesture = bindings[layout][action];
             const occupied = nativeNavigationConflict(root, gesture) ? ', used by the game' : '';

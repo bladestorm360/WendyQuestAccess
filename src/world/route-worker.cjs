@@ -59,7 +59,8 @@ parentPort.on('message', message => {
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
             result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
-            if (result.status === 'ready' && !result.reenter && request.beacon === true) {
+            const follows = result.status === 'ready' && !result.reenter && (request.beacon === true || request.autowalk === true);
+            if (follows || (result.status === 'interrupted' && request.autowalk === true)) {
                 // Two direction bits and the bounded distance to the next turn.
                 // The renderer advances one byte per accepted native step.
                 const course = new Uint8Array(result.distance);
@@ -73,6 +74,15 @@ parentPort.on('message', message => {
                     }
                 }
                 result.course = course;
+            }
+            if (result.status === 'ready' && request.autowalk === true && !result.land && !request.vehicle &&
+                result.distance > 0 && result.arrival.facing === null) {
+                const target = live.events.find(event => event.id === request.event);
+                if (target && !target.normal && (target.trigger === 1 || target.trigger === 2)) {
+                    const last = result.legs[result.legs.length - 1];
+                    result.autowalkStop = last.direction;
+                    result.autowalkMore = result.legs.length - (last.tiles === 1 ? 1 : 0) > request.limit;
+                }
             }
             if ((result.status === 'ready' || result.status === 'interrupted') &&
                 Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&

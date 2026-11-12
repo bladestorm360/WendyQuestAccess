@@ -15,6 +15,7 @@ const { warningApproach, captureMotion } = require('../src/world/puzzles/cave');
 const { verifyCaveProgression } = require('./cave-progression.cjs');
 const { verifyLocalDestinations } = require('./local-destinations.cjs');
 const { verifyVehicleNavigation } = require('./vehicle-navigation.cjs');
+const { verifyAutowalk } = require('./autowalk.cjs');
 const { copyPatrol } = require('../src/world/puzzles/patrol-motion.cjs');
 const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../src/world/puzzles/motion-world.cjs');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
@@ -907,6 +908,7 @@ async function main() {
     verifyCaveProgression(c, load, snapshot, verifyRoute);
     await verifyLocalDestinations(c, load, verifyRoute, verifyWorker);
     await verifyVehicleNavigation(c, load, read, verifyWorker);
+    await verifyAutowalk(c, load, verifyWorker);
     await verifyCrossingPreview();
     await verifyLiveCrossing();
     await verifyWarningApproach();

@@ -37,7 +37,7 @@ def methods(installed):
         'Game_Character': ['updateStop', 'updateRoutineMove', 'processMoveCommand', 'processRouteEnd',
                            'advanceMoveRouteIndex', 'forceMoveRoute', 'memorizeMoveRoute', 'restoreMoveRoute',
                            'isMoveRouteForcing', 'turnTowardPlayer', 'turnTowardCharacter', 'deltaXFrom', 'deltaYFrom',
-                           'moveForward'],
+                           'moveForward', 'searchLimit', 'findDirectionTo'],
         'Game_Player': ['isMapPassable', 'vehicle', 'isInAirship', 'canStartLocalEvents',
                         'checkEventTriggerHere', 'checkEventTriggerThere', 'checkEventTriggerTouch', 'isCollided',
                         'updateScroll', 'centerX', 'centerY', 'moveByInput', 'getInputDirection', 'executeMove',

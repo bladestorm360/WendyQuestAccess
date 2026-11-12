@@ -4,15 +4,21 @@ const { MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, BINDABLE_MASK, buttonBi
     recoveryMask } = require('./controller-bindings');
 const QUEUE_LIMIT = 4;
 const FIELD_MODE = ['settings', ...FIELD_MODE_ACTIONS];
+const MOVING_MODE = ['beaconStop'];
 const FRONT_MODE = ['settings'];
 const DIALOGUE_MODE = ['repeat', 'puzzleStop'];
 
 function modeAnnouncement(family, context, bindings) {
     if (context.kind === 'field') {
+        if (context.navigationOnly) {
+            const stop = bindings.beaconStop === null ? '' : `${buttonName(family, bindings.beaconStop)} stops autowalk. `;
+            return `Mod mode. ${stop}${buttonName(family, bindings.mode)} cancels.`;
+        }
         const current = bindings.currentDestination === null ? '' : `${buttonName(family, bindings.currentDestination)} reads the destination. `;
         const start = context.puzzle && bindings.puzzleGuide != null ? `${buttonName(family, bindings.puzzleGuide)} reviews the puzzle. ` : '';
         const stop = context.puzzleActive && bindings.puzzleStop != null ? `${buttonName(family, bindings.puzzleStop)} stops the guide. ` : '';
-        const beacon = context.beaconActive && bindings.beaconStop != null ? `${buttonName(family, bindings.beaconStop)} stops the beacon. ` : '';
+        const beacon = context.beaconActive && bindings.beaconStop != null ?
+            `${buttonName(family, bindings.beaconStop)} stops ${context.autowalkActive ? 'autowalk' : 'the beacon'}. ` : '';
         return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${current}${start}${stop}${beacon}${buttonName(family, bindings.mode)} cancels.`;
     }
     const next = context.kind === 'front' ? 'opens settings' : 'repeats dialogue';
@@ -124,7 +130,7 @@ function createController(host) {
             return physical;
         }
         if (mode !== device) {
-            if (context.kind === 'field') for (const action of FIELD_ACTIONS) {
+            if (context.kind === 'field' && !context.navigationOnly) for (const action of FIELD_ACTIONS) {
                 const button = bindings[action];
                 const bit = buttonBit(button);
                 if ((rising & bit) && !host.nativeButton(button)) {
@@ -137,7 +143,8 @@ function createController(host) {
         // A second command requires releasing the mode button first. Keep
         // all native controls neutral while the deliberate mode is active.
         if (!(pressed & modeBit) && !(previous & modeBit)) {
-            const actions = context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE : DIALOGUE_MODE;
+            const actions = context.navigationOnly ? MOVING_MODE :
+                context.kind === 'field' ? FIELD_MODE : context.kind === 'front' ? FRONT_MODE : DIALOGUE_MODE;
             for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
                 (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive) &&
                 (action !== 'beaconStop' || context.beaconActive)) {

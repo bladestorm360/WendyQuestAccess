@@ -90,10 +90,11 @@ SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentatio
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
                  b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
-                 b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive)')
+                 b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
+                 b'SceneManager._scene?._wqaAutowalkActive)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                b'SceneManager._scene?._wqaWallAudio||SceneManager._scene?._wqaBeaconActive||'
-               b'SceneManager._scene?._wqaCaveTimingActive)'
+               b'SceneManager._scene?._wqaCaveTimingActive||SceneManager._scene?._wqaAutowalkActive)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||this._eventId!==undefined||'
                b'this._type==="boat"||this._type==="ship"||this._type==="airship")||'
@@ -235,11 +236,14 @@ def objects_notification(original):
         231586: MAP_LEAVING + b'\n        ',  # Native ship boarding
         231668: MAP_LEAVING + b'\n        ',  # Native boat boarding
         232058: MAP_LEAVING + b'\n        ',  # Native landing after isLandOk
+        222789: b'if(this===$gamePlayer&&SceneManager._scene?._wqaAutowalkActive)'
+                b'direction=globalThis.WendyQuestAccessAutowalkInput?.(SceneManager._scene,this,direction,'
+                b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
-                b'(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive))'
+                b'(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive||SceneManager._scene._wqaAutowalkActive))'
                 b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',
         249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive||'
-                b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive))'
+                b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||SceneManager._scene._wqaAutowalkActive))'
                 b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene);\n        ',  # Accepted event start
         255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + MAP_LEAVING + b'}',
         255573: MAP_LEAVING + b'\n                ',  # Face preload
