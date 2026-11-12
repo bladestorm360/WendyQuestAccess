@@ -1,0 +1,8 @@
+# WendyQuest accessibility project
+
+This workspace contains a feasibility investigation for WendyQuest: Legend of the Four Corner Stones. The November 11, 2026 request covers offline investigation, design and estimates. It does not start mod implementation or authorize game execution, control, capture, tool installation, deployment, or public release.
+
+- Start at [CODEX_MEMORY.md](CODEX_MEMORY.md). Use the owner's maintained `D:/Games/Dev/codex/templates/accessibility-mod/SKILL.md` and `D:/Games/Dev/codex/MODEL_POLICY.md` for implementation, resource limits, scope closure, source boundaries and Sol-only ownership. Follow the current user resource instruction for expensive offline tools too.
+- The Windows Steam install and source-bearing inputs stay outside Git. Do not copy game scripts, disassembly, maps, assets, saves, credentials, or extracted fixtures into a repository. Use source locators and behavioral findings in documentation. Preserve dependency attribution and use source-free release artifacts.
+- Prefer the proven MZ plugin loader contract as the integration candidate for build 26578620. Verify the exact installed build again and prove safe scene readiness before choosing feature hooks. See the [engineering evidence](docs/engine-evidence.md) and [feature checkpoint](docs/feature-checkpoint.md).
+- Preserve native progression, battle timing, puzzle state, achievements, saves, and real-world reward logic. Keep puzzle and secret access tied to native controls, current reachability and the user's reveal policy. Check [the puzzle audit](docs/puzzles-and-secrets.md) before broadening scope.
