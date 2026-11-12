@@ -180,10 +180,10 @@ function pad(...buttons) {
 }
 function padTap(button) { const mask = pad(button); pad(); return mask; }
 function battleText(parent, value) {
-    const sprite = { parent, worldVisible: true, worldAlpha: 1, _dirty: false, _currentString: value, children: [] };
+    const sprite = { parent, y: 0, worldVisible: true, worldAlpha: 1, _dirty: false, _currentString: value, children: [] };
     for (let position = 0; position < value.length; position++) {
         if (value[position] === '\\n') continue;
-        sprite.children.push({ parent: sprite, worldVisible: true, worldAlpha: 1, alpha: 1,
+        sprite.children.push({ parent: sprite, y: 0, worldVisible: true, worldAlpha: 1, alpha: 1,
             scale: { x: 1, y: 1 }, bitmap: { isReady: () => true } });
     }
     return sprite;
@@ -1381,6 +1381,41 @@ const interval = setInterval(() => {
             endingStep = 60;
         } else if (endingStep === 60 && fs.existsSync(receipt + '.coupon-list-locked')) {
             fs.unlinkSync(receipt + '.coupon-list-stage');
+            fs.writeFileSync(receipt + '.coupon-response-stage', '');
+            const scene = SceneManager._scene;
+            WendyQuestAccessMenuLeaving(scene);
+            scene._couponsWindow = null;
+            const area = {};
+            const visible = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
+            const response = scene._couponResponseWindow = { ...visible(scene._windowLayer), active: true, _ready: true,
+                _index: 1, openness: 255, contentsOpacity: 255, contents: { isReady: () => true },
+                innerHeight: 330, _clientArea: area, maxItems: () => 3 };
+            response.backButton = visible(response);
+            response._button1 = visible(area);
+            response._button2 = visible(area);
+            response._wqaCouponCodeText = battleText(response._button1, 'X1-Z9');
+            response._wqaCouponButton2Text = battleText(response._button2, 'Open in app');
+            response.titleText = battleText(area, 'SYNTHETIC COUPON');
+            response.subTitleText1 = battleText(area, 'REDEEM');
+            response.bodyText1 = battleText(area, 'Shown instructions.');
+            WendyQuestAccessMenuReady(scene, 7);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 61;
+        } else if (endingStep === 61 && fs.existsSync(receipt + '.coupon-response-focus') &&
+            fs.existsSync(receipt + '.coupon-response-auto')) {
+            tap('i', 'KeyI');
+            endingStep = 62;
+        } else if (endingStep === 62 && fs.existsSync(receipt + '.coupon-response-details')) {
+            const scene = SceneManager._scene;
+            const response = scene._couponResponseWindow;
+            response.clipboardText = { ...battleText(response._clientArea, 'Copied to Clipboard'), alpha: 1 };
+            for (const glyph of response.clipboardText.children) glyph.parent = response.clipboardText;
+            response._wqaCouponCopy = 1;
+            WendyQuestAccessMenuReady(scene, 7);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 63;
+        } else if (endingStep === 63 && fs.existsSync(receipt + '.coupon-response-copy')) {
+            fs.unlinkSync(receipt + '.coupon-response-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             const title = SceneManager._scene = Graphics.app.stage = new Scene_Title();
             WendyQuestAccessTitleReady(title);
@@ -1443,6 +1478,14 @@ parentPort.on('message', message => {
     if (fs.existsSync(receipt + '.closing-pass')) {
         const speech = formatSpeech(message);
         const automatic = fs.existsSync(receipt + '.menu-autodetail');
+        if (fs.existsSync(receipt + '.coupon-response-stage')) {
+            if (message.kind === 'menuFocus') fs.writeFileSync(receipt + '.coupon-response-focus', speech);
+            if (message.kind === 'menuDetails')
+                fs.writeFileSync(receipt + (message.append ? '.coupon-response-auto' : '.coupon-response-details'), speech);
+            if (message.kind === 'menuReview') fs.writeFileSync(receipt + '.coupon-response-copy', speech);
+            parentPort.postMessage('ack');
+            return;
+        }
         if (fs.existsSync(receipt + '.coupon-list-stage')) {
             if (message.kind === 'menuFocus')
                 fs.writeFileSync(receipt + (message.enabled ? '.coupon-list-stone' : '.coupon-list-locked'), speech);
@@ -1787,6 +1830,10 @@ def main():
             'menu-vitals-full': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent',
             'coupon-list-stone': 'Available rewards, Fry Stone, 1 of 5',
             'coupon-list-locked': 'Locked reward, unavailable, 2 of 5',
+            'coupon-response-focus': 'Coupon response, SYNTHETIC COUPON. Copy coupon code, 2 of 3',
+            'coupon-response-auto': 'SYNTHETIC COUPON. REDEEM. Shown instructions.',
+            'coupon-response-details': 'SYNTHETIC COUPON. REDEEM. Shown instructions. Coupon code, X 1 dash Z 9',
+            'coupon-response-copy': 'Copied to Clipboard',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',

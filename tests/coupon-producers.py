@@ -18,10 +18,21 @@ def methods(installed):
     text, _ = decode((installed / WINDOW_REL).read_text(encoding='utf-8-sig'))
     selected = [
         between(source, "(Window_CouponList['prototype']['constructor']=Window_CouponList)['prototype']['initialize']=function(",
-                "},Window_CouponList['prototype']['update']") + '};'
+                "},Window_CouponList['prototype']['update']") + '};',
+        between(source, "(Window_CouponResponse['prototype']['constructor']=Window_CouponResponse)['prototype']['initialize']=function(",
+                "},Window_CouponResponse['prototype']['makeCommandList']") + '};',
     ]
     for owner, name, tail in (
         ('Scene_Coupons', 'createCouponsWindow', 'couponWindowRect'),
+        ('Scene_Coupons', 'createCouponResponseWindow', 'couponResponseWindowRect'),
+        ('Window_CouponResponse', 'makeCommandList', 'select'),
+        ('Window_CouponResponse', 'select', 'hitIndex'),
+        ('Window_CouponResponse', 'processOk', 'callHandler'),
+        ('Window_CouponResponse', 'callHandler', 'paint'),
+        ('Window_CouponResponse', 'createBackButton', 'setupSingleView'),
+        ('Window_CouponResponse', 'setupSingleView', 'setupSplitView'),
+        ('Window_CouponResponse', 'setupSplitView', 'addLineBreaks'),
+        ('Window_CouponResponse', 'addLineBreaks', 'createDoodle2'),
         ('Window_CouponList', 'makeCommandList', 'createTitleText'),
         ('Window_CouponList', 'processOk', 'selectCoupon'),
     ):

@@ -58,7 +58,7 @@ function formatSpeech(message) {
             const name = label(message);
             if (!name) return '';
             const screens = ['Menu', 'Inventory', 'Battle commands', 'Battle Bag', 'Shop', 'Purchase quantity',
-                'Available rewards'];
+                'Available rewards', 'Coupon response'];
             const screen = screens.includes(message.screen) ? message.screen : '';
             const actor = screen === 'Battle commands' && typeof message.actor === 'string' && message.actor.length <= 48 ?
                 message.actor : '';
@@ -98,7 +98,8 @@ function formatSpeech(message) {
             if (!Array.isArray(message.lines) || message.lines.length > 8 ||
                 !message.lines.every(line => typeof line === 'string' && line.length <= 96)) return '';
             limit = 512;
-            text = message.lines.join('. ');
+            text = message.lines.map((line, index) =>
+                index + 1 < message.lines.length && !/[.!?]$/.test(line) ? line + '.' : line).join(' ');
             break;
         case 'fieldTarget': {
             const name = label(message);

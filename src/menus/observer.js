@@ -3,7 +3,7 @@
 const { reviewLines, moveReview } = require('./review');
 const { battlePresented, drawnText } = require('../battle/presentation');
 const { shopRow, shopQuantity, shopDetails, sameShopPaint, shopPaint } = require('./shop');
-const { couponListItem, couponListFocus } = require('./coupons');
+const { couponListItem, couponListFocus, couponResponseItem, couponResponseFocus } = require('./coupons');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
 const PARAMS = [0, 1, 2, 3];
@@ -19,6 +19,7 @@ function focusWindow(scene, screen) {
     if (screen === 4) return scene._buyWindow;
     if (screen === 5) return scene._numberWindow;
     if (screen === 6) return scene._couponsWindow;
+    if (screen === 7) return scene._couponResponseWindow;
     if (scene._actorWindow?.active) return null;
     return scene._itemWindow?.isFocused ? scene._itemWindow : scene._categoryWindow;
 }
@@ -98,6 +99,8 @@ function createMenuObserver(root, host, notifications, preferences) {
     function live(page) {
         if (!page || page.suspended || !ready(page.scene, page.screen)) return false;
         const window = focusWindow(page.scene, page.screen);
+        if (page.screen === 7) return window === page.window && window.active && visible(page.scene, window) &&
+            window._index === page.index && couponResponseItem(window) === page.item;
         if (page.screen === 6) return window === page.window && window.active && visible(page.scene, window) &&
             window._index === page.index && couponListItem(window) === page.item &&
             (page.index === -1 || presentedRow(window));
@@ -119,13 +122,37 @@ function createMenuObserver(root, host, notifications, preferences) {
                 !!visible(page.scene, page.scene._equipStatusWindow) === page.compareVisible));
     }
 
-    function details(page) {
-        return { kind: 'menuDetails', lines: page.lines };
-    }
 
     function show(page, record) {
         notifications.close(page.epoch);
         page.epoch = notifications.open(record, () => current === page && live(page));
+    }
+
+    function speakDetails(page, lines, append) {
+        // Reward responses can fill several native paragraphs. Five maximum
+        // length lines fit the worker's 512-character utterance limit.
+        const perMessage = page.screen === 7 ? 5 : 8;
+        for (let index = 0; index < lines.length; index += perMessage) {
+            const record = { kind: 'menuDetails', lines: lines.slice(index, index + perMessage) };
+            if (append || index) notifications.focus(page.epoch, { ...record, append: true });
+            else show(page, record);
+        }
+    }
+
+    function observeCouponCopy(page) {
+        const { window } = page;
+        const token = window._wqaCouponCopy;
+        if (!token || token === window._wqaCouponCopyObserved || !(window.clipboardText?.alpha > 0)) return;
+        const renderer = host.graphics.app?.renderer;
+        if (typeof renderer?.once !== 'function') return;
+        renderer.once('postrender', () => {
+            try {
+                if (page !== current || !live(page) || token !== window._wqaCouponCopy) return;
+                const text = drawnText(window._clientArea, window.clipboardText, 64);
+                if (text) notifications.focus(page.epoch, { kind: 'menuReview', name: text, append: true });
+            } catch { retire(page.scene); }
+        });
+        window._wqaCouponCopyObserved = token;
     }
 
     function announceSave(scene, page) {
@@ -181,14 +208,17 @@ function createMenuObserver(root, host, notifications, preferences) {
         }
         scene._wqaControllerReady = scene._wqaMenuActive = scene._wqaPresentation = true;
         const options = preferences();
-        const headings = ['Menu', 'Inventory', 'Battle Bag', 'Shop', 'Purchase quantity', 'Available rewards'];
+        const headings = ['Menu', 'Inventory', 'Battle Bag', 'Shop', 'Purchase quantity', 'Available rewards',
+            'Coupon response'];
         const heading = headings[screen - 1];
         show(page, { kind: 'menuFocus', ...focus, indexed: options.indexing,
             screen: previous?.scene === scene && !previous.suspended &&
                 (screen <= 2 || previous.screen === screen) ? '' : heading });
-        const automatic = screen === 5 && page.quantityDetail ? lines.slice(1) : lines;
-        if (automatic.length && options.autodetail)
-            notifications.focus(page.epoch, { kind: 'menuDetails', lines: automatic, append: true });
+        if (options.autodetail) {
+            const automatic = screen === 5 && page.quantityDetail ? lines.slice(1) : page.publicLines || lines;
+            if (screen !== 7 || previous?.window !== window) speakDetails(page, automatic, true);
+        }
+        if (screen === 7) observeCouponCopy(page);
         if (screen === 1) announceSave(scene, page);
         if (screen === 4 && scene._wqaShopPurchase) {
             const purchase = scene._wqaShopPurchase;
@@ -237,10 +267,22 @@ function createMenuObserver(root, host, notifications, preferences) {
         present(page, { name, enabled, position: window._index + 1, total: window.sprites.length });
     }
 
+    function publishCouponResponse(scene, window) {
+        const offer = couponResponseFocus(window);
+        if (!offer) return;
+        const { item, name, title, lines, publicLines } = offer;
+        const page = { kind: 'menu', scene, screen: 7, window, index: window._index, item,
+            lines, publicLines, position: 0, epoch: 0, hasReview: lines.length > 0 };
+        const first = current?.window !== window;
+        present(page, { name: first && name !== title ? title + '. ' + name : name,
+            position: window._index + 1, total: window.maxItems() });
+    }
+
     function publish(scene, screen) {
         if (!ready(scene, screen)) return retire(scene);
         const window = focusWindow(scene, screen);
         if (!window?.active || !visible(scene, window)) return;
+        if (screen === 7) return publishCouponResponse(scene, window);
         const rowRequired = screen !== 5 && !(screen === 6 && window._index === -1);
         if (rowRequired && !presentedRow(window)) return;
         if (screen === 6) return publishCouponList(scene, window);
@@ -280,12 +322,14 @@ function createMenuObserver(root, host, notifications, preferences) {
         if (screen === 1) observeSave(scene);
         if (current?.scene === scene && live(current)) {
             if (screen === 1) announceSave(scene, current);
+            if (screen === 7) observeCouponCopy(current);
             return;
         }
         if (waiting?.scene === scene) return;
         const window = focusWindow(scene, screen);
         if (!window?.active) return retire(scene);
-        const row = screen === 6 ? couponListItem(window) : screen === 5 ? shopQuantity(window) :
+        const row = screen === 7 ? couponResponseItem(window) : screen === 6 ? couponListItem(window) :
+            screen === 5 ? shopQuantity(window) :
             screen === 4 ? shopRow(window) : screen === 3 ? battleBagRow(window) : selectedItem(window);
         if (!row) return retire(scene);
         // Close stale output immediately. Keep the old cursor until the next
@@ -308,7 +352,10 @@ function createMenuObserver(root, host, notifications, preferences) {
         controlOwner(scene) { return current?.scene === scene && live(current) ? current : null; },
         command(page, action) {
             if (!page || page !== current || !live(page)) return false;
-            if (action === 'details') show(page, page.lines.length ? details(page) : { kind: 'menuReview', name: 'No details here.' });
+            if (action === 'details') {
+                if (page.lines.length) speakDetails(page, page.lines, false);
+                else show(page, { kind: 'menuReview', name: 'No details here.' });
+            }
             else if (REVIEW.has(action) && page.lines.length) {
                 show(page, { ...moveReview(page, action), indexed: preferences().indexing });
             } else return false;

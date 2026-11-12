@@ -225,14 +225,24 @@ def menu_notifications(original):
         113848: b'if(this._volumePips&&this._index===_0xe6cc9c){this._wqaOptionRow=_0xe6cc9c;'
                 b'this._wqaOptionTab=this.currentTab;this._wqaOptionStatus=_0x2a39aa;}',
         115137: b'if(this._list[this._index]?.symbol===_0x409fc3)this._wqaVolumeShown=_0x20639e;',
-        122099: b'if(!this._wqaCouponBusy&&this._couponsWindow?.active&&this._couponsWindow.sprites&&'
-                b'this._started&&this._active&&this._fadeDuration===0&&this._fadeOpacity===0&&'
+        122099: b'if(!this._wqaCouponBusy&&this._started&&this._active&&this._fadeDuration===0&&this._fadeOpacity===0&&'
                 b'!this._wqaSettingsActive&&!SceneManager._nextScene&&!SceneManager._exiting&&'
-                b'!SceneManager._wqaNativeAutosaves&&!Graphics._wqaResize&&Graphics.app?.stage===this)'
-                b'globalThis.WendyQuestAccessMenuReady?.(this,6);',
+                b'!SceneManager._wqaNativeAutosaves&&!Graphics._wqaResize&&Graphics.app?.stage===this){'
+                b'if(this._couponResponseWindow?.active&&this._couponResponseWindow._ready)'
+                b'globalThis.WendyQuestAccessMenuReady?.(this,7);'
+                b'else if(this._couponsWindow?.active&&this._couponsWindow.sprites)'
+                b'globalThis.WendyQuestAccessMenuReady?.(this,6);}',
         122210: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
         122542: b'this._wqaCouponBusy=true;',
         122716: b'this._wqaCouponBusy=false;',
+        131759: b',this._wqaCouponCopy=(this._wqaCouponCopy||0)+1',
+        132121: b'if(SceneManager._scene?._wqaMenuActive)'
+                b'globalThis.WendyQuestAccessMenuLeaving?.(SceneManager._scene);',
+        139187: b',this._wqaCouponButton1Text=_0x16262d',
+        143144: b'if(SceneManager._scene?._wqaMenuActive)'
+                b'globalThis.WendyQuestAccessMenuLeaving?.(SceneManager._scene);',
+        144369: b',this._wqaCouponCodeText=_0x37d87b',
+        144657: b',this._wqaCouponButton2Text=_0x37d87b',
         163333: b'this._wqaFileKind=3;',
         165098: b'this._wqaDeleteStatus=_0x4a1a5b;' + files_ready('this'),
         165586: FILES_LEAVING,

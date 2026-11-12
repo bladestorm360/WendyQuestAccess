@@ -20,7 +20,9 @@ const renderer = new EventEmitter();
 const layer = new Sprite();
 const stones = { isReady: () => true };
 const padlock = { isReady: () => true };
-let load;
+const imageLoads = [];
+const copied = [];
+let links = 0;
 let reply;
 let requestCount = 0;
 let buzzes = 0;
@@ -34,55 +36,85 @@ function Window_Command() {}
 Window_Command.prototype = Object.create(Sprite.prototype);
 Window_Command.prototype.initialize = function () {
     Sprite.prototype.initialize.call(this);
-    Object.assign(this, { active: true, openness: 255, contentsOpacity: 255, innerWidth: 640, innerHeight: 200,
-        _clientArea: new Sprite(), contents: { width: 640, isReady: () => true }, innerRect: { x: 0 },
-        _list: [], _index: 0 });
+    Object.assign(this, { active: true, openness: 255, contentsOpacity: 255, innerWidth: 640, innerHeight: 390,
+        _clientArea: new Sprite(), contents: { width: 640, context: {}, isReady: () => true }, innerRect: { x: 0 },
+        _list: [], _index: 0, _handlers: {} });
     this.addChild(this._clientArea);
     this.makeCommandList();
 };
+Object.assign(Window_Command.prototype, {
+    addCommand(name, symbol) { this._list.push({ name, symbol }); },
+    setHandler(symbol, handler) { this._handlers[symbol] = handler; },
+    isHandled(symbol) { return !!this._handlers[symbol]; },
+    callOkHandler() { this.callHandler?.(this._list[this._index]?.symbol); },
+    index() { return this._index; }, forceSelect(index) { this._index = index; },
+    maxItems() { return this._list.length; }, refreshCursor() {}, callUpdateHelp() {},
+    isCurrentItemEnabled: () => true, updateInputData() {}, playOkSound() {},
+    addInnerChild(sprite) { this._clientArea.addChild(sprite); }
+});
 function Window_CouponList(...args) { this.initialize(...args); }
 Window_CouponList.prototype = Object.create(Window_Command.prototype);
 Object.assign(Window_CouponList.prototype, {
-    addCommand(name, symbol) { this._list.push({ name, symbol }); },
-    setHandler() {}, index() { return this._index; }, forceSelect(index) { this._index = index; },
     itemRect(index) { return { x: 20 + 90 * index, y: 60, width: 80, height: 80 }; },
     itemLineRect(index) { return this.itemRect(index); },
-    addInnerChild(sprite) { this._clientArea.addChild(sprite); },
-    refresh() {}, updateInputData() {}, callOkHandler() {}, playOkSound() {},
-    isCurrentItemEnabled: () => true,
+    refresh() {},
     deactivate() { this.active = false; },
     invalidSelection() { buzzes++; this.active = true; }
 });
-for (const name of ['setBitmapFont', 'setDrawColour', 'setOutline', 'setAlignment'])
+function Window_CouponResponse(...args) { this.initialize(...args); }
+Window_CouponResponse.prototype = Object.create(Window_Command.prototype);
+Window_CouponResponse.prototype.createDoodle2 = Window_CouponResponse.prototype.createDoodle3 = () => {};
+
+function Sprite_Sliced() { Sprite.call(this); }
+Sprite_Sliced.prototype = Object.create(Sprite.prototype);
+Object.assign(Sprite_Sliced.prototype, {
+    setRect() { return this; }, initSlices() {},
+    setSourceBitmap(bitmap) { this._bitmap = this.bitmap = bitmap; }
+});
+for (const name of ['setBitmapFont', 'setDrawColour', 'setOutline', 'setAlignment', 'setCharSpacing2'])
     Sprite_Text.prototype[name] = function () { return this; };
+Sprite_Text.prototype.StartTextAnimation = () => {};
 
 const c = vm.createContext({
-    ...host, Window_Command, Window_CouponList, Scene_Coupons, Scene_MenuBase: function () {}, SceneManager: {},
+    ...host, Window_Command, Window_CouponList, Window_CouponResponse, Scene_Coupons,
+    Sprite_Sliced, Sprite_UIButton: Sprite, Sprite_UI: Sprite, Scene_MenuBase: function () {}, SceneManager: {},
+    console: { log() {} }, SpriteTextAnimation: {}, SoundManager: { playCancel() {} },
+    Utils: { copyToClipboard(code) { copied.push(code); }, OpenURLDeepLink() { assert.equal(active, 0); links++; } },
     Graphics: { app: { renderer }, startLoading() { assert.equal(active, 0); },
         endLoading() { assert(scene._wqaCouponBusy); } },
     Input: { GetLastInputDeviceIsTouchScreen: () => true },
     DataManager: { getGlobalStoneInfo: () => [true, false, true, false, false] },
-    WendyQuest: { t: { u: { successpopup: {} }, v: index => cached && index === 2, I: () => 'fixture',
+    WendyQuest: { t: { u: { successpopup: {} }, v: index => cached && index === 2, I: () => 'fixture', M: () => 'fixture link',
         R(index) { assert.equal(index, 2); requestCount++; return new Promise(resolve => { reply = resolve; }); } } },
-    ImageLoader: function (_paths, callback) { load = () => callback({ GetImage: name => name.includes('lock') ? padlock : stones }); },
+    ImageLoader: function (_paths, callback) {
+        imageLoads.push(() => callback({ GetImage: name => name.includes('lock') ? padlock :
+            name.includes('AllStones') ? stones : { isReady: () => true, fillRect() {} } }));
+    },
     a16_0x55d438() { throw Error('Unresolved coupon property'); }
 });
 c.Scene_MenuBase.prototype.update = function () { this._windowLayer.update(); };
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 const scene = c.SceneManager._scene = c.Graphics.app.stage = Object.assign(new Scene_Coupons(), {
     _active: true, _started: true, _fadeDuration: 0, _fadeOpacity: 0, _windowLayer: layer,
-    addWindow(window) { layer.addChild(window); }, couponWindowRect: () => ({}), popScene() {},
+    addWindow(window) { layer.addChild(window); }, couponWindowRect: () => ({}), couponResponseWindowRect: () => ({}),
+    popScene() { observer.retire(scene); },
     onRedeemSuccess() {}, onRedeemFailure() {}, createCouponResponseWindow() { assert.equal(active, 0); }
 });
 const observer = createMenuObserver(c, { manager: c.SceneManager, graphics: c.Graphics, hasFocus: () => true }, {
     open(record, live) { assert(live()); spoken.push(formatSpeech(record)); return active = ++epoch; },
     focus(id, record) { assert.equal(id, active); spoken.push(formatSpeech(record)); },
     close(id) { if (id === active) active = 0; }
-}, () => ({ indexing: true }));
+}, () => ({ indexing: true, autodetail: true }));
 c.WendyQuestAccessMenuReady = observer.observe;
 c.WendyQuestAccessMenuLeaving = observer.retire;
 
-function frame() { scene.update(); renderer.emit('postrender'); }
+function load() { imageLoads.shift()(); }
+function frame() {
+    scene.update();
+    const clipboard = scene._couponResponseWindow?.clipboardText;
+    if (clipboard) clipboard.worldAlpha = clipboard.alpha;
+    renderer.emit('postrender');
+}
 async function main() {
     scene.createCouponsWindow();
     frame();
@@ -126,7 +158,71 @@ async function main() {
     await scene.onCouponSelected(2);
     assert.equal(requestCount, 1, 'a cached response retains the native local path');
     assert.equal(active, 0);
-    console.log('Verified the installed coupon list, visible locked and unlocked art, native rejection and request retirement.');
+
+    delete scene.createCouponResponseWindow;
+    scene.createCouponResponseWindow({ Title: 'Fixture error', Body1: 'The reward is unavailable.', Button1: 'Close' });
+    const failure = scene._couponResponseWindow;
+    const beforeResponse = spoken.length;
+    load();
+    frame();
+    assert.equal(spoken.length, beforeResponse, 'the back artwork still has to load');
+    load();
+    frame();
+    assert.equal(spoken[beforeResponse], 'Coupon response, FIXTURE ERROR');
+    assert.match(spoken.at(-1), /The reward is unavailable/);
+    failure.select(1);
+    frame();
+    assert.equal(spoken.at(-1), 'Close, 2 of 2');
+    failure.processOk();
+    assert.equal(active, 0);
+    layer.removeChild(failure);
+
+    const response = { 1: { title: 'Fixture reward' }, subtitle1: 'Coupon', subtitle2: 'App',
+        body1: 'Use the displayed code.', body2: 'Read the local offer instructions.', button2: 'Open in app' };
+    scene.createCouponResponseWindow(response, 0, 'A1-B2');
+    const result = scene._couponResponseWindow;
+    while (imageLoads.length) load();
+    scene._wqaCouponBusy = true;
+    const beforeReady = spoken.length;
+    frame();
+    assert.equal(spoken.length, beforeReady);
+    scene._wqaCouponBusy = false;
+    frame();
+    assert.equal(spoken[beforeReady], 'Coupon response, FIXTURE REWARD');
+    assert.match(spoken.at(-1), /Use the displayed code/);
+    assert.doesNotMatch(spoken.at(-1), /A 1 dash B 2/);
+    result.select(1);
+    frame();
+    assert.equal(spoken.at(-1), 'Copy coupon code, 2 of 3');
+    assert(observer.command(observer.controlOwner(scene), 'details'));
+    assert.match(spoken.at(-1), /Coupon code, A 1 dash B 2/);
+    for (let attempt = 0; attempt < 2; attempt++) {
+        result.processOk();
+        frame();
+        assert.equal(spoken.at(-1), 'Copied to Clipboard');
+    }
+    assert.deepEqual(copied, ['A1-B2', 'A1-B2']);
+    result.bodyText1.y = result.innerHeight + 20;
+    result.select(2);
+    frame();
+    assert.equal(spoken.at(-1), 'Open in app, 3 of 3');
+    assert(observer.command(observer.controlOwner(scene), 'details'));
+    assert.doesNotMatch(spoken.at(-1), /Use the displayed code/);
+    result.processOk();
+    assert.equal(links, 1);
+    layer.removeChild(result);
+
+    scene.createCouponResponseWindow({ ...response,
+        body1: 'First public paragraph. Second public paragraph. Third public paragraph.',
+        body2: 'Fourth public paragraph. Fifth public paragraph.' }, 0, 'SYNTHETIC');
+    while (imageLoads.length) load();
+    frame();
+    const detailsStart = spoken.length;
+    assert(observer.command(observer.controlOwner(scene), 'details'));
+    const details = spoken.slice(detailsStart);
+    assert(details.length > 1, 'long visible details use more than one bounded packet');
+    assert.match(details.join(' '), /First public paragraph.*Fifth public paragraph.*Coupon code/);
+    console.log('Verified installed coupon art, request retirement, both response layouts, explicit code review and native action boundaries.');
     console.log('Throttled presented coupon focus through formatted receipt', receipt.toFixed(2), 'ms.');
 }
 

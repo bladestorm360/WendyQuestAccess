@@ -28,4 +28,66 @@ function couponListFocus(window) {
     return { item, name: STONES[index], enabled: true };
 }
 
-module.exports = { couponListItem, couponListFocus };
+function couponResponseItem(window) {
+    const index = window._index;
+    if (!window._ready || !visibleSprite(window, window.backButton)) return null;
+    if (index === -1) return window.titleText;
+    if (index === 0) return window.backButton;
+    const button = index === 1 ? window._button1 : index === 2 ? window._button2 : null;
+    return visibleSprite(window._clientArea, button) ? button : null;
+}
+
+function paragraph(window, sprite) {
+    const text = drawnText(window._clientArea, sprite, 512);
+    if (!text) return [];
+    // Sprite_Text creates glyph children in line order. The inner window
+    // clips text outside its client area, even when the sprite is visible.
+    const shown = [];
+    let offset = 0;
+    for (const line of text.split('\n')) {
+        const glyph = sprite.children[offset];
+        offset += line.length;
+        const y = sprite.y + glyph?.y;
+        if (!line.trim() || (y >= 0 && y < window.innerHeight)) shown.push(line.trim());
+    }
+    const lines = [];
+    for (const block of shown.join('\n').split(/\n\n+/)) {
+        let remaining = block.replace(/\n/g, ' ').trim();
+        while (remaining.length > 96) {
+            const boundary = remaining.lastIndexOf(' ', 96);
+            const end = boundary > 0 ? boundary : 96;
+            lines.push(remaining.slice(0, end));
+            remaining = remaining.slice(end).trimStart();
+        }
+        if (remaining) lines.push(remaining);
+    }
+    return lines;
+}
+
+function couponResponseFocus(window) {
+    const item = couponResponseItem(window);
+    if (!item) return null;
+    const area = window._clientArea;
+    const title = paragraph(window, window.titleText).join(' ');
+    if (!title || title.length > 144) return null;
+    const index = window._index;
+    const code = visibleSprite(area, window._button1) ?
+        drawnText(window._button1, window._wqaCouponCodeText, 64).trim() : '';
+    let name = title;
+    if (index === 0) name = 'Back';
+    else if (index === 1) name = code ? 'Copy coupon code' : drawnText(item, window._wqaCouponButton1Text, 64);
+    else if (index === 2) name = drawnText(item, window._wqaCouponButton2Text, 64);
+    if (!name) return null;
+    const publicLines = [window.titleText, window.bodyText, window.subTitleText1, window.bodyText1,
+        window.subTitleText2, window.bodyText2].flatMap(sprite => paragraph(window, sprite));
+    const privateLines = [];
+    if (code) {
+        // Only explicit review reads the code, from its presented button.
+        const characters = Array.from(code, char => char === '-' ? 'dash' : char === ' ' ? 'space' : char);
+        for (let offset = 0; offset < characters.length; offset += 12)
+            privateLines.push('Coupon code, ' + characters.slice(offset, offset + 12).join(' '));
+    }
+    return { item, name, title, publicLines, lines: [...publicLines, ...privateLines] };
+}
+
+module.exports = { couponListItem, couponListFocus, couponResponseItem, couponResponseFocus };
