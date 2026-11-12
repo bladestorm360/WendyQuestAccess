@@ -2,7 +2,7 @@
 
 const { DIRECTIONS, MAX_CELLS } = require('./geometry.cjs');
 const { HOUSE_SWITCHES, CAULDRON_VARIABLE, NUGGEDOR_VARIABLE, NUGGEDOR_THRESHOLD, NUGGEDOR_BEFORE, NUGGEDOR_AFTER,
-    STAGE, ALL_STAGES, cauldronGate } = require('./transfer-gates.cjs');
+    STAGE, ALL_STAGES, cauldronGate, WORLD_CAULDRON, worldCauldronGate } = require('./transfer-gates.cjs');
 
 const STAIRS = {
     127: { switchId: HOUSE_SWITCHES[0], gate: 1, condition: 0, open: 2, closed: 6, secretMap: 195, floorMap: 128, floor: 'Third floor' },
@@ -301,9 +301,9 @@ function worldQuestEntrance(entry, page, index, common) {
     return null;
 }
 
-function playerHeading(command) {
+function playerHeading(command, depth = 0) {
     const args = command?.parameters;
-    return rowIs(command, 111) && args?.length === 3 && args[0] === 6 && args[1] === -1 && DIRECTIONS.includes(args[2])
+    return rowIs(command, 111, depth) && args?.length === 3 && args[0] === 6 && args[1] === -1 && DIRECTIONS.includes(args[2])
         ? args[2] : null;
 }
 
@@ -333,6 +333,59 @@ function worldFacingEntrances(entry, page, common) {
         edges.push({ ...edge, approach });
     }
     return edges;
+}
+
+function chillcrestEntrances(entry, page, common) {
+    const { list } = page;
+    if (entry.pages.length !== 1 || page.trigger !== 1 || page.priorityType !== 0 || !flagsAre(page) ||
+        !recordsPositionAt(list, 0, common)) return [];
+    const codes = [117, 111, 201, 0, 411, 111, 201, 0, 411, 201, 121, 0, 412, 0, 412, 0];
+    const depths = [0, 0, 1, 1, 0, 1, 2, 2, 1, 2, 2, 2, 1, 1, 0, 0];
+    if (list.length !== codes.length || !codes.every((code, index) => rowIs(list[index], code, depths[index])) ||
+        playerHeading(list[1]) !== 6 || playerHeading(list[5], 1) !== 4 || !parametersAre(list[10], [155, 155, 0])) return [];
+    const east = transferTo(list[2], 113);
+    const west = transferTo(list[6], 113);
+    const other = transferTo(list[9], 113);
+    if (!landingIs(east, 25, 1, 17) || !landingIs(west, 25, 47, 27) || !landingIs(other, 25, 23, 36)) return [];
+    return [{ ...east, approach: 6 }, { ...west, approach: 4 }, { ...other, approach: 2 }, { ...other, approach: 8 }];
+}
+
+function worldCauldronEntrances(entry, page, index, common) {
+    const { list } = page;
+    if (entry.pages.length !== 3 || page.trigger !== 1 || page.priorityType !== 0 || !recordsPositionAt(list, 0, common))
+        return [];
+    if (index === 1) {
+        const edge = transferTo(list[1], 113);
+        return list.length === 3 && flagsAre(page, 'selfSwitchValid') && page.conditions.selfSwitchCh === 'A' &&
+            rowIs(list[1], 201) && rowIs(list[2], 0) && landingIs(edge, 58, 20, 23) ?
+            [{ ...edge, gate: worldCauldronGate(WORLD_CAULDRON.informed) }] : [];
+    }
+    if (index === 2) {
+        const codes = [117, 111, 201, 0, 411, 111, 201, 0, 412, 0, 412, 0];
+        const depths = [0, 0, 1, 1, 0, 1, 2, 2, 1, 1, 0, 0];
+        const north = transferTo(list[2], 113);
+        const east = transferTo(list[6], 113);
+        if (list.length !== codes.length || !codes.every((code, at) => rowIs(list[at], code, depths[at])) ||
+            !flagsAre(page, 'switch1Valid') || page.conditions.switch1Id !== 54 ||
+            playerHeading(list[1]) !== 8 || playerHeading(list[5], 1) !== 6 ||
+            !landingIs(north, 57, 20, 23) || !landingIs(east, 57, 1, 13)) return [];
+        const gate = worldCauldronGate(WORLD_CAULDRON.changed);
+        return [{ ...north, approach: 8, gate }, { ...east, approach: 6, gate }];
+    }
+    const codes = [117, 111, 201, 0, 411, 111, 111, 201, 0, 411, 201, 0, 412, 0, 412, 0,
+        412, 111, 230, 101, 401, 101, 401, 401, 101, 401, 401, 123, 0, 412, 0];
+    const depths = [0, 0, 1, 1, 0, 1, 2, 3, 3, 2, 3, 3, 2, 2, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0];
+    const north = transferTo(list[2], 113);
+    const rescued = transferTo(list[7], 113);
+    const early = transferTo(list[10], 113);
+    if (list.length !== codes.length || !codes.every((code, at) => rowIs(list[at], code, depths[at])) ||
+        !flagsAre(page) || playerHeading(list[1]) !== 8 || playerHeading(list[5], 1) !== 6 ||
+        !parametersAre(list[6], [0, 462, 0]) || !parametersAre(list[17], [0, 462, 0]) || !parametersAre(list[27], ['A', 0]) ||
+        !landingIs(north, 58, 20, 23) || !landingIs(rescued, 58, 20, 23) || !landingIs(early, 58, 1, 13)) return [];
+    // Native dialogue and the self-switch follow the reservation when the rescue is complete.
+    return [{ ...north, approach: 8, gate: worldCauldronGate(WORLD_CAULDRON.early | WORLD_CAULDRON.rescued) },
+        { ...rescued, approach: 6, gate: worldCauldronGate(WORLD_CAULDRON.rescued) },
+        { ...early, approach: 6, gate: worldCauldronGate(WORLD_CAULDRON.early) }];
 }
 
 function worldWalkingEntrance(entry, page, common) {
@@ -376,6 +429,8 @@ function transferOptions(map, entry, page, common) {
     const special = cauldronSpecial(map, entry.id, page, index, common);
     if (special !== undefined) return special;
     if (map === 113) {
+        if (entry.id === 19) return chillcrestEntrances(entry, page, common);
+        if (entry.id === 43) return worldCauldronEntrances(entry, page, index, common);
         const facing = worldFacingEntrances(entry, page, common);
         if (facing) return facing;
     }
@@ -393,6 +448,10 @@ function catalogTransferOptions(map, entry, common) {
     if (map === 87 && entry.id === 91 && pages.length === 2) {
         const first = transferOptions(map, entry, pages[0], common);
         return first.length && transferOptions(map, entry, pages[1], common).length ? first : [];
+    }
+    if (map === 113 && entry.id === 43 && pages.length === 3) {
+        const variants = pages.map(page => transferOptions(map, entry, page, common));
+        return variants.every((options, index) => options.length === [3, 1, 2][index]) ? variants.flat() : [];
     }
     if (map === 113 && pages.length === 2 && (WORLD_MARKERS[entry.id] || entry.id === 46)) {
         const [before, after] = pages.map(page => transferOptions(map, entry, page, common)[0]);

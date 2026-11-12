@@ -299,6 +299,36 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         }
         console.log('Verified both Russetwood arrival sides and the solid Cracked Cove entrance from the native heading.');
 
+        for (const [event, switches, self, approach, destination, targetX, targetY] of [
+            [19, [], [], 6, 25, 1, 17],
+            [19, [], [], 4, 25, 47, 27],
+            [43, [], [], 8, 58, 20, 23],
+            [43, [], [], 6, 58, 1, 13],
+            [43, [462], [], 6, 58, 20, 23],
+            [43, [462], ['113,43,A'], undefined, 58, 20, 23],
+            [43, [54], [], 8, 57, 20, 23],
+            [43, [54], [], 6, 57, 1, 13]
+        ]) {
+            const story = load(113, { switches, self });
+            story.player.setPosition(1, 1);
+            const { entrances, state } = transfers.candidates();
+            const edge = entrances.find(candidate => candidate.event === event && candidate.approach === approach);
+            assert.deepEqual([edge?.map, edge?.x, edge?.y], [destination, targetX, targetY]);
+            const live = captureWorld(c).live;
+            const { request: { x, y } } = reachableStart(story, live, [edge]);
+            await verifyWorker(story, { x, y, field: true, transfer: { map: destination, state,
+                point: { x: targetX, y: targetY }, candidates: [{ event, map: destination, x: targetX, y: targetY, approach }] } },
+            live, result => {
+                assert.equal(result.entrance, event);
+                assert.equal(result.approach, approach);
+            });
+            const accepted = reserveSpecial(story, event, [x, y], destination, 138, approach);
+            story.gameMap._mapId = destination;
+            story.player.setPosition(accepted.x, accepted.y);
+            assert.deepEqual(transfers.settle({}), { ...marker, trail: [destination + '/' + accepted.x + '/' + accepted.y] });
+        }
+        console.log('Verified nested Chillcrest directions and all active Cauldron world entrance pages and story branches.');
+
         for (const [origin, destination, expectNormal] of [[19, 20, true], [17, 113, false]]) {
             const fixture = load(origin);
             const { gameMap, player } = fixture;
