@@ -1,22 +1,32 @@
 'use strict';
 
 const CONTROLLER_DEFAULTS = Object.freeze({ enabled: true, mode: 8, settings: 9, repeat: 0,
-    previous: 12, next: 13, confirm: 0, back: 1, recovery: Object.freeze([10, 11]) });
+    previous: 12, next: 13, confirm: 0, back: 1, recovery: Object.freeze([10, 11]),
+    previousDestination: 20, nextDestination: 21, previousCategory: 22, nextCategory: 23, directions: 6,
+    currentDestination: 0 });
 const MODE_ACTIONS = ['mode', 'settings', 'repeat'];
 const MENU_ACTIONS = ['previous', 'next', 'confirm', 'back'];
+const FIELD_ACTIONS = ['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory', 'directions'];
+const RECOVERY_CONFLICTS = [...MODE_ACTIONS, 'currentDestination', ...FIELD_ACTIONS];
 const ACTION_NAMES = Object.freeze({ mode: 'Toggle mod mode', settings: 'Open mod settings', repeat: 'Repeat dialogue',
     previous: 'Previous settings item', next: 'Next settings item', confirm: 'Activate settings item',
-    back: 'Back in settings', recovery: 'Toggle controller support' });
+    back: 'Back in settings', recovery: 'Toggle controller support', previousDestination: 'Previous destination',
+    nextDestination: 'Next destination', previousCategory: 'Previous category', nextCategory: 'Next category',
+    directions: 'Directions', currentDestination: 'Read selected destination in mod mode' });
 const BUTTONS = ['South button', 'East button', 'West button', 'North button', 'Left bumper', 'Right bumper',
     'Left trigger', 'Right trigger', 'Left center button', 'Right center button', 'Left stick click', 'Right stick click',
-    'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right'];
+    'D-pad up', 'D-pad down', 'D-pad left', 'D-pad right', null, null, null, null,
+    'Right stick left', 'Right stick right', 'Right stick up', 'Right stick down'];
 const FAMILY_LABELS = Object.freeze({
     xbox: ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'View', 'Menu', 'L3', 'R3'],
     playstation: ['Cross', 'Circle', 'Square', 'Triangle', 'L1', 'R1', 'L2', 'R2', 'Share or Create', 'Options', 'L3', 'R3'],
     switch: ['B', 'A', 'Y', 'X', 'L', 'R', 'ZL', 'ZR', 'Minus', 'Plus', 'Left stick click', 'Right stick click']
 });
 
-function buttonBit(button) { return Number.isInteger(button) && button >= 0 && button < BUTTONS.length ? 1 << button : 0; }
+function buttonBit(button) { return Number.isInteger(button) && BUTTONS[button] ? 1 << button : 0; }
+const BINDABLE_MASK = BUTTONS.reduce((mask, name, index) => name ? mask | 1 << index : mask, 0);
+
+function canUnassign(action) { return action === 'repeat' || action === 'currentDestination' || FIELD_ACTIONS.includes(action); }
 
 function controllerFamily(id) {
     if (typeof id !== 'string' || id.length > 128) return '';
@@ -35,9 +45,15 @@ function recoveryMask(recovery) { return buttonBit(recovery[0]) | buttonBit(reco
 function bindingAllowed(action, value, bindings, nativeButton) {
     if (action === 'recovery') {
         return Array.isArray(value) && value.length === 2 && !!buttonBit(value[0]) && !!buttonBit(value[1]) && value[0] !== value[1] &&
-            !value.includes(bindings.mode) && value.every(button => !nativeButton(button));
+            value.every(button => button < 16 && !nativeButton(button) && RECOVERY_CONFLICTS.every(other => bindings[other] !== button));
     }
-    if (!buttonBit(value) || (action === 'mode' && (nativeButton(value) || bindings.recovery.includes(value)))) return false;
+    if (!buttonBit(value) || (RECOVERY_CONFLICTS.includes(action) && bindings.recovery.includes(value))) return false;
+    if (FIELD_ACTIONS.includes(action)) return value !== bindings.mode && !nativeButton(value) &&
+        FIELD_ACTIONS.every(other => other === action || bindings[other] !== value);
+    if (action === 'mode' && (nativeButton(value) ||
+        bindings.currentDestination === value || FIELD_ACTIONS.some(other => bindings[other] === value))) return false;
+    if (action === 'currentDestination') return value !== bindings.mode && value !== bindings.settings;
+    if (action === 'settings' && value === bindings.currentDestination) return false;
     const group = MODE_ACTIONS.includes(action) ? MODE_ACTIONS : MENU_ACTIONS;
     return group.every(other => other === action || bindings[other] !== value);
 }
@@ -53,13 +69,23 @@ function normalizeController(saved) {
             for (let index = 0; index < group.length; index++) result[group[index]] = candidate[index];
         }
     }
+    for (const action of FIELD_ACTIONS) result[action] = null;
     if (Array.isArray(saved?.recovery) && bindingAllowed('recovery', saved.recovery, result, () => false)) {
         result.recovery = saved.recovery.slice();
-    } else if (result.recovery.includes(result.mode)) {
+    } else if (MODE_ACTIONS.some(action => result.recovery.includes(result[action]))) {
         for (const action of MODE_ACTIONS) result[action] = CONTROLLER_DEFAULTS[action];
+    }
+    const current = saved?.currentDestination;
+    result.currentDestination = current === null || bindingAllowed('currentDestination', current, result, () => false)
+        ? current : [0, 2, 3].find(value => value !== result.settings && value !== result.mode);
+    for (const action of FIELD_ACTIONS) {
+        const preferred = saved?.[action];
+        const alternatives = action === 'directions' ? [CONTROLLER_DEFAULTS[action], 7] : [CONTROLLER_DEFAULTS[action]];
+        result[action] = preferred === null ? null : [preferred, ...alternatives].find(value =>
+            bindingAllowed(action, value, result, () => false)) ?? null;
     }
     return result;
 }
 
-module.exports = { CONTROLLER_DEFAULTS, MODE_ACTIONS, MENU_ACTIONS, ACTION_NAMES, buttonBit, controllerFamily,
-    buttonName, recoveryMask, bindingAllowed, normalizeController };
+module.exports = { CONTROLLER_DEFAULTS, MODE_ACTIONS, MENU_ACTIONS, FIELD_ACTIONS, ACTION_NAMES, buttonBit, controllerFamily,
+    buttonName, recoveryMask, bindingAllowed, normalizeController, BINDABLE_MASK, canUnassign };

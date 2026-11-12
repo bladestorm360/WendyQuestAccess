@@ -1,13 +1,27 @@
 'use strict';
 
-const { MENU_ACTIONS, buttonBit, controllerFamily, buttonName, recoveryMask } = require('./controller-bindings');
+const { MENU_ACTIONS, FIELD_ACTIONS, BINDABLE_MASK, buttonBit, controllerFamily, buttonName, recoveryMask } = require('./controller-bindings');
 const QUEUE_LIMIT = 4;
 
 function modeAnnouncement(family, context, bindings) {
+    if (context.kind === 'field') {
+        const current = bindings.currentDestination === null ? '' : `${buttonName(family, bindings.currentDestination)} reads the destination. `;
+        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${current}${buttonName(family, bindings.mode)} cancels.`;
+    }
     const next = context.kind === 'front' ? 'opens settings' : 'repeats dialogue';
     const input = context.kind === 'front' ? bindings.settings : bindings.repeat;
     const hint = input === null ? '' : `${buttonName(family, input)} ${next}. `;
     return `Mod mode. ${hint}${buttonName(family, bindings.mode)} cancels.`;
+}
+
+function rightStick(x, y, previous) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
+    // Retain an intentional axis until it returns toward center. A diagonal
+    // selects the stronger axis, so it cannot change category and item together.
+    if ((previous === 20 && x < -0.4) || (previous === 21 && x > 0.4) ||
+        (previous === 22 && y < -0.4) || (previous === 23 && y > 0.4)) return previous;
+    if (Math.max(Math.abs(x), Math.abs(y)) < 0.55) return 0;
+    return Math.abs(x) >= Math.abs(y) ? (x < 0 ? 20 : 21) : (y < 0 ? 22 : 23);
 }
 
 function createController(host) {
@@ -35,7 +49,7 @@ function createController(host) {
         }
     }
 
-    function sample(index, mapping, id, pressed) {
+    function sample(index, mapping, id, pressed, axisX, axisY) {
         if (mapping !== 'standard' || !Number.isInteger(index) || index < 0 || index >= devices.length) return 0;
         const context = host.context();
         let device = devices[index];
@@ -44,12 +58,17 @@ function createController(host) {
             if (device) devices[index] = undefined;
             return 0;
         }
+        const physical = pressed;
+        pressed &= 0xffff;
+        const stick = rightStick(axisX, axisY, device?.context === context ? device.stick : 0);
+        if (stick) pressed |= buttonBit(stick);
         if (!device || device.context !== context) {
-            devices[index] = { context, pressed, family: controllerFamily(id) };
+            devices[index] = { context, pressed, stick, family: controllerFamily(id) };
             return 0;
         }
         const previous = device.pressed;
         device.pressed = pressed;
+        device.stick = stick;
         const bindings = host.bindings();
         if (mode === device && (!bindings.enabled || host.nativeButton(bindings.mode))) mode = null;
         const capture = context.kind === 'settings' && context.group === 'controller' && context.capture;
@@ -60,7 +79,7 @@ function createController(host) {
                 device.gesture = 0;
             }
             if (device.armed) {
-                device.gesture |= pressed & 0xffff;
+                device.gesture |= pressed & BINDABLE_MASK;
                 if (!pressed && device.gesture) {
                     queue(index, device, 'capture', device.gesture);
                     device.gesture = 0;
@@ -68,7 +87,7 @@ function createController(host) {
             } else if (!pressed) device.armed = true;
             return 0;
         }
-        if (previous === pressed) return mode === device ? pressed : 0;
+        if (previous === pressed) return mode === device ? physical : 0;
         const rising = pressed & ~previous;
         const chord = recoveryMask(bindings.recovery);
         if ((pressed & chord) === chord && (previous & chord) !== chord &&
@@ -93,19 +112,31 @@ function createController(host) {
             const entering = mode !== device;
             mode = entering ? device : null;
             queue(index, device, entering ? 'modeEntered' : 'modeLeft');
-            return pressed;
+            return physical;
         }
-        if (mode !== device) return 0;
+        if (mode !== device) {
+            if (context.kind === 'field') for (const action of FIELD_ACTIONS) {
+                const button = bindings[action];
+                const bit = buttonBit(button);
+                if ((rising & bit) && !host.nativeButton(button)) {
+                    queue(index, device, action);
+                    return bit & 0xffff;
+                }
+            }
+            return 0;
+        }
         // A second command requires releasing the mode button first. Keep
         // all native controls neutral while the deliberate mode is active.
         if (!(pressed & modeBit) && !(previous & modeBit)) {
-            const action = context.kind === 'front' ? 'settings' : 'repeat';
-            if (rising & buttonBit(bindings[action])) {
+            const actions = context.kind === 'field' ? ['settings', 'currentDestination'] :
+                context.kind === 'front' ? ['settings'] : ['repeat'];
+            for (const action of actions) if (rising & buttonBit(bindings[action])) {
                 mode = null;
                 queue(index, device, action);
+                break;
             }
         }
-        return pressed;
+        return physical;
     }
 
     return {

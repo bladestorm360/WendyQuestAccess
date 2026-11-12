@@ -1,7 +1,8 @@
 'use strict';
 
 const { captureWorld } = require('./snapshot');
-const COMMANDS = new Set(['J', 'K', 'L', 'P']);
+const { browse, createDestinationBrowser } = require('./destinations');
+const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const TIMED_MAPS = new Set([196, 199, 200, 201]);
 
 function createField(root, host, notifications) {
@@ -13,11 +14,13 @@ function createField(root, host, notifications) {
     let sequence = 0;
     let speech = 0;
     let renderOwner = null;
+    let control = null;
 
     function ready(scene) {
         const player = root.$gamePlayer;
         const map = root.$gameMap;
-        return !!(scene?._wqaFieldReady && scene === host.manager._scene && host.graphics.app?.stage === scene &&
+        return !!(scene?._wqaFieldReady && !scene._wqaSettingsActive &&
+            scene === host.manager._scene && host.graphics.app?.stage === scene &&
             !host.manager._nextScene && !host.manager._exiting && !host.manager._wqaNativeAutosaves &&
             !host.graphics._wqaResize && !host.screenFading() && host.hasFocus() && !scene._wqaTerrainWork &&
             scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 && root.$gameScreen?._brightness === 255 &&
@@ -54,7 +57,7 @@ function createField(root, host, notifications) {
                 legs: result.legs, facing: result.arrival.facing, more: result.more === true });
             else if (result?.status === 'unreachable') status(job, 'No walkable route to ' + job.label);
             else if (result?.status === 'unavailable') status(job, 'Directions unavailable for ' + job.label);
-        } else if (active && active.key === 'P' && ready(active.scene)) afterRender();
+        } else if (active?.action === 'directions' && ready(active.scene)) afterRender();
     }
 
     function route(job, snapshot, target) {
@@ -70,7 +73,7 @@ function createField(root, host, notifications) {
                     const dropped = inFlight;
                     inFlight = null;
                     if (dropped) status(dropped, 'Directions service unavailable');
-                    if (active && active !== dropped && active.key === 'P' && ready(active.scene)) afterRender();
+                    if (active?.action === 'directions' && active !== dropped && ready(active.scene)) afterRender();
                 };
                 created.on('message', received);
                 created.on('error', failed);
@@ -92,30 +95,18 @@ function createField(root, host, notifications) {
 
     function perform(job) {
         if (active !== job || !ready(job.scene)) return;
-        if (job.key === 'P' && inFlight) return;
+        if (job.action === 'directions' && inFlight) return;
         job.performed = true;
-        const snapshot = captureWorld(root);
+        if (job.action === 'status') return status(job, job.text);
+        const routing = job.action === 'directions';
+        if (routing && TIMED_MAPS.has(root.$gameMap._mapId)) return status(job, 'Ordinary directions unavailable in this timed area');
+        const snapshot = captureWorld(root, routing);
         if (!snapshot) return status(job, 'Map information unavailable');
-        const objects = snapshot.objects;
-        if (!objects.length) return status(job, 'No named objects here');
-        let index = objects.findIndex(item => item.id === owner.selection);
-        if (index < 0 && owner.selection && (job.key === 'K' || job.key === 'P')) {
-            owner.selection = null;
-            return status(job, 'Selected object is unavailable');
-        }
-        if (index < 0) {
-            index = 0;
-            const distance = item => Math.abs(item.x - snapshot.x) + Math.abs(item.y - snapshot.y);
-            for (let cursor = 1; cursor < objects.length; cursor++) {
-                if (distance(objects[cursor]) < distance(objects[index])) index = cursor;
-            }
-        }
-        index = ((index + job.delta) % objects.length + objects.length) % objects.length;
-        const target = objects[index];
-        owner.selection = target.id;
-        if (job.key !== 'P') return present(job, { kind: 'fieldTarget', name: target.name,
+        const result = browse(owner.browser, snapshot, job.changes);
+        if (!result.target) return status(job, result.status);
+        const { target, category } = result;
+        if (!routing) return present(job, { kind: 'fieldTarget', name: target.name, category,
             dx: target.x - snapshot.x, dy: target.y - snapshot.y });
-        if (TIMED_MAPS.has(snapshot.map)) return status(job, 'Ordinary directions unavailable in this timed area');
         route(job, snapshot, target);
     }
 
@@ -133,24 +124,38 @@ function createField(root, host, notifications) {
     }
 
     for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => { if (owner) retire(owner.scene); });
+    function command(action, text) {
+        const scene = host.manager._scene;
+        if ((!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' && action !== 'status') ||
+            !ready(scene) || sequence >= 0x7ffffffe) return false;
+        const changes = active?.scene === scene && !active.performed ? active.changes : [];
+        if (BROWSE.has(action) && changes.length < 16) changes.push(action);
+        if (owner) retire(owner.scene);
+        if (owner?.scene !== scene) owner = { scene, browser: createDestinationBrowser() };
+        active = { scene, action, sequence: ++sequence, changes, text };
+        scene._wqaRouteActive = scene._wqaPresentation = true;
+        afterRender();
+        return true;
+    }
     return {
-        command(key) {
-            const scene = host.manager._scene;
-            if (!COMMANDS.has(key) || !ready(scene) || sequence >= 0x7ffffffe) return false;
-            const pending = active?.scene === scene && !active.performed ? active.delta : 0;
-            const delta = (pending + (key === 'J' ? -1 : key === 'L' ? 1 : 0)) % 512;
-            if (owner) retire(owner.scene);
-            if (owner?.scene !== scene) owner = { scene, selection: null };
-            active = { scene, key, sequence: ++sequence, delta };
-            scene._wqaRouteActive = scene._wqaPresentation = true;
-            afterRender();
-            return true;
+        ready,
+        controlOwner(scene) {
+            if (!ready(scene)) return null;
+            if (control?.scene !== scene) control = { kind: 'field', scene };
+            return control;
         },
+        command,
+        report(text) { return command('status', text); },
         changed: retire,
+        controlLost(scene) {
+            retire(scene);
+            if (control?.scene === scene) control = null;
+        },
         leave(scene) {
             if (scene) scene._wqaFieldReady = false;
             retire(scene);
             if (owner?.scene === scene) owner = null;
+            if (control?.scene === scene) control = null;
         }
     };
 }

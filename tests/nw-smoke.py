@@ -105,6 +105,7 @@ let fileShown = false;
 let mapShown = false;
 let dialogueShown = false;
 let routeRequested = false;
+let fieldStep = 0;
 let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
@@ -137,6 +138,7 @@ function pad(...buttons) {
     return WendyQuestAccessPadSample(0, 'standard', 'Xbox fixture', buttons.reduce((mask, button) => mask | 1 << button, 0));
 }
 function padTap(button) { const mask = pad(button); pad(); return mask; }
+function padStick(x, y) { return WendyQuestAccessPadSample(0, 'standard', 'Xbox fixture', 0, x, y); }
 function choose(label) {
     const button = Array.from(document.querySelectorAll('dialog button')).find(item => item.textContent.startsWith(label));
     if (!button) throw Error('Missing settings control ' + label);
@@ -163,10 +165,23 @@ function verifySettings() {
         if (document.activeElement.textContent !== 'Repeat dialogue, T') throw Error('Focus lost on binding change');
         choose('Open mod settings');
         tap('j', 'KeyJ');
+        if (menuStatus() !== 'J is already in use. Choose another key.') throw Error('Field binding collision was accepted');
+        tap('v', 'KeyV');
         settingsStep++;
     } else if (settingsStep === 3 && menuStatus() === 'Keyboard bindings saved') {
         tap('Escape');
         if (document.activeElement.textContent !== 'Keyboard bindings') throw Error('Parent focus not restored');
+        choose('Navigation keyboard');
+        choose('Navigation keymap');
+        settingsStep++;
+    } else if (settingsStep === 4 && menuStatus() === 'Navigation keyboard saved') {
+        if (document.activeElement.textContent !== 'Navigation keymap, Brackets and backslash') throw Error('Layout did not change');
+        choose('Next destination');
+        tap('n', 'KeyN');
+        settingsStep++;
+    } else if (settingsStep === 5 && menuStatus() === 'Navigation keyboard saved') {
+        tap('Escape');
+        if (document.activeElement.textContent !== 'Navigation keyboard') throw Error('Navigation parent focus was lost');
         key('keydown', 'Escape', 'Escape');
         if (document.querySelector('dialog') || SceneManager._scene._wqaSettingsActive) throw Error('Modal did not close');
         key('keydown', 'z', 'KeyZ', true);
@@ -201,22 +216,25 @@ function verifyController() {
             Array.from(document.querySelectorAll('dialog button')).find(item => item.textContent === 'Back').focus();
         });
         watch.observe(node, { childList: true });
-        padTap(6);
+        padTap(7);
     }
     else if (controllerStep === 7 && menuStatus() === 'Controller settings saved') {
-        const mode = Array.from(document.querySelectorAll('dialog button')).some(item => item.textContent === 'Toggle mod mode, LT');
+        const mode = Array.from(document.querySelectorAll('dialog button')).some(item => item.textContent === 'Toggle mod mode, RT');
         if (!mode || focus !== 'Back') throw Error('Controller remap, family label, or save focus failed');
+        choose('Unassign a controller binding');
+        choose('Unassign next category');
+    } else if (controllerStep === 8 && menuStatus() === 'Controller settings saved' && focus === 'Next category, Unassigned') {
         choose('Controller support');
-    } else if (controllerStep === 8 && menuStatus() === 'Controller settings saved' && focus === 'Controller support, off') {
+    } else if (controllerStep === 9 && menuStatus() === 'Controller settings saved' && focus === 'Controller support, off') {
         pad();
         padTap(13); // No controller navigation while passthrough is selected.
         pad(10, 11);
         pad();
-    } else if (controllerStep === 9 && menuStatus() === 'Controller settings saved' && focus === 'Controller support, on') {
+    } else if (controllerStep === 10 && menuStatus() === 'Controller settings saved' && focus === 'Controller support, on') {
         pad(); // Applying a setting retires the previous device baseline.
         padTap(1);
-    } else if (controllerStep === 10 && focus === 'Controller bindings') padTap(1);
-    else if (controllerStep === 11 && !document.querySelector('dialog')) Graphics.app.renderer.emit('postrender');
+    } else if (controllerStep === 11 && focus === 'Controller bindings') padTap(1);
+    else if (controllerStep === 12 && !document.querySelector('dialog')) Graphics.app.renderer.emit('postrender');
     else return;
     controllerStep++;
 }
@@ -224,27 +242,31 @@ Input.keyMapper[87] = 'up';
 const interval = setInterval(() => {
     if (restart) {
         if (!document.querySelector('dialog')) {
-            tap('j', 'KeyJ');
+            tap('v', 'KeyV');
             if (document.querySelector('dialog')) choose('Keyboard bindings');
         }
         if (document.querySelector('dialog') && menuStatus() !== 'Loading settings') {
             const bindings = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
             tap('Escape');
             choose('Controller bindings');
-            const controller = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
-            write({ bindings, controller });
+            const buttons = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
+            const controller = [...buttons.slice(0, 2), buttons.find(item => item.startsWith('Next category, '))];
+            tap('Escape');
+            choose('Navigation keyboard');
+            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 3).map(item => item.textContent);
+            write({ bindings, controller, navigation });
             clearInterval(interval);
             nw.App.quit();
         }
         return;
     }
     if (!fileShown && require('fs').existsSync(receipt + '.title')) {
-        if (settingsStep < 4) return verifySettings();
+        if (settingsStep < 6) return verifySettings();
         if (!require('fs').existsSync(receipt + '.returned-title')) return;
-        if (controllerStep < 12) return verifyController();
+        if (controllerStep < 13) return verifyController();
         if (!require('fs').existsSync(receipt + '.controller-returned-title')) return;
         fileShown = true;
-        tap('j', 'KeyJ');
+        tap('v', 'KeyV');
         if (!document.querySelector('dialog')) throw Error('Remapped settings key is inactive');
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         if (document.querySelector('dialog') || SceneManager._scene._wqaSettingsActive) {
@@ -267,9 +289,11 @@ const interval = setInterval(() => {
             parent: layer, worldVisible: true, worldAlpha: 1, contentsOpacity: 255,
             _wqaBannerDrawnRevision: 1, _wqaBannerText: 'Synthetic map banner' } };
         $gameMap = { _mapId: 1, _tilesetId: 1, inactiveTime: 0, _events: [null,
-            { _eventId: 1, _x: 2, _y: 0, _pageIndex: 0, _trigger: 0, _priorityType: 1 }], _tileEvents: [], _vehicles: [] };
+            { _eventId: 1, _x: 2, _y: 0, _pageIndex: 0, _trigger: 0, _priorityType: 1 },
+            { _eventId: 2, _x: 2, _y: 1, _pageIndex: 0, _trigger: 0, _priorityType: 1 }], _tileEvents: [], _vehicles: [] };
         $dataMap = { width: 3, height: 2, scrollType: 0, tilesetId: 1, data: new Array(36).fill(0),
-            events: [null, { name: 'Synthetic wall', pages: [{ list: [{}, {}] }] }] };
+            events: [null, { name: 'Synthetic wall', pages: [{ list: [{}, {}] }] },
+                { name: 'Synthetic switch', pages: [{ list: [{}, {}] }] }] };
         $dataTilesets = [null, { flags: [0] }];
         $gameTileChanges = { 1: { 6: 0 } };
         $gamePlayer = { _x: 0, _y: 0, _realX: 0, _realY: 0, _vehicleType: 'walk' };
@@ -278,15 +302,44 @@ const interval = setInterval(() => {
         WendyQuestAccessMapBannerReady(scene, 1);
         Graphics.app.renderer.emit('postrender');
     }
-    if (!routeRequested && require('fs').existsSync(receipt + '.map')) {
-        routeRequested = true;
-        const start = performance.now();
+    if (fieldStep === 0 && require('fs').existsSync(receipt + '.map')) {
+        fieldStep++;
         tap('p', 'KeyP');
+        Graphics.app.renderer.emit('postrender');
+    }
+    if (fieldStep === 1 && require('fs').existsSync(receipt + '.field-target-1')) {
+        fieldStep++;
+        tap(']', 'BracketRight');
+        Graphics.app.renderer.emit('postrender');
+        tap('n', 'KeyN');
+        Graphics.app.renderer.emit('postrender');
+    }
+    if (fieldStep === 2 && require('fs').existsSync(receipt + '.field-target-2')) {
+        fieldStep++;
+        padStick(0, 0);
+        padStick(-0.8, 0);
+        padStick(0, 0);
+    }
+    if (fieldStep === 3) Graphics.app.renderer.emit('postrender');
+    if (fieldStep === 3 && !routeRequested && require('fs').existsSync(receipt + '.field-target-3')) {
+        routeRequested = true;
+        fieldStep++;
+        const start = performance.now();
+        tap(String.fromCharCode(92), 'Backslash');
         Graphics.app.renderer.emit('postrender');
         require('fs').writeFileSync(receipt + '.route-submit-ms', String(performance.now() - start));
     }
-    if (!dialogueShown && require('fs').existsSync(receipt + '.route')) {
+    if (fieldStep === 4 && require('fs').existsSync(receipt + '.route-1')) {
+        fieldStep++;
+        padTap(6);
+    }
+    if (fieldStep === 5) Graphics.app.renderer.emit('postrender');
+    if (!dialogueShown && require('fs').existsSync(receipt + '.route-2')) {
         dialogueShown = true;
+        tap('v', 'KeyV');
+        if (!document.querySelector('dialog') || !SceneManager._scene._wqaSettingsActive) throw Error('Field settings did not open');
+        tap('Escape');
+        if (document.querySelector('dialog')) throw Error('Field settings did not return control');
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         const layer = {};
         const visible = { parent: layer, worldVisible: true, worldAlpha: 1, openness: 255, contentsOpacity: 255 };
@@ -308,7 +361,7 @@ const interval = setInterval(() => {
     if (dialoguePadStep === 0 && require('fs').existsSync(receipt + '.repeat')) {
         dialoguePadStep++;
         pad();
-        if (padTap(8) !== 0 || padTap(6) !== 1 << 6) throw Error('Old and new mode bindings did not hand back correctly');
+        if (padTap(8) !== 0 || padTap(7) !== 1 << 7) throw Error('Old and new mode bindings did not hand back correctly');
     }
     if (dialoguePadStep === 1 && require('fs').existsSync(receipt + '.dialogue-mode')) {
         dialoguePadStep++;
@@ -326,13 +379,14 @@ const interval = setInterval(() => {
         WendyQuestAccessDialogueReady(scene);
         Graphics.app.renderer.emit('postrender');
     }
-    if (require('fs').existsSync(receipt) && require('fs').existsSync(receipt + '.route')) {
+    if (require('fs').existsSync(receipt) && require('fs').existsSync(receipt + '.route-2')) {
         clearInterval(interval);
         nw.App.quit();
     }
 }, 40);
 setTimeout(() => {
-    write({ error: 'No worker receipt', versions: process.versions, shared: typeof SharedArrayBuffer });
+    write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, dialoguePadStep,
+        status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
     nw.App.quit();
 }, 5000);
 ''', encoding='utf8')
@@ -360,7 +414,14 @@ parentPort.on('message', message => {
     }
     if (message.kind === 'saveSlot') fs.writeFileSync(receipt + '.slot', '');
     if (message.kind === 'mapBanner') fs.writeFileSync(receipt + '.map', '');
-    if (message.kind === 'routeDirections' || message.kind === 'fieldStatus') fs.writeFileSync(receipt + '.route', '');
+    if (message.kind === 'fieldTarget') {
+        const count = records.filter(record => record.kind === 'fieldTarget').length;
+        fs.writeFileSync(receipt + '.field-target-' + count, '');
+    }
+    if (message.kind === 'routeDirections' || message.kind === 'fieldStatus') {
+        const count = records.filter(record => record.kind === 'routeDirections' || record.kind === 'fieldStatus').length;
+        fs.writeFileSync(receipt + '.route-' + count, '');
+    }
     if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
     if (message.kind === 'dialoguePage' && fs.existsSync(receipt + '.choice')) {
         fs.writeFileSync(receipt + (fs.existsSync(receipt + '.repeat') ? '.controller-repeat' : '.repeat'), '');
@@ -408,24 +469,28 @@ def main():
             raise RuntimeError(f'NW exited {result.returncode} without a receipt: {result.stderr[:1024]!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result.returncode or data.get('error') or len(records) != 13 or not all(r.get('sameEpoch') for r in records):
+        if result.returncode or data.get('error') or len(records) != 17 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, returned_title, title_mode, controller_title, slot, banner, route, page, choice, repeat, dialogue_mode, pad_repeat, number = records
+        title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, page, choice, repeat, dialogue_mode, pad_repeat, number = records
         if any(item['name'] != title['name'] for item in (returned_title, controller_title)) or \
                 len({title['epoch'], returned_title['epoch'], controller_title['epoch']}) != 3:
             raise RuntimeError(f'NW fixture did not restore the title focus: {data}')
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
-                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:8]}) != 7:
+                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:12]}) != 11:
             raise RuntimeError(f'NW fixture did not deliver distinct presentation epochs: {data}')
-        if route['kind'] != 'routeDirections' or route['speech'] != 'Synthetic wall. east, 1 step. face east.':
+        if [item.get('name') for item in (first, second, third)] != ['Synthetic wall', 'Synthetic switch', 'Synthetic wall'] or \
+                any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
+            raise RuntimeError(f'NW field selection or layout priority failed: {data}')
+        if any(item['kind'] != 'routeDirections' or item['speech'] != 'Synthetic wall. east, 1 step. face east.'
+               for item in (route, pad_route)):
             raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
         if repeat != page or pad_repeat != page or title_mode['speech'] != 'Mod mode. Menu opens settings. View cancels.' or \
-                dialogue_mode['speech'] != 'Mod mode. A repeats dialogue. LT cancels.':
+                dialogue_mode['speech'] != 'Mod mode. A repeats dialogue. RT cancels.':
             raise RuntimeError(f'NW fixture did not deliver the controller mode prompt and current page repeat: {data}')
         if number['kind'] != 'numberEntry' or number.get('speech') != 'Number entry. 0, 7. Digit 2 of 2, 7' or \
                 number['epoch'] in {record['epoch'] for record in records[:-1]}:
@@ -435,8 +500,10 @@ def main():
         receipt.with_suffix('.json.restart').touch()
         restarted = subprocess.run(launch, cwd=runtime, capture_output=True, timeout=25)
         reloaded = json.loads(receipt.read_text(encoding='utf8')) if receipt.exists() else {}
-        if restarted.returncode or reloaded.get('bindings') != ['Open mod settings, J', 'Repeat dialogue, T'] or \
-                reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Left trigger']:
+        if restarted.returncode or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T'] or \
+                reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, Right trigger', 'Next category, Unassigned'] or \
+                reloaded.get('navigation') != ['Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
+                                               'Next destination, N']:
             raise RuntimeError('NW settings did not survive restart in the isolated profile')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")

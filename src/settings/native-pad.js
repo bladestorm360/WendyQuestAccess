@@ -5,7 +5,7 @@
 {
     const wqaScene = SceneManager._scene;
     const wqaModal = wqaScene?._wqaSettingsActive === true;
-    const wqaActive = (wqaModal || wqaScene?._wqaControllerReady) &&
+    const wqaActive = (wqaModal || wqaScene?._wqaControllerReady || wqaScene?._wqaFieldReady) &&
         !SceneManager._nextScene && !SceneManager._exiting;
     const wqaIndex = WQA_PAD.index;
     const wqaPrior = this._wqaSettingsPads?.[wqaIndex] || 0;
@@ -16,7 +16,7 @@
             if (WQA_STATE[wqaButton]) wqaPressed |= 1 << wqaButton;
         }
         const wqaClaim = wqaActive ? globalThis.WendyQuestAccessPadSample?.(
-            wqaIndex, WQA_PAD.mapping, WQA_PAD.id, wqaPressed) : 0;
+            wqaIndex, WQA_PAD.mapping, WQA_PAD.id, wqaPressed, WQA_PAD.axes[2], WQA_PAD.axes[3]) : 0;
         const wqaMask = wqaPressed & (wqaModal ? -1 : wqaPrior | wqaClaim);
         if (wqaMask) for (let wqaButton = 0; wqaButton < wqaCount; wqaButton++) {
             if (wqaMask & (1 << wqaButton)) WQA_STATE[wqaButton] = false;

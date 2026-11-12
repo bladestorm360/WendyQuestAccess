@@ -90,24 +90,31 @@ function boot(root, nodeRequire, nodeProcess) {
             const panel = settings?.controllerOwner();
             if (panel?.scene === scene && scene._wqaSettingsActive) return panel;
             if (readyScene()) return frontendControl;
-            return dialogue.controllerOwner(scene);
+            return dialogue.controllerOwner(scene) || field.controlOwner(scene);
         }
         function announce(context, text) {
             if (controlContext() !== context) return;
             const record = { kind: 'controllerStatus', name: text };
-            if (context.kind === 'dialogue') dialogue.announce(context, record);
+            if (context.kind === 'field') field.report(text);
+            else if (context.kind === 'dialogue') dialogue.announce(context, record);
             else if (context.scene instanceof root.Scene_Title) title.announce(context.scene, record);
             else files.announce(context.scene, record);
         }
         const nativeButton = button => root.Input?.gamepadMapper?.[button];
         settings = createSettingsMenu(root, {
-            readyScene,
+            readyScene() {
+                const scene = host.manager._scene;
+                return readyScene() || (field.ready(scene) ? scene : null);
+            },
+            fieldReady: field.ready,
             nativeButton,
             controllerChanged: () => controller?.reset(),
-            suspend() {
+            suspend(scene) {
                 setSettingsScene(null);
                 title.suspend();
                 files.suspend();
+                field.changed(scene);
+                scene._wqaPresentation = true;
                 root.Input?.clear();
                 root.TouchInput?.clear();
             },
@@ -129,10 +136,11 @@ function boot(root, nodeRequire, nodeProcess) {
                 else if (action === 'modeLeft') announce(context, 'Mod mode off');
                 else if (action === 'modeEntered') announce(context,
                     modeAnnouncement(family, context, settings.controllerBindings()));
+                else if (context.kind === 'field') field.command(action);
             }
         });
-        root.WendyQuestAccessPadSample = function (index, mapping, id, pressed) {
-            try { return controller.sample(index, mapping, id, pressed); } catch { return 0; }
+        root.WendyQuestAccessPadSample = function (index, mapping, id, pressed, axisX, axisY) {
+            try { return controller.sample(index, mapping, id, pressed, axisX, axisY); } catch { return 0; }
         };
         root.addEventListener('gamepaddisconnected', event => {
             controller.disconnect(event.gamepad.index);
@@ -234,6 +242,10 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFieldChanged = function (scene) { field?.changed(scene); };
+    root.WendyQuestAccessFieldControlLost = function (scene) {
+        field?.controlLost(scene);
+        controller?.reset();
+    };
 
     // Direct native scene changes and developer reload can bypass the active
     // window's accepted actions. Their entry marker invokes this once before

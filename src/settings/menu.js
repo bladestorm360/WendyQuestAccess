@@ -2,8 +2,10 @@
 
 const { DEFAULT_KEYS, keyName, nativeConflict, normalizeKeys } = require('./keyboard');
 const { openSettings } = require('./storage');
-const { CONTROLLER_DEFAULTS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
-    normalizeController } = require('./controller-bindings');
+const { ACTIONS, DEFAULTS: NAVIGATION_DEFAULTS, LAYOUT_NAMES, navigationGesture, nativeNavigationConflict,
+    normalizeNavigation, navigationAction, gestureName } = require('./navigation-keys');
+const { FIELD_ACTIONS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
+    normalizeController, canUnassign } = require('./controller-bindings');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue' });
 const POINTER_EVENTS = ['mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
@@ -12,6 +14,7 @@ function createSettingsMenu(root, host) {
     let session = null;
     let keys = normalizeKeys(DEFAULT_KEYS);
     let pad = normalizeController();
+    let navigation = normalizeNavigation();
     let storage = null;
     let loading = true;
     let saving = false;
@@ -24,9 +27,11 @@ function createSettingsMenu(root, host) {
     let heldMouse = false;
 
     openSettings(root.indexedDB).then(async database => {
-        const [keyboard, controller] = await Promise.all([database.read(), database.read('controller')]);
+        const [keyboard, controller, savedNavigation] = await Promise.all([
+            database.read(), database.read('controller'), database.read('navigation')]);
         keys = normalizeKeys(keyboard);
         pad = normalizeController(controller);
+        navigation = normalizeNavigation(savedNavigation);
         host.controllerChanged();
         storage = database;
     }).catch(() => {}).finally(() => {
@@ -51,8 +56,9 @@ function createSettingsMenu(root, host) {
         owner.contents.textContent = '';
         const keyboard = button(owner, 'Keyboard bindings', () => showKeyboard(owner));
         const controller = button(owner, 'Controller bindings', () => showController(owner));
+        const field = button(owner, 'Navigation keyboard', () => showNavigation(owner));
         button(owner, 'Close settings', () => close(owner.scene, true));
-        (selection === 'controller' ? controller : keyboard).focus();
+        (selection === 'controller' ? controller : selection === 'navigation' ? field : keyboard).focus();
     }
 
     function status(owner, message) {
@@ -62,13 +68,15 @@ function createSettingsMenu(root, host) {
     function change(owner, next, selection, key = 'keyboard', failure) {
         if (loading || saving) return false;
         const isController = key === 'controller';
-        const previous = isController ? pad : keys;
+        const isNavigation = key === 'navigation';
+        const previous = isController ? pad : isNavigation ? navigation : keys;
         const origin = owner?.group;
         function apply(value) {
             if (isController) {
                 pad = value;
                 host.controllerChanged();
-            } else keys = value;
+            } else if (isNavigation) navigation = value;
+            else keys = value;
         }
         function refresh(message) {
             if (owner && session === owner) {
@@ -81,7 +89,7 @@ function createSettingsMenu(root, host) {
             refresh('Changed for this session. Settings storage is unavailable.');
             return true;
         }
-        const subject = isController ? 'Controller settings' : 'Keyboard bindings';
+        const subject = isController ? 'Controller settings' : isNavigation ? 'Navigation keyboard' : 'Keyboard bindings';
         saving = true;
         refresh(`Saving ${subject.toLowerCase()}`);
         storage.save(next, key).then(() => {
@@ -102,6 +110,47 @@ function createSettingsMenu(root, host) {
     function showGroup(owner, selection) {
         if (owner.group === 'controller') showController(owner, selection);
         else if (owner.group === 'keyboard') showKeyboard(owner, selection);
+        else if (owner.group === 'navigation') showNavigation(owner, selection);
+    }
+
+    function showNavigation(owner, selection = 'layout') {
+        owner.group = 'navigation';
+        owner.selected = selection;
+        owner.capture = null;
+        owner.heading.textContent = 'Navigation keyboard';
+        owner.status.textContent = loading ? 'Loading settings' : '';
+        owner.contents.textContent = '';
+        const { layout, bindings } = navigation;
+        let focused = button(owner, `Navigation keymap, ${LAYOUT_NAMES[layout]}`, () => change(owner,
+            { ...navigation, layout: layout === 'letters' ? 'brackets' : 'letters' }, 'layout', 'navigation'));
+        for (const [action, name] of Object.entries(ACTIONS)) {
+            const gesture = bindings[layout][action];
+            const occupied = nativeNavigationConflict(root, gesture) ? ', used by the game' : '';
+            const item = button(owner, `${name}, ${gestureName(gesture)}${occupied}`, () => {
+                if (loading || saving) return;
+                owner.capture = owner.selected = action;
+                status(owner, 'Press a letter, bracket or backslash, with or without Shift. Delete unassigns. Escape cancels.');
+            });
+            if (selection === action) focused = item;
+        }
+        button(owner, 'Reset this navigation keymap', () => change(owner,
+            { ...navigation, bindings: { ...bindings, [layout]: { ...NAVIGATION_DEFAULTS[layout] } } }, selection, 'navigation'));
+        button(owner, 'Back', () => showRoot(owner, 'navigation'));
+        focused.focus();
+    }
+
+    function captureNavigation(owner, gesture, eventCode, unassign) {
+        if (!gesture && !unassign) return;
+        const { layout, bindings } = navigation;
+        const action = owner.capture;
+        const duplicate = navigationAction(navigation, gesture);
+        if (!unassign && (nativeNavigationConflict(root, gesture, eventCode) || gesture === keys.settings ||
+            (duplicate && duplicate !== action))) {
+            status(owner, `${gestureName(gesture)} is already in use. Choose another key.`);
+            return;
+        }
+        const selected = { ...bindings[layout], [action]: unassign ? null : gesture };
+        change(owner, { ...navigation, bindings: { ...bindings, [layout]: selected } }, action, 'navigation');
     }
 
     function showKeyboard(owner, selection = 'settings') {
@@ -129,6 +178,7 @@ function createSettingsMenu(root, host) {
 
     function showController(owner, selection = 'enabled') {
         owner.group = 'controller';
+        owner.unbinding = false;
         owner.selected = selection;
         owner.capture = null;
         owner.heading.textContent = 'Controller bindings';
@@ -137,21 +187,41 @@ function createSettingsMenu(root, host) {
         const master = button(owner, `Controller support, ${pad.enabled ? 'on' : 'off'}`, () => toggleController(owner));
         let focused = master;
         for (const action of Object.keys(ACTION_NAMES)) {
-            const item = button(owner, `${ACTION_NAMES[action]}, ${buttonName(owner.family, pad[action])}`, () => {
+            const reserved = action === 'recovery' ? pad.recovery.some(host.nativeButton) :
+                (action === 'mode' || FIELD_ACTIONS.includes(action)) && host.nativeButton(pad[action]);
+            const occupied = reserved ? ', used by the game' : '';
+            const item = button(owner, `${ACTION_NAMES[action]}, ${buttonName(owner.family, pad[action])}${occupied}`, () => {
                 if (loading || saving) return;
                 owner.capture = { action };
                 owner.selected = action;
-                const gesture = action === 'recovery' ? 'Hold two buttons together, then release' : 'Press and release a button';
+                const gesture = action === 'recovery' ? 'Hold two buttons together, then release' : 'Press and release a button or stick direction';
                 const cancel = buttonName(owner.family, [pad.confirm, pad.back]);
-                status(owner, `${gesture}. To cancel, press Escape or hold ${cancel} together and release.`);
+                const clear = canUnassign(action) ? ' Delete unassigns.' : '';
+                status(owner, `${gesture}. To cancel, press Escape or hold ${cancel} together and release.${clear}`);
             });
             if (action === selection) focused = item;
         }
-        button(owner, 'Unassign controller repeat', () => change(owner, { ...pad, repeat: null }, 'repeat', 'controller'));
+        button(owner, 'Unassign a controller binding', () => showControllerUnassign(owner));
         button(owner, 'Reset controller defaults', () => change(owner,
             { ...normalizeController(), enabled: pad.enabled }, selection, 'controller'));
         button(owner, 'Back', () => showRoot(owner, 'controller'));
         focused.focus();
+    }
+
+    function showControllerUnassign(owner) {
+        owner.unbinding = true;
+        owner.heading.textContent = 'Unassign a controller binding';
+        owner.status.textContent = '';
+        owner.contents.textContent = '';
+        let first = null;
+        for (const [action, name] of Object.entries(ACTION_NAMES)) {
+            if (!canUnassign(action) || pad[action] === null) continue;
+            const item = button(owner, `Unassign ${name.toLowerCase()}`, () =>
+                change(owner, { ...pad, [action]: null }, action, 'controller'));
+            if (!first) first = item;
+        }
+        const cancel = button(owner, 'Back', () => showController(owner));
+        (first || cancel).focus();
     }
 
     function toggleController(owner, failure) {
@@ -161,6 +231,7 @@ function createSettingsMenu(root, host) {
 
     function back(owner) {
         if (owner.capture) showGroup(owner, owner.selected);
+        else if (owner.unbinding) showController(owner);
         else if (owner.group) showRoot(owner, owner.group);
         else close(owner.scene, true);
     }
@@ -169,7 +240,7 @@ function createSettingsMenu(root, host) {
         const action = owner.capture?.action;
         if (!action) return;
         const buttons = [];
-        for (let index = 0; index < 16; index++) {
+        for (let index = 0; index < 24; index++) {
             if (mask & buttonBit(index)) buttons.push(index);
         }
         if (mask === (buttonBit(pad.confirm) | buttonBit(pad.back))) return back(owner);
@@ -233,7 +304,8 @@ function createSettingsMenu(root, host) {
         const action = owner.capture;
         if (!key || (key === 'F8' && action !== 'settings')) return;
         const other = action === 'settings' ? 'repeat' : 'settings';
-        if (nativeConflict(root, key, event.keyCode) || key === keys[other]) {
+        if (nativeConflict(root, key, event.keyCode) || key === keys[other] ||
+            (action === 'settings' && navigationAction(navigation, key))) {
             status(owner, `${key} is already in use. Choose another key.`);
             return;
         }
@@ -255,26 +327,36 @@ function createSettingsMenu(root, host) {
             const goBack = event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
             if (goBack || owner.capture) {
                 const key = keyName(event);
+                const gesture = navigationGesture(event);
+                const unassign = event.key === 'Delete' && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
                 event.preventDefault();
                 if (!event.repeat && physical && held.size < 64) held.add(physical);
                 if (event.repeat) return;
                 if (goBack) back(owner);
                 else if (owner.group === 'keyboard') capture(key, event, owner);
+                else if (owner.group === 'navigation') captureNavigation(owner, gesture, event.keyCode, unassign);
+                else if (owner.group === 'controller' && unassign && canUnassign(owner.capture?.action)) {
+                    const action = owner.capture.action;
+                    change(owner, { ...pad, [action]: null }, action, 'controller');
+                }
             } else if (physical && held.size < 64 && !event.repeat) {
                 held.add(physical);
             }
             return;
         }
+        if (event.repeat || event.target?.closest?.('input, textarea, select, [contenteditable]')) return;
+        const gesture = navigationGesture(event);
+        const action = navigationAction(navigation, gesture);
+        if (action && !nativeNavigationConflict(root, gesture, event.keyCode) && host.fieldCommand(action)) return;
         const key = keyName(event);
-        if (!key || event.repeat || event.target?.closest?.('input, textarea, select, [contenteditable]') ||
-            nativeConflict(root, key, event.keyCode)) return;
+        if (!key || nativeConflict(root, key, event.keyCode)) return;
         if (key === keys.repeat && host.repeat()) return;
-        if (ready && (key === keys.settings || (key === 'F8' && nativeConflict(root, keys.settings)))) {
-            if (open(ready)) {
-                event.preventDefault();
-                event.stopPropagation();
-            }
-        } else host.fieldCommand(key);
+        const recover = key === 'F8' && (nativeConflict(root, keys.settings) ||
+            (ready && host.fieldReady(ready) && navigationAction(navigation, keys.settings)));
+        if (ready && (key === keys.settings || recover) && open(ready)) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
     }
 
     root.addEventListener('keydown', keydown, true);

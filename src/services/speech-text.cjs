@@ -56,6 +56,7 @@ function formatSpeech(message) {
         case 'mapBanner': text = label(message); break;
         case 'fieldTarget': {
             const name = label(message);
+            const category = typeof message.category === 'string' && message.category.length <= 32 ? message.category : '';
             const offsets = [];
             if (Number.isInteger(message.dx) && message.dx && Math.abs(message.dx) < 256) {
                 offsets.push(`${Math.abs(message.dx)} ${message.dx < 0 ? 'west' : 'east'}`);
@@ -63,7 +64,7 @@ function formatSpeech(message) {
             if (Number.isInteger(message.dy) && message.dy && Math.abs(message.dy) < 256) {
                 offsets.push(`${Math.abs(message.dy)} ${message.dy < 0 ? 'north' : 'south'}`);
             }
-            text = name && [name, ...offsets].join(', ');
+            text = name && [category, name, ...offsets].filter(Boolean).join(', ');
             break;
         }
         case 'routeDirections': {

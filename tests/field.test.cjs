@@ -8,6 +8,7 @@ const { fixture, mapData } = require('./map-lifecycle.test.cjs');
 const { bakeMap, MAX_CELLS } = require('../src/world/geometry.cjs');
 const { solveRoute } = require('../src/world/routes.cjs');
 const { captureWorld } = require('../src/world/snapshot');
+const { destination } = require('../src/world/destinations');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 async function main() {
@@ -17,7 +18,8 @@ async function main() {
     const tileData = path.join(process.argv[2], 'package.nw', 'data', 'Tilesets.json');
     const flags = JSON.parse(fs.readFileSync(tileData, 'utf8'));
     const base = bakeMap(data, flags[data.tilesetId].flags);
-    const key = value => f.dispatchWindowEvent('keydown', { key: value, keyCode: value.toUpperCase().charCodeAt(0) });
+    const key = (value, modifiers = {}) => f.dispatchWindowEvent('keydown',
+        { key: value, keyCode: value.toUpperCase().charCodeAt(0), ...modifiers });
     const fieldSpeech = () => f.packets.filter(packet => ['fieldTarget', 'fieldStatus', 'routeDirections'].includes(packet.kind));
     const reply = (request, result = solveRoute(base, request.live, request.request)) =>
         f.routeReply({ epoch: request.epoch, sequence: request.sequence, map: request.map, result });
@@ -30,7 +32,7 @@ async function main() {
     c.Tyruswoo.TileControl.tileIdExists = (_set, id) => Number.isInteger(flags[data.tilesetId].flags[id]);
     Object.assign(map, { _mapId: 19, _tilesetId: data.tilesetId, _events: [], _tileEvents: [], _vehicles: [], _nameDisplay: false,
         mapToEdit: () => data, linkedTilesetId: () => data.tilesetId, editingMapId: () => 19, isTileEditingLocal: () => true });
-    for (const id of [114, 97]) {
+    for (const id of [114, 97, 2, 3]) {
         const entry = data.events[id];
         const page = entry.pages[0];
         const event = Object.assign(f.event(id, 0), { _x: entry.x, _y: entry.y, _pageIndex: 0,
@@ -81,6 +83,18 @@ async function main() {
     assert.equal(formatSpeech(fieldSpeech()[2]), 'Wall. face south.');
     assert.deepEqual([player._x, player._y], [26, 12]);
 
+    key('l', { shiftKey: true });
+    f.frame();
+    assert.match(formatSpeech(fieldSpeech()[3]), /^Exits, To Chilly North/);
+    key('l', { shiftKey: true });
+    f.frame();
+    assert.match(formatSpeech(fieldSpeech()[4]), /^Treasure, Chest|^Treasure, Treasure/);
+    assert.doesNotMatch(formatSpeech(fieldSpeech()[4]), /25 Gold/);
+    key('l', { shiftKey: true });
+    f.frame();
+    assert.match(formatSpeech(fieldSpeech()[5]), /^Objects, Wall/);
+    const delivered = fieldSpeech().length;
+
     key('p');
     f.frame();
     const pending = routePackets[1];
@@ -89,7 +103,7 @@ async function main() {
     map.setExactTileId(26, 12, 3, data.data[3 * data.width * data.height + cell]);
     assert.equal(f.routeEpoch(), 0, 'native tile publication retires the route immediately');
     reply(pending);
-    assert.equal(fieldSpeech().length, 3);
+    assert.equal(fieldSpeech().length, delivered);
     key('p');
     f.frame();
     assert.equal(routePackets.length, 2, 'tilemap refresh owns the next request until settled');
@@ -102,7 +116,7 @@ async function main() {
     map._events[114].SetBlocker(0, 0, 1, 0);
     assert.equal(f.routeEpoch(), 0);
     reply(routePackets[2]);
-    assert.equal(fieldSpeech().length, 3);
+    assert.equal(fieldSpeech().length, delivered);
 
     key('p');
     f.frame();
@@ -117,7 +131,7 @@ async function main() {
     assert.equal(player._x, 27);
     assert.equal(f.routeEpoch(), 0, 'accepted native movement retires the old origin');
     reply(moves);
-    assert.equal(fieldSpeech().length, 3);
+    assert.equal(fieldSpeech().length, delivered);
 
     player.setPosition(26, 12);
     key('p');
@@ -143,7 +157,11 @@ async function main() {
     player.reserveTransfer(196, 11, 49, 2, 0);
     assert.equal(f.routeEpoch(), 0);
     reply(routePackets[5]);
-    assert.equal(fieldSpeech().length, 3, 'transfer rejects the old map result');
+    assert.equal(fieldSpeech().length, delivered, 'transfer rejects the old map result');
+    for (const [mapId, id, category, name] of [[181, 5, 'merchants', 'Kathryn'], [14, 1, 'enemies', 'Enemy1']]) {
+        const entry = mapData(mapId).events[id];
+        assert.deepEqual(destination(entry, entry.pages[0], entry.pages[0].trigger), { category, name });
+    }
     profileSnapshot(flags);
     console.log('Verified native field admission, spoken object selection and route, restored tiles, and stale-route retirement.');
 }
@@ -168,8 +186,18 @@ function profileSnapshot(tilesets) {
     const changed = measure();
     assert.equal(base.changes, 0);
     assert.equal(changed.changes, count);
+    const fullStart = performance.now();
+    const full = captureWorld(root);
+    const fullElapsed = performance.now() - fullStart;
+    const browseStart = performance.now();
+    const browse = captureWorld(root, false);
+    const browseElapsed = performance.now() - browseStart;
+    assert.deepEqual(browse.objects, full.objects);
+    assert.equal(browse.live, undefined);
     console.log(`Throttled snapshot plus clone: ${base.elapsed.toFixed(1)} ms without deltas, ` +
         `${changed.elapsed.toFixed(1)} ms for ${count} changed cells.`);
+    console.log(`Throttled dense map capture: ${fullElapsed.toFixed(1)} ms with terrain, ` +
+        `${browseElapsed.toFixed(1)} ms for the same destination list.`);
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

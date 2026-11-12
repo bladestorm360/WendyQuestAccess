@@ -53,7 +53,8 @@ DEPENDENCIES = {
 FILES_LEAVING = b'globalThis.WendyQuestAccessFilesLeaving?.(SceneManager._scene),'
 SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
-FIELD_WATCHED = b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||SceneManager._scene?._wqaRouteActive)'
+FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
+                 b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaSettingsActive)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||this._eventId!==undefined||'
@@ -269,6 +270,7 @@ def map_notification(original):
     }
 '''
     field_update = b'''
+    const wqaWasFieldReady = this._wqaFieldReady;
     this._wqaFieldReady = !!(this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
         this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true && this.srcWendy &&
         this.srcStones && $gameMap.inactiveTime < 30 && !$gameMap._needsRefresh && !$gameMap._needsTilemapRefresh &&
@@ -278,7 +280,7 @@ def map_notification(original):
         !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
     if (this._wqaFieldReady) {
         if (!Graphics._wqaFrontEndObserved) globalThis.WendyQuestAccessFieldReady?.(this);
-    } else if (this._wqaRouteActive) globalThis.WendyQuestAccessFieldChanged?.(this);
+    } else if (wqaWasFieldReady || this._wqaRouteActive) globalThis.WendyQuestAccessFieldControlLost?.(this);
 '''
     return insert(original, MAP_SHA, {
         # Track the native generator lifetime, including yielded rings.
