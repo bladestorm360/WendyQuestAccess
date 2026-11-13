@@ -336,7 +336,7 @@ function verifySettings() {
         battleAudioStep++;
     } else if (settingsStep === 17 && battleAudioStep === 1 && menuStatus() === 'Audio settings saved') {
         if (document.activeElement.textContent !== 'Battle timing cues, on') throw Error('Battle cue setting failed');
-        choose('Preview battle ice-break tone');
+        choose('Preview battle accuracy tone');
         battleAudioStep++;
     } else if (settingsStep === 17 && battleAudioStep === 2 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         choose('Mod sounds');
@@ -2053,7 +2053,7 @@ def main():
         beacon_ms = float(receipt.with_suffix('.json.beacon-ms').read_text(encoding='utf8'))
         battle_cue_ms = float(receipt.with_suffix('.json.battle-cue-ms').read_text(encoding='utf8'))
         battle_cue = json.loads(receipt.with_suffix('.json.battle-cue').read_text(encoding='utf8'))
-        if battle_cue['status'] != 1 or battle_cue['pitch'] != 1.16:
+        if battle_cue['status'] != 1 or abs(battle_cue['pitch'] - 1.1925) > 0.00001:
             raise RuntimeError('NW battle timing cue did not submit stereo PCM to SDL')
         if receipt.with_suffix('.json.cave-cue').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL')

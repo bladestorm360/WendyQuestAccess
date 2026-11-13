@@ -2,28 +2,20 @@
 
 const { battlePresented, visibleSprite } = require('./presentation');
 
-// Short notes leave room for the native wind-up and input. The high note
-// starts shortly before the center to allow for frame and audio submission.
-const LEAD_SECONDS = 0.19;
-const NEAR_SECONDS = 0.10;
-const TAP_SECONDS = 0.034;
-const FALL_SECONDS = 0.10;
-const MAX_REQUEST_MS = 90;
-const NOTE_PITCH = [0, 0.85, 1.13, 1.16, 1.13, 0.85];
+// Each pulse represents the latest visible position. Keep the same rhythm
+// and waveform through the target, with no separately scheduled hit note.
+const PULSE_INTERVAL_MS = 65;
+const MAX_REQUEST_MS = 48;
 const SOURCE = 'battleTiming';
 
-function secondsTo(progress, target, duration, slowStart, slowEnd) {
-    if (target <= progress) return 0;
-    const slow = Math.max(0, Math.min(target, slowEnd) - Math.max(progress, slowStart));
-    return (target - progress + slow) * duration;
-}
-
-function timingWindow(start, end, limit, iceStart, iceEnd) {
-    if (iceStart >= 0) return [Math.max(0, iceStart), Math.min(iceEnd, limit)];
-    if (start < Math.min(end, limit)) return [Math.max(0, start), Math.min(end, limit)];
-    // The game can show a sweep without a highlighted success band. Use its
-    // last safe visible approach as a timing reference in that case.
-    return [Math.max(0, limit - 0.14), limit - 0.04];
+function sweepPitch(progress, start, end, limit, ice) {
+    // An end band, or a meter without a band, rises to the native cutoff.
+    // An interior band shapes the pitch around its midpoint.
+    const upper = Math.min(end, limit);
+    const lower = Math.max(0, start);
+    const peak = upper > lower && (ice || upper < limit) ? (lower + upper) / 2 : limit;
+    const height = progress <= peak ? progress / peak : (limit - progress) / (limit - peak);
+    return 0.75 + 0.5 * Math.max(0, Math.min(1, height));
 }
 
 function createBattleCues(root, host, audio, preferences) {
@@ -76,7 +68,7 @@ function createBattleCues(root, host, audio, preferences) {
             owner = { scene, action, window: null };
             scene._wqaBattleCueActive = action._wqaBattleCueActive = true;
         },
-        sample(scene, action, phase, progress, duration, start, end, limit, iceStart, iceEnd, paused, frosty, accepted) {
+        sample(scene, action, phase, progress, duration, start, end, limit, iceStart, iceEnd, paused, _frosty, accepted) {
             const current = owner;
             if (current?.scene !== scene || current.action !== action) return;
             if (accepted || paused || (phase !== 0 && phase !== 1) || !(progress >= 0 && progress <= 1) ||
@@ -85,41 +77,28 @@ function createBattleCues(root, host, audio, preferences) {
                 return;
             }
             const ice = iceStart >= 0;
-            const kind = ice ? audio.cues.battleIce : phase === 0 ? audio.cues.battlePower : audio.cues.battleAccuracy;
-            let window = current.window;
-            if (window?.kind !== kind) {
-                if (window) endSweep(scene, action);
-                const [lower, upper] = timingWindow(start, end, limit, iceStart, iceEnd);
-                if (!(upper > lower)) return;
-                window = current.window = { kind, center: (lower + upper) / 2, upper, stage: 0 };
-            }
-            const slow = frosty && end > start;
-            const slowStart = slow ? start : 0;
-            const slowEnd = slow ? end : 0;
-            const remaining = secondsTo(progress, window.center, duration, slowStart, slowEnd);
-            const untilUpper = secondsTo(progress, window.upper, duration, slowStart, slowEnd);
-            const after = (progress - window.upper) * duration;
-            const stage = progress >= window.upper ? (after >= FALL_SECONDS ? 5 : 4) :
-                remaining <= TAP_SECONDS ? 3 : remaining <= NEAR_SECONDS ? 2 : remaining <= LEAD_SECONDS ? 1 : 0;
-            if (stage <= window.stage) return;
-            window.stage = stage;
-            const afterWindow = stage >= 4;
-            if (afterWindow && (progress >= limit || ice)) {
-                audio.retire(scene, SOURCE);
+            const cutoff = ice ? Math.min(iceEnd, limit) : limit;
+            if (!(progress < cutoff)) {
+                if (current.window) endSweep(scene, action);
                 return;
             }
+            let window = current.window;
+            if (window?.phase !== phase || window.ice !== ice) {
+                if (window) endSweep(scene, action);
+                window = current.window = { phase, ice, next: 0 };
+            }
+            const now = host.now();
+            if (now < window.next) return;
             const config = enabled();
             if (!config || !ready(scene, action)) return retire(scene);
-            // Only the high note means press. A falling pair indicates a
-            // window that was passed while the native sweep kept moving.
-            const note = stage === 3 ? kind : audio.cues.battleLead;
-            const pitch = NOTE_PITCH[stage];
-            const remainingMs = (afterWindow ? (limit - progress) * duration : untilUpper) * 1000;
-            const expires = host.now() + Math.min(MAX_REQUEST_MS, remainingMs);
-            const angle = Math.PI * (phase === 0 ? 1 + window.center : 2 - window.center);
-            audio.play(scene, config.hrtf, note, config.battleTimingVolume / 100,
+            window.next = now + PULSE_INTERVAL_MS;
+            const pitch = sweepPitch(progress, ice ? iceStart : start, ice ? iceEnd : end, cutoff, ice);
+            const angle = Math.PI * (phase === 0 ? 1 + progress : 2 - progress);
+            const cue = phase === 0 ? audio.cues.battlePower : audio.cues.battleAccuracy;
+            const expires = now + MAX_REQUEST_MS;
+            audio.play(scene, config.hrtf, cue, config.battleTimingVolume / 100,
                 [Math.cos(angle), -Math.sin(angle), 1],
-                () => owner === current && current.window === window && window.stage === stage &&
+                () => owner === current && current.window === window &&
                     host.now() < expires && ready(scene, action), undefined, SOURCE, pitch);
         },
         endSweep,

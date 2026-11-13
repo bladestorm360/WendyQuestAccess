@@ -34,7 +34,7 @@ At final gameplay handoff, first compare the two wall previews with headphones. 
 
 The builder defaults to the checkout's `.deps/audio-sdk` and accepts `-AudioSdkRoot` for an equivalent local source. It verifies the key input hashes before staging the two runtime libraries and their notices in `audio-deps`. OpenAL Soft includes its MIT KEMAR measurements in the DLL. The matching corresponding-source URL and measurement attribution travel in `audio-deps/SOURCE.txt`. The Windows release must preserve those files and the SDL license. The current platform target is Windows x64. [SDL 3.4.4](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.4) · [OpenAL Soft 1.25.2 HRTF](https://github.com/kcat/openal-soft/blob/1.25.2/docs/hrtf.txt) · [MIT KEMAR measurements and terms](https://sound.media.mit.edu/resources/KEMAR.html)
 
-Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the exact locally installed payload on November 12, 2026 at 4:41 p.m. PST and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.267.0. The native files reported `NotSigned`. [Candidate, installer hashes and deployment status](deployment.md#battle-meter-and-map-audit-update)
+Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender custom-scanned the exact locally installed payload on November 12, 2026 at 5:10 p.m. PST and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.267.0. The native files reported `NotSigned`. [Candidate, installer hashes and deployment status](deployment.md#battle-meter-sweep-update)
 
 | Scanned file | SHA-256 |
 | --- | --- |
@@ -43,7 +43,7 @@ Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon 
 | `soft_oal.dll` | `3963b06e319180700be0bcc0d027336664bb3a4975876b4a5442f10746fab5b4` |
 | `WendyQuestSpeech.exe` | `4a8b8257359d2b2616381056485211ce4f023284c9ea780b6d0a2ed036bd3dfa` |
 | `prism.dll` | `7c7d09c8c7306e8e1a0c46d603ccb2a391c194c77843400c11b746e7dd56a467` |
-| `WendyQuestAccess.js` | `435fedde0e1780105b2b0668435d3d63ad1ddecb5813eb7f29f591594155c74a` |
+| `WendyQuestAccess.js` | `220550f4997633b242cd58cdf45d38454de45e247a2132b417f81541397c2e54` |
 | `audio-worker.cjs` | `209e6b9a5e9c6e48920e4e211d80b20a3d4927082afdeed884cde5c272baf49a` |
 | `speech-worker.cjs` | `1fe62b4525b0ae37e1460a983cfc91f0126baf2bfa4bfd1742d263a18235da7a` |
 | `route-worker.cjs` | `58c2ffd8b11b3ea1269956dc2c7d859910177c24c52f53e1d87e842c2874b83d` |
