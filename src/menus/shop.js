@@ -19,13 +19,23 @@ function paint(window, key) {
     return result?.contents === window.contents ? result : null;
 }
 
+function goldPaint(scene, visible) {
+    const window = scene._goldWindow;
+    return visible(scene, window) ? paint(window, '_wqaShopGold') : null;
+}
+
+function goldLabel(gold) {
+    if (!Number.isSafeInteger(gold?.value) || gold.value < 0) return '';
+    const unit = typeof gold.currency === 'string' && gold.currency.length <= 24 ? gold.currency.trim() : '';
+    return String(gold.value) + (unit ? ' ' + unit : '');
+}
+
 function shopPaint(scene, visible) {
-    const gold = scene._goldWindow;
     const help = scene._helpWindow;
     const status = scene._statusWindow;
     const statusVisible = visible(scene, status);
     return {
-        gold: visible(scene, gold) ? paint(gold, '_wqaShopGold') : null,
+        gold: goldPaint(scene, visible),
         help: visible(scene, help) ? paint(help, '_wqaShopHelp') : null,
         possession: statusVisible ? paint(status, '_wqaShopPossession') : null,
         equip: statusVisible ? paint(status, '_wqaShopEquip') : null,
@@ -34,11 +44,10 @@ function shopPaint(scene, visible) {
 }
 
 function sameShopPaint(scene, previous, visible) {
-    const gold = scene._goldWindow;
     const help = scene._helpWindow;
     const status = scene._statusWindow;
     const statusVisible = visible(scene, status);
-    return previous.gold === (visible(scene, gold) ? paint(gold, '_wqaShopGold') : null) &&
+    return previous.gold === goldPaint(scene, visible) &&
         previous.help === (visible(scene, help) ? paint(help, '_wqaShopHelp') : null) &&
         previous.possession === (statusVisible ? paint(status, '_wqaShopPossession') : null) &&
         previous.equip === (statusVisible ? paint(status, '_wqaShopEquip') : null) &&
@@ -54,10 +63,8 @@ function shopDetails(root, row, { gold, help, possession, equip, change }, quant
     }
     if (help?.text && help.text === item.description) lines.push(...help.text.split(/\r?\n/));
     if (possession?.item === item && Number.isSafeInteger(possession.count)) lines.push('Owned ' + possession.count);
-    if (gold && Number.isSafeInteger(gold.value)) {
-        const currency = typeof gold.currency === 'string' && gold.currency.length <= 24 ? gold.currency.trim() : '';
-        lines.push('Balance ' + gold.value + (currency ? ' ' + currency : ''));
-    }
+    const balance = goldLabel(gold);
+    if (balance) lines.push('Balance ' + balance);
     if (equip?.item === item && typeof equip.name === 'string' && equip.name) {
         lines.push(equip.name + (equip.enabled ? '' : ', cannot equip'));
         if (equip.oldItem?.name) lines.push('Equipped ' + equip.oldItem.name);
@@ -70,4 +77,4 @@ function shopDetails(root, row, { gold, help, possession, equip, change }, quant
     return reviewLines(lines);
 }
 
-module.exports = { shopRow, shopQuantity, shopPaint, sameShopPaint, shopDetails };
+module.exports = { goldPaint, goldLabel, shopRow, shopQuantity, shopPaint, sameShopPaint, shopDetails };

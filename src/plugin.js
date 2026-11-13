@@ -11,6 +11,7 @@ const { createBattleTargets } = require('./battle/targets');
 const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createBattleLog } = require('./battle/action-log');
+const { recordCollapse, recordCondition } = require('./battle/outcomes');
 const { createRadialResult } = require('./battle/radial-result');
 const { partyVitals, menuVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
@@ -18,6 +19,7 @@ const { createMapBannerObserver } = require('./world/map-banner');
 const { createInteractionPrompt } = require('./world/interaction-prompt');
 const { createAutosaveNotice } = require('./world/autosave-notice');
 const { createField } = require('./world/field');
+const { createFieldDiagnostics } = require('./world/field-diagnostics');
 const { createWallAudio } = require('./world/wall-audio');
 const { createBeacon } = require('./world/beacon');
 const { createCaveTiming } = require('./world/cave-timing');
@@ -144,15 +146,16 @@ function boot(root, nodeRequire, nodeProcess) {
         };
         battleFocus = createBattleFocus(root, host, notifications, () => speechPreferences, warmBattleAudio);
         battleTargets = createBattleTargets(root, host, notifications, () => speechPreferences);
-        battleTiming = createBattleTiming(root, host, notifications, battleTargets, warmBattleAudio);
+        battleTiming = createBattleTiming(root, host, warmBattleAudio);
         battleLog = createBattleLog(root, host, notifications, battleFocus.appendFeedback);
         radialResult = createRadialResult(root, host);
-        mapBanner = createMapBannerObserver(host, notifications);
         host.speechPreferences = () => speechPreferences;
         host.dialogueDiagram = (scene, window) => captureDiagram(root, host.graphics, scene, window);
         dialogue = createDialogueObserver(host, notifications);
         credits = createCredits(root, host, notifications, host.speechPreferences);
         field = createField(root, host, notifications);
+        mapBanner = createMapBannerObserver(root, host, notifications, field.ready);
+        const fieldKeyDenied = createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
         interaction = createInteractionPrompt(root, host, field.interactionReady, notifications);
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
         quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
@@ -254,6 +257,9 @@ function boot(root, nodeRequire, nodeProcess) {
                 return readyScene() || ((menus.controlOwner(scene) || battleFocus.controlOwner(scene) || field.ready(scene)) ? scene : null);
             },
             fieldReady: field.ready,
+            fieldKeyDenied(action) {
+                try { fieldKeyDenied(host.manager._scene, action); } catch { /* Keep native input available. */ }
+            },
             bookmarkContext: field.bookmarkContext,
             selectBookmark: field.selectBookmark,
             nativeButton,
@@ -321,10 +327,13 @@ function boot(root, nodeRequire, nodeProcess) {
             },
             menuCommand(action) {
                 const scene = host.manager._scene;
-                try { return menus.command(menus.controlOwner(scene), action) ||
-                    battleFocus.command(battleFocus.controlOwner(scene), action) ||
-                    battleTargets.command(battleTargets.controlOwner(scene), action) ||
-                    dialogue.diagramCommand(scene, action) || credits.command(scene, action) || quests.command(scene, action); }
+                try {
+                    const handled = menus.command(menus.controlOwner(scene), action);
+                    if (handled || action === 'gold') return handled;
+                    return battleFocus.command(battleFocus.controlOwner(scene), action) ||
+                        battleTargets.command(battleTargets.controlOwner(scene), action) ||
+                        dialogue.diagramCommand(scene, action) || credits.command(scene, action) || quests.command(scene, action);
+                }
                 catch { return false; }
             },
             battleCommand(action) { try { return battleVitalsAction(action); } catch { return false; } },
@@ -541,6 +550,35 @@ function boot(root, nodeRequire, nodeProcess) {
             if (!mapBanner) initialize();
             mapBanner.observe(scene, revision);
         } catch { mapBanner?.leave(scene); }
+    };
+
+    root.WendyQuestAccessMapEntranceReady = function (scene) {
+        try { mapBanner?.entrance(scene); } catch { mapBanner?.leave(scene); }
+    };
+
+    function outcomeScene() {
+        const scene = root.SceneManager._scene;
+        const manager = root.SceneManager;
+        return scene?._wqaBattleStarted && scene._started && scene._active &&
+            !scene._fadeDuration && !scene._fadeOpacity && !scene._wqaSettingsActive &&
+            !scene._wqaBattleInterpreter?._list && !root.$gameTroop?._interpreter?._list &&
+            !root.$gameMessage?.isBusy() && !manager._nextScene && !manager._exiting &&
+            !manager._wqaNativeAutosaves && !root.Graphics._wqaResize && root.Graphics.app?.stage === scene &&
+            root.document.hasFocus() ? scene : null;
+    }
+
+    root.WendyQuestAccessEnemyCollapse = function (sprite) {
+        try {
+            const scene = outcomeScene();
+            if (scene) recordCollapse(scene, sprite);
+        } catch { /* Continue the native collapse. */ }
+    };
+
+    root.WendyQuestAccessBattleCondition = function (window, target, state, added, speak) {
+        try {
+            const scene = outcomeScene();
+            if (scene?._logWindow === window) recordCondition(root, scene, target, state, added, speak);
+        } catch { /* Continue the native battle log. */ }
     };
 
     root.WendyQuestAccessMapBannerLeaving = function (scene) { mapBanner?.leave(scene); };

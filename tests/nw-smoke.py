@@ -235,14 +235,21 @@ function verifySettings() {
         tap('ArrowUp');
         if (document.activeElement.textContent !== 'Help') throw Error('Settings Help is missing');
         tap('Enter');
-        tap('ArrowDown');
+        choose('Pathfinder');
         if (!document.activeElement.textContent.includes('Directions P')) throw Error('Help did not show the current directions key');
         tap('Enter');
         if (!menuStatus()?.includes('Previous category Shift+J')) throw Error('Help did not expose the pathfinder instructions');
         tap('ArrowDown');
+        if (!document.activeElement.textContent.includes('map name M')) throw Error('Help did not show the map key');
+        tap('ArrowDown');
         if (!document.activeElement.textContent.includes('NPC lists reachable characters') ||
             !document.activeElement.textContent.includes('Events lists nearby scene triggers and conversations'))
             throw Error('Help did not use the NPC category label');
+        tap('Escape');
+        if (document.activeElement.textContent !== 'Pathfinder') throw Error('Help section did not restore focus');
+        choose('Battle');
+        if (!document.activeElement.textContent.includes('then for accuracy')) throw Error('Battle Help is missing');
+        tap('Escape');
         tap('Escape');
         if (document.activeElement.textContent !== 'Help') throw Error('Help did not return to its parent');
         tap('ArrowDown');
@@ -1344,8 +1351,7 @@ const interval = setInterval(() => {
             WendyQuestAccessBattleTimingReady(scene, action);
             Graphics.app.renderer.emit('postrender');
             endingStep = 34;
-        } else if (endingStep === 34 && fs.existsSync(receipt + '.battle-target-autodetail') &&
-            fs.existsSync(receipt + '.battle-target-timing')) {
+        } else if (endingStep === 34 && fs.existsSync(receipt + '.battle-target-autodetail')) {
             pad();
             if (padTap(7) !== 1 << 7) throw Error('Battle target mod mode did not claim its binding');
             endingStep = 35;
@@ -1362,6 +1368,7 @@ const interval = setInterval(() => {
             WendyQuestAccessBattleTargetLeaving(scene);
             WendyQuestAccessBattleTimingLeaving(scene);
             if (scene._wqaBattleTargetControl) throw Error('Retired target still owns controller review');
+            if (fs.existsSync(receipt + '.battle-target-timing')) throw Error('The old timing prompt was spoken');
             const action = BattleManager._currentActionCommand;
             action._cancelable = action._wqaTimingWaiting = false;
             WendyQuestAccessBattleCueBegin(scene, action);
@@ -1517,6 +1524,8 @@ const interval = setInterval(() => {
                 _index: 0, _list: [{ symbol: 'save', name: 'Save' }], innerWidth: 120, innerHeight: 80,
                 itemRect: () => ({ x: 0, y: 0, width: 100, height: 32 }) };
             const visible = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
+            const gold = scene._goldWindow = { ...scene._commandWindow, active: false };
+            gold._wqaShopGold = { contents: gold.contents, value: 17, currency: 'Gold' };
             const hud = scene._wqaMenuStatus = scene._statusWindow = { ...visible(scene), offsetY: 0, states: [],
                 battler: { actor: () => ({ name: 'Synthetic menu hero' }) } };
             for (const [key, value] of Object.entries({ _numberSprite: '8', _totalSprite: '14', _dividerSprite: '/',
@@ -1531,6 +1540,9 @@ const interval = setInterval(() => {
             hud.levelMetreFillSprite = { ...visible(hud), mask };
             WendyQuestAccessMenuReady(scene, 1);
             Graphics.app.renderer.emit('postrender');
+            tap('g', 'KeyG');
+            endingStep = 70;
+        } else if (endingStep === 70 && fs.existsSync(receipt + '.menu-gold')) {
             tap('h', 'KeyH');
             endingStep = 56;
         } else if (endingStep === 56 && fs.existsSync(receipt + '.menu-vitals-hp')) {
@@ -1751,6 +1763,7 @@ parentPort.on('message', message => {
             return;
         }
         if (fs.existsSync(receipt + '.menu-vitals-stage')) {
+            if (message.kind === 'menuReview') fs.writeFileSync(receipt + '.menu-gold', speech);
             if (message.kind === 'menuDetails')
                 fs.writeFileSync(receipt + (message.lines.length > 2 ? '.menu-vitals-full' : '.menu-vitals-hp'), speech);
             if (message.kind === 'controllerStatus' && speech.includes('X reads vitals'))
@@ -2100,6 +2113,7 @@ def main():
             'shop-details': 'Shown effect. Owned 2. Balance 12 Gold',
             'shop-quantity': 'Purchase quantity, Synthetic shop item, quantity 3, Total 57 Gold',
             'shop-quantity-details': 'Quantity 3, total 57 Gold. Shown effect. Owned 2. Balance 12 Gold',
+            'menu-gold': '17 Gold',
             'menu-vitals-hp': 'Synthetic menu hero. HP 8 of 14',
             'menu-vitals-full': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent',
             'coupon-list-stone': 'Available rewards, Fry Stone, 1 of 5',
@@ -2110,7 +2124,6 @@ def main():
             'coupon-response-copy': 'Copied to Clipboard',
             'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
-            'battle-target-timing': 'Confirm to start timing. Confirm for power, then for accuracy.',
             'battle-autodetail': 'Shield raised. Cost 2 MP',
             'battle-details': 'Shield raised. Cost 2 MP',
             'battle-review': 'Cost 2 MP, 2 of 2',

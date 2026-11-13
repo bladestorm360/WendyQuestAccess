@@ -2,6 +2,7 @@
 
 const { battleScenePresented } = require('./presentation');
 const { damageCaption } = require('./damage-popup');
+const { readConditions } = require('./outcomes');
 
 const MAX_PAINTED_ROWS = 8;
 const MAX_HISTORY = 6;
@@ -107,6 +108,8 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             sprite._wqaDamageCaption = null;
             lines.push(caption);
         }
+        if (scene._wqaEnemyCollapses?.length) lines.push(...scene._wqaEnemyCollapses.splice(0));
+        lines.push(...readConditions(root, host.graphics, scene));
         if (!lines.length) return;
         if (history?.scene !== scene) history = { scene, lines: [] };
         history.lines.push(...lines);
@@ -125,7 +128,8 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         observe(scene, window) {
             const rows = take(window);
             const damage = takeDamage(scene);
-            if (!rows.length && !damage.length && !scene._wqaRadialReport) return;
+            if (!rows.length && !damage.length && !scene._wqaRadialReport && !scene._wqaEnemyCollapses?.length &&
+                !scene._wqaBattleConditions?.length) return;
             const renderer = host.graphics.app?.renderer;
             if (!ready(scene, window) || typeof renderer?.once !== 'function') {
                 release(rows);
@@ -166,6 +170,11 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         retire,
         leave(scene) {
             retire(scene);
+            if (scene) {
+                scene._wqaEnemyCollapses = null;
+                scene._wqaBattleConditions = null;
+                scene._wqaSeenConditions = null;
+            }
             if (history?.scene === scene) history = null;
         }
     };

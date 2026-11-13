@@ -229,7 +229,8 @@ def menu_notifications(original):
         16961: b')',
         16962: b'(wqaShopCurrency=',
         16984: b')',
-        17016: b'if(SceneManager._scene?._wqaShop&&SceneManager._scene._goldWindow===this)'
+        # The native pause and shop windows share this completed draw.
+        17016: b'if(SceneManager._scene?._goldWindow===this)'
                b'this._wqaShopGold={contents:this.contents,value:wqaShopGold,currency:wqaShopCurrency};',
         20002: b'globalThis.WendyQuestAccessMenuReady?.(this,2);',
         25165: b'if(this._wqaMenuActive)globalThis.WendyQuestAccessMenuLeaving?.(this);',
@@ -375,7 +376,13 @@ def scenes_notification(original):
     })
 
 
+# The verified parallel weather timers have no event-page consumers of variable 2.
+LIGHTNING_EVENTS = {12: 31, 13: 9, 14: 28, 15: 35, 16: 40, 17: 20, 161: 3,
+                    162: 2, 164: 3, 165: 1, 166: 3, 207: 2, 208: 2}
+
+
 def objects_notification(original):
+    lightning = json.dumps(LIGHTNING_EVENTS, separators=(',', ':')).encode()
     preload = (b'{const wqaPrior=ImageManager._wqaInterpreterPreload;'
                b'ImageManager._wqaInterpreterPreload=true;try{')
     restore_preload = b'}finally{ImageManager._wqaInterpreterPreload=wqaPrior;}}'
@@ -394,8 +401,9 @@ def objects_notification(original):
                 b'SceneManager._scene._wqaLightningRefreshOnly=false;',
         # Pin the request to the authored parallel lightning event and
         # retire its one-use mark even if the native variable write throws.
-        278919: b'const wqaLightningScene=variableId===2&&this._mapId===13&&this._eventId===9&&'
-                b'$gameMap?._mapId===13&&SceneManager._scene?._wqaMapRestored?SceneManager._scene:null;'
+        278919: b'const wqaLightningScene=variableId===2&&this._mapId===$gameMap?._mapId&&'
+                b'SceneManager._scene?._wqaMapRestored&&this._eventId===(' + lightning +
+                b')[this._mapId]?SceneManager._scene:null;'
                 b'if(wqaLightningScene)wqaLightningScene._wqaLightningVariableWrite=true;',
         279818: b'finally{if(wqaLightningScene)wqaLightningScene._wqaLightningVariableWrite=false;}',
         178811: b'\n    ' + ROUTE_DIRTY,  # Tileset replacement
@@ -468,6 +476,10 @@ def windows_notification(original):
     return insert(original, WINDOWS_SHA, {
         6945: b'    if (this._wqaChoicePaint) textState._wqaPaint = this._wqaChoicePaint;\n'
               b'    else if (this._wqaBattleLogPaint) textState._wqaPaint = this._wqaBattleLogPaint;\n',
+        171638: b'        if (state.iconIndex > 0 && (!stateText || !state.message4)) '
+                b'globalThis.WendyQuestAccessBattleCondition?.(this,target,state,true,!stateText);\n',
+        172025: b'        if (state.iconIndex > 0 && !state.message4) '
+                b'globalThis.WendyQuestAccessBattleCondition?.(this,target,state,false,true);\n',
         162511: b'    if(SceneManager._scene?._wqaBattleStarted&&SceneManager._scene._logWindow===this){'
                 b'BattleManager._wqaBattleSpritesBusy=undefined;' + BATTLE_LOG_LEAVING + b';}\n',
         7547: b'\n        if (text && (textState._wqaMessage || textState._wqaPaint)) this._wqaRecordPaint(textState, text);',
@@ -569,9 +581,9 @@ def map_notification(original):
                 !$gamePlayer._transferring && $gameScreen._brightness === 255 && !($gameScreen._fadeOutDuration > 0) &&
                 this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
                 !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this;
-            if (this._wqaMapAnnouncement && (!wqaReady || this._wqaMapAnnouncement !== wqaRevision))
+            if (this._wqaMapAnnouncement > 0 && (!wqaReady || this._wqaMapAnnouncement !== wqaRevision))
                 globalThis.WendyQuestAccessMapBannerLeaving?.(this);
-            if (wqaReady && wqaUnread && !this._wqaMapAnnouncement)
+            if (wqaReady && wqaUnread && !(this._wqaMapAnnouncement > 0))
                 globalThis.WendyQuestAccessMapBannerReady?.(this, wqaRevision);
         }
     }
@@ -589,13 +601,19 @@ def map_notification(original):
     this._wqaFieldReady = !!(this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
         this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true && this.srcWendy &&
         this.srcStones && $gameMap.inactiveTime < 30 &&
-        (!$gameMap._needsRefresh || ($gameMap._mapId === 13 && this._wqaLightningRefreshOnly)) &&
+        (!$gameMap._needsRefresh || this._wqaLightningRefreshOnly) &&
         !$gameMap._needsTilemapRefresh && !this._wqaPreloads?.size && !this._wqaPreloadOverflow &&
         !$gamePlayer._transferring && !$gamePlayer._vehicleGettingOn && !$gamePlayer._vehicleGettingOff &&
         $gameScreen._brightness === 255 && !$gameScreen._fadeOutDuration && !this._wqaTerrainWork &&
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
         !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
     if (this._wqaFieldReady) {
+        if ((this._wqaPlaceFrames || 0) < 30 && !this._wqaSettingsActive &&
+            !$gameMessage.isBusy() && !$gameMap._interpreter?._list) {
+            this._wqaPlaceFrames = (this._wqaPlaceFrames || 0) + 1;
+            if (this._wqaPlaceFrames === 30)
+                globalThis.WendyQuestAccessMapEntranceReady?.(this);
+        }
         if (this._wqaStepNavigation && $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY)
             globalThis.WendyQuestAccessStepNavigationReady?.(this);
         const wqaIcon = $gamePlayer._iconState === 1 && $gamePlayer._interactIcon?.visible ? $gamePlayer._interactIcon : null;
@@ -778,7 +796,9 @@ def battle_notification(original):
             this._fadeDuration === 0 && this._fadeOpacity === 0 && !this._wqaSettingsActive &&
             !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
             !Graphics._wqaResize && Graphics.app?.stage === this) {
-            if (wqaLog._wqaBattleLogRows?.length || this._wqaRadialReport || this._wqaDamageRows?.length)
+            if (wqaLog._wqaBattleLogRows?.length || this._wqaRadialReport || this._wqaDamageRows?.length ||
+                this._wqaEnemyCollapses?.length ||
+                (this._wqaBattleConditions?.length && Graphics.frameCount >= this._wqaNextConditionFrame))
                 globalThis.WendyQuestAccessBattleLogReady?.(this,wqaLog);
         } else if (this._wqaBattleLogActive || wqaLog?._wqaBattleLogRows?.length || this._wqaDamageRows?.length) {
             globalThis.WendyQuestAccessBattleLogLeaving?.(this);
@@ -844,6 +864,11 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         162176: b'((' + command_ready +
                 b')&&globalThis.WendyQuestAccessBattleFocusReady?.(SceneManager._scene,this),',
         162205: b')',
+        # Observe the accepted effect before an instant collapse can finish.
+        183354: b'const wqaWasAppeared=this._appeared;',
+        183378: b',wqaWasAppeared&&!this._appeared&&this._effectDuration>0&&'
+                b'(this._effectType==="collapse"||this._effectType==="bossCollapse"||'
+                b'this._effectType==="instantCollapse")&&globalThis.WendyQuestAccessEnemyCollapse?.(this)',
         192463: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
                 BATTLE_CUE_LEAVING + b';',
         193431: b'(this._wqaDialogueBusy=(this._wqaBattleSpritesBusy=',

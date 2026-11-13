@@ -100,6 +100,8 @@ function localDestination(root, event, page) {
     if (map === 13 && id === 5 && event._pageIndex === 1 && trigger === 4 && page.image?.characterName === '~ElderTater')
         return { name: 'Elder Tater', category: 'people', waypoint: true, handoffs: BEACH_HANDOFFS };
     if (trigger !== 0) return undefined;
+    // The three pantry props share a label in both native interaction states.
+    if (map === 116 && [7, 9, 10].includes(id)) return { name: 'Pantry', category: 'objects' };
     if (PULLS[map]?.includes(id)) return event._pageIndex === 0 ? { name: 'Pull handle', category: 'objects' } : null;
     if (map === 15 && id >= 31 && id <= 33) return { name: 'Gate switch', category: 'objects' };
     if (map === 87 && id >= 121 && id <= 130 && page.list[35]?.parameters?.[3]?.pictureName === 'system/Caffeine Caverns Map')

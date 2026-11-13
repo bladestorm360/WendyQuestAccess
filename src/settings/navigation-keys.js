@@ -3,8 +3,8 @@
 const ROUTE_ACTIONS = { previousDestination: 'Previous destination', nextDestination: 'Next destination',
     currentDestination: 'Read selected destination', directions: 'Directions', previousCategory: 'Previous category',
     nextCategory: 'Next category' };
-const AUDIO_KEYS = { beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
-const ACTIONS = Object.freeze({ ...ROUTE_ACTIONS, beaconToggle: 'Toggle navigation beacon',
+const FIELD_KEYS = { mapName: 'M', beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
+const ACTIONS = Object.freeze({ ...ROUTE_ACTIONS, mapName: 'Read current map name', beaconToggle: 'Toggle navigation beacon',
     wallToggle: 'Toggle wall sounds', beaconStop: 'Stop current navigation' });
 const LAYOUT_NAMES = Object.freeze({ letters: 'Letters', brackets: 'Brackets and backslash' });
 const DEFAULTS = Object.freeze({
@@ -46,11 +46,11 @@ function normalizeNavigation(saved, reserved = []) {
             proposed[action] = key && !used.has(key) ? key : null;
             if (proposed[action]) used.add(key);
         };
-        for (const action of Object.keys(AUDIO_KEYS)) {
+        for (const action of Object.keys(FIELD_KEYS)) {
             const key = saved?.bindings?.[layout]?.[action];
             if (key === null || (typeof key === 'string' && GESTURE.test(key))) put(action, key);
         }
-        for (const [action, fallback] of Object.entries(AUDIO_KEYS)) {
+        for (const [action, fallback] of Object.entries(FIELD_KEYS)) {
             if (proposed[action] === undefined) put(action, fallback);
         }
         bindings[layout] = proposed;

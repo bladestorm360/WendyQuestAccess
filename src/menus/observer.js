@@ -2,7 +2,7 @@
 
 const { reviewLines, moveReview } = require('./review');
 const { battlePresented, drawnText } = require('../battle/presentation');
-const { shopRow, shopQuantity, shopDetails, sameShopPaint, shopPaint } = require('./shop');
+const { goldPaint, goldLabel, shopRow, shopQuantity, shopDetails, sameShopPaint, shopPaint } = require('./shop');
 const { couponListItem, couponListFocus, couponResponseItem, couponResponseFocus } = require('./coupons');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
@@ -139,9 +139,9 @@ function createMenuObserver(root, host, notifications, preferences) {
     }
 
 
-    function show(page, record) {
+    function show(page, record, stillShown) {
         notifications.close(page.epoch);
-        page.epoch = notifications.open(record, () => current === page && live(page));
+        page.epoch = notifications.open(record, () => current === page && live(page) && (!stillShown || stillShown()));
     }
 
     function speakDetails(page, lines, append) {
@@ -370,7 +370,14 @@ function createMenuObserver(root, host, notifications, preferences) {
         controlOwner(scene) { return current?.scene === scene && live(current) ? current : null; },
         command(page, action) {
             if (!page || page !== current || !live(page)) return false;
-            if (action === 'details') {
+            if (action === 'gold') {
+                if (page.screen !== 1 && page.screen !== 4 && page.screen !== 5) return false;
+                const gold = goldPaint(page.scene, visible);
+                const name = goldLabel(gold);
+                if (!name) return false;
+                show(page, { kind: 'menuReview', name }, () => goldPaint(page.scene, visible) === gold);
+            }
+            else if (action === 'details') {
                 if (page.lines.length) speakDetails(page, page.lines, false);
                 else show(page, { kind: 'menuReview', name: 'No details here.' });
             }

@@ -201,9 +201,72 @@ async function main() {
     }
     profileSnapshot(flags);
     await verifyOpeningField(flags);
+    await verifyRuinsHandback();
     await verifyBeachHandoffs(flags);
     await verifySurfaceField(flags);
     console.log('Verified native field admission, spoken object selection and route, restored tiles, and stale-route retirement.');
+}
+
+async function verifyRuinsHandback() {
+    const data = mapData(16);
+    const f = fixture(data);
+    const { c, frame } = f;
+    const map = c.$gameMap;
+    const player = c.$gamePlayer;
+    const timer = data.events[40].pages[0];
+    const decrement = timer.list.find(command => command.code === 122 && command.parameters[2] === 2);
+    const conversation = data.events[24].pages[0];
+    assert.equal(timer.trigger, 4);
+    assert(conversation.list.some(command => command.code === 101));
+    const variables = JSON.parse(execFileSync('python', ['-B', '-W', 'ignore::SyntaxWarning',
+        path.join(__dirname, 'map-producers.py'), path.join(process.argv[2], 'package.nw'), 'variable-stack'],
+        { encoding: 'utf8', timeout: 6000, maxBuffer: 10000 }));
+    for (const method of variables) f.run(method);
+    f.run('Math.randomInt = () => 0;');
+    c.$gameQuest = { getAllAssentedQuests: () => null };
+    const weather = Object.assign(new c.Game_Interpreter(), { _mapId: 16, _eventId: 40 });
+    c.$gameVariables = new c.Game_Variables();
+    c.$gameVariables.setValue(2, 100);
+    player._vehicleType = 'walk';
+    player.setPosition(13, 27);
+    player.reserveTransfer(16, 13, 27, 2, 0);
+    c.SceneManager.goto(c.Scene_Map);
+    c.SceneManager.changeScene();
+    c.DataManager.ready = c.ImageManager.ready = true;
+    c.SceneManager.updateScene();
+    await new Promise(setImmediate);
+    const scene = c.Graphics.app.stage;
+    map._mapId = 16;
+    map._nameDisplay = false;
+    scene._fadeDuration = scene._fadeOpacity = 0;
+    c.SceneManager.updateScene();
+    f.idleCallbacks.shift()();
+    c.Scene_Map.prototype.updateMainMultiply = () => {
+        map._needsRefresh = false;
+        scene._wqaLightningRefreshOnly = false;
+        weather.command122(decrement.parameters);
+    };
+    map._interpreter._list = conversation.list;
+    map._interpreter._eventId = 24;
+    c.SceneManager.updateScene();
+    frame();
+    assert.equal(scene._wqaFieldReady, false);
+    map._interpreter.clear();
+    c.SceneManager.updateScene();
+    assert(map._needsRefresh);
+    assert(scene._wqaFieldReady, 'Crispy Ruins returns mod control after the native conversation');
+    frame();
+    f.dispatchWindowEvent('keydown', { key: 'm', keyCode: 77 });
+    frame();
+    assert.equal(f.packets.filter(packet => packet.kind === 'fieldStatus').at(-1)?.name, 'Crispy Ruins');
+    for (let n = 0; n < 36; n++) {
+        c.SceneManager.updateScene();
+        frame();
+    }
+    assert.deepEqual(f.speech(), ['Entering Crispy Ruins.'], 'entry remains accessible after the native banner has gone');
+    map.requestRefresh();
+    assert.equal(scene._wqaLightningRefreshOnly, false, 'an ordinary refresh still invalidates field admission');
+    console.log('Verified the Crispy Ruins weather gate and map-name keys with the authored native conversation and timer.');
 }
 
 async function verifyOpeningField(tilesets) {

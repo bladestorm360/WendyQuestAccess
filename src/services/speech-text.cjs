@@ -58,8 +58,13 @@ function formatSpeech(message) {
             break;
         case 'fileLabel':
         case 'controllerStatus':
-        case 'fieldStatus':
-        case 'mapBanner': text = label(message); break;
+        case 'fieldStatus': text = label(message); break;
+        case 'mapBanner': {
+            const name = label(message);
+            text = name && (message.entering ? 'Entering ' + name + '.' : name);
+            limit = 270;
+            break;
+        }
         case 'menuFocus': {
             const name = label(message);
             if (!name) return '';

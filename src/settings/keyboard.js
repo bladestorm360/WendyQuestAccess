@@ -4,7 +4,7 @@ const REVIEW_KEYS = Object.freeze({ reviewPrevious: 'Shift+ArrowUp', reviewNext:
     reviewFirst: 'Shift+ArrowLeft', reviewLast: 'Shift+ArrowRight' });
 const BATTLE_KEYS = Object.freeze({ battleHP: 'H', battleSlot1: '1', battleSlot2: '2' });
 const DEFAULT_KEYS = Object.freeze({ settings: 'F8', repeat: 'R', puzzleGuide: 'Shift+G', puzzleStop: 'Ctrl+G',
-    details: 'I', ...BATTLE_KEYS, ...REVIEW_KEYS });
+    details: 'I', gold: 'G', ...BATTLE_KEYS, ...REVIEW_KEYS });
 const LETTER = /^[A-Z]$/;
 const SIMPLE_BATTLE_KEY = /^[A-Z1-9]$/;
 const REVIEW_GESTURE = /^Shift\+(?:Arrow(?:Up|Down|Left|Right)|[A-Z])$/;
@@ -38,6 +38,8 @@ function normalizeKeys(value) {
         normalized[action] = key === null ? null : [preferred, defaultKey].find(candidate => !used.has(candidate)) ?? null;
         used.add(normalized[action]);
     }
+    const gold = typeof value?.gold === 'string' && LETTER.test(value.gold) ? value.gold : DEFAULT_KEYS.gold;
+    normalized.gold = [gold, DEFAULT_KEYS.gold].find(candidate => !used.has(candidate)) ?? null;
     const actions = Object.keys(REVIEW_KEYS);
     const review = actions.map(action => value?.[action]);
     const valid = review.every(gesture => typeof gesture === 'string' && REVIEW_GESTURE.test(gesture)) &&

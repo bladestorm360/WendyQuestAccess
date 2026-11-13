@@ -128,9 +128,15 @@ if sys.argv[2:] == ['log']:
         start = stock.index(f'Window_Base.prototype.{name} = function(')
         end = stock.index('\n};', start) + 3
         methods.append(stock[start:end])
-    start = stock.index('Window_BattleLog.prototype.showAnimation = function(')
-    end = stock.index('\n};', start) + 3
-    methods.append(stock[start:end])
+    for name in ('showAnimation', 'displayAddedStates', 'displayRemovedStates'):
+        start = stock.index(f'Window_BattleLog.prototype.{name} = function(')
+        end = stock.index('\n};', start) + 3
+        methods.append(stock[start:end])
+    sprites = (installed / 'package.nw/js/rmmz_sprites.js').read_text(encoding='utf-8')
+    start = sprites.index('Sprite_Enemy.prototype.setupEffect = function(')
+    methods.append(sprites[start:sprites.index('\n};', start) + 3])
+    methods.append(sprite_method(battle, 'Sprite_Enemy', 'updateEffect'))
+    methods.append(sprite_method(battle, 'Window_BattleLog', 'addText'))
     baseline_draw = sprite_method(untouched, 'Window_BattleActionLog', 'drawItem')
     methods.append(baseline_draw.replace("['drawItem']", "['fixtureNativeDraw']", 1))
     print(json.dumps(methods))

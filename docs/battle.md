@@ -74,17 +74,11 @@ The bounded installed-method fixture exercised the actual icon chooser and frame
 
 Enemy condition development cleanup removed 9656301 bytes of generated staging after recording the scan and hashes.
 
-## Radial timing prompt
+## Radial timing audio preparation
 
-When the game has displayed its radial timing meter and is waiting for input, the mod announces the sequence. Confirm starts the timer. The following confirm presses set power and accuracy in the game's native sequence. The start prompt follows the selected target and details in the same speech context. A displayed timing screen without a target can speak on its own. Confirm or cancel retires pending prompt speech.
+Confirm to start timing. Confirm again for power, then for accuracy. The native tutorial teaches the sequence. The ReadMe and F8 Battle Help also give the instructions.
 
-`BattleManager.processTurn` in `ActionCommandCombat.js` starts the native action command at byte 11819. `ActionCommandRadial.Run` at 54251 builds the radial artwork and runs its intro. The waiting loop starts at 67588 after that intro and uses the original keyboard, controller and touch input functions. Its marker at 67807 runs after the native cancel check and before yielding. The scene update at `BattleSceneArranger.js` byte 242214 uses the same settled, busy and interpreter gates as the battle target. It confirms the loaded backing sprite and current action on postrender. The observer admits one pending render and tries up to eight presented frames when artwork is still unavailable. Accepted cancel at 25684 and windup at 67814 close the prompt before their native effects. [Prompt observer](../src/battle/timing.js) · [Registration](../tools/registration.py)
-
-The installed-method fixture uses the exact wait loop and original input and cancellation methods. It verified the intro boundary, hidden artwork, target-first speech, targetless fallback, acceptance and cancellation before pending output. The synthetic scene update, postrender and formatted receipt took 0.67 ms in a throttled run. The stable case checked 250 frames with no further observer calls. The matching NW.js test verified that the packaged prompt followed target details from the same rendered action. The bounded build and all 16 registration candidates passed, and Defender scanned the exact development payload. [Native prompt fixture](../tests/battle-timing.test.cjs) · [Packaged fixture](../tests/nw-smoke.py) · [Payload evidence](audio.md#dependencies-and-payload-check)
-
-The power, accuracy and frozen arcs also have optional timing audio. [Timing tone controls and evidence](#radial-timing-tones)
-
-The package check completed in workspace scratch on C:. Its isolated profile and source-bearing fixture were removed. Cleanup also cleared 9660437 bytes of generated build staging.
+The marker in `ActionCommandRadial.Run` at byte 67807 still follows the native cancel check in the waiting loop. The native `Scene_Battle.update` marker at byte 242214 uses the battle readiness gates. The observer can prepare optional audio after the backing sprite becomes visible and tries up to eight presented frames. Confirm or cancel retires the pending observation. The exact native wait-loop fixture verifies hidden artwork, warm-up, early confirmation and cancel. The synthetic warm-up path took 0.03 ms in the bounded run. [Timing observer](../src/battle/timing.js) · [Native wait-loop fixture](../tests/battle-timing.test.cjs)
 
 ## Radial timing tones
 
@@ -163,3 +157,11 @@ The normal power band spans 94 to 100 percent of the sweep. The accuracy band is
 The native timeout writes a final **35%** to the displayed badge and creates a visible **LATE** label. The speech uses the painted percent glyphs and words. A frozen timeout uses its own visible wording. The native result fixture verified both timeout cases as well as normal and critical scores.
 
 The matching installed-method runs measured 20 complete power and accuracy pairs at 6.22 ms native and 9.09 ms enabled under the shared CPU cap. The synthetic warm NW.js tap reached silent SDL submission in 2 ms. Native HRTF and stereo waveform checks verified the low and high approach-note pitch ordering. Audibility, device onset and end-to-end timing against a physical press remain gameplay checks. [Sweep fixture](../tests/battle-cues.test.cjs) · [Result fixture](../tests/radial-result.test.cjs) · [Audio fixture](../tests/spatial-audio-fixture.cpp) · [Exact package](deployment.md#battle-meter-and-map-audit-update)
+
+## Enemy defeat and status effects
+
+The battle log announces an enemy defeat when its native collapse animation starts. It uses the visible enemy name when available, otherwise its on-screen position. The installed build leaves the enemy’s standard defeat text empty. `Sprite_Enemy.updateEffect` in `BattleSceneArranger.js` admits the effect immediately after `setupEffect` starts it. This edge also covers instant collapse. The rendered action log publishes and retains the result for **R** review.
+
+Written conditions still use the native log. The native `displayAddedStates` and `displayRemovedStates` branches supply icon IDs for effects that need supplemental speech. Wendy’s visible HUD can provide the painted condition label. For enemies, the mod samples the native icon carousel and uses the shared icon meaning when variants share artwork. Removal speech requires an observed application and the later disappearance of the icon. Unshown effects and blank messages without a visible icon have no announcement. The queue holds at most eight conditions and samples at most once per six frames for up to 336 frames. The native `Frozen` status uses the battle log or a visible icon. The timing meter’s Frozen result comes from its own renderer.
+
+The installed-method fixture verified native written Frosted, visible Regeneration and its recovery, instant KO, repeat and animation cancellation. A throttled painted action-log row reached the formatted receipt in 1.26 ms. The same 250 stable frames took 3.99 ms native and 4.71 ms enabled. The fixture uses stand-ins for PIXI sprites and speech. Actual enemy collapse audibility, condition timing and cumulative game cost remain gameplay checks. [Battle outcomes](../src/battle/outcomes.js) · [Installed-method fixture](../tests/battle-log.test.cjs)

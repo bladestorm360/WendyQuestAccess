@@ -166,3 +166,18 @@ For the meter, turn on **Audio → Battle timing cues** and press confirm when t
 November 12, 2026. Plan SHA-256 `2a5335c25186222b548e591e039d223ae4ac8f4d514ac8cf3a6d4d45c12ddfde`. The focused build replaced the plugin bundle and verified the other 37 payload files, all 240 geometry entries and the unchanged 16 native script transforms. Installed battle checks verified the end and interior contours, unchanged native scores and timing lifecycle. Matching NW 0.48.4 delivered the updated pulse to silent SDL in 2 ms for the warm fixture case. The exact installer mirror passed interruption recovery and removal.
 
 Defender completed its custom scans at 5:10:49 p.m. PST and reported no threats in the exact payload, staged geometry, plan or build and installer scripts. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.267.0. Native binaries remain unsigned. Build and installer script hashes match the prior update. The verified Steam deployment and original recovery retained the hashes of all three save files. [Player controls and contour evidence](battle.md#radial-timing-tones)
+
+## Crispy Ruins field handback and battle feedback
+
+November 13, 2026. Plan SHA-256 `607c0fbddf5678a017eedefac3443c2ca67fa067e63451a3c2e51ed0760dd214`. The focused update replaced the plugin and speech formatter, reused 36 payload files and all 240 geometry entries, and checked syntax for all 16 native transforms. Five transforms changed. The installed-method and matching NW 0.48.4 fixtures passed. The world regression covered 120,972 movement comparisons. The exact installer mirror passed interruption recovery, reapply, protection against unknown replacements and removal.
+
+Microsoft Defender found no threats in the exact payload, geometry and plan, or the four build and installer scripts at 04:36:21 PST. Platform 4.18.26100.4, engine 1.1.26100.4, signatures 1.463.277.0. The native binaries remain unsigned.
+
+- `install.py` SHA-256 `52f8c993854e8028656075e559f7050177fd11a7b12dac99201505fdec30f9d5`
+- `registration.py` SHA-256 `10f53e8e44b62dce0bc50cdb8b2fece13c701e091f8af8c49703f40fc4ef8731`
+- `build.py` SHA-256 `6999ab99cf1b3631853336019c5c52d57ef4deabf2c0a95af5f09eace8e47cdb`
+- `bake-world.cjs` SHA-256 `544f28ae4fc3c4ea8b767f6157b895835af26b72fd82dc5fe45f29e2f65720b6`
+
+The C: Steam installation was verified against all 16 script patches, 38 payload files and 240 geometry entries. The original game recovery files and all four save-directory files retained their hashes. The game stayed closed.
+
+After a conversation in Crispy Ruins ends, press **M** for the map name and **P** for directions. The next named arrival should say “Entering” and the map name. In battle, defeat an enemy and press **R** if you want to hear the recent results again. Test audible timing and responsiveness in gameplay. [Field evidence](navigation.md#field-handback-after-dialogue) · [Battle evidence](battle.md#enemy-defeat-and-status-effects) · [Gold and HP](menus.md#read-displayed-gold)

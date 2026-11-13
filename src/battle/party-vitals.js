@@ -43,20 +43,22 @@ function momentum(hud) {
     return 'Momentum ' + filled + ' of ' + pips.length;
 }
 
+function visibleCondition(hud, graphics, id) {
+    const row = hud.stateIcons?.[id];
+    const icon = row?.children?.[1];
+    const top = hud.y + row?.y;
+    if (row?.parent !== hud || !row.worldVisible || !(row.worldAlpha > 0) ||
+        !(top >= 0 && top + 16 <= graphics.height) || !visibleSprite(row, icon)) return '';
+    return drawnText(icon, icon.children?.[0], 32);
+}
+
 function statusLines(hud, graphics) {
     const states = hud.states;
     if (!Array.isArray(states) || states.length > 24) return [];
     const lines = [];
     let line = '';
     for (const id of states) {
-        const row = hud.stateIcons?.[id];
-        const icon = row?.children?.[1];
-        // The native state holder has no bitmap of its own. Check its
-        // viewport location and the attached icon and painted label.
-        const top = hud.y + row?.y;
-        if (row?.parent !== hud || !row.worldVisible || !(row.worldAlpha > 0) ||
-            !(top >= 0 && top + 16 <= graphics.height) || !visibleSprite(row, icon)) continue;
-        const name = drawnText(icon, icon.children?.[0], 32);
+        const name = visibleCondition(hud, graphics, id);
         if (!name) continue;
         if (line && line.length + name.length + 2 > 96) {
             lines.push(line);
@@ -170,4 +172,4 @@ function partyVitals(scene, graphics, sprite, hpOnly = false) {
     return hudVitals(hud, graphics, displayed.name, hpOnly);
 }
 
-module.exports = { portraitActor, partyVitals, menuVitals, fieldVitals, fieldVitalsVisible };
+module.exports = { portraitActor, partyVitals, menuVitals, fieldVitals, fieldVitalsVisible, visibleCondition };

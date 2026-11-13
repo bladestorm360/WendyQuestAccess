@@ -6,7 +6,6 @@ const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 const vm = require('node:vm');
 const { createBattleTiming } = require('../src/battle/timing');
-const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
     path.join(__dirname, 'battle-focus-producers.py'), process.argv[2], 'timing'],
@@ -14,11 +13,8 @@ const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning'
 const renderer = new EventEmitter();
 let pressed = false;
 let cancel = false;
-let targetPresented = false;
 let cancellations = 0;
-const messages = [];
-const epochs = new Map();
-let epoch = 0;
+let warmups = 0;
 const scene = { _active: true, _started: true, _wqaBattleStarted: false, _fadeDuration: 0, _fadeOpacity: 0,
     isActive: () => true, isBusy: () => false, updateBattleProcess() { c.BattleManager.isBusy(); } };
 const battle = { _phase: 'ActionCommand', _targets: [{}], _spriteset: { isBusy: () => false }, _logWindow: { isBusy: () => false },
@@ -38,25 +34,14 @@ for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 Object.setPrototypeOf(scene, c.Scene_Battle.prototype);
 
 const observer = createBattleTiming(c, { manager: c.SceneManager, graphics: c.Graphics, hasFocus: () => true,
-    screenFading: () => false }, {
-    open(record, live) { epochs.set(++epoch, live); messages.push(formatSpeech(record)); return epoch; },
-    close(id) { epochs.delete(id); }
-}, {
-    appendTiming(owner, action, record) {
-        assert.equal(owner, scene);
-        assert.equal(action, battle._currentActionCommand);
-        if (!targetPresented) return false;
-        messages.push(formatSpeech(record));
-        return true;
-    }
-});
+    screenFading: () => false }, owner => { assert.equal(owner, scene); warmups++; });
 let observations = 0;
 c.WendyQuestAccessBattleTimingReady = (owner, action) => { observations++; observer.observe(owner, action); };
 c.WendyQuestAccessBattleTimingLeaving = observer.retire;
 function arm() {
     const action = battle._currentActionCommand = Object.assign(new c.ActionCommand(), { _cancelable: true,
         _spriteBase: { parent: scene }, PointInBounds: () => true, BarParams: () => ({}),
-        _coroutineContainer: { coroutine: { Cancel() { assert.equal(epochs.size, 0); cancellations++; } } } });
+        _coroutineContainer: { coroutine: { Cancel() { cancellations++; } } } });
     action._backing = { parent: action._spriteBase, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } };
     return [action, action.nativeWait()];
 }
@@ -73,21 +58,16 @@ waiting.next();
 first._backing.worldAlpha = 0;
 scene.update();
 render();
-assert.equal(messages.length, 0, 'hidden radial artwork stays silent');
+assert.equal(warmups, 0, 'hidden radial artwork cannot start audio preparation');
 first._backing.worldAlpha = 1;
 scene.update();
-assert.equal(messages.length, 0, 'observation waits for a rendered frame');
-render();
-assert.equal(messages.length, 0, 'target gets time to paint and publish first');
-targetPresented = true;
+assert.equal(warmups, 0, 'preparation waits for a rendered frame');
 const start = performance.now();
-scene.update();
 render();
 const firstFocus = performance.now() - start;
-assert.equal(messages[0], 'Confirm to start timing. Confirm for power, then for accuracy.');
-assert.equal(epochs.size, 0, 'the prompt appends to the existing target epoch');
+assert.equal(warmups, 1);
 for (let frame = 0; frame < 250; frame++) { scene.update(); render(); }
-assert.equal(observations, 3, 'stable radial readiness does not call the observer per frame');
+assert.equal(observations, 2, 'stable radial readiness does not call the observer per frame');
 pressed = true;
 assert(waiting.next().done);
 assert.equal(first._wqaTimingWaiting, false);
@@ -95,18 +75,17 @@ assert.equal(first._cancelable, false);
 assert.equal(scene._wqaBattleTimingActive, false);
 
 pressed = false;
-targetPresented = false;
 battle._targets = [];
 const [second, cancellable] = arm();
 cancellable.next();
 scene.update();
 render();
-assert.equal(epochs.size, 1, 'targetless prompt gets its own cancellable epoch');
+assert.equal(warmups, 2, 'a targetless sweep can still prepare audio');
 cancel = true;
 assert(cancellable.next().done);
 assert.equal(cancellations, 1);
 assert.equal(second._wqaTimingWaiting, false);
-assert.equal(epochs.size, 0);
+assert.equal(scene._wqaBattleTimingActive, false);
 
 cancel = false;
 const [third, quick] = arm();
@@ -117,7 +96,7 @@ pressed = true;
 assert(quick.next().done);
 render();
 assert.equal(third._wqaTimingPromptSeen, false);
-assert.equal(messages.length, 2, 'confirmation before rendering prevents a late prompt');
+assert.equal(warmups, 2, 'confirmation before rendering prevents late preparation');
 
-console.log('Verified native radial waiting, paint gating, target append, cancel and early confirmation.');
-console.log('Throttled timing prompt through synthetic postrender and formatted receipt', firstFocus.toFixed(2), 'ms.');
+console.log('Verified native radial waiting, silent audio preparation, cancel and early confirmation.');
+console.log('Throttled timing audio readiness after synthetic postrender', firstFocus.toFixed(2), 'ms.');

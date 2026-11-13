@@ -12,7 +12,7 @@ const { createBookmarkMenu } = require('./bookmark-menu');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
     puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance',
-    details: 'Read details', battleHP: 'Read active HP', battleSlot1: 'Read party slot 1',
+    details: 'Read details', gold: 'Read displayed gold', battleHP: 'Read active HP', battleSlot1: 'Read party slot 1',
     battleSlot2: 'Read party slot 2 in battle', reviewPrevious: 'Previous review line', reviewNext: 'Next review line',
     reviewFirst: 'First review line', reviewLast: 'Last review line' });
 const BATTLE_ACTIONS = Object.keys(BATTLE_KEYS);
@@ -197,38 +197,60 @@ function createSettingsMenu(root, host) {
         else if (owner.group === 'help') showHelp(owner, selection);
     }
 
-    function showHelp(owner, selection = 0) {
+    function showHelp(owner, section = null, previous = null) {
         owner.group = 'help';
-        owner.selected = selection;
+        owner.selected = section;
         owner.capture = null;
-        owner.heading.textContent = 'Help';
+        owner.heading.textContent = section ? 'Help. ' + section : 'Help';
         owner.status.textContent = '';
         owner.contents.textContent = '';
 
         const field = navigation.bindings[navigation.layout];
         const binding = action => gestureName(field[action]);
         const padName = action => buttonName(owner.family, pad[action]);
-        const instructions = [
-            'Settings. Use the arrows to move, Enter to activate and Escape to go back. Your settings key is ' +
-                gestureName(keys.settings) + '.',
-            'Pathfinder. Previous destination ' + binding('previousDestination') + '. Next destination ' +
-                binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
-                binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
-            'All combines destinations and saved bookmarks. NPC lists reachable characters. Events lists nearby scene triggers and conversations. Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
-            'Review. Repeat dialogue ' + gestureName(keys.repeat) + '. Read details ' + gestureName(keys.details) +
-                '. Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
-            'Controller. Press and release ' + padName('mode') + ' for mod mode, then ' + padName('settings') +
-                ' for settings or ' + padName('currentDestination') + ' to read the selected destination on the field.',
-            'Controller pathfinder. Previous and next destination ' + padName('previousDestination') + ' and ' +
-                padName('nextDestination') + '. Previous and next category ' + padName('previousCategory') + ' and ' +
-                padName('nextCategory') + '. Directions ' + padName('directions') + '.'
-        ];
-        const items = instructions.map((line, index) => button(owner, line, () => {
-            owner.selected = index;
-            status(owner, line);
-        }));
-        button(owner, 'Back', () => showRoot(owner, 'help'));
-        (items[selection] || items[0]).focus();
+        const sections = {
+            'Menus and reading': [
+                'Use the arrows to move, Enter to activate and Escape to go back. Settings key ' + gestureName(keys.settings) + '.',
+                'Repeat dialogue ' + gestureName(keys.repeat) + '. Read details ' + gestureName(keys.details) +
+                    '. Read displayed gold ' + gestureName(keys.gold) + '. Read HP ' + gestureName(keys.battleHP) + '.',
+                'Review previous and next lines with ' + gestureName(keys.reviewPrevious) + ' and ' +
+                    gestureName(keys.reviewNext) + '. First and last with ' + gestureName(keys.reviewFirst) + ' and ' +
+                    gestureName(keys.reviewLast) + '.'
+            ],
+            Pathfinder: [
+                'Previous destination ' + binding('previousDestination') + '. Next destination ' +
+                    binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
+                    binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
+                'Read the current map name ' + binding('mapName') + '.',
+                'All combines destinations and saved bookmarks. NPC lists reachable characters. Events lists nearby scene triggers and conversations.',
+                'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
+                'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
+                'Toggle the beacon ' + binding('beaconToggle') + '. Toggle wall sounds ' + binding('wallToggle') +
+                    '. Stop current navigation ' + binding('beaconStop') + '.'
+            ],
+            Battle: [
+                'Confirm to start the timing meter. Confirm again for power, then for accuracy.',
+                'Turn on Battle timing cues under Audio to hear the sweep. Time your press near the end of a rising power sweep or around the crest of an earlier accuracy band.',
+                'Read active HP ' + gestureName(keys.battleHP) + '. Read party slots with ' + gestureName(keys.battleSlot1) +
+                    ' and ' + gestureName(keys.battleSlot2) + '.'
+            ],
+            Controller: [
+                'Press and release ' + padName('mode') + ' for mod mode, then ' + padName('settings') +
+                    ' for settings or ' + padName('currentDestination') + ' to read the selected destination on the field.',
+                'Previous and next destination ' + padName('previousDestination') + ' and ' +
+                    padName('nextDestination') + '. Previous and next category ' + padName('previousCategory') + ' and ' +
+                    padName('nextCategory') + '. Directions ' + padName('directions') + '.'
+            ]
+        };
+        if (section) {
+            const rows = sections[section].map(line => button(owner, line, () => status(owner, line)));
+            button(owner, 'Back', () => showHelp(owner, null, section));
+            rows[0].focus();
+        } else {
+            const rows = Object.keys(sections).map(name => button(owner, name, () => showHelp(owner, name)));
+            button(owner, 'Back', () => showRoot(owner, 'help'));
+            (rows[Object.keys(sections).indexOf(previous)] || rows[0]).focus();
+        }
     }
 
     function showSpeech(owner, selection = 'enabled') {
@@ -506,6 +528,7 @@ function createSettingsMenu(root, host) {
             host.audioStop(owner.scene);
             showAudio(owner, 'soundscape');
         }
+        else if (owner.group === 'help' && owner.selected) showHelp(owner, null, owner.selected);
         else if (owner.group) showRoot(owner, owner.group);
         else close(owner.scene, true);
     }
@@ -622,7 +645,8 @@ function createSettingsMenu(root, host) {
         const battleConflict = BATTLE_KEYS[action] ?
             ['settings', 'repeat', 'details', ...BATTLE_ACTIONS].some(id => id !== action && keys[id] === key) :
             BATTLE_ACTIONS.some(id => keys[id] === key);
-        if (nativeConflict(root, key, event.keyCode) || key === keys[other] || battleConflict ||
+        const goldConflict = action === 'gold' ? key === keys.details || key === keys.repeat : key === keys.gold;
+        if (nativeConflict(root, key, event.keyCode) || key === keys[other] || battleConflict || goldConflict ||
             (action === 'settings' && key === keys.details) ||
             (action === 'settings' && navigationAction(navigation, key))) {
             status(owner, `${key} is already in use. Choose another key.`);
@@ -683,7 +707,7 @@ function createSettingsMenu(root, host) {
         const review = reviewGesture(event);
         const menuAction = review ? Object.keys(REVIEW_KEYS).find(action => keys[action] === review &&
             (review.includes('Arrow') || !nativeConflict(root, review, event.keyCode))) :
-            key && key === keys.details && !nativeConflict(root, key, event.keyCode) ? 'details' : '';
+            key && !nativeConflict(root, key, event.keyCode) ? key === keys.gold ? 'gold' : key === keys.details ? 'details' : '' : '';
         if (menuAction && host.menuCommand(menuAction)) {
             if (physical && held.size < 64) held.add(physical);
             event.preventDefault();
@@ -693,6 +717,7 @@ function createSettingsMenu(root, host) {
         const gesture = navigationGesture(event);
         const action = navigationAction(navigation, gesture);
         if (action && !nativeNavigationConflict(root, gesture, event.keyCode) && host.fieldCommand(action)) return;
+        if (action) host.fieldKeyDenied?.(action);
         const chord = puzzleGesture(event);
         const puzzle = chord && (chord === keys.puzzleGuide ? 'puzzleGuide' : chord === keys.puzzleStop ? 'puzzleStop' : '');
         if (!action && puzzle && !nativeConflict(root, chord, event.keyCode) && host.fieldCommand(puzzle)) {
@@ -705,9 +730,11 @@ function createSettingsMenu(root, host) {
         if (key === keys.repeat && host.repeat()) return;
         const recover = key === 'F8' && (nativeConflict(root, keys.settings) ||
             (ready && host.fieldReady(ready) && navigationAction(navigation, keys.settings)));
-        if (ready && (key === keys.settings || recover) && open(ready)) {
-            event.preventDefault();
-            event.stopPropagation();
+        if (key === keys.settings || recover || key === 'F8') {
+            if (ready && (key === keys.settings || recover) && open(ready)) {
+                event.preventDefault();
+                event.stopPropagation();
+            } else host.fieldKeyDenied?.('settings');
         }
     }
 

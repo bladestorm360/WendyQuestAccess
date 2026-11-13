@@ -121,3 +121,7 @@ The installed-method fixture ran the real SetPictureText handler, Game_Picture a
 ## Inventory category highlight
 
 Open **Items** and move left or right while the category row has focus. The mod reads the selected native category, including Items, Equipment and Key Items. The installed-method fixture follows the native category list and page-cycle handlers, reproduces confirmation leaving the category inactive, checks the three labels and visible hover highlight, then verifies handback to the item list. Stable item review still emits no duplicate focus report across the bounded 400-frame fixture.
+
+## Read displayed gold
+
+Press **G** in the pause menu or shop. The existing hash-checked `Window_Gold.refresh` marker captures the amount and currency only after the native gold window paints. The read checks the current scene, attached window and exact bitmap. The scope includes purchase quantity while the balance is visible. The installed menu test checks redraw and window replacement, and the packaged NW.js test reads “17 Gold.” **H** reads Wendy’s exact displayed HP in the pause menu and the arc percentage on the field. [Native gold capture](../tools/registration.py) · [Menu observer](../src/menus/observer.js)

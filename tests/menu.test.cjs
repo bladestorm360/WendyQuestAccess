@@ -20,9 +20,11 @@ const records = [];
 const trace = [];
 let current = 0;
 let sequence = 0;
+let admitted;
 const actor = { param: index => [12, 3, 5, 9][index], equipSlots: () => [armor.etypeId] };
 const root = vm.createContext({
     Scene_Menu: function () {}, Scene_Item: function () {}, Window_Item_Help: function () {},
+    Window_Gold: function () {}, SceneManager: {},
     Window_ItemList: function () {}, Window_ItemCategory: function () {}, Window_EquipStatus: function () {},
     Scene_Menu_prototype_update() {}, Scene_Item_prototype_update() {},
     Window_ItemList_prototype_updateHelp() {},
@@ -35,7 +37,7 @@ const root = vm.createContext({
     JsonEx: { makeDeepCopy: () => ({ ...actor, param: index => [12, 3, 7, 10][index],
         isEquipChangeOk: () => true, forceChangeEquip() {} }) },
     CoroutineManager: { StartAnonymousCoroutine() {} },
-    SceneManager: {}, a16_0x55d438() {}
+    a16_0x55d438() {}
 });
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
     path.join(__dirname, 'menu-producers.py'), installed], { encoding: 'utf8', timeout: 6000, maxBuffer: 20000 }));
@@ -44,7 +46,7 @@ for (const method of methods) vm.runInContext(method, root, { timeout: 100 });
 const host = { manager: root.SceneManager, graphics: { app: { renderer } }, hasFocus: () => true };
 const preferences = { autodetail: false, indexing: false };
 const menu = createMenuObserver(root, host, {
-    open(record, ready) { assert(ready()); records.push(record); return current = ++sequence; },
+    open(record, ready) { assert(ready()); admitted = ready; records.push(record); return current = ++sequence; },
     focus(token, record) { assert.equal(token, current); records.push(record); },
     close(token) { if (token && token === current) { trace.push('closed'); current = 0; } }
 }, () => preferences);
@@ -74,6 +76,29 @@ pause.update();
 assert.equal(records.length, 0, 'an active selection still requires a render');
 renderer.emit('postrender');
 assert.equal(spoken(), 'Menu, Save, unavailable');
+const pausePage = menu.controlOwner(pause);
+let goldValue = 17;
+const gold = pause._goldWindow = Object.assign(new root.Window_Gold(), windowFor(pause), {
+    itemLineRect: () => ({ x: 0, y: 0, width: 100 }), value: () => goldValue, currencyUnit: () => 'Gold',
+    drawCurrencyValue(value, unit) { this.drawn = value + ' ' + unit; }
+});
+assert(!menu.command(pausePage, 'gold'), 'the window must have drawn the amount');
+gold.refresh();
+assert(menu.command(pausePage, 'gold'));
+assert.equal(spoken(), gold.drawn);
+assert.equal(spoken(), '17 Gold');
+const previousGold = admitted;
+goldValue = 19;
+assert(previousGold(), 'unpainted amounts do not affect the current reading');
+gold.refresh();
+assert(!previousGold(), 'a redraw retires the older reading');
+assert(menu.command(pausePage, 'gold'));
+assert.equal(spoken(), '19 Gold');
+gold.worldVisible = false;
+assert(!admitted() && !menu.command(pausePage, 'gold'));
+gold.worldVisible = true;
+gold.contents = { isReady: () => true };
+assert(!menu.command(pausePage, 'gold'), 'a replacement bitmap has no recorded paint');
 pause._commandWindow._index = 2;
 preferences.indexing = true;
 frame(pause);

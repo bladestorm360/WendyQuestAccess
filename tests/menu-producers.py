@@ -25,6 +25,7 @@ def methods(installed):
         ("Window_Item_Help['prototype']['refresh']=function(", "},Window_Item_Help['prototype']['itemIsEquipped']"),
         ("Window_ItemList['prototype']['updateHelp']=function(", "},Scene_Shop['prototype']['create']"),
         ("Window_EquipStatus['prototype']['drawAllParams']=function(", "},Window_EquipStatus['prototype']['rightArrowWidth']"),
+        ("Window_Gold['prototype']['refresh']=function(", "},Window_Gold['prototype']['update']"),
     )]
 
 

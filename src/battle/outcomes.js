@@ -1,0 +1,85 @@
+'use strict';
+
+const { visibleSprite } = require('./presentation');
+const { enemyIconIndex, enemyState } = require('./enemy-state');
+const { enemyLabel } = require('./damage-popup');
+const { portraitActor, visibleCondition } = require('./party-vitals');
+
+const MAX_RESULTS = 8;
+// RPG Maker rotates the enemy icon every 40 frames. The observation window
+// covers eight icons with a sample only after each six presented frames.
+const ICON_WINDOW = 336;
+
+function recordCollapse(scene, sprite) {
+    const field = scene?._spriteset?._battleField;
+    if (!field || sprite.parent !== field || !visibleSprite(field, sprite)) return;
+    const name = enemyLabel(scene, sprite);
+    if (name && (scene._wqaEnemyCollapses?.length || 0) < MAX_RESULTS)
+        (scene._wqaEnemyCollapses ||= []).push(name + ' defeated.');
+}
+
+function recordCondition(root, scene, target, state, added, speak) {
+    const id = state?.id;
+    const icon = state?.iconIndex;
+    if (!Number.isInteger(id) || id <= 0 || id > 64 || !Number.isInteger(icon) || icon <= 0) return;
+    const queue = scene._wqaBattleConditions ||= [];
+    const prior = queue.findIndex(entry => entry.target === target && entry.id === id);
+    if (prior >= 0) queue.splice(prior, 1);
+    if (queue.length >= MAX_RESULTS) return;
+    const frame = root.Graphics.frameCount || 0;
+    queue.push({ target, id, icon, added, speak, until: frame + ICON_WINDOW });
+    scene._wqaNextConditionFrame = frame;
+}
+
+function readConditions(root, graphics, scene) {
+    const pending = scene._wqaBattleConditions;
+    if (!pending?.length || graphics.frameCount < scene._wqaNextConditionFrame) return [];
+    const frame = graphics.frameCount || 0;
+    scene._wqaNextConditionFrame = frame + 6;
+    const set = scene._spriteset;
+    const enemies = set?._enemySprites;
+    const actors = set?._actorSprites;
+    const hud = scene._statusWindow;
+    const seen = scene._wqaSeenConditions ||= new WeakMap();
+    const lines = [];
+    scene._wqaBattleConditions = pending.filter(entry => {
+        const { target, id, icon, added, speak, until } = entry;
+        const tracked = seen.get(target);
+        const prior = tracked?.get(id);
+        const enemy = Array.isArray(enemies) && enemies.length <= MAX_RESULTS &&
+            enemies.find(sprite => sprite._enemy === target);
+        const actor = hud?.battler === target && Array.isArray(actors) && actors.length <= MAX_RESULTS &&
+            actors.find(sprite => sprite._actor === target);
+        const name = enemy ? enemyLabel(scene, enemy) :
+            actor && visibleSprite(scene, hud) && portraitActor(scene, actor)?.name;
+        if (!name) return false;
+
+        if (added) {
+            const label = enemy ? (enemyIconIndex(root, enemy) === icon && enemyState(root, enemy)) :
+                visibleCondition(hud, graphics, id);
+            if (!label) return frame < until;
+            const observed = tracked || new Map();
+            // Track only effects with no native recovery line.
+            if (!root.$dataStates?.[id]?.message4) {
+                observed.set(id, label);
+                if (!tracked) seen.set(target, observed);
+            }
+            if (speak) lines.push(name + ', ' + label + '.');
+        } else {
+            if (!prior) return false;
+            if (enemy ? enemyIconIndex(root, enemy) === icon : visibleCondition(hud, graphics, id)) return frame < until;
+            // Shared icons stay eligible until no remaining state uses the
+            // same visual. Never describe a hidden variant by its ID.
+            if (enemy && target.allIcons?.().includes(icon)) {
+                tracked.delete(id);
+                return false;
+            }
+            tracked.delete(id);
+            lines.push(name + ', ' + prior + ' ended.');
+        }
+        return false;
+    });
+    return lines;
+}
+
+module.exports = { recordCollapse, recordCondition, readConditions };

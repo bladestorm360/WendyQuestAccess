@@ -12,6 +12,7 @@ const { tileKey } = require('./geometry.cjs');
 const { browse, createDestinationBrowser } = require('./destinations');
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
+const { mapPlace } = require('./map-banner');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
@@ -94,7 +95,7 @@ function createField(root, host, notifications) {
             !host.graphics._wqaResize && !host.screenFading() && host.hasFocus() && !scene._wqaTerrainWork &&
             !scene._wqaPreloads?.size && !scene._wqaPreloadOverflow &&
             scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 && root.$gameScreen?._brightness === 255 &&
-            (waking || map?.inactiveTime < 30) && (!map?._needsRefresh || (map._mapId === 13 && scene._wqaLightningRefreshOnly)) &&
+            (waking || map?.inactiveTime < 30) && (!map?._needsRefresh || scene._wqaLightningRefreshOnly) &&
             map && !map._needsTilemapRefresh && !player?._transferring &&
             !player?._vehicleGettingOn && !player?._vehicleGettingOff &&
             !root.$gameMessage?.isBusy() && !map?._interpreter?._list && travelMode(map, player) &&
@@ -503,6 +504,7 @@ function createField(root, host, notifications) {
         if (navigationRequest(job) && inFlight) return;
         if (movingReport) return present(job, job.text, true);
         if (job.action === 'status') return status(job, job.text);
+        if (job.action === 'mapName') return status(job, mapPlace(root) || 'Map name unavailable');
         if (job.action === 'fieldVitals') {
             // The map scene owns its attached RadialStatus. Read the glyphs
             // after this frame only while the same HUD is still presented.
@@ -592,7 +594,7 @@ function createField(root, host, notifications) {
         }
         const reporting = action === 'navigationReport';
         const navigation = navigationRequest({ action });
-        const canWaitForStep = navigation && !timedCave(root.$gameMap?._mapId);
+        const canWaitForStep = action === 'mapName' || navigation && !timedCave(root.$gameMap?._mapId);
         const idle = canWaitForStep && root.$gameMap?.inactiveTime >= 30;
         if (!ready(scene, reporting || canWaitForStep, idle) || sequence >= 0x7ffffffe) return false;
         const player = root.$gamePlayer;
@@ -601,7 +603,7 @@ function createField(root, host, notifications) {
         const puzzle = action === 'puzzleGuide' && guideFor(scene);
         const vitals = action === 'fieldVitals' && fieldVitalsVisible(scene);
         if (!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' &&
-            action !== 'status' && !reporting && !puzzle && !vitals) return false;
+            action !== 'status' && action !== 'mapName' && !reporting && !puzzle && !vitals) return false;
         if (BROWSE.has(action) || action === 'directions' || puzzle) {
             autowalk.stop(scene);
             host.beacon?.stop(scene);

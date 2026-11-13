@@ -214,6 +214,13 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, commo
     assert.equal(opened.player.canPass(24, 25, 8), true);
     c.$gameParty.members = partyMembers;
 
+    for (const self of [[], ['116,7,A']]) {
+        const house = load(116, { self });
+        house.player.setPosition(5, 6);
+        const targets = captureWorld(c).objects.filter(item => [7, 9, 10].includes(item.id));
+        assert.deepEqual(targets.map(item => [item.id, item.name, item.category]),
+            [[7, 'Pantry', 'objects'], [9, 'Pantry', 'objects'], [10, 'Pantry', 'objects']]);
+    }
     const common = c.$dataCommonEvents;
     c.$dataCommonEvents = commonEvents;
     for (const [map, id, x, y, kind, switches] of [

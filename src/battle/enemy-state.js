@@ -8,7 +8,7 @@ const SHARED_ICONS = new Map([
     [7, 'Rage or spicy'], [65, 'Frozen or frosted'], [72, 'Regeneration'], [81, 'Crispy']
 ]);
 
-function currentIcon(root, sprite) {
+function enemyIconIndex(root, sprite) {
     const icon = sprite._stateIconSprite;
     if (!visibleSprite(sprite, icon) || icon._battler !== sprite._enemy) return 0;
     const index = icon._iconIndex;
@@ -35,7 +35,7 @@ function parameterIcon(root, index) {
 }
 
 function enemyState(root, sprite) {
-    const index = currentIcon(root, sprite);
+    const index = enemyIconIndex(root, sprite);
     if (!index) return '';
     const shared = SHARED_ICONS.get(index);
     if (shared) return shared;
@@ -47,4 +47,4 @@ function enemyState(root, sprite) {
     return parameterIcon(root, index) || 'Status icon';
 }
 
-module.exports = { enemyState };
+module.exports = { enemyState, enemyIconIndex };

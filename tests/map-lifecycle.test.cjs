@@ -251,11 +251,11 @@ async function main() {
         name.worldAlpha = 1;
         c.SceneManager.updateScene();
         frame();
-        assert.deepEqual(speech(), [data.displayName]);
+        assert.deepEqual(speech(), ['Entering ' + data.displayName + '.']);
         assert(epoch());
         c.SceneManager.updateScene();
         frame();
-        assert.deepEqual(speech(), [data.displayName]);
+        assert.deepEqual(speech(), ['Entering ' + data.displayName + '.']);
 
         const pendingEvent = c.$gameMap.fixtureEvents[0];
         const load = c.Bitmap.load;
@@ -288,7 +288,7 @@ async function main() {
         bitmapCallbacks.shift()();
         c.SceneManager.updateScene();
         frame();
-        assert.deepEqual(speech(), [data.displayName, data.displayName], 'a new native banner may repeat the same text');
+        assert.deepEqual(speech(), Array(2).fill('Entering ' + data.displayName + '.'), 'a new native banner may repeat the same text');
 
         const sceneLeaving = c.WendyQuestAccessSceneLeaving;
         let retirements = 0;
@@ -391,7 +391,7 @@ async function main() {
         frame();
         if (id === 13 || id === 196) {
             assert(name._wqaBannerDrawnRevision > 0);
-            assert.deepEqual(speech(), [entryData.displayName], 'the visible native entry banner remains accessible');
+            assert.deepEqual(speech(), ['Entering ' + entryData.displayName + '.'], 'the visible native entry banner remains accessible');
         } else {
             assert.equal(name._wqaBannerDrawnRevision, 0);
             assert.deepEqual(speech(), [], 'unnamed opening or reset maps do not publish a location');

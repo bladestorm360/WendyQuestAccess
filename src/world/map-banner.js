@@ -1,9 +1,45 @@
 'use strict';
 
+const LOCAL_NAMES = Object.freeze({ 116: "Elder Tater's house" });
+
+function mapPlace(root) {
+    const id = root.$gameMap?._mapId;
+    const name = root.$dataMap?.displayName;
+    return typeof name === 'string' && name.length <= 240 && name.trim() || LOCAL_NAMES[id] || '';
+}
+
 // The installed MapScene publishes a draw revision after its bitmap work.
 // Keep this observation attached to that presentation until its native end.
-function createMapBannerObserver(host, notifications) {
+function createMapBannerObserver(root, host, notifications, fieldReady) {
     let current = null;
+    let lastMap = null;
+    let lastId = null;
+
+    function markPlace() {
+        lastMap = root.$gameMap;
+        lastId = lastMap?._mapId;
+    }
+
+    function entrance(scene) {
+        if (scene._wqaEntryNamed || !fieldReady(scene, true) ||
+            (root.$gameMap === lastMap && root.$gameMap?._mapId === lastId && !scene._transfer)) return;
+        const renderer = host.graphics.app?.renderer;
+        if (typeof renderer?.once !== 'function') return;
+        renderer.once('postrender', () => {
+            if (scene._wqaEntryNamed || !fieldReady(scene, true)) return;
+            const name = mapPlace(root);
+            if (!name) return;
+            if (current) leave(current.scene);
+            markPlace();
+            scene._wqaEntranceFallback = scene._wqaEntryNamed = true;
+            const context = current = { scene, epoch: 0, fallback: true };
+            scene._wqaMapAnnouncement = -1;
+            scene._wqaPresentation = true;
+            context.epoch = notifications.open({ kind: 'mapBanner', name, entering: true },
+                () => current === context && fieldReady(scene, true));
+            if (!context.epoch) leave(scene);
+        });
+    }
 
     function leave(scene) {
         if (current?.scene !== scene) return;
@@ -25,7 +61,12 @@ function createMapBannerObserver(host, notifications) {
     function observe(scene, revision) {
         const window = scene._mapNameWindow;
         const renderer = host.graphics.app?.renderer;
-        if (!window || typeof renderer?.once !== 'function' || current?.scene === scene) return;
+        if (!window || typeof renderer?.once !== 'function') return;
+        if (scene._wqaEntranceFallback) {
+            window._wqaBannerRead = revision;
+            return;
+        }
+        if (current?.scene === scene) return;
         if (current) leave(current.scene);
         const context = { scene, window, revision, epoch: 0 };
         current = context;
@@ -39,7 +80,9 @@ function createMapBannerObserver(host, notifications) {
                     const name = window._wqaBannerText;
                     window._wqaBannerRead = revision;
                     if (typeof name === 'string' && name.length > 0 && name.length <= 256) {
-                        context.epoch = notifications.open({ kind: 'mapBanner', name }, () => ready(context));
+                        markPlace();
+                        scene._wqaEntryNamed = true;
+                        context.epoch = notifications.open({ kind: 'mapBanner', name, entering: true }, () => ready(context));
                     }
                     if (!context.epoch) leave(scene);
                 } catch { leave(scene); }
@@ -52,12 +95,13 @@ function createMapBannerObserver(host, notifications) {
             host.window.addEventListener(event, () => { if (current) leave(current.scene); });
         }
     }
-    return { observe, leave,
+    return { observe, entrance, leave,
         append(scene, record) {
-            if (current?.scene !== scene || !current.epoch || !ready(current)) return false;
+            if (current?.scene !== scene || !current.epoch ||
+                !(current.fallback ? fieldReady(scene, true) : ready(current))) return false;
             return notifications.focus(current.epoch, { ...record, append: true });
         }
     };
 }
 
-module.exports = { createMapBannerObserver };
+module.exports = { createMapBannerObserver, mapPlace };

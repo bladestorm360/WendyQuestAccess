@@ -26,7 +26,18 @@ function popupOwner(scene, popup, target) {
     if (!Array.isArray(enemies) || enemies.length > MAX_BATTLERS) return '';
     const enemy = enemies.find(matches);
     if (enemy?.parent !== field) return '';
-    const presented = enemies.filter(sprite => attached(sprite, field) && Number.isFinite(sprite.x))
+    return enemyLabel(scene, enemy, false);
+}
+
+function enemyLabel(scene, enemy, includeCollapsed = true) {
+    const set = scene._spriteset;
+    const field = set?._battleField;
+    const enemies = set?._enemySprites;
+    if (!Array.isArray(enemies) || enemies.length > MAX_BATTLERS || !enemies.includes(enemy) || enemy?.parent !== field) return '';
+    if (includeCollapsed && !attached(enemy, field)) return '';
+    // Keep the left-to-right index stable as earlier enemies collapse.
+    const presented = enemies.filter(sprite => Number.isFinite(sprite.x) &&
+        (includeCollapsed ? sprite?.parent === field : attached(sprite, field)))
         .sort((left, right) => left.x - right.x);
     const position = presented.indexOf(enemy);
     if (position < 0) return 'Enemy';
@@ -56,4 +67,4 @@ function damageCaption(scene, graphics, popup) {
     return [who, result, effectiveness, adjustment].filter(Boolean).join(', ');
 }
 
-module.exports = { damageCaption };
+module.exports = { damageCaption, enemyLabel };

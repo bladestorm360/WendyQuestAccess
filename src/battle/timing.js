@@ -2,12 +2,9 @@
 
 const { battlePresented, visibleSprite } = require('./presentation');
 
-const START_PROMPT = { kind: 'menuReview', name: 'Confirm to start timing. Confirm for power, then for accuracy.' };
-const MAX_TARGET_PAINT_WAIT = 3;
 const MAX_PAINT_ATTEMPTS = 8;
 
-function createBattleTiming(root, host, notifications, targets, onReady) {
-    let current = null;
+function createBattleTiming(root, host, onReady) {
     let pending = null;
     let renderOwner = null;
     let attempts = null;
@@ -26,14 +23,10 @@ function createBattleTiming(root, host, notifications, targets, onReady) {
             attempts.action._wqaTimingPromptSeen = false;
             attempts = null;
         }
-        if (current?.scene === scene) {
-            if (current.epoch) notifications.close(current.epoch);
-            current.action._wqaTimingPromptSeen = false;
-            current = null;
-        }
         scene._wqaBattleTimingActive = false;
     }
 
+    // Warm optional timing audio only after the native backing has painted.
     function publish(job) {
         const { scene, action } = job;
         if (!ready(scene, action)) return;
@@ -43,11 +36,7 @@ function createBattleTiming(root, host, notifications, targets, onReady) {
             return;
         }
         onReady?.(scene);
-        const appended = targets.appendTiming(scene, action, START_PROMPT);
-        if (!appended && root.BattleManager._targets?.length && count < MAX_TARGET_PAINT_WAIT) return;
-        const owner = current = { scene, action, epoch: 0 };
         action._wqaTimingPromptSeen = true;
-        if (!appended) owner.epoch = notifications.open(START_PROMPT, () => current === owner && ready(scene, action));
     }
 
     return {
@@ -55,7 +44,7 @@ function createBattleTiming(root, host, notifications, targets, onReady) {
             if (!ready(scene, action) || action._wqaTimingPromptSeen) return;
             const renderer = host.graphics.app?.renderer;
             if (typeof renderer?.once !== 'function') return;
-            if (current && (current.scene !== scene || current.action !== action)) retire(current.scene);
+            if (attempts && (attempts.scene !== scene || attempts.action !== action)) retire(attempts.scene);
             if (attempts?.scene !== scene || attempts.action !== action) attempts = { scene, action, count: 0 };
             scene._wqaBattleTimingActive = scene._wqaPresentation = true;
             pending = { scene, action };

@@ -124,7 +124,9 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
         if (bookmark.kind === 'point' && bookmark.x < width && bookmark.y < height)
             objects.push({ ...label, x: bookmark.x, y: bookmark.y, point: true });
         if (bookmark.kind === 'entity') {
-            const current = objects.find(item => item.id === bookmark.event && item.category === bookmark.category);
+            // Keep entity bookmarks for the pantry formerly listed as treasure.
+            const category = id === 116 && bookmark.event === 7 && bookmark.category === 'treasure' ? 'objects' : bookmark.category;
+            const current = objects.find(item => item.id === bookmark.event && item.category === category);
             if (current) objects.push({ ...current, ...label, event: current.id });
         }
     }
