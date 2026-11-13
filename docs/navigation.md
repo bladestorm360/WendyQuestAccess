@@ -220,3 +220,9 @@ The original numeric setter, active filter and quest wrappers, and native refres
 Field input diagnostics are always on. A declined pathfinder or settings gesture on a stable map can leave a row in `WendyQuestAccess-field.log` beside the Steam game executable. The asynchronous writer accepts one operation at a time, rate-limits identical rows, rechecks the scene at submission and caps the file at 32 KiB. Rows contain action names, map and event IDs, and readiness flags. The file is created on the first eligible denial. [Field diagnostics](../src/world/field-diagnostics.js)
 
 The three action-enabled pantry events in Elder Tater’s house use **Pantry** under **Objects**. The pantry that contains an item keeps its name after the native pickup. Local saved entity targets recorded in the former Treasure category still resolve to the same event. [Destination labels](../src/world/local-destinations.js) · [Bookmark matching](../src/world/snapshot.js)
+
+## NPC names in conversations
+
+Frygor and Tatoria on the second floor of Frygor’s house are named by their own active dialogue. Earlier builds gave Frygor the fallback “Person” because his interaction also grants a reward. The NPC browser now reads the first eligible non-Wendy name from the active page’s Show Text header, including messages without a portrait. A usable authored event name remains the fallback. The classifier uses only the speaker field and keeps all message text and rewards with the native interaction.
+
+The installed-method fixture verifies Frygor and Tatoria on Map 118, omits Frygor after his native action page retires, reads the portraitless names Old Bill and Kara, and checks the Map 048 conversation that opens with Wendy speaking. [NPC label resolver](../src/world/destinations.js) · [Installed map fixture](../tests/local-destinations.cjs)

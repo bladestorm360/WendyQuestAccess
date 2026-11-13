@@ -290,9 +290,33 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const books = captureWorld(c).objects.filter(item => [12, 13].includes(item.id));
         assert.deepEqual(books.map(({ name, category }) => [name, category]), Array(2).fill(['Book', 'objects']));
     }
-    const barrels = load(12);
-    barrels.player.setPosition(6, 22);
-    assert(captureWorld(c).objects.some(item => item.id === 11 && item.name === 'Barrel'));
+    const russetwood = load(12);
+    russetwood.player.setPosition(6, 22);
+    const townTargets = captureWorld(c).objects;
+    assert(townTargets.some(item => item.id === 11 && item.name === 'Barrel'));
+    assert(townTargets.some(item => item.id === 17 && item.category === 'people' && item.name === 'Old Bill'));
+
+    const house = load(118);
+    house.player.setPosition(11, 13);
+    const residents = captureWorld(c).objects.filter(item => item.category === 'people');
+    assert.deepEqual(residents.map(({ name, eventAction }) => [name, eventAction]),
+        [['Tatoria', 'talk'], ['Frygor', 'talk']]);
+    const departed = load(118, { self: ['118,5,A'] });
+    departed.player.setPosition(11, 13);
+    assert(!captureWorld(c).objects.some(item => item.id === 5), 'Frygor is omitted after the native interaction retires');
+
+    const chillcrest = load(25);
+    chillcrest.player.setPosition(20, 20);
+    const kara = captureWorld(c).objects.find(item => item.id === 11);
+    assert.equal(kara?.category, 'people');
+    assert.equal(kara.name, 'Kara');
+    assert.equal(kara.eventAction, 'talk');
+
+    const archaeologist = read('Map048.json').events[21];
+    const conversation = archaeologist.pages[1];
+    const speaker = eventTarget({ $gameMap: { _mapId: 48 } }, 'walk',
+        { _eventId: 21, _pageIndex: 1, _trigger: 0 }, archaeologist, conversation);
+    assert.deepEqual(speaker, { category: 'people', name: 'Archaeologist', eventAction: 'talk' });
     console.log('Verified unique Russetwood exits, generic ambush and discovery triggers, and spoiler-free books and barrels.');
 
     for (const [map, id, x, y, kind, switches] of [

@@ -31,17 +31,28 @@ function destination(entry, page, trigger, map) {
     if (/^(?:test|debug|developer)/i.test(raw)) return null;
     const name = eventName(entry);
     const sprite = page.image?.characterName || '';
+    const npc = /^~|npc/i.test(sprite);
     let shop = false;
     let battle = false;
     let transfer = false;
     let warp = false;
     let reward = false;
     let speaker = '';
+    let conversation = false;
     let activeCommand = false;
     for (const command of page.list) {
         if (!NON_INTERACTION_COMMANDS.has(command.code)) activeCommand = true;
-        if (command.code === 101 && !speaker && command.parameters?.[0] && typeof command.parameters[4] === 'string')
-            speaker = command.parameters[4].trim();
+        if (npc && command.code === 101) {
+            conversation = true;
+            const label = command.parameters?.[4];
+            // The speaker field also works without a face graphic. Skip
+            // Wendy and text-control labels before choosing the NPC name.
+            if (!speaker && typeof label === 'string' && label.length <= 48) {
+                const candidate = label.trim();
+                if (candidate.toLowerCase() !== 'wendy' && !/[\\<>]/.test(candidate) && /\p{L}/u.test(candidate))
+                    speaker = candidate;
+            }
+        }
         if (command.code === 302) shop = true;
         else if (command.code === 301) battle = true;
         else if (command.code === 201 && command.indent === 0) {
@@ -69,9 +80,9 @@ function destination(entry, page, trigger, map) {
         (/^~/.test(sprite) || /enemy|patrol|guard|encounter/i.test(name)))
         return { category: 'enemies', name: safeName || 'Enemy' };
     if (trigger !== 0) return null;
-    if (/^~|npc/i.test(sprite)) return { category: 'people',
-        name: speaker && speaker.length <= 48 && !/[\\<>]/.test(speaker) && speaker !== 'Wendy' ? speaker : safeName || 'Person',
-        ...(speaker ? { eventAction: 'talk' } : {}) };
+    if (npc) return { category: 'people',
+        name: speaker || safeName || 'Person',
+        ...(conversation ? { eventAction: 'talk' } : {}) };
     if (reward || SENSITIVE_NAME.test(name))
         return { category: 'objects', name: 'Interaction' };
     if (/^distraction\s*crystal/i.test(name)) return { category: 'objects', name: 'Distraction crystal' };
