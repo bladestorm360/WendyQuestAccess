@@ -243,7 +243,7 @@ function verifySettings() {
         if (!document.activeElement.textContent.includes('map name M')) throw Error('Help did not show the map key');
         tap('ArrowDown');
         if (!document.activeElement.textContent.includes('NPC lists reachable characters') ||
-            !document.activeElement.textContent.includes('Events lists nearby scene triggers and conversations'))
+            !document.activeElement.textContent.includes('Events lists reachable scene triggers'))
             throw Error('Help did not use the NPC category label');
         tap('Escape');
         if (document.activeElement.textContent !== 'Pathfinder') throw Error('Help section did not restore focus');

@@ -156,7 +156,7 @@ function boot(root, nodeRequire, nodeProcess) {
         field = createField(root, host, notifications);
         mapBanner = createMapBannerObserver(root, host, notifications, field.ready);
         const fieldKeyDenied = createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
-        interaction = createInteractionPrompt(root, host, field.interactionReady, notifications);
+        interaction = createInteractionPrompt(root, host, field.interactionReady, notifications, field.appendInteraction);
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
         quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);

@@ -912,7 +912,7 @@ async function main() {
     await verifyNativeBeacon();
     verifyNativePatrolMotion();
     verifyCaveProgression(c, load, snapshot, verifyRoute, read);
-    await verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read('CommonEvents.json'));
+    await verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read);
     await verifyVehicleNavigation(c, load, read, verifyWorker);
     await verifyAutowalk(c, load, verifyWorker);
     verifySoundscape(c, load);

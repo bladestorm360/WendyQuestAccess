@@ -66,6 +66,7 @@ methods = read_methods(MAP_REL.name, map_notification, [
     ('Scene_Map', 'updateInactive', "},Scene_Map['prototype']['isFastForward']"),
     ('Game_Event', 'onSceneStart', "},Game_Event['prototype']['reinstateAnimationData']"),
     ('Game_Event', 'SetBlocker', "},Game_Event['prototype']['GetCenter']"),
+    ('Game_Event', 'GetCenter', "},Game_Event['prototype']['findProperPageIndex']"),
     ('Window_MapName', 'refresh', "},Window_MapName['prototype']['drawBackground']"),
 ])
 methods += read_methods(WINDOW_REL.name, window_notification, [

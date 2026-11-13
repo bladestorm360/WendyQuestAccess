@@ -222,7 +222,7 @@ function createSettingsMenu(root, host) {
                     binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
                     binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
                 'Read the current map name ' + binding('mapName') + '.',
-                'All combines destinations and saved bookmarks. NPC lists reachable characters. Events lists nearby scene triggers and conversations.',
+                'All combines destinations and saved bookmarks. NPC lists reachable characters. Events lists reachable scene triggers. Active quest markers have their own Quests category.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
                 'Toggle the beacon ' + binding('beaconToggle') + '. Toggle wall sounds ' + binding('wallToggle') +

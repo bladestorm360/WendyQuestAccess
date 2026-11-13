@@ -1,6 +1,6 @@
 'use strict';
 
-const { worldFacingEntrances } = require('./transfer-events.cjs');
+const { worldFacingEntrances, transferOptions } = require('./transfer-events.cjs');
 const { DIRECTIONS } = require('./geometry.cjs');
 const { vehicleOnMap } = require('./vehicle-navigation');
 
@@ -11,6 +11,9 @@ const RUINS = [162, 207, 164, 208, 165, 166, 161, 167, 168, 169, 170, 171, 172, 
 const DISCOVERIES = { 11: 89, 75: 76, 78: 80, 81: 83, 85: 84, 86: 88, 90: 13, 92: 93, 97: 96,
     98: 100, 101: 102, 104: 105, 107: 108, 112: 110, 113: 114, 118: 116, 119: 121, 124: 122, 125: 126,
     128: 129, 131: 132, 134: 135, 190: 100 };
+
+const FLOOR_EXITS = { 3: ['Russetwood', 12], 4: ['Russetwood', 12], 74: ['Russetwood', 12],
+    19: ['Chillcrest', 25], 22: ['Cold Brew Trail', 36], 56: ['Sunrise Beach', 76] };
 
 const SOLID_EXITS = { 59: ['Cracked Cove', 191], 60: ['Cracked Cove', 77],
     63: ['Poached Pools', 80], 64: ['Poached Pools', 80] };
@@ -54,10 +57,14 @@ function worldDestination(root, mode, event, entry, page) {
         }
         if (land) {
             if (id === 13 && transfersTo(list[1], 206)) return { name: 'Secret Island', category: 'exits' };
-            if (mode === 'walk') {
-                const name = worldBoundaryName(root, id);
-                if (name) return { name, category: 'objects' };
-            }
+            const floor = FLOOR_EXITS[id];
+            if (floor && transferOptions(map, entry, page, root.$dataCommonEvents).some(edge => edge.map === floor[1]))
+                return { name: floor[0], category: 'exits' };
+            if (id === 43 && transferOptions(map, entry, page, root.$dataCommonEvents).some(edge =>
+                edge.map === 57 || edge.map === 58))
+                return { name: 'Cauldron', category: 'exits' };
+            if (mode === 'walk' && discoveryEntrance(map, event))
+                return { name: 'Scene trigger', category: 'events', eventAction: 'step' };
             const number = /^EnterSecretArea(\d+)$/.exec(entry.name)?.[1];
             if (number && transfersTo(list[1], RUINS[Number(number) - 1]))
                 return { name: 'Lost Ruins ' + number, category: 'exits' };
@@ -68,9 +75,7 @@ function worldDestination(root, mode, event, entry, page) {
     return land ? undefined : null;
 }
 
-// These two authored surface touch pages remain separate from the named
-// landing targets. The dock also has a generic approach when the correct
-// heading for boarding is unavailable.
+// These authored discovery tiles can also be approached by boat.
 function worldEventDescription(root, mode, event, page) {
     const map = root.$gameMap._mapId;
     if (map !== 113 || event._pageIndex !== 0 || event._trigger !== 1 || event._priorityType === 1) return null;
@@ -78,9 +83,7 @@ function worldEventDescription(root, mode, event, page) {
     const sailing = (mode === 'ship' || mode === 'boat') && (id === 24 || id === 158) &&
         page.list.some(command => command.code === 357 && command.parameters?.[0] === 'Tyruswoo_TileControl' &&
             command.parameters[1] === 'set_tile');
-    const dock = mode === 'walk' && id === 94 && root.$gameSwitches?.value?.(221) === false &&
-        page.list[4]?.code === 117 && page.list[4].parameters[0] === 139;
-    return sailing || dock ? { name: 'Scene trigger', category: 'events', eventAction: 'step' } : null;
+    return sailing ? { name: 'Scene trigger', category: 'events', eventAction: 'step' } : null;
 }
 
 function discoveryEntrance(map, event) {
@@ -90,10 +93,7 @@ function discoveryEntrance(map, event) {
 
 function worldBoundaryName(root, id) {
     const entrance = discoveryEntrance(root.$gameMap._mapId, root.$gameMap._events?.[id]);
-    if (entrance === 13) return 'Secret Island discovery';
-    const name = entrance && root.$dataMap?.events?.[entrance]?.name;
-    const number = /^EnterSecretArea(\d+)$/.exec(name)?.[1];
-    return number && RUINS[Number(number) - 1] ? `Lost Ruins ${number} discovery` : '';
+    return entrance ? 'Scene trigger' : '';
 }
 
 module.exports = { worldDestination, worldEventDescription, worldBoundaryName, discoveryEntrance };

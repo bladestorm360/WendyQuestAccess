@@ -289,9 +289,9 @@ function createCaveGuide(root, graphics) {
         const target = !state.sign && room.sign && warningApproach(map, x, y, room.sign) && objects.find(item => item.id === room.sign);
         const patrol = patrolInView(room, map, root.$dataMap, scene, graphics.app?.renderer?.screen, x, y);
         const hint = target ? 'Warning sign selected. Get directions, then use the action button at the sign.' :
-            { 199: 'Objects lists patrol line floor triggers. The next room is in Exits.',
+            { 199: 'Events lists the scene triggers for the patrol line. The next room is in Exits.',
                 200: 'Find distraction crystals and checkpoints in Objects.',
-                201: 'Objects lists chase floor triggers. Find the staircase passage in Exits.' }[map._mapId] ||
+                201: 'Events lists the scene triggers for the chase. Find the staircase passage in Exits.' }[map._mapId] ||
                 'Avoid contact with patrols.';
         const text = ['Secret cave.', state.outcome, hint, patrol || 'No patrol in view at this check.'].filter(Boolean).join(' ');
         return { target, text };

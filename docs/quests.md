@@ -36,7 +36,7 @@ For the final player pass, accept the first quest and wait for the field to retu
 
 Use the **Quests** category when the game has an eligible marker on the current map. Press **Shift+J** or **Shift+L** to change category, **J** or **L** to choose a destination, **K** to read it, and **P** for directions. On a controller, use the right stick to browse and the left trigger for directions. The existing alternate keyboard layout and remaps apply. [All navigation controls](navigation.md#destination-controls-in-the-development-build)
 
-An actionable marker leads to the current event's normal interaction approach. A marked prop or scenery waypoint leads to its walkable tile or the edge of its solid footprint. Use the quest tracker for the objective text. A quest chest is still read by treasure type. A marker can also stay in its ordinary category.
+An actionable marker leads to the current event's normal interaction approach. A marked prop or scenery waypoint leads to its walkable tile or the edge of its solid footprint. Use the quest tracker for the objective text. A quest chest is still read by treasure type. A marked scene trigger is listed only in **Quests**. An ordinary object, chest, character or exit can still be found by its own category. **All** lists the target once.
 
 Only two quest definitions have place text, and the installed tracker's draw routine leaves its library place renderer unused. The 239-map audit found 40 authored marker commands, eight quest event signals, 18 explicit objective completions and 87 automatic-marker suppressions. The most common objective type is event-driven, with 36 of 40 rows. Place text alone cannot identify the active destination.
 

@@ -618,7 +618,7 @@ def map_notification(original):
             globalThis.WendyQuestAccessStepNavigationReady?.(this);
         const wqaIcon = $gamePlayer._iconState === 1 && $gamePlayer._interactIcon?.visible ? $gamePlayer._interactIcon : null;
         if ((this._wqaInteractionActive && this._wqaInteractionActive !== wqaIcon) ||
-            (!this._wqaInteractionActive && !this._wqaRouteActive && wqaIcon && wqaIcon !== this._wqaInteractionSeen &&
+            (!this._wqaInteractionActive && !this._wqaInteractionDeferred && wqaIcon && wqaIcon !== this._wqaInteractionSeen &&
             wqaIcon.scale.x > 0 && wqaIcon.children[0]?.texture?.valid))
             globalThis.WendyQuestAccessInteractionUpdate?.(this, wqaIcon);
         if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaBookmarkTransferPending) &&

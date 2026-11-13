@@ -2,12 +2,12 @@
 
 const { renderedSprite } = require('../runtime/rendered-sprite');
 
-function createInteractionPrompt(root, host, ready, notifications) {
+function createInteractionPrompt(root, host, ready, notifications, appendToField) {
     let current = null;
 
     function leave(scene) {
         if (current?.scene !== scene) return;
-        if (current.token) notifications.close(current.token);
+        if (current.cancel) current.cancel();
         scene._wqaInteractionActive = false;
         current = null;
     }
@@ -24,7 +24,7 @@ function createInteractionPrompt(root, host, ready, notifications) {
         if (!icon || current?.icon === icon || scene._wqaInteractionSeen === icon || !ready(scene)) return;
         const renderer = host.graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return;
-        const context = { scene, icon, token: 0 };
+        const context = { scene, icon, cancel: null };
         current = context;
         scene._wqaInteractionActive = icon;
         scene._wqaPresentation = true;
@@ -34,7 +34,12 @@ function createInteractionPrompt(root, host, ready, notifications) {
             // Identity is the native pop presentation. Turning away and back
             // can show a new icon with the same spoken instruction.
             scene._wqaInteractionSeen = icon;
-            context.token = notifications.open({ kind: 'interactionPrompt' }, () => presented(scene, icon));
+            const record = { kind: 'interactionPrompt' };
+            context.cancel = appendToField(scene, record);
+            if (!context.cancel) {
+                const token = notifications.open(record, () => presented(scene, icon));
+                context.cancel = () => notifications.close(token);
+            }
         });
     }
 

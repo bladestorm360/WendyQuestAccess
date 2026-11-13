@@ -1,6 +1,6 @@
 'use strict';
 
-const { eventName, treasureName } = require('./destinations');
+const { destination, eventName, treasureName } = require('./destinations');
 
 const PLUGIN = 'Ayatam_HighQualityQuestSystem';
 const MAX_MARKERS = 128;
@@ -94,9 +94,9 @@ function collectQuestDestinations(root, scene, mode) {
 }
 
 function questDestinationLabel(entry, lease, ordinary) {
-    const treasure = treasureName(entry, lease.page);
-    if (treasure) return treasure;
-    const name = ordinary?.name || eventName(entry);
+    const safe = ordinary || destination(entry, lease.page, lease.trigger, lease.map?._mapId);
+    const name = (safe?.category !== 'events' && safe?.name) || treasureName(entry, lease.page) ||
+        (lease.waypoint ? eventName(entry) : '');
     if (lease.waypoint) {
         const anchor = name.replace(/^quest\s*marker\s*/i, '');
         return anchor ? 'Quest marker near ' + anchor : 'Quest marker';

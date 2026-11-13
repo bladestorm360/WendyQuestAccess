@@ -124,6 +124,7 @@ function createField(root, host, notifications) {
         if (admission) Atomics.store(admission, 0, 0);
         active = null;
         scene._wqaRouteActive = false;
+        scene._wqaInteractionDeferred = false;
         scene._wqaStepNavigation = false;
         scene._wqaNavigationWake = false;
         scene._wqaCaveReview = false;
@@ -134,7 +135,9 @@ function createField(root, host, notifications) {
     }
 
     function present(job, record, moving = false) {
-        if (active !== job || !ready(job.scene, moving)) return;
+        if (active !== job) return;
+        job.scene._wqaInteractionDeferred = false;
+        if (!ready(job.scene, moving)) return;
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
             (!job.entrance || transfers.current(job.entrance)) &&
@@ -283,6 +286,7 @@ function createField(root, host, notifications) {
                 status(job, job.nearestLanding ? 'No landing site is available' : prefix + job.label);
             }
             else if (result?.status === 'unavailable') status(job, 'Directions unavailable for ' + job.label);
+            else retire(job.scene);
         } else if (navigationRequest(active) && ready(active.scene)) afterRender();
     }
 
@@ -510,6 +514,7 @@ function createField(root, host, notifications) {
             // after this frame only while the same HUD is still presented.
             const record = fieldVitals(job.scene, host.graphics, job.text === true);
             if (record) present(job, record);
+            else retire(job.scene);
             return;
         }
         const routing = job.action === 'directions';
@@ -527,7 +532,7 @@ function createField(root, host, notifications) {
         job.performed = true;
         if (job.action === 'puzzleGuide') {
             const result = guideFor(job.scene)?.review(job.scene, snapshot.objects, snapshot.x, snapshot.y);
-            if (!result) return;
+            if (!result) return retire(job.scene);
             if (result.target) {
                 owner.browser.category = result.target.category;
                 owner.browser.selections[result.target.category] = result.target.id;
@@ -558,6 +563,9 @@ function createField(root, host, notifications) {
     function queue(job) {
         const { scene } = job;
         active = { ...job, sequence: ++sequence };
+        // The pending command owns the next speech turn. Once its result
+        // is published, keep the route lease and let a visible prompt append.
+        scene._wqaInteractionDeferred = true;
         scene._wqaStepNavigation = !!(job.step || job.idle);
         scene._wqaCaveReview = timedCave(root.$gameMap._mapId);
         scene._wqaRouteActive = !scene._wqaCaveReview && !autowalk.active(scene);
@@ -715,7 +723,18 @@ function createField(root, host, notifications) {
             return active?.scene === scene && ready(scene, true, active.idle);
         },
         interactionReady(scene) {
-            return !(active?.scene === scene && navigationRequest(active)) && ready(scene);
+            return ready(scene) && !scene._wqaInteractionDeferred;
+        },
+        appendInteraction(scene, record) {
+            const token = speech;
+            if (!token || active?.scene !== scene || !notifications.focus(token, { ...record, append: true })) return null;
+            // The renderer uses one admission token per speech context.
+            // Revoke that token if this appended prompt becomes stale.
+            return () => {
+                if (speech !== token) return;
+                notifications.close(token);
+                speech = 0;
+            };
         },
         stepReady(scene) {
             const job = active;

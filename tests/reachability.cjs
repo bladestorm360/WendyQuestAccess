@@ -30,8 +30,11 @@ async function verifyReachability(c, load, verifyWorker) {
     const actor = speechMap.gameMap.event(93);
     speechMap.player.setPosition(actor.x, actor.y + 1);
     const dialogueView = captureWorld(c);
-    const conversation = dialogueView.objects.find(item => item.id === actor.eventId() && item.category === 'events');
-    assert.equal(conversation?.name, 'Conversation');
+    const matching = dialogueView.objects.filter(item => item.id === actor.eventId());
+    assert.equal(matching.length, 1);
+    const [conversation] = matching;
+    assert.equal(conversation.category, 'people');
+    assert.equal(conversation.name, 'Chomps');
     assert.equal(conversation.eventAction, 'talk');
     const talk = { x: dialogueView.x, y: dialogueView.y, field: true, event: actor.eventId() };
     assert.equal(findReachable(speechMap.geometry, dialogueView.live, { ...talk, candidates: [talk] }).available[0], 1);
@@ -39,7 +42,7 @@ async function verifyReachability(c, load, verifyWorker) {
     assert.equal(talkRoute.status, 'ready');
     assert(talkRoute.arrival.facing);
     assert.match(formatSpeech({ kind: 'routeDirections', name: conversation.name, legs: talkRoute.legs,
-        facing: talkRoute.arrival.facing, conversation: true }), /^Conversation\. .*press the action button to talk\.$/);
+        facing: talkRoute.arrival.facing, conversation: true }), /^Chomps\. .*press the action button to talk\.$/);
     const opened = load(57, { switches: [81] });
     opened.player.setPosition(20, 23);
     assert.equal(findReachable(opened.geometry, captureWorld(c).live,
@@ -116,14 +119,10 @@ async function verifyReachability(c, load, verifyWorker) {
     const bookmark = { id: 'bookmark-1', category: 'bookmarks', name: 'Beach stop', saved: true };
     const all = createDestinationBrowser();
     all.category = 'all';
-    const alias = { ...elder, category: 'events', name: 'Conversation' };
-    const mixed = { ...origin, objects: [marker, alias, elder, bookmark] };
+    const mixed = { ...origin, objects: [marker, elder, bookmark] };
     assert.equal(browse(all, mixed, []).target, elder, 'All prefers the ordinary identity for the same event');
     assert.equal(browse(all, mixed, ['nextDestination']).target, bookmark, 'All keeps the separate saved bookmark');
     assert.equal(browse(all, mixed, ['nextDestination']).target, elder, 'All has no duplicate aliases');
-    const eventBrowser = createDestinationBrowser();
-    eventBrowser.category = 'events';
-    assert.equal(browse(eventBrowser, mixed, []).target, alias);
     assert.equal(browse(all, { ...mixed, objects: [], eligibleObjects: [elder, marker] }, []).status,
         'Selected destination is out of reach');
 

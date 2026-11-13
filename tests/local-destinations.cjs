@@ -1,11 +1,37 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { captureWorld } = require('../src/world/snapshot');
+const { captureWorld, eventTarget } = require('../src/world/snapshot');
+const { questDestinationLabel } = require('../src/world/quest-destinations');
 const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
-async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, commonEvents) {
+async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read) {
+    const commonEvents = read('CommonEvents.json');
+    const maps = read('MapInfos.json').filter(Boolean);
+    assert.equal(maps.length, 239);
+    let checked = 0;
+    const unsafe = /\b(?:gold|coins?|easter\s*egg|guide to combat|combat\s*volume)\b/i;
+    for (const { id } of maps) {
+        const data = read(`Map${String(id).padStart(3, '0')}.json`);
+        const root = { $dataMap: data, $dataCommonEvents: commonEvents, $gameMap: { _mapId: id },
+            $gameSwitches: { value: () => false }, $gameSelfSwitches: { value: () => false } };
+        for (const entry of data.events) {
+            if (!entry) continue;
+            for (const [index, page] of entry.pages.entries()) {
+                if (page.list.length < 2 || ![0, 1, 2].includes(page.trigger)) continue;
+                checked++;
+                const event = { _eventId: entry.id, _pageIndex: index, _trigger: page.trigger, _priorityType: page.priorityType };
+                const ordinary = eventTarget(root, 'walk', event, entry, page);
+                const lease = { page, map: root.$gameMap, trigger: page.trigger, waypoint: false };
+                const names = [ordinary?.name, questDestinationLabel(entry, lease, ordinary)];
+                for (const name of names) assert(!unsafe.test(name || ''), `unsafe label at map ${id} event ${entry.id} page ${index}`);
+                if (ordinary?.category === 'treasure') assert.match(ordinary.name, /^(Chest|Treasure)$/);
+                if (ordinary?.category === 'events') assert.equal(ordinary.name, 'Scene trigger');
+            }
+        }
+    }
+    console.log(`Checked ${checked} actionable pages on all ${maps.length} maps for spoiler-free pathfinder and quest labels.`);
     const inBattle = c.$gameParty.inBattle;
     c.$gameParty.inBattle = () => false;
     c.$gameMessage = { isBusy: () => false };
@@ -223,6 +249,52 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, commo
     }
     const common = c.$dataCommonEvents;
     c.$dataCommonEvents = commonEvents;
+    const world = load(113);
+    world.player.setPosition(14, 30);
+    const view = captureWorld(c);
+    for (const id of [3, 4, 74]) {
+        const entries = view.objects.filter(item => item.id === id);
+        assert.deepEqual(entries.map(({ name, category }) => [name, category]), [['Russetwood', 'exits']]);
+    }
+    for (const id of [78, 90, 124, 159, 185]) {
+        const entries = view.objects.filter(item => item.id === id);
+        assert.deepEqual(entries.map(({ name, category, eventAction }) => [name, category, eventAction]),
+            [['Scene trigger', 'events', 'step']]);
+    }
+    const ruinsAmbush = load(172);
+    ruinsAmbush.player.setPosition(5, 5);
+    assert.deepEqual(captureWorld(c).objects.filter(item => item.id === 31)
+        .map(({ name, category, eventAction }) => [name, category, eventAction]), [['Scene trigger', 'events', 'bump']]);
+    const completed = load(113, { self: ['113,159,A', '113,160,A', '113,78,A'] });
+    completed.player.setPosition(14, 30);
+    assert(!captureWorld(c).objects.some(item => [78, 159, 160].includes(item.id)));
+    for (const [id, states] of [[20, {}], [21, { switches: [23] }]]) {
+        const ruins = load(16, states);
+        ruins.player.setPosition(52, 7);
+        const exits = captureWorld(c).objects.filter(item => item.id === id);
+        assert.deepEqual(exits.map(({ name, category }) => [name, category]), [['Road to Russetwood', 'exits']]);
+    }
+    for (const [map, id, floor] of [[23, 2, 'Second floor'], [24, 1, 'First floor'],
+        [117, 13, 'Second floor'], [118, 3, 'First floor'], [120, 2, 'Second floor'], [122, 1, 'First floor'],
+        [126, 2, 'Second floor'], [127, 1, 'First floor'], [127, 2, 'Third floor'], [128, 1, 'Second floor'],
+        [132, 2, 'Second floor'], [133, 1, 'First floor'], [157, 2, 'Second floor'], [158, 1, 'First floor'],
+        [195, 1, 'Second floor'], [203, 1, 'First floor']]) {
+        const building = load(map);
+        building.player.setPosition(2, 2);
+        const stairs = captureWorld(c).objects.filter(item => item.id === id);
+        assert.deepEqual(stairs.map(({ name, category }) => [name, category]), [[floor, 'exits']], `stairs on map ${map}`);
+    }
+    for (const self of [[], ['118,12,A', '118,13,A']]) {
+        const reading = load(118, { self });
+        reading.player.setPosition(9, 9);
+        const books = captureWorld(c).objects.filter(item => [12, 13].includes(item.id));
+        assert.deepEqual(books.map(({ name, category }) => [name, category]), Array(2).fill(['Book', 'objects']));
+    }
+    const barrels = load(12);
+    barrels.player.setPosition(6, 22);
+    assert(captureWorld(c).objects.some(item => item.id === 11 && item.name === 'Barrel'));
+    console.log('Verified unique Russetwood exits, generic ambush and discovery triggers, and spoiler-free books and barrels.');
+
     for (const [map, id, x, y, kind, switches] of [
         [12, 27, 2, 22, 'exits'], [25, 13, 23, 36, 'exits'], [27, 17, 21, 47, 'exits'],
         [27, 44, 21, 47, 'exits'], [48, 3, 56, 7, 'exits'], [48, 4, 56, 7, 'exits'],
@@ -271,9 +343,10 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, commo
     shore.player.setPosition(46, 0);
     const shoreline = captureWorld(c);
     const fromShore = { x: shoreline.x, y: shoreline.y, event: 94, field: true, stopBeforeEvent: true };
-    assert(shoreline.objects.some(item => item.id === 94 && item.category === 'events' && item.name === 'Scene trigger'));
+    assert.deepEqual(shoreline.objects.filter(item => item.id === 94).map(item => item.category), ['vehicles']);
     assert.deepEqual([...findReachable(shore.geometry, shoreline.live, { ...fromShore,
         candidates: [{ event: 94, entryDirection: 4 }, { event: 94 }] }).available], [0, 1]);
+    // The generic approach is valid native movement, but this side cannot board.
     const shoreRoute = solveRoute(shore.geometry, shoreline.live, fromShore);
     assert.equal(shoreRoute.status, 'interrupted');
     assert.equal(shoreRoute.boundary, 2);

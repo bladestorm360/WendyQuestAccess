@@ -32,9 +32,8 @@ function caveDestination(map, event, entry, page) {
         page.list[index].parameters[1] === exit[2])) return { name: exit[0], category: 'exits' };
     if (map === 197 && id === 11 && event._trigger === 0) return { name: 'Statue', category: 'objects' };
     if (event._pageIndex !== 0 || event._trigger !== 1 || event._x !== entry.x || event._y !== entry.y) return null;
-    if (map === 199 && (id === 22 || id === 24)) return { name: 'Patrol line floor trigger', category: 'objects' };
-    if (map === 201 && CHASE_FLOORS.has(id)) return { name: 'Chase floor trigger', category: 'objects' };
-    if (map === 202 && id >= 5 && id <= 11) return { name: 'Staircase floor trigger', category: 'objects' };
+    if ((map === 199 && (id === 22 || id === 24)) || (map === 201 && CHASE_FLOORS.has(id)) ||
+        (map === 202 && id >= 5 && id <= 11)) return { name: 'Scene trigger', category: 'events', eventAction: 'step' };
     return null;
 }
 

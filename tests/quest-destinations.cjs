@@ -108,6 +108,22 @@ async function verifyQuestDestinations(c, game, read, load, verifyRoute, verifyW
     assert.match(chestTarget.name, /^(?:Chest|Treasure)$/, 'quest treasure retains a type-only label');
     assert(chestTargets.objects.some(row => row.category === 'treasure' && row.id === 14));
     assert(questDestinationCurrent(c, chestScene, chestTarget.quest));
+    const floor = chest.gameMap._events[14];
+    const originalName = chest.map.events[14].name;
+    const originalImage = floor.page().image.characterName;
+    const originalTrigger = floor._trigger;
+    const originalPriority = floor._priorityType;
+    // Use the native marker binding to exercise precedence on a floor trigger.
+    chest.map.events[14].name = 'Floor scene';
+    floor.page().image.characterName = '';
+    floor._trigger = 1;
+    floor._priorityType = 0;
+    assert(targets(chestScene).objects.some(row => row.id === 14 && row.category === 'quests' && row.eventAction === 'step'));
+    assert(!targets(chestScene).objects.some(row => row.id === 14 && row.category === 'events'));
+    chest.map.events[14].name = originalName;
+    floor.page().image.characterName = originalImage;
+    floor._trigger = originalTrigger;
+    floor._priorityType = originalPriority;
     const browser = createDestinationBrowser();
     browser.category = 'quests';
     assert.equal(browse(browser, chestTargets, []).target.id, 14);

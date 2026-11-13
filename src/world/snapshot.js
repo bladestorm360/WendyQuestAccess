@@ -2,18 +2,22 @@
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination, eventDescription } = require('./destinations');
-const { localDestination } = require('./local-destinations');
+const { localDestination, localHandoffName } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
 
 function eventTarget(root, mode, event, entry, page) {
+    const map = root.$gameMap._mapId;
     let target = worldDestination(root, mode, event, entry, page);
     if (target === undefined) target = localDestination(root, event, page);
-    if (target === undefined) target = checkpointTarget(root.$gameMap._mapId, event._eventId, event._pageIndex, event._trigger)
+    if (target === undefined) target = checkpointTarget(map, event._eventId, event._pageIndex, event._trigger)
         ? { name: 'Checkpoint', category: 'objects' }
-        : caveDestination(root.$gameMap._mapId, event, entry, page) || destination(entry, page, event._trigger) || undefined;
+        : caveDestination(map, event, entry, page) || destination(entry, page, event._trigger, map) || undefined;
+    if (!target) target = worldEventDescription(root, mode, event, page) ||
+        (mode === 'walk' && !timedCave(map) && eventDescription(entry, page, event, localHandoffName(map, event._eventId))) ||
+        target;
     return target && mode === 'airship' && target.category !== 'exits' ? null : target;
 }
 
@@ -78,7 +82,6 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
 
     const events = [];
     const objects = [];
-    const eventBrowser = mode === 'walk' && !timedCave(id);
     const quests = scene ? collectQuestDestinations(root, scene, mode) : null;
     const tiles = routing ? new Set(map._tileEvents) : null;
     for (const event of map._events) {
@@ -99,20 +102,15 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
         }
         if (event._erased || !action) continue;
         const target = eventTarget(root, mode, event, entry, page);
-        if (target) {
+        const quest = quests?.get(eventId);
+        if (target && (!quest || target.category !== 'events')) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
         }
-        if (target?.category !== 'events') {
-            const description = worldEventDescription(root, mode, event, page) ||
-                (eventBrowser && eventDescription(entry, page, event, target));
-            if (description) objects.push({ id: eventId, x, y, ...description });
-        }
-        const quest = quests?.get(eventId);
         if (quest && target !== null && (mode !== 'airship' || target?.category === 'exits')) {
+            const { entryDirection, eventAction, bumpDirections, handoffs } = target || {};
             objects.push({ id: eventId, x, y, name: questDestinationLabel(entry, quest, target), category: 'quests',
-                entryDirection: target?.entryDirection, eventAction: target?.eventAction, bumpDirections: target?.bumpDirections,
-                handoffs: target?.handoffs, quest });
+                entryDirection, eventAction, bumpDirections, handoffs, quest });
         }
     }
     if (mode === 'walk') objects.push(...boardingTargets(map));
@@ -126,7 +124,11 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
         if (bookmark.kind === 'entity') {
             // Keep entity bookmarks for the pantry formerly listed as treasure.
             const category = id === 116 && bookmark.event === 7 && bookmark.category === 'treasure' ? 'objects' : bookmark.category;
-            const current = objects.find(item => item.id === bookmark.event && item.category === category);
+            let current = objects.find(item => item.id === bookmark.event && item.category === category);
+            if (!current && category === 'events') current = objects.find(item => item.id === bookmark.event &&
+                ['people', 'exits', 'quests'].includes(item.category));
+            if (!current && category === 'objects' && id === 113 && discoveryEntrance(id, map._events[bookmark.event]))
+                current = objects.find(item => item.id === bookmark.event && ['events', 'quests'].includes(item.category));
             if (current) objects.push({ ...current, ...label, event: current.id });
         }
     }

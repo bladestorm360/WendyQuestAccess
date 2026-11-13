@@ -181,3 +181,11 @@ Microsoft Defender found no threats in the exact payload, geometry and plan, or 
 The C: Steam installation was verified against all 16 script patches, 38 payload files and 240 geometry entries. The original game recovery files and all four save-directory files retained their hashes. The game stayed closed.
 
 After a conversation in Crispy Ruins ends, press **M** for the map name and **P** for directions. The next named arrival should say “Entering” and the map name. In battle, defeat an enemy and press **R** if you want to hear the recent results again. Test audible timing and responsiveness in gameplay. [Field evidence](navigation.md#field-handback-after-dialogue) · [Battle evidence](battle.md#enemy-defeat-and-status-effects) · [Gold and HP](menus.md#read-displayed-gold)
+
+## Interaction prompt and destination audit update
+
+November 13, 2026. Plan SHA-256 `afe804d355bb8cb4530ea8abf9a9b29bff8f7d6115e961d4f6a9910aff774f1d`. The focused build replaced the plugin bundle and the MapScene marker. It reused 37 payload files and 240 geometry entries. All 16 native transforms passed syntax checks. The installed-method chest, ice block and statue cases passed. The world fixture checked 3,004 actionable pages and 120,972 directed movement comparisons. The hidden NW 0.48.4 smoke and exact installer mirror passed.
+
+Microsoft Defender found no threats in the final payload, geometry, plan and four build and installer scripts at 06:14:45 PST. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.281.0. The reused native binaries remain unsigned. The `registration.py` SHA-256 is `a0b8de03c23efcd22f29a41dbc3bfd078b591df22c8d403ef0809af04937299a`. The other three scanned scripts match the previous update.
+
+The Steam install verified 16 script patches, 38 payload files, 240 geometry entries and original recovery. All four save-directory files kept their hashes. In gameplay, face the ice block or statue again after using the pathfinder. The native prompt should say “Interact.” Actual device timing and all possible live story states remain gameplay checks. [Prompt evidence](navigation.md#interaction-prompt) · [Event categories and spoiler labels](navigation-audit.md#event-categories-and-spoiler-labels)

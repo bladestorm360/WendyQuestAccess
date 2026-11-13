@@ -59,7 +59,9 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
     for (const id of [22, 24]) {
         const { source, event, gameMap } = select(199, id);
         const other = id === 22 ? 24 : 22;
-        assert.equal(captureWorld(c, false).objects.find(item => item.id === other).name, 'Patrol line floor trigger');
+        const target = captureWorld(c, false).objects.find(item => item.id === other);
+        assert.equal(target?.category, 'events');
+        assert.equal(target?.name, 'Scene trigger');
         run(source, 0, 203);
         assert.equal(gameMap._events[other].x, 0);
         assert.equal(gameMap._events[other].y, 0);

@@ -153,7 +153,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     assert.equal(ruins.length, 21);
     assert.equal(new Set(ruins.map(item => item.name)).size, 21);
     assert.equal(discovery.result.boundaryEvent, 90);
-    assert.equal(worldBoundaryName(c, 90), 'Secret Island discovery');
+    assert.equal(worldBoundaryName(c, 90), 'Scene trigger');
     follow(coast, discovery.result, undefined);
     player.moveStraight(discovery.result.boundary);
     settle(player);
@@ -501,7 +501,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             assert.equal(walking.live.mode, 'walk');
             if (reveal) {
                 await followEntrance(reveal, entrance);
-                assert.match(formatSpeech(records.at(-1)), /discovery toward Walking marker/);
+                assert.match(formatSpeech(records.at(-1)), /Scene trigger toward Walking marker/);
                 source.command357 = ([plugin, name, , args]) => {
                     assert.equal(plugin, 'Tyruswoo_TileControl');
                     assert.equal(name, 'set_tile');
@@ -691,7 +691,8 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         follow(flight, ground.result, 124);
         const discovery = gameMap._events[124];
         const discovered = worldBoundaryName(c, 124);
-        assert.equal(discovered, 'Lost Ruins 17 discovery');
+        assert.equal(discovered, 'Scene trigger');
+        assert.equal(ground.target.category, 'events');
         flight.source.command357 = ([plugin, name, , args]) => {
             assert.equal(plugin, 'Tyruswoo_TileControl');
             assert.equal(name, 'set_tile');
@@ -708,7 +709,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         const afterDiscovery = directions(flight, 122);
         follow(flight, afterDiscovery.result, 122);
         assert.match(formatSpeech({ kind: 'routeDirections', name: linked.target.name, legs: [], land: true, discovery: discovered }),
-            /Press the action button to land. Then request walking directions to Lost Ruins 17 discovery/);
+            /Press the action button to land. Then request walking directions to Scene trigger/);
         console.log('Verified native airship boarding, 48-update ascent and descent, 9,504 landing comparisons, and an actual walking approach after flight.');
     }
 }

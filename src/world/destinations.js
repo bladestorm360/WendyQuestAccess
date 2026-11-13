@@ -1,5 +1,7 @@
 'use strict';
 
+const NON_INTERACTION_COMMANDS = new Set([0, 108, 214, 408, 657]);
+const SENSITIVE_NAME = /\b(?:gold|coins?|reward|easter\s*egg)\b/i;
 const CATEGORY_LABELS = Object.freeze({ all: 'All', objects: 'Objects', people: 'NPC', merchants: 'Merchants', exits: 'Exits',
     events: 'Events', treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
 
@@ -10,12 +12,20 @@ function eventName(entry) {
 }
 
 function treasureName(entry, page) {
-    const sprite = page.image?.characterName || '';
-    return /chest|treasure|loot|collectible/i.test(entry.name + ' ' + sprite)
-        ? /chest/i.test(sprite) ? 'Chest' : 'Treasure' : '';
+    const visual = (page.image?.characterName || '') + ' ' + (entry.name || '');
+    if (/barrel/i.test(visual)) return 'Barrel';
+    if (/pantry/i.test(visual)) return 'Pantry';
+    if (/chest/i.test(visual)) return 'Chest';
+    return /treasure|loot|collectible/i.test(visual) ? 'Treasure' : '';
 }
 
-function destination(entry, page, trigger) {
+function bookName(entry) {
+    const name = entry.name || '';
+    if (/book\s*case|book\s*shelf|^books$/i.test(name)) return 'Bookcase';
+    return /book|\bdiary\b|guide to combat|combat\s*volume|^woa\s+easter egg\b/i.test(name) ? 'Book' : '';
+}
+
+function destination(entry, page, trigger, map) {
     if (!page || page.list.length < 2 || trigger < 0 || trigger > 2 || !Number.isInteger(trigger)) return null;
     const raw = typeof entry.name === 'string' ? entry.name.trim() : '';
     if (/^(?:test|debug|developer)/i.test(raw)) return null;
@@ -24,39 +34,59 @@ function destination(entry, page, trigger) {
     let shop = false;
     let battle = false;
     let transfer = false;
+    let warp = false;
     let reward = false;
+    let speaker = '';
+    let activeCommand = false;
     for (const command of page.list) {
+        if (!NON_INTERACTION_COMMANDS.has(command.code)) activeCommand = true;
+        if (command.code === 101 && !speaker && command.parameters?.[0] && typeof command.parameters[4] === 'string')
+            speaker = command.parameters[4].trim();
         if (command.code === 302) shop = true;
         else if (command.code === 301) battle = true;
-        else if (command.code === 201 && command.indent === 0) transfer = true;
-        else if (command.code >= 125 && command.code <= 128) reward = true;
+        else if (command.code === 201 && command.indent === 0) {
+            if (command.parameters?.[0] === 0 && command.parameters[1] === map) warp = true;
+            else transfer = true;
+        } else if (command.code >= 125 && command.code <= 128) reward = true;
     }
+    // A completed encounter can leave an invisible action page whose only
+    // effect is to erase itself. Keep native collision, but omit the entry.
+    if (trigger === 0 && !activeCommand) return null;
     const treasure = treasureName(entry, page);
-    if (treasure) return trigger === 0 ? { category: 'treasure', name: treasure } : null;
-    if (shop && trigger === 0) return { category: 'merchants', name: !reward && name || 'Merchant' };
-    if (transfer && /^(?:(?:go\s+)?to\s|exit\b)|\b(?:exit|door|stairs)\b/i.test(name)) {
-        return { category: 'exits', name: name || 'Exit' };
-    }
-    if (battle && /enemy|patrol|guard|encounter/i.test(name + ' ' + sprite)) {
-        return { category: 'enemies', name: name || 'Enemy' };
-    }
+    if (treasure && trigger === 0) return { category: ['Barrel', 'Pantry'].includes(treasure) ? 'objects' : 'treasure', name: treasure };
+    const book = trigger === 0 && bookName(entry);
+    if (book) return { category: 'objects', name: book };
+    if (warp && !transfer) return { category: 'objects', name: 'Warp tile',
+        ...(trigger !== 0 ? { eventAction: page.priorityType === 1 ? 'bump' : 'step' } : {}) };
+    const safeName = !SENSITIVE_NAME.test(name) && name;
+    if (shop && trigger === 0) return { category: 'merchants', name: !reward && safeName || 'Merchant' };
+    if (transfer && /^(?:(?:go\s+)?to\s|exit\b)|\b(?:exit|door|stairs)\b/i.test(name))
+        return { category: 'exits', name: safeName || 'Exit',
+            ...(trigger !== 0 && page.priorityType === 1 ? { eventAction: 'bump' } : {}) };
+    if (battle && (!sprite || /ambush/i.test(name))) return { category: 'events', name: 'Scene trigger',
+        ...(trigger !== 0 ? { eventAction: page.priorityType === 1 ? 'bump' : 'step' } : {}) };
+    if (battle && sprite && (trigger === 0 || page.priorityType === 1) &&
+        (/^~/.test(sprite) || /enemy|patrol|guard|encounter/i.test(name)))
+        return { category: 'enemies', name: safeName || 'Enemy' };
     if (trigger !== 0) return null;
-    if (/^~|npc/i.test(sprite)) return { category: 'people', name: !reward && name || 'Person' };
-    if (reward) return { category: 'objects', name: 'Interaction' };
+    if (/^~|npc/i.test(sprite)) return { category: 'people',
+        name: speaker && speaker.length <= 48 && !/[\\<>]/.test(speaker) && speaker !== 'Wendy' ? speaker : safeName || 'Person',
+        ...(speaker ? { eventAction: 'talk' } : {}) };
+    if (reward || SENSITIVE_NAME.test(name))
+        return { category: 'objects', name: 'Interaction' };
     if (/^distraction\s*crystal/i.test(name)) return { category: 'objects', name: 'Distraction crystal' };
     if (/^final\s*crystal/i.test(name)) return { category: 'objects', name: 'Crystal' };
     return name ? { category: 'objects', name } : null;
 }
 
-// Give eligible native interactions a generic alias. Never use the event's
-// name, dialogue text or command parameters for these labels.
-function eventDescription(entry, page, event, target) {
-    if (target?.category === 'exits' || target?.category === 'vehicles' || /^(?:test|debug|developer)/i.test(entry.name?.trim()))
-        return null;
-    if ((event._trigger === 1 || event._trigger === 2) && event._priorityType !== 1)
-        return { category: 'events', name: 'Scene trigger', eventAction: 'step' };
-    if (event._trigger === 0 && target?.category === 'people' && page.list.some(command => command.code === 101))
-        return { category: 'events', name: 'Conversation', eventAction: 'talk' };
+// Classify only otherwise unlisted native touch events. Authored names
+// and dialogue never enter this generic description.
+function eventDescription(entry, page, event, keepCleanup) {
+    if (![1, 2].includes(event._trigger) || /^(?:test|debug|developer)/i.test(entry.name?.trim())) return null;
+    if (!keepCleanup && !page.list.some(command => !NON_INTERACTION_COMMANDS.has(command.code))) return null;
+    if (event._priorityType !== 1) return { category: 'events', name: 'Scene trigger', eventAction: 'step' };
+    if (page.list.some(command => command.code === 101 || command.code === 301))
+        return { category: 'events', name: 'Scene trigger', eventAction: 'bump' };
     return null;
 }
 
@@ -68,11 +98,9 @@ function browse(state, snapshot, changes) {
     for (const target of snapshot.objects) {
         if (!groups.has(target.category)) groups.set(target.category, []);
         groups.get(target.category).push(target);
-        // Prefer the ordinary identity in All, then a generic event alias,
-        // then a quest marker. Keep each alias in its own category.
+        // Use the ordinary identity in All if it also has a quest marker.
         const previous = all.get(target.id);
-        if (!previous || (previous.category === 'quests' && target.category !== 'quests') ||
-            (previous.category === 'events' && target.category !== 'events' && target.category !== 'quests'))
+        if (!previous || (previous.category === 'quests' && target.category !== 'quests'))
             all.set(target.id, target);
     }
     if (all.size) groups.set('all', [...all.values()]);

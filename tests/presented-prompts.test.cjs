@@ -67,39 +67,52 @@ function verifySplash() {
     assert.equal(f.epoch(), 0, 'the title constructor is not allowed to keep splash output admitted');
 }
 
-async function verifyInteraction() {
-    const data = mapData(13);
+async function verifyInteraction(mapId, eventId, pageIndex = 0, testPathfinder = false) {
+    const data = mapData(mapId);
     const f = fixture(data);
     const { c } = f;
     const player = c.$gamePlayer;
     const map = c.$gameMap;
     const sounds = [];
-    const chest = data.events[14];
-    const target = Object.assign(f.event(14, 0), {
-        x: chest.x, y: chest.y, _pageIndex: 0, _trigger: chest.pages[0].trigger,
-        _walkAnime: chest.pages[0].walkAnime, _moveType: chest.pages[0].moveType, _moveRoute: chest.pages[0].moveRoute,
-        isNormalPriority: () => chest.pages[0].priorityType === 1,
+    const entry = data.events[eventId];
+    const page = entry.pages[pageIndex];
+    const blocker = entry.pages[0].list.find(command =>
+        command.code === 357 && command.parameters[1] === 'SetBlocker')?.parameters[3];
+    const x = entry.x + Number(blocker?.minX || 0) - 1;
+    const target = Object.assign(f.event(eventId, pageIndex), {
+        x: entry.x, y: entry.y, _x: entry.x, _y: entry.y, _pageIndex: pageIndex, _trigger: page.trigger,
+        _walkAnime: page.walkAnime, _moveType: page.moveType, _moveRoute: page.moveRoute,
+        _priorityType: page.priorityType, _through: page.through,
+        isNormalPriority: () => page.priorityType === 1,
         isTriggerIn(triggers) { return triggers.includes(this._trigger); },
-        lock() { assert.equal(f.epoch(), 0); },
-        GetCenter() { return { x: this.x, y: this.y }; }
+        lock() { assert.equal(f.epoch(), 0); }
     });
+    if (blocker) target.blockerProperties = { x1: Number(blocker.minX), y1: Number(blocker.minY),
+        x2: Number(blocker.maxX), y2: Number(blocker.maxY) };
+    map._events = [];
+    map._events[eventId] = target;
     map.fixtureEvents.push(target);
     Object.assign(map, {
-        _mapId: 13, _nameDisplay: false, event: id => id === 14 ? target : null,
+        _mapId: mapId, _tilesetId: data.tilesetId, _nameDisplay: false, event: id => map._events[id],
+        _tileEvents: [], _vehicles: [],
         roundXWithDirection: (x, d) => x + (d === 6 ? 1 : d === 4 ? -1 : 0),
         roundYWithDirection: (y, d) => y + (d === 2 ? 1 : d === 8 ? -1 : 0)
     });
     Object.assign(player, {
-        x: chest.x - 1, y: chest.y, _x: chest.x - 1, _y: chest.y, _realX: chest.x - 1, _realY: chest.y,
+        x, y: entry.y, _x: x, _y: entry.y, _realX: x, _realY: entry.y,
         _direction: 4, _nextDirection: 4, _vehicleType: 'walk', _eventWasRunning: false,
         isMoving: () => false, direction() { return this._direction; }
     });
     Object.assign(c.Graphics, { width: 1280, height: 720 });
     c.Input.deviceType = { MOUSE: 1, KEYBOARD: 2, GAMEPAD: 3, TOUCH_DEVICE: 4 };
-    c.Input.GetLastInputDeviceType = () => c.Input.deviceType.KEYBOARD;
+    c.Input.GetLastInputDeviceType = () => c.Input.deviceType[eventId === 53 ? 'GAMEPAD' : 'KEYBOARD'];
     c.AudioManager.playSe = sound => sounds.push(sound.name);
     Object.assign(c, {
-        WorldX: x => x, WorldY: y => y,
+        WorldX: x => x - player.x + c.Graphics.width / 64,
+        WorldY: y => y - player.y + c.Graphics.height / 64,
+        Point: function (x, y) { this.x = x; this.y = y; },
+        Lerp: (a, b, t) => a + (b - a) * t,
+        $dataTilesets: JSON.parse(fs.readFileSync(path.join(packageRoot, 'data/Tilesets.json'), 'utf8')),
         GetIndicesOf: (needle, text) => [text.indexOf(needle)],
         Game_Player_prototype_update() { this._direction = this._nextDirection; },
         EaseFunction: {},
@@ -122,7 +135,7 @@ async function verifyInteraction() {
     install(f, 'interaction');
     c.Scene_Map.prototype.addChild = function (child) { child.parent = this; };
     c.Scene_Map.prototype.updateMainMultiply = () => player.update();
-    player.reserveTransfer(13, player.x, player.y, 2, 0);
+    player.reserveTransfer(mapId, player.x, player.y, 2, 0);
     c.SceneManager.goto(c.Scene_Map);
     c.SceneManager.changeScene();
     c.DataManager.ready = c.ImageManager.ready = true;
@@ -134,16 +147,36 @@ async function verifyInteraction() {
     f.idleCallbacks.shift()();
     function tick() { c.SceneManager.updateScene(); f.frame(); }
     tick();
-    player._nextDirection = 6;
-    tick();
-    assert(sounds.includes('WQ/Menu/SFX_InteractPop'), 'the native chest produces the original cue');
-    assert.match(player._interactIcon.children[0].asset, /InteractKeyboard_Icon/);
     const announcements = () => f.packets.filter(packet => packet.kind === 'interactionPrompt').map(formatSpeech);
-    assert.deepEqual(announcements(), [], 'unpainted artwork is silent');
-    player._interactIcon.children[0].texture.valid = true;
+    if (testPathfinder) {
+        f.dispatchWindowEvent('keydown', { key: 'k', keyCode: 75 });
+        tick();
+        const request = f.routePackets.at(-1);
+        assert(request?.request.candidates.some(candidate => candidate.event === eventId));
+        player._nextDirection = 6;
+        tick();
+        player._interactIcon.children[0].texture.valid = true;
+        tick();
+        assert.deepEqual(announcements(), [], 'an in-flight pathfinder read keeps its priority');
+        f.routeReply({ map: mapId, sequence: request.sequence, epoch: request.epoch,
+            result: { status: 'reachable', available: new Uint8Array(request.request.candidates.length).fill(1) } });
+    } else player._nextDirection = 6;
     tick();
+    assert(sounds.includes('WQ/Menu/SFX_InteractPop'), 'the native target produces the original cue');
+    assert.match(player._interactIcon.children[0].asset, eventId === 53 ? /InteractGamepad_Icon/ : /InteractKeyboard_Icon/);
+    if (!testPathfinder) {
+        assert.deepEqual(announcements(), [], 'unpainted artwork is silent');
+        player._interactIcon.children[0].texture.valid = true;
+        tick();
+    }
     tick();
-    assert.deepEqual(announcements(), ['Interact']);
+    assert.deepEqual(announcements(), ['Interact'], 'a finished pathfinder request leaves the visible icon eligible');
+    if (testPathfinder) {
+        const targetSpeech = f.packets.find(packet => packet.kind === 'fieldTarget');
+        const promptSpeech = f.packets.find(packet => packet.kind === 'interactionPrompt');
+        assert.equal(promptSpeech.epoch, targetSpeech.epoch);
+        assert.equal(promptSpeech.append, true, 'the prompt follows the pathfinder read in the same speech context');
+    }
     const first = player._interactIcon;
     player._nextDirection = 4;
     tick();
@@ -170,8 +203,10 @@ async function verifyInteraction() {
 
 async function main() {
     verifySplash();
-    await verifyInteraction();
-    console.log('Verified both native splash cards and the authored Crispy Beach interaction icon, including lifecycle retirement.');
+    await verifyInteraction(13, 14);
+    await verifyInteraction(16, 51, 1, true);
+    await verifyInteraction(16, 53, 0, true);
+    console.log('Verified the native chest, ice block and statue prompts, including pathfinder handback and lifecycle retirement.');
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });
