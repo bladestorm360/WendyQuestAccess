@@ -9,6 +9,7 @@ const { FIELD_ACTIONS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
     normalizeController, canUnassign } = require('./controller-bindings');
 const { SOUNDSCAPE, normalizeSoundscape } = require('./soundscape-preferences');
 const { createBookmarkMenu } = require('./bookmark-menu');
+const { HIT_NOTE_PITCH } = require('../battle/timing-cues');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
     puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance',
@@ -27,11 +28,14 @@ const audioGroup = group => group === 'audio' || group === 'soundscape' || group
 
 function normalizeAudio(value) {
     const volume = value?.wallVolume;
+    const footstepVolume = value?.footstepVolume;
     const beaconVolume = value?.beaconVolume;
     const caveVolume = value?.caveVolume;
     const battleVolume = value?.battleTimingVolume;
     return { enabled: value?.enabled !== false, hrtf: value?.hrtf !== false, wall: value?.wall === true,
         wallVolume: Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : 65,
+        footsteps: value?.footsteps === true,
+        footstepVolume: Number.isInteger(footstepVolume) && footstepVolume >= 0 && footstepVolume <= 100 ? footstepVolume : 50,
         beacon: value?.beacon === true,
         beaconVolume: Number.isInteger(beaconVolume) && beaconVolume >= 0 && beaconVolume <= 100 ? beaconVolume : 65,
         caveTiming: value?.caveTiming === true,
@@ -221,16 +225,17 @@ function createSettingsMenu(root, host) {
                 'Previous destination ' + binding('previousDestination') + '. Next destination ' +
                     binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
                     binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
-                'Read the current map name ' + binding('mapName') + '.',
+                'Read the current map name ' + binding('mapName') + '. Read the visible quest objective ' +
+                    binding('questObjective') + '.',
                 'All combines destinations and saved bookmarks. NPC lists reachable characters. Events lists reachable scene triggers. Active quest markers have their own Quests category.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
                 'Toggle the beacon ' + binding('beaconToggle') + '. Toggle wall sounds ' + binding('wallToggle') +
-                    '. Stop current navigation ' + binding('beaconStop') + '.'
+                    '. Stop current navigation ' + binding('beaconStop') + '. Toggle footstep sounds under Audio.'
             ],
             Battle: [
                 'Confirm to start the timing meter. Confirm again for power, then for accuracy.',
-                'Turn on Battle timing cues under Audio to hear the sweep. Time your press near the end of a rising power sweep or around the crest of an earlier accuracy band.',
+                'Turn on Battle timing assist under Audio for one note when a perfect window opens. Press Confirm at the note.',
                 'Read active HP ' + gestureName(keys.battleHP) + '. Read party slots with ' + gestureName(keys.battleSlot1) +
                     ' and ' + gestureName(keys.battleSlot2) + '.'
             ],
@@ -279,12 +284,12 @@ function createSettingsMenu(root, host) {
         (selection === 'language' ? languageButton : focused).focus();
     }
 
-    function previewAudio(owner, bearing, cue, gain) {
+    function previewAudio(owner, bearing, cue, gain, pitch) {
         if (loading || saving) return;
         if (!audio.enabled) return status(owner, 'Mod sounds are off.');
         if (gain === 0) return status(owner, 'This cue’s volume is zero.');
         status(owner, 'Preparing audio preview.');
-        if (!host.previewAudio(owner, audio.hrtf, bearing, text => status(owner, text), cue, gain)) status(owner, '');
+        if (!host.previewAudio(owner, audio.hrtf, bearing, text => status(owner, text), cue, gain, pitch)) status(owner, '');
     }
 
     function showSoundscape(owner, selection = 'enabled', category = '') {
@@ -347,6 +352,12 @@ function createSettingsMenu(root, host) {
                 update('lower', { ...audio, wallVolume: Math.max(0, audio.wallVolume - 10) })),
             raise: button(owner, `Increase wall volume, ${audio.wallVolume} percent`, () =>
                 update('raise', { ...audio, wallVolume: Math.min(100, audio.wallVolume + 10) })),
+            footsteps: button(owner, `Footstep sounds, ${audio.footsteps ? 'on' : 'off'}`, () =>
+                update('footsteps', { ...audio, footsteps: !audio.footsteps })),
+            footstepLower: button(owner, `Decrease footstep volume, ${audio.footstepVolume} percent`, () =>
+                update('footstepLower', { ...audio, footstepVolume: Math.max(0, audio.footstepVolume - 10) })),
+            footstepRaise: button(owner, `Increase footstep volume, ${audio.footstepVolume} percent`, () =>
+                update('footstepRaise', { ...audio, footstepVolume: Math.min(100, audio.footstepVolume + 10) })),
             beacon: button(owner, `Navigation beacon, ${audio.beacon ? 'on' : 'off'}`, () =>
                 update('beacon', { ...audio, beacon: !audio.beacon })),
             beaconLower: button(owner, `Decrease beacon volume, ${audio.beaconVolume} percent`, () =>
@@ -359,7 +370,7 @@ function createSettingsMenu(root, host) {
                 update('caveLower', { ...audio, caveVolume: Math.max(0, audio.caveVolume - 10) })),
             caveRaise: button(owner, `Increase cave timing volume, ${audio.caveVolume} percent`, () =>
                 update('caveRaise', { ...audio, caveVolume: Math.min(100, audio.caveVolume + 10) })),
-            battleTiming: button(owner, `Battle timing cues, ${audio.battleTiming ? 'on' : 'off'}`, () =>
+            battleTiming: button(owner, `Battle timing assist, ${audio.battleTiming ? 'on' : 'off'}`, () =>
                 update('battleTiming', { ...audio, battleTiming: !audio.battleTiming })),
             battleLower: button(owner, `Decrease battle timing volume, ${audio.battleTimingVolume} percent`, () =>
                 update('battleLower', { ...audio, battleTimingVolume: Math.max(0, audio.battleTimingVolume - 10) })),
@@ -367,15 +378,16 @@ function createSettingsMenu(root, host) {
                 update('battleRaise', { ...audio, battleTimingVolume: Math.min(100, audio.battleTimingVolume + 10) })),
             soundscape: button(owner, 'Soundscape', () => showSoundscape(owner))
         };
-        const preview = (bearing, cue, gain) => previewAudio(owner, bearing, cue, gain);
-        button(owner, 'Preview wall bump ahead', () => preview([0, 0, 1], 'wallBump', audio.wallVolume / 100));
-        button(owner, 'Preview wall brush on the left', () => preview([-1, 0, 0], 'wallBrush', audio.wallVolume / 100));
+        const preview = (bearing, cue, gain, pitch) => previewAudio(owner, bearing, cue, gain, pitch);
+        button(owner, 'Preview wall tone ahead', () => preview([0, 0, 1], 'wallTone', audio.wallVolume / 100));
+        button(owner, 'Preview wall tone on the left', () => preview([-1, 0, 0], 'wallTone', audio.wallVolume / 100));
+        button(owner, 'Preview footstep', () => preview([0, -1, 0.15], 'footstep', audio.footstepVolume / 100));
         button(owner, 'Preview beacon ahead', () => preview([0, 0, 1], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconTurn', audio.beaconVolume / 100));
         button(owner, 'Preview beacon arrival', () => preview([0, 0, 1], 'beaconArrival', audio.beaconVolume / 100));
         button(owner, 'Preview cave crossing tone', () => preview([0, 0, 1], 'caveGo', audio.caveVolume / 100));
-        button(owner, 'Preview battle power tone', () => preview([1, 0, 1], 'battlePower', audio.battleTimingVolume / 100));
-        button(owner, 'Preview battle accuracy tone', () => preview([-1, 0, 1], 'battleAccuracy', audio.battleTimingVolume / 100));
+        button(owner, 'Preview battle power tone', () => preview([1, 0, 1], 'battlePower', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
+        button(owner, 'Preview battle accuracy tone', () => preview([-1, 0, 1], 'battleAccuracy', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
         for (const [direction, bearing] of AUDIO_PREVIEWS) {
             button(owner, `Preview ${direction}`, () => preview(bearing));
         }
@@ -400,7 +412,7 @@ function createSettingsMenu(root, host) {
         let focused = { autowalk, speakAutowalkPath: narration }[selection] || keymap;
         for (const [action, name] of Object.entries(ACTIONS)) {
             const gesture = bindings[layout][action];
-            const occupied = nativeNavigationConflict(root, gesture) ? ', used by the game' : '';
+            const occupied = nativeNavigationConflict(root, gesture, undefined, action) ? ', used by the game' : '';
             const item = button(owner, `${name}, ${gestureName(gesture)}${occupied}`, () => {
                 if (loading || saving) return;
                 owner.capture = owner.selected = action;
@@ -422,7 +434,7 @@ function createSettingsMenu(root, host) {
         const { layout, bindings } = navigation;
         const action = owner.capture;
         const duplicate = navigationAction(navigation, gesture);
-        if (!unassign && (nativeNavigationConflict(root, gesture, eventCode) || gesture === keys.settings || gesture === keys.puzzleGuide ||
+        if (!unassign && (nativeNavigationConflict(root, gesture, eventCode, action) || gesture === keys.settings || gesture === keys.puzzleGuide ||
             (duplicate && duplicate !== action))) {
             status(owner, `${gestureName(gesture)} is already in use. Choose another key.`);
             return;
@@ -716,7 +728,7 @@ function createSettingsMenu(root, host) {
         }
         const gesture = navigationGesture(event);
         const action = navigationAction(navigation, gesture);
-        if (action && !nativeNavigationConflict(root, gesture, event.keyCode) && host.fieldCommand(action)) return;
+        if (action && !nativeNavigationConflict(root, gesture, event.keyCode, action) && host.fieldCommand(action)) return;
         if (action) host.fieldKeyDenied?.(action);
         const chord = puzzleGesture(event);
         const puzzle = chord && (chord === keys.puzzleGuide ? 'puzzleGuide' : chord === keys.puzzleStop ? 'puzzleStop' : '');

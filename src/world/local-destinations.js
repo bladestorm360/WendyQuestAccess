@@ -112,6 +112,18 @@ function localDestination(root, event, page) {
     if (map === 13 && id === 5 && event._pageIndex === 1 && trigger === 4 && page.image?.characterName === '~ElderTater')
         return { name: 'Elder Tater', category: 'people', waypoint: true, handoffs: BEACH_HANDOFFS };
     if (trigger !== 0) return undefined;
+    // The workshop has a book on the desk and two separate cupboards.
+    if (map === 120 && (id === 11 || id === 12)) return { name: 'Cupboard', category: 'objects' };
+    // This event's editor name describes an item. The visible prop is a drawer.
+    if (map === 124 && id === 15) return { name: 'Drawer', category: 'objects' };
+    if (map === 138 && id === 4) return { name: 'Book', category: 'objects' };
+    if (map === 138 && id === 9) return { name: 'Food basket', category: 'objects' };
+    if (map === 146 && id === 15) return { name: 'Bowl', category: 'objects' };
+    // These are visibly placed pickups. Use their visible type, including
+    // the drink and burger variants with item-specific editor names.
+    if ((map === 119 && id === 23) || (map === 151 && id === 11))
+        return { name: 'Drink', category: 'objects' };
+    if (map === 158 && id === 17) return { name: 'Burger', category: 'objects' };
     // The three pantry props share a label in both native interaction states.
     if (map === 116 && [7, 9, 10].includes(id)) return { name: 'Pantry', category: 'objects' };
     if (PULLS[map]?.includes(id)) return event._pageIndex === 0 ? { name: 'Pull handle', category: 'objects' } : null;

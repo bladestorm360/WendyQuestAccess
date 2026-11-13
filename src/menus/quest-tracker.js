@@ -121,7 +121,7 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
         const previous = current;
         if (previous) leave(previous.scene);
         const same = previous?.window === window && previous.draft.quest === draft.quest;
-        current = { scene, window, draft, title, first: rendered.first, body, lines, epoch: 0,
+        current = { scene, window, draft, title, first: rendered.first, objective: rendered.objective, body, lines, epoch: 0,
             position: same ? Math.min(previous.position, lines.length - 1) : 0 };
         scene._wqaQuestTracking = scene._wqaPresentation = true;
         announce(current);
@@ -182,6 +182,8 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
             const page = current;
             if (page?.scene !== scene || !ready(page)) return false;
             if (action === 'details') speak(page, detail(page));
+            else if (action === 'questObjective' && page.objective)
+                speak(page, { kind: 'questFocus', objective: page.objective });
             else if (REVIEW.has(action)) speak(page, { ...moveReview(page, action), indexed: preferences().indexing });
             else return false;
             return true;

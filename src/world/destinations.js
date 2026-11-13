@@ -12,7 +12,8 @@ function eventName(entry) {
 }
 
 function treasureName(entry, page) {
-    const visual = (page.image?.characterName || '') + ' ' + (entry.name || '');
+    const sprite = page.image?.characterName || '';
+    const visual = sprite || entry.name || '';
     if (/barrel/i.test(visual)) return 'Barrel';
     if (/pantry/i.test(visual)) return 'Pantry';
     if (/chest/i.test(visual)) return 'Chest';
@@ -129,12 +130,17 @@ function browse(state, snapshot, changes) {
         return { status: 'Selected destination is unavailable' };
     }
     if (!categories.length) return { status: snapshot.eligibleObjects ? 'No reachable destinations here' : 'No destinations here' };
-    const closest = items => {
-        let nearest = 0;
-        const distance = item => item.saved ? Infinity : Math.abs(item.x - snapshot.x) + Math.abs(item.y - snapshot.y);
-        for (let index = 1; index < items.length; index++) if (distance(items[index]) < distance(items[nearest])) nearest = index;
-        return nearest;
-    };
+    // Rank the current snapshot once per command, including local bookmarks.
+    // Native event order is the tie-breaker. Remote bookmarks have no tile here.
+    const distances = new Map();
+    for (const item of snapshot.objects) {
+        let dx = Math.abs(item.x - snapshot.x);
+        let dy = Math.abs(item.y - snapshot.y);
+        if (snapshot.scrollType & 2) dx = Math.min(dx, snapshot.width - dx);
+        if (snapshot.scrollType & 1) dy = Math.min(dy, snapshot.height - dy);
+        distances.set(item, Number.isFinite(dx + dy) ? dx + dy : Infinity);
+    }
+    for (const items of groups.values()) items.sort((a, b) => distances.get(a) - distances.get(b));
     const relative = (length, index, offset) => (length + index + offset) % length;
     const previousCategory = state.category;
     if (!state.category) state.category = categories.find(category => category !== 'all') || 'all';
@@ -148,16 +154,16 @@ function browse(state, snapshot, changes) {
             const items = groups.get(state.category);
             if (!items) continue;
             let index = items.findIndex(item => item.id === state.selections[state.category]);
-            if (index < 0) index = closest(items);
             const offset = action === 'previousDestination' ? -1 : 1;
-            state.selections[state.category] = items[relative(items.length, index, offset)].id;
+            // A fresh category or an expired target starts at the nearest.
+            state.selections[state.category] = items[index < 0 ? 0 : relative(items.length, index, offset)].id;
         }
     }
     const items = groups.get(state.category);
     if (!items) return { status: 'No ' + (snapshot.eligibleObjects ? 'reachable ' : '') +
         'destinations in ' + CATEGORY_LABELS[state.category] };
     const selection = state.selections[state.category];
-    const target = items.find(item => item.id === selection) || items[closest(items)];
+    const target = items.find(item => item.id === selection) || items[0];
     state.selections[state.category] = target.id;
     return { target, category: changes.some(action => action.endsWith('Category')) ||
         (previousCategory && previousCategory !== state.category) ? CATEGORY_LABELS[state.category] : '' };

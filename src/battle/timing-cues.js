@@ -2,21 +2,9 @@
 
 const { battlePresented, visibleSprite } = require('./presentation');
 
-// Each pulse represents the latest visible position. Keep the same rhythm
-// and waveform through the target, with no separately scheduled hit note.
-const PULSE_INTERVAL_MS = 65;
 const MAX_REQUEST_MS = 48;
 const SOURCE = 'battleTiming';
-
-function sweepPitch(progress, start, end, limit, ice) {
-    // An end band, or a meter without a band, rises to the native cutoff.
-    // An interior band shapes the pitch around its midpoint.
-    const upper = Math.min(end, limit);
-    const lower = Math.max(0, start);
-    const peak = upper > lower && (ice || upper < limit) ? (lower + upper) / 2 : limit;
-    const height = progress <= peak ? progress / peak : (limit - progress) / (limit - peak);
-    return 0.75 + 0.5 * Math.max(0, Math.min(1, height));
-}
+const HIT_NOTE_PITCH = 1.16;
 
 function createBattleCues(root, host, audio, preferences) {
     let owner = null;
@@ -45,8 +33,9 @@ function createBattleCues(root, host, audio, preferences) {
 
     function endSweep(scene, action) {
         if (owner?.scene !== scene || owner.action !== action) return;
+        if (!owner.open) return;
+        owner.open = false;
         audio.retire(scene, SOURCE);
-        owner.window = null;
     }
 
     return {
@@ -65,45 +54,38 @@ function createBattleCues(root, host, audio, preferences) {
             const config = enabled();
             if (owner) retire(owner.scene);
             if (!config || !audio.isPrepared(config.hrtf) || !ready(scene, action)) return;
-            owner = { scene, action, window: null };
+            owner = { scene, action, phase: 0, emitted: false, open: false };
             scene._wqaBattleCueActive = action._wqaBattleCueActive = true;
         },
-        sample(scene, action, phase, progress, duration, start, end, limit, iceStart, iceEnd, paused, _frosty, accepted) {
+        sample(scene, action, phase, progress, start, end, limit, blocked) {
             const current = owner;
-            if (current?.scene !== scene || current.action !== action) return;
-            if (accepted || paused || (phase !== 0 && phase !== 1) || !(progress >= 0 && progress <= 1) ||
-                !(duration > 0 && duration <= 4) || !(limit > 0 && limit <= 1)) {
-                if (current.window) endSweep(scene, action);
+            if (current?.scene !== scene || current.action !== action || (phase !== 0 && phase !== 1) || phase < current.phase) return;
+            if (current.phase !== phase) {
+                endSweep(scene, action);
+                current.phase = phase;
+                current.emitted = false;
+            }
+            // These are the bounds used by the native perfect-hit and failure
+            // branches. A confirm already handled on this frame owns the result.
+            if (blocked || !(start < end && progress >= start && progress <= end && progress < limit && progress < 1)) {
+                endSweep(scene, action);
                 return;
             }
-            const ice = iceStart >= 0;
-            const cutoff = ice ? Math.min(iceEnd, limit) : limit;
-            if (!(progress < cutoff)) {
-                if (current.window) endSweep(scene, action);
-                return;
-            }
-            let window = current.window;
-            if (window?.phase !== phase || window.ice !== ice) {
-                if (window) endSweep(scene, action);
-                window = current.window = { phase, ice, next: 0 };
-            }
-            const now = host.now();
-            if (now < window.next) return;
+            // Wobble may leave and re-enter the band. A phase gets one note.
+            if (current.emitted) return;
             const config = enabled();
             if (!config || !ready(scene, action)) return retire(scene);
-            window.next = now + PULSE_INTERVAL_MS;
-            const pitch = sweepPitch(progress, ice ? iceStart : start, ice ? iceEnd : end, cutoff, ice);
-            const angle = Math.PI * (phase === 0 ? 1 + progress : 2 - progress);
+            current.emitted = current.open = true;
             const cue = phase === 0 ? audio.cues.battlePower : audio.cues.battleAccuracy;
-            const expires = now + MAX_REQUEST_MS;
+            const expires = host.now() + MAX_REQUEST_MS;
             audio.play(scene, config.hrtf, cue, config.battleTimingVolume / 100,
-                [Math.cos(angle), -Math.sin(angle), 1],
-                () => owner === current && current.window === window &&
-                    host.now() < expires && ready(scene, action), undefined, SOURCE, pitch);
+                [phase === 0 ? 1 : -1, 0, 1],
+                () => owner === current && current.phase === phase && current.open &&
+                    host.now() < expires && ready(scene, action), undefined, SOURCE, HIT_NOTE_PITCH);
         },
         endSweep,
         retire
     };
 }
 
-module.exports = { createBattleCues };
+module.exports = { createBattleCues, HIT_NOTE_PITCH };

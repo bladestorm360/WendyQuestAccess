@@ -102,8 +102,18 @@ public:
         alSource3f_(source_, AL_POSITION, static_cast<float>(p.right), static_cast<float>(p.up), static_cast<float>(-p.forward));
         alSourcef_(source_, AL_GAIN, static_cast<float>(gain));
         alSourcef_(source_, AL_PITCH, static_cast<float>(rate_scale));
+        const bool loop = cue == Cue::wall_tone;
+        alSourcei_(source_, AL_LOOPING, loop ? AL_TRUE : AL_FALSE);
         if (!ready()) return false;
         alSourcePlay_(source_);
+        if (loop) {
+            // Discard one period so the looping PCM starts with a settled
+            // spatial filter history. The SDL callback repeats exactly one period.
+            for (int i = 0; i < cue_frames; i += 128) {
+                if (!ready()) return false;
+                render_(device_, output.data(), std::min(128, cue_frames - i));
+            }
+        }
         for (int i = 0; i < render_frames; i += 128) {
             if (!ready()) return false;
             render_(device_, output.data() + i * 2, std::min(128, render_frames - i));

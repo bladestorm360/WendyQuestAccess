@@ -92,7 +92,8 @@ function drawnQuestPage(window, draft, graphics) {
         if (row.progress && row.progress[0] < row.progress[1]) incomplete ||= line;
         lines.push(line);
     }
-    return { title, lines: [...lines, ...trailing], first: incomplete || first || trailing[0] || '' };
+    const objective = incomplete || first;
+    return { title, lines: [...lines, ...trailing], objective, first: objective || trailing[0] || '' };
 }
 
 module.exports = { captureQuestPaint, drawnQuestPage };

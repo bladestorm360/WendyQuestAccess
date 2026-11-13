@@ -50,9 +50,9 @@ const c = vm.createContext({
 });
 const cues = createBattleCues(c, { manager: c.SceneManager, graphics: c.Graphics, hasFocus: () => true,
     screenFading: () => false, now: () => now }, audio, () => configuration);
-c.WendyQuestAccessBattleCueSample = (scene, action, phase, progress, ...rest) => {
-    samples.push({ phase, progress, paused: rest[6], at: now });
-    cues.sample(scene, action, phase, progress, ...rest);
+c.WendyQuestAccessBattleCueSample = (scene, action, phase, progress, start, end, limit, blocked) => {
+    samples.push({ phase, progress, start, end, limit, blocked, at: now });
+    cues.sample(scene, action, phase, progress, start, end, limit, blocked);
 };
 c.WendyQuestAccessBattleCueEndSweep = cues.endSweep;
 c.WendyQuestAccessBattleCueLeaving = cues.retire;
@@ -67,6 +67,7 @@ function run(method, scenario, play) {
     const action = battle._currentActionCommand = Object.assign(new c.ActionCommandRadial(), {
         _spriteBase: { parent: scene }, _hitZoneSize: 0.1,
         InputPressed() {
+            if (scenario.followCue && beats.length) return true;
             if (!press.length || now < press[0]) return false;
             press.shift();
             return true;
@@ -89,83 +90,68 @@ function run(method, scenario, play) {
     throw Error('Native fixture sweep exceeded its update bound');
 }
 
-const ordinaryPower = { settings: {}, press: [774], lower: 0.9, upper: 1, iceStart: 0.4, iceEnd: 0.55 };
-const ordinary = run('observedPower', ordinaryPower, true);
-assert.deepEqual(ordinary.outcome, run('nativePower', ordinaryPower, false).outcome);
-assert(ordinary.beats.length > 8);
-assert(ordinary.beats.every(beat => beat.cue === CUE.battlePower));
-assert(ordinary.beats.every((beat, index) => !index || beat.at - ordinary.beats[index - 1].at >= 65));
-assert(ordinary.beats.every((beat, index) => !index || beat.pitch > ordinary.beats[index - 1].pitch));
-assert(ordinary.beats.at(-1).progress >= 0.90);
-assert(ordinary.beats.at(-1).bearing[0] > 0.85);
-assert.equal(latest, null, 'native sweep exit clears active output');
 
+function check(method, scenario, cue, side) {
+    const result = run('observed' + method, scenario, true);
+    assert.deepEqual(result.outcome, run('native' + method, scenario, false).outcome);
+    if (cue === undefined) {
+        assert.equal(result.beats.length, 0);
+        return result;
+    }
+    const first = result.samples.find(sample => !sample.blocked && sample.start < sample.end &&
+        sample.progress >= sample.start && sample.progress <= sample.end &&
+        sample.progress < sample.limit && sample.progress < 1);
+    assert(first);
+    assert.deepEqual(result.beats, [{ cue, at: first.at, progress: first.progress, bearing: [side, 0, 1], pitch: 1.16 }]);
+    return result;
+}
+
+const ordinaryPower = { settings: {}, press: [790], lower: 0.9, upper: 1, iceStart: 0.4, iceEnd: 0.55 };
+const ordinary = check('Power', ordinaryPower, CUE.battlePower, 1);
 const accuracy = { ...ordinaryPower, press: [760] };
-const second = run('observedAccuracy', accuracy, true);
-assert.deepEqual(second.outcome, run('nativeAccuracy', accuracy, false).outcome);
-assert(second.beats.length > 8);
-assert(second.beats.every(beat => beat.cue === CUE.battleAccuracy));
-assert(second.beats.at(-1).progress > 0.88 && second.beats.at(-1).progress < 0.95);
-assert(second.beats.at(-1).bearing[0] < -0.85);
-assert.equal(scene._wqaBattleCueActive, false);
-
+check('Accuracy', accuracy, CUE.battleAccuracy, -1);
 const mid = { ...accuracy, lower: 0.45, upper: 0.58, press: [690] };
-const middle = run('observedAccuracy', mid, true);
-assert.deepEqual(middle.outcome, run('nativeAccuracy', mid, false).outcome);
-const peak = middle.beats.reduce((best, beat) => beat.pitch > best.pitch ? beat : best);
-const peakIndex = middle.beats.indexOf(peak);
-assert(middle.beats.every(beat => beat.cue === CUE.battleAccuracy), 'the target has the same pulse as the sweep');
-assert(middle.beats.every((beat, index) => !index || beat.at - middle.beats[index - 1].at >= 65));
-assert(peak.progress >= mid.lower && peak.progress <= mid.upper);
-assert(middle.beats.every((beat, index) => !index ||
-    (index <= peakIndex ? beat.pitch > middle.beats[index - 1].pitch : beat.pitch < middle.beats[index - 1].pitch)));
-assert(middle.beats.at(-1).progress > mid.upper);
-assert.equal(latest, null);
+check('Accuracy', mid, CUE.battleAccuracy, -1);
 
-const frozen = { ...ordinaryPower, settings: { Frozen: true }, press: [410, 1274] };
-const ice = run('observedPower', frozen, true);
-assert.deepEqual(ice.outcome, run('nativePower', frozen, false).outcome);
-assert(ice.beats.every(beat => beat.cue === CUE.battlePower));
-assert(ice.beats.some(beat => beat.progress >= 0.4 && beat.progress < 0.55));
-assert(ice.beats.every(beat => !ice.samples.find(sample => sample.at === beat.at).paused));
-assert(ice.beats.some((beat, index) => index && beat.at - ice.beats[index - 1].at >= 500));
-assert(ice.samples.some(sample => sample.paused), 'the native break pause is exercised');
-const iceAccuracy = { ...frozen, press: [410, 1260] };
-const frozenSecond = run('observedAccuracy', iceAccuracy, true);
-assert.deepEqual(frozenSecond.outcome, run('nativeAccuracy', iceAccuracy, false).outcome);
-assert(frozenSecond.beats.length > 8);
-assert(frozenSecond.beats.every(beat => beat.cue === CUE.battleAccuracy));
-assert(frozenSecond.beats.some((beat, index) => index && beat.at - frozenSecond.beats[index - 1].at >= 500));
+for (const [method, scenario] of [['Power', ordinaryPower], ['Accuracy', mid]]) {
+    const following = run('observed' + method, { ...scenario, press: [], followCue: true }, true);
+    assert.equal(following.beats.length, 1);
+    const [progress, accepted, frozen] = following.outcome;
+    const { start, end, limit } = following.samples.at(-1);
+    assert(accepted && !frozen && progress >= start && progress <= end && progress < limit && progress < 1);
+}
 
-const frosty = { ...ordinaryPower, settings: { Frosty: true }, press: [1070] };
-const slower = run('observedPower', frosty, true);
-assert.deepEqual(slower.outcome, run('nativePower', frosty, false).outcome);
-const ordinaryAt = ordinary.samples.find(sample => sample.progress >= 0.8).at;
-const frostyAt = slower.samples.find(sample => sample.progress >= 0.8).at;
-assert(frostyAt > ordinaryAt + 180);
-assert(slower.beats.find(beat => beat.progress >= 0.8).at >= frostyAt);
-
-const soggy = { ...ordinaryPower, settings: { Soggy: true, Wobble: 0.35 }, press: [] };
-const reduced = run('observedPower', soggy, true);
-assert.deepEqual(reduced.outcome, run('nativePower', soggy, false).outcome);
-assert(reduced.beats.length > 2);
-assert(reduced.beats.every(beat => beat.cue === CUE.battlePower && beat.progress < 0.75));
-
-const missingBand = { ...accuracy, lower: 1, upper: 1 };
-const reference = run('observedAccuracy', missingBand, true);
-assert(reference.beats.length > 8);
-assert(reference.beats.every(beat => beat.cue === CUE.battleAccuracy));
-assert.deepEqual(reference.beats, second.beats, 'no-band meter has the ordinary rising contour to cutoff');
-const quick = { ...ordinaryPower, press: [120] };
-assert(run('observedPower', quick, true).beats.every(beat => beat.at < 120));
+const frozen = { ...ordinaryPower, settings: { Frozen: true }, press: [410, 1290] };
+const ice = check('Power', frozen, CUE.battlePower, 1);
+assert(ice.samples.some(sample => sample.blocked && sample.at > 410 && sample.at < 900));
+assert(ice.beats[0].at > 910);
+check('Accuracy', { ...frozen, press: [410, 1280] }, CUE.battleAccuracy, -1);
+check('Power', { ...frozen, press: [] });
+const frosty = { ...ordinaryPower, settings: { Frosty: true }, press: [1110] };
+const slower = check('Power', frosty, CUE.battlePower, 1);
+assert(slower.beats[0].at > ordinary.beats[0].at + 180);
+check('Power', { ...ordinaryPower, settings: { Soggy: true, Wobble: 0.35 }, press: [] });
+check('Power', { ...ordinaryPower, settings: { Bland: true }, press: [] });
+check('Accuracy', { ...accuracy, lower: 1, upper: 1 });
+check('Power', { ...ordinaryPower, press: [120] });
 
 const lastAction = battle._currentActionCommand;
 cues.begin(scene, lastAction);
 now = 0;
-cues.sample(scene, lastAction, 0, 0.94, 0.8, 0.94, 1, 1, -1, 0, false, false, false);
+beats.length = 0;
+cues.sample(scene, lastAction, 0, 0.94, 0.94, 1, 1, false);
 assert(latest());
 now = 49;
-assert(!latest(), 'stale audio requests expire even before another native update');
+assert(!latest(), 'unsent audio requests expire before another native update');
+cues.sample(scene, lastAction, 0, 0.93, 0.94, 1, 1, false);
+assert.equal(latest, null, 'leaving the band retires active audio');
+cues.sample(scene, lastAction, 0, 0.95, 0.94, 1, 1, false);
+assert.equal(beats.length, 1, 'wobble re-entry does not replay the note');
+cues.endSweep(scene, lastAction);
+cues.sample(scene, lastAction, 1, 0.58, 0.45, 0.58, 1, false);
+assert.equal(beats.length, 2, 'the inclusive accuracy upper bound and independent phase are honored');
+cues.sample(scene, lastAction, 1, 0.58, 0.45, 0.58, 1, true);
+assert.equal(latest, null, 'accepted input retires audio');
 cues.retire(scene);
 
 let nativeTotal = 0;
@@ -191,7 +177,7 @@ assert(!preparedReady());
 preparedComplete(2);
 assert.equal(scene._wqaBattleCueActive, false);
 
-console.log('Verified native power and accuracy outcomes, continuous pulse identity through the peak, early confirmation, frozen pause, Frosty speed and Soggy cutoff.');
+console.log('Verified native power and accuracy outcomes, one note per eligible window, next-frame confirm, early confirmation, frozen pause, Frosty speed and Soggy cutoff.');
 console.log('Throttled observed sweep wall time', ordinary.elapsed.toFixed(2), 'ms across', ordinary.samples.length, 'samples.');
 console.log('Throttled 20 complete power and accuracy pairs', nativeTotal.toFixed(2), 'ms native,',
     observedTotal.toFixed(2), 'ms enabled.');

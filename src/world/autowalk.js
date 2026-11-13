@@ -62,7 +62,9 @@ function createAutowalk(root, ready, preferences, report) {
         if (!state || state.scene !== scene || state.player !== player) return direction;
         if (manual) {
             stop(scene);
-            report(scene, null, true);
+            // Manual input ends automatic movement. The beacon can still
+            // follow the player's accepted step toward the same destination.
+            report(scene, null);
             return direction;
         }
         if (!ready(scene) || state.map.isAnyEventStarting?.()) {

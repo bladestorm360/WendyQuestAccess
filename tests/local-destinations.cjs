@@ -5,15 +5,60 @@ const { captureWorld, eventTarget } = require('../src/world/snapshot');
 const { questDestinationLabel } = require('../src/world/quest-destinations');
 const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
+const { mapPlace } = require('../src/world/map-banner');
+const { browse, createDestinationBrowser } = require('../src/world/destinations');
 
 async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read) {
+    const browser = createDestinationBrowser();
+    const snapshot = { x: 2, y: 0, width: 20, height: 20, scrollType: 0, objects: [
+        { id: 1, category: 'objects', x: 13, y: 0 },
+        { id: 2, category: 'objects', x: 5, y: 0 },
+        { id: 3, category: 'objects', x: 2, y: 0 },
+        { id: 4, category: 'people', x: 10, y: 0 },
+        { id: 5, category: 'people', x: 4, y: 0 },
+        { id: 'saved', category: 'bookmarks', x: 0, y: 0, saved: {} }
+    ] };
+    assert.equal(browse(browser, snapshot, []).target.id, 3);
+    assert.equal(browse(browser, snapshot, ['nextDestination']).target.id, 2);
+    snapshot.x = 12;
+    assert.equal(browse(browser, snapshot, []).target.id, 2, 'the selected ID survives a new order');
+    assert.equal(browse(browser, snapshot, ['previousDestination']).target.id, 1);
+    assert.equal(browse(browser, snapshot, ['nextCategory']).target.id, 4, 'enter the category at the nearest NPC');
+    assert.equal(browse(browser, snapshot, ['previousCategory']).target.id, 1);
+    snapshot.x = 19;
+    snapshot.scrollType = 2;
+    browser.category = 'all';
+    assert.equal(browse(browser, snapshot, []).target.id, 'saved', 'local bookmarks use wrapped distance');
     const commonEvents = read('CommonEvents.json');
     const maps = read('MapInfos.json').filter(Boolean);
     assert.equal(maps.length, 239);
     let checked = 0;
-    const unsafe = /\b(?:gold|coins?|easter\s*egg|guide to combat|combat\s*volume)\b/i;
+    let fallbackCount = 0;
+    const transfers = new Set();
+    const roomNames = new Set();
     for (const { id } of maps) {
+        const map = read(`Map${String(id).padStart(3, '0')}.json`);
+        for (const event of map.events.filter(Boolean))
+            for (const page of event.pages)
+                for (const command of page.list)
+                    if (command.code === 201 && command.parameters[0] === 0) transfers.add(command.parameters[1]);
+    }
+    const unsafe = /\b(?:gold|coins?|easter\s*egg|guide to combat|combat\s*volume|locket)\b/i;
+    for (const { id, name } of maps) {
         const data = read(`Map${String(id).padStart(3, '0')}.json`);
+        const place = mapPlace({ $gameMap: { _mapId: id }, $dataMap: data });
+        if (data.displayName.trim()) assert.equal(place, data.displayName.trim());
+        else if (place) {
+            fallbackCount++;
+            assert(transfers.has(id), `Named fallback map ${id} has an authored transfer`);
+            assert.doesNotMatch(place, /secret|greyblock|test/i);
+        }
+        if (transfers.has(id) && !/greyblock|grayblock/i.test(name) &&
+            /house|workshop|genericshop|^wendys/i.test(name)) assert(place, `Transferred room ${id} needs a name`);
+        if (id >= 117 && id <= 125) {
+            assert(place && !roomNames.has(place), 'each Russetwood room has a distinct place name');
+            roomNames.add(place);
+        }
         const root = { $dataMap: data, $dataCommonEvents: commonEvents, $gameMap: { _mapId: id },
             $gameSwitches: { value: () => false }, $gameSelfSwitches: { value: () => false } };
         for (const entry of data.events) {
@@ -23,6 +68,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 checked++;
                 const event = { _eventId: entry.id, _pageIndex: index, _trigger: page.trigger, _priorityType: page.priorityType };
                 const ordinary = eventTarget(root, 'walk', event, entry, page);
+                if (id === 120 && [11, 12].includes(entry.id)) assert.deepEqual(ordinary, { name: 'Cupboard', category: 'objects' });
+                if (id === 124 && entry.id === 15) assert.deepEqual(ordinary, { name: 'Drawer', category: 'objects' });
                 const lease = { page, map: root.$gameMap, trigger: page.trigger, waypoint: false };
                 const names = [ordinary?.name, questDestinationLabel(entry, lease, ordinary)];
                 for (const name of names) assert(!unsafe.test(name || ''), `unsafe label at map ${id} event ${entry.id} page ${index}`);
@@ -31,6 +78,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
             }
         }
     }
+    console.log(`Verified ${fallbackCount} fallback place names against native transfers.`);
     console.log(`Checked ${checked} actionable pages on all ${maps.length} maps for spoiler-free pathfinder and quest labels.`);
     const inBattle = c.$gameParty.inBattle;
     c.$gameParty.inBattle = () => false;

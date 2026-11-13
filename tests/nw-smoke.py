@@ -105,7 +105,7 @@ var DataManager = { savefileInfo: () => null };
 var $gameMap, $gamePlayer, $gameScreen, $gameTemp, $dataMap, $dataTilesets, $gameTileChanges;
 var $gameMessage = { isBusy: () => false };
 var $dataSystem = { tileSize: 32, locale: GAME_LOCALE }, $dataMapInfos = [null, { id: 1 }, { id: 2 }, { id: 3 }];
-var Input = { keyMapper: { 90: 'ok' }, clear() {} };
+var Input = { keyMapper: { 81: 'pageup', 90: 'ok' }, clear() {} };
 Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 3: 'menu', 9: 'menu', 12: 'up', 13: 'down' };
 '''.replace('GAME_LOCALE', json.dumps(game_locale)), encoding='utf8')
     (app / 'run.js').write_text('''
@@ -134,6 +134,7 @@ let caveShown = false;
 let caveRoute = false;
 let dialogueShown = false;
 let routeRequested = false;
+let beaconDetourStep = 0;
 let fieldStep = 0;
 let mapVitalsStep = 0;
 let diagramViewport;
@@ -143,6 +144,7 @@ let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
 let battleAudioStep = 0;
+let footstepSettingsStep = 0;
 let audioStarted = 0;
 let wallPreviewStarted = 0;
 let beaconStarted = 0;
@@ -323,12 +325,19 @@ function verifySettings() {
     } else if (settingsStep === 12 && menuStatus() === 'Audio settings saved') {
         if (document.activeElement.textContent !== 'Decrease wall volume, 55 percent') throw Error('Wall gain setting failed');
         wallPreviewStarted = performance.now();
-        choose('Preview wall brush on the left');
+        choose('Preview wall tone on the left');
         settingsStep++;
-    } else if (settingsStep === 13 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+    } else if (settingsStep === 13 && footstepSettingsStep === 0 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         require('fs').writeFileSync(receipt + '.wall-preview-ms', String(performance.now() - wallPreviewStarted));
+        choose('Footstep sounds, off');
+        footstepSettingsStep = 1;
+    } else if (settingsStep === 13 && footstepSettingsStep === 1 && menuStatus() === 'Audio settings saved') {
+        if (document.activeElement.textContent !== 'Footstep sounds, on') throw Error('Footstep setting failed');
+        choose('Preview footstep');
+        footstepSettingsStep = 2;
+    } else if (settingsStep === 13 && footstepSettingsStep === 2 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         choose('Navigation beacon');
-        settingsStep++;
+        settingsStep = 14;
     } else if (settingsStep === 14 && menuStatus() === 'Audio settings saved') {
         choose('Preview beacon arrival');
         settingsStep++;
@@ -339,10 +348,10 @@ function verifySettings() {
         choose('Preview cave crossing tone');
         settingsStep++;
     } else if (settingsStep === 17 && battleAudioStep === 0 && menuStatus() === 'Preview uses stereo and rear pitch.') {
-        choose('Battle timing cues, off');
+        choose('Battle timing assist, off');
         battleAudioStep++;
     } else if (settingsStep === 17 && battleAudioStep === 1 && menuStatus() === 'Audio settings saved') {
-        if (document.activeElement.textContent !== 'Battle timing cues, on') throw Error('Battle cue setting failed');
+        if (document.activeElement.textContent !== 'Battle timing assist, on') throw Error('Battle cue setting failed');
         choose('Preview battle accuracy tone');
         battleAudioStep++;
     } else if (settingsStep === 17 && battleAudioStep === 2 && menuStatus() === 'Preview uses stereo and rear pitch.') {
@@ -460,7 +469,7 @@ const interval = setInterval(() => {
             tap('Escape');
             tap('Escape');
             choose('Audio');
-            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 14).map(item => item.textContent);
+            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 17).map(item => item.textContent);
             choose('Soundscape');
             const soundscape = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
             choose('Exits');
@@ -741,12 +750,39 @@ const interval = setInterval(() => {
         Graphics.frameCount++;
         if (scene._wqaBeaconDue && Graphics.frameCount >= scene._wqaBeaconDue) WendyQuestAccessBeaconUpdate(scene);
         Graphics.app.renderer.emit('postrender');
-        if (!require('fs').existsSync(receipt + '.beacon')) return;
-        require('fs').writeFileSync(receipt + '.beacon-ms', String(performance.now() - beaconStarted));
+        const fs = require('fs');
+        if (!beaconDetourStep) {
+            if (!fs.existsSync(receipt + '.beacon')) return;
+            fs.writeFileSync(receipt + '.beacon-ms', String(performance.now() - beaconStarted));
+            fs.unlinkSync(receipt + '.beacon');
+            fs.writeFileSync(receipt + '.beacon-detour', '');
+            const player = $gamePlayer;
+            player._x = player._realX = 0;
+            player._y = player._realY = 1;
+            player._direction = 6;
+            player.canPass = () => true;
+            WendyQuestAccessFieldMove(scene, 2, true);
+            beaconDetourStep = 1;
+            return;
+        }
+        // Check that the detour produced a new turn cue through the real worker.
+        if (beaconDetourStep === 1 && fs.existsSync(receipt + '.beacon-refresh')) {
+            fs.unlinkSync(receipt + '.beacon-detour');
+            const player = $gamePlayer;
+            player._y = player._realY = 0;
+            player._direction = 6;
+            WendyQuestAccessFieldMove(scene, 8, true);
+            beaconDetourStep = 2;
+        }
+        if (beaconDetourStep !== 2 || !fs.existsSync(receipt + '.beacon')) return;
         fieldStep++;
         padTap(6);
     }
     if (fieldStep === 5) Graphics.app.renderer.emit('postrender');
+    if (fieldStep === 4 && beaconDetourStep) {
+        const scene = SceneManager._scene;
+        if (!scene._wqaBeaconActive) throw Error('The beacon lost its destination after a manual detour');
+    }
     if (autowalkStep < 7 && require('fs').existsSync(receipt + '.route-2')) {
         const scene = SceneManager._scene;
         if (autowalkStep === 0) {
@@ -994,8 +1030,15 @@ const interval = setInterval(() => {
             Graphics.app.renderer.emit('postrender');
             endingStep++;
         } else if (endingStep === 9 && fs.existsSync(receipt + '.quest-detail-auto')) {
+            let nativeQ = false;
+            document.addEventListener('keydown', event => { nativeQ = event.code === 'KeyQ' && !event.defaultPrevented; },
+                { once: true });
+            tap('q', 'KeyQ');
+            if (!nativeQ) throw Error('Quest review swallowed native Page Up input');
+            endingStep = 90;
+        } else if (endingStep === 90 && fs.existsSync(receipt + '.quest-objective')) {
             tap('i', 'KeyI');
-            endingStep++;
+            endingStep = 10;
         } else if (endingStep === 10 && fs.existsSync(receipt + '.quest-detail')) {
             fs.renameSync(receipt + '.quest-detail', receipt + '.quest-detail-key');
             pad();
@@ -1374,7 +1417,7 @@ const interval = setInterval(() => {
             WendyQuestAccessBattleCueBegin(scene, action);
             if (!action._wqaBattleCueActive) throw Error('Warm battle timing audio did not acquire its action');
             battleCueStarted = Date.now();
-            WendyQuestAccessBattleCueSample(scene, action, 0, 0.885, 0.8, 0.8, 1, 1, -1, 0, false, false, false);
+            WendyQuestAccessBattleCueSample(scene, action, 0, 0.95, 0.94, 1, 1, false);
             endingStep = 42;
         } else if (endingStep === 42 && fs.existsSync(receipt + '.battle-cue')) {
             const cueReceipt = JSON.parse(fs.readFileSync(receipt + '.battle-cue', 'utf8'));
@@ -1848,7 +1891,8 @@ parentPort.on('message', message => {
                 parentPort.postMessage('ack');
                 return;
             }
-            if (message.kind === 'questFocus') fs.writeFileSync(receipt + '.quest-focus', speech);
+            if (message.kind === 'questFocus')
+                fs.writeFileSync(receipt + (message.name ? '.quest-focus' : '.quest-objective'), speech);
             if (message.kind === 'menuDetails')
                 fs.writeFileSync(receipt + (message.append ? '.quest-detail-auto' : '.quest-detail'), speech);
             if (message.kind === 'fieldStatus' && message.name.includes('reads the quest'))
@@ -1937,6 +1981,10 @@ const post = parentPort.postMessage.bind(parentPort);
 parentPort.postMessage = packet => {
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 3 && active.forward === 1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.beacon'), String(packet.status));
+    }
+    if (packet.status > 0 && packet.epoch === active.epoch && (active.cue === 4 && active.forward !== 1 || active.cue === 3 && active.forward === 1) &&
+        fs.existsSync(path.join(__dirname, '..', 'receipt.json.beacon-detour'))) {
+        fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.beacon-refresh'), String(packet.status));
     }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 6 && active.forward === -1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.cave-cue'), String(packet.status));
@@ -2061,12 +2109,13 @@ def main():
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
         audio_ms = float(receipt.with_suffix('.json.audio-init-ms').read_text(encoding='utf8'))
         wall_ms = float(receipt.with_suffix('.json.wall-preview-ms').read_text(encoding='utf8'))
-        if receipt.with_suffix('.json.beacon').read_text(encoding='utf8') != '1':
+        if receipt.with_suffix('.json.beacon').read_text(encoding='utf8') != '1' or \
+                receipt.with_suffix('.json.beacon-refresh').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW route beacon did not publish stereo PCM to SDL')
         beacon_ms = float(receipt.with_suffix('.json.beacon-ms').read_text(encoding='utf8'))
         battle_cue_ms = float(receipt.with_suffix('.json.battle-cue-ms').read_text(encoding='utf8'))
         battle_cue = json.loads(receipt.with_suffix('.json.battle-cue').read_text(encoding='utf8'))
-        if battle_cue['status'] != 1 or abs(battle_cue['pitch'] - 1.1925) > 0.00001:
+        if battle_cue['status'] != 1 or abs(battle_cue['pitch'] - 1.16) > 0.00001:
             raise RuntimeError('NW battle timing cue did not submit stereo PCM to SDL')
         if receipt.with_suffix('.json.cave-cue').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL')
@@ -2082,6 +2131,7 @@ def main():
             'menuFocus-auto': 'Inventory, Synthetic supply, 3, 1 of 1',
             'menuDetails-auto': 'Visible first line. Visible second line',
             'quest-focus': 'Synthetic quest. A shown clue. 1 of 2',
+            'quest-objective': 'Quest objective. A shown clue. 1 of 2',
             'quest-detail-auto': 'A shown clue. 1 of 2',
             'quest-detail-key': 'Synthetic quest. A shown clue. 1 of 2',
             'quest-detail': 'Synthetic quest. A shown clue. 1 of 2',
@@ -2159,9 +2209,10 @@ def main():
                                                'Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
                                                'Next destination, N'] or reloaded.get('audio') != [
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
-                    'Increase wall volume, 55 percent', 'Navigation beacon, on', 'Decrease beacon volume, 65 percent',
+                    'Increase wall volume, 55 percent', 'Footstep sounds, on', 'Decrease footstep volume, 50 percent',
+                    'Increase footstep volume, 50 percent', 'Navigation beacon, on', 'Decrease beacon volume, 65 percent',
                     'Increase beacon volume, 65 percent', 'Cave timing cues, on', 'Decrease cave timing volume, 65 percent',
-                    'Increase cave timing volume, 65 percent', 'Battle timing cues, on',
+                    'Increase cave timing volume, 65 percent', 'Battle timing assist, on',
                     'Decrease battle timing volume, 65 percent', 'Increase battle timing volume, 65 percent'] or reloaded.get('soundscape') != [
                     'Soundscape, on', 'Decrease volume, 35 percent', 'Exits, off']:
             raise RuntimeError(f'NW settings did not survive restart in the isolated profile: {reloaded}')
@@ -2207,7 +2258,7 @@ def main():
         print(f'Verified native HRTF and stereo wall preview on the silent SDL driver and settings persistence. '
               f'Throttled cold HRTF status observed after {audio_ms:.1f} ms with 40 ms polling.')
         print(f'Throttled warm wall preview status observed after {wall_ms:.1f} ms with 40 ms polling.')
-        print(f'Verified a live stereo route beacon and its retirement in field settings. '
+        print(f'Verified a live stereo route beacon, off-course refresh and retirement in field settings. '
               f'Throttled warm native submission observed after {beacon_ms:.1f} ms with 40 ms polling.')
         print(f'Verified late forecast replacement, native cue submission and retirement at cave exit. '
               f'Throttled warm submission observed after {cave_cue_ms:.1f} ms with 40 ms polling.')

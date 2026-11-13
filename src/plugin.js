@@ -21,6 +21,7 @@ const { createAutosaveNotice } = require('./world/autosave-notice');
 const { createField } = require('./world/field');
 const { createFieldDiagnostics } = require('./world/field-diagnostics');
 const { createWallAudio } = require('./world/wall-audio');
+const { createFootsteps } = require('./world/footsteps');
 const { createBeacon } = require('./world/beacon');
 const { createCaveTiming } = require('./world/cave-timing');
 const { createSoundscape } = require('./world/soundscape');
@@ -53,6 +54,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let credits = null;
     let audio = null;
     let wall = null;
+    let footsteps = null;
     let beacon = null;
     let caveTiming = null;
     let soundscape = null;
@@ -160,7 +162,10 @@ function boot(root, nodeRequire, nodeProcess) {
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
         quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
-        beacon = host.beacon = createBeacon(root, field.ready, audio, () => audioPreferences, field.report);
+        footsteps = createFootsteps(root, field.ready, audio, () => audioPreferences);
+        beacon = host.beacon = createBeacon(root, field.ready, audio, () => audioPreferences, field.report, {
+            submit: field.refreshBeacon, cancel: field.cancelBeaconRefresh
+        });
         caveTiming = host.caveTiming = createCaveTiming(root, field.ready, audio, () => audioPreferences, field.report);
         soundscape = createSoundscape(root, field.ready, audio, () => audioPreferences);
         function readyScene() {
@@ -235,6 +240,7 @@ function boot(root, nodeRequire, nodeProcess) {
             return true;
         }
         function fieldAction(action) {
+            if (action === 'questObjective') return quests.command(host.manager._scene, action);
             const questAction = QUEST_ACTIONS[action];
             if (questAction) return quests.command(host.manager._scene, questAction);
             const scene = host.manager._scene;
@@ -275,6 +281,8 @@ function boot(root, nodeRequire, nodeProcess) {
             audioChanged(value) {
                 const master = value.enabled !== audioPreferences.enabled || value.hrtf !== audioPreferences.hrtf;
                 if (master || value.wall !== audioPreferences.wall || value.wallVolume !== audioPreferences.wallVolume) wall.leave();
+                if (master || value.footsteps !== audioPreferences.footsteps ||
+                    value.footstepVolume !== audioPreferences.footstepVolume) footsteps.leave();
                 if (master || value.beacon !== audioPreferences.beacon || value.beaconVolume !== audioPreferences.beaconVolume) beacon.stop();
                 if (master || value.caveTiming !== audioPreferences.caveTiming || value.caveVolume !== audioPreferences.caveVolume)
                     caveTiming.stop();
@@ -283,22 +291,24 @@ function boot(root, nodeRequire, nodeProcess) {
                     value.battleTimingVolume !== audioPreferences.battleTimingVolume) battleCues.retire();
                 audioPreferences = value;
                 root.Graphics._wqaWallEnabled = value.enabled && value.wall && value.wallVolume > 0;
+                root.Graphics._wqaFootstepsEnabled = value.enabled && value.footsteps && value.footstepVolume > 0;
                 root.Graphics._wqaCaveTimingEnabled = value.enabled && value.caveTiming && value.caveVolume > 0;
                 root.Graphics._wqaBattleCueEnabled = value.enabled && value.battleTiming && value.battleTimingVolume > 0;
                 root.Graphics._wqaSoundscapeEnabled = value.enabled && value.soundscape.enabled && value.soundscape.volume > 0 &&
                     Object.values(value.soundscape.categories).some(category => category.enabled && category.volume > 0);
                 const scene = host.manager._scene;
-                if ((root.Graphics._wqaWallEnabled || root.Graphics._wqaCaveTimingEnabled) && field.ready(scene))
+                if ((root.Graphics._wqaWallEnabled || root.Graphics._wqaFootstepsEnabled || root.Graphics._wqaCaveTimingEnabled) && field.ready(scene))
                     root.WendyQuestAccessFieldReady(scene);
             },
-            previewAudio(owner, hrtf, bearing, report, cue, gain) {
+            previewAudio(owner, hrtf, bearing, report, cue, gain, pitch) {
                 const panel = owner.group;
                 return audio.preview(owner.scene, hrtf, bearing, () =>
-                    owner.group === panel && controlContext() === owner && !host.screenFading(), report, audio.cues[cue], gain);
+                    owner.group === panel && controlContext() === owner && !host.screenFading(), report, audio.cues[cue], gain, pitch);
             },
             suspend(scene) {
                 interaction.leave(scene);
                 wall.leave(scene);
+                footsteps.leave(scene);
                 beacon.stop(scene);
                 caveTiming.stop(scene);
                 soundscape.leave(scene);
@@ -378,6 +388,7 @@ function boot(root, nodeRequire, nodeProcess) {
             splash.leave(host.manager._scene);
             interaction.leave(host.manager._scene);
             wall.leave();
+            footsteps.leave();
             beacon.stop();
             caveTiming.stop();
             soundscape.leave();
@@ -396,7 +407,7 @@ function boot(root, nodeRequire, nodeProcess) {
         });
         root.addEventListener('focus', () => {
             const scene = host.manager._scene;
-            if ((root.Graphics._wqaWallEnabled || root.Graphics._wqaCaveTimingEnabled) && field.ready(scene))
+            if ((root.Graphics._wqaWallEnabled || root.Graphics._wqaFootstepsEnabled || root.Graphics._wqaCaveTimingEnabled) && field.ready(scene))
                 root.WendyQuestAccessFieldReady(scene);
         });
         root.Graphics._wqaFrontEndObserved = true;
@@ -511,9 +522,8 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessBattleCueBegin = function (scene, action) {
         try { battleCues?.begin(scene, action); } catch { battleCues?.retire(scene); }
     };
-    root.WendyQuestAccessBattleCueSample = function (scene, action, phase, progress, duration, start, end, limit,
-        iceStart, iceEnd, paused, frosty, accepted) {
-        try { battleCues?.sample(scene, action, phase, progress, duration, start, end, limit, iceStart, iceEnd, paused, frosty, accepted); }
+    root.WendyQuestAccessBattleCueSample = function (scene, action, phase, progress, start, end, limit, blocked) {
+        try { battleCues?.sample(scene, action, phase, progress, start, end, limit, blocked); }
         catch { battleCues?.retire(scene); }
     };
     root.WendyQuestAccessBattleCueEndSweep = function (scene, action) { battleCues?.endSweep(scene, action); };
@@ -604,7 +614,8 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessFieldReady = function (scene) {
         if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaCaveProgressPending &&
-            !root.Graphics._wqaBookmarkTransferPending && !root.Graphics._wqaWallEnabled && !root.Graphics._wqaCaveTimingEnabled) ||
+            !root.Graphics._wqaBookmarkTransferPending && !root.Graphics._wqaWallEnabled &&
+            !root.Graphics._wqaFootstepsEnabled && !root.Graphics._wqaCaveTimingEnabled) ||
             fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
             !root.document.hasFocus()) return;
         const renderer = root.Graphics.app?.renderer;
@@ -620,6 +631,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 if (!field) initialize();
                 field.observeReady(scene);
                 if (root.Graphics._wqaWallEnabled) wall.arm(scene);
+                if (root.Graphics._wqaFootstepsEnabled) footsteps.arm(scene);
                 if (root.Graphics._wqaCaveTimingEnabled) caveTiming.warm(scene);
             } catch { /* Native field input remains available. */ }
         });
@@ -662,7 +674,8 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessFieldChanged = function (scene, steppedActor) {
         quests?.suspend(scene);
         soundscape?.invalidate(scene);
-        wall?.leave(scene);
+        if (scene?._wqaTerrainWork || !steppedActor) wall?.leave(scene);
+        if (!steppedActor || steppedActor === root.$gamePlayer) footsteps?.leave(scene);
         caveTiming?.stop(scene);
         if (scene?._wqaTerrainWork) beacon?.stop(scene);
         else beacon?.invalidate(scene);
@@ -676,6 +689,7 @@ function boot(root, nodeRequire, nodeProcess) {
         quests?.suspend(scene);
         soundscape?.leave(scene);
         wall?.leave(scene);
+        footsteps?.leave(scene);
         caveTiming?.stop(scene);
         beacon?.stop(scene);
         field?.controlLost(scene);
@@ -687,6 +701,7 @@ function boot(root, nodeRequire, nodeProcess) {
         try { field?.autowalk.moved(scene, direction, succeeded); } catch { field?.autowalk.stop(scene); }
         try { beacon?.moved(scene, direction, succeeded); } catch { beacon?.stop(scene); }
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
+        try { footsteps?.move(scene, direction, succeeded); } catch { footsteps?.leave(scene); }
     };
     root.WendyQuestAccessFieldEvent = function (scene) {
         interaction?.leave(scene);
@@ -698,6 +713,7 @@ function boot(root, nodeRequire, nodeProcess) {
         if (stopped || scene?._wqaCaveReview || scene?._wqaQuestNavigation || scene?._wqaRouteActive) field?.changed(scene);
         beacon?.stop(scene);
         wall?.interrupt(scene);
+        footsteps?.leave(scene);
     };
     root.WendyQuestAccessAutowalkInput = function (scene, player, direction, manual) {
         try { return field?.autowalk.input(scene, player, direction, manual) ?? direction; }
@@ -707,7 +723,9 @@ function boot(root, nodeRequire, nodeProcess) {
             return direction;
         }
     };
-    root.WendyQuestAccessWallExpire = function (scene) { wall?.expire(scene); };
+    root.WendyQuestAccessWallExpire = function (scene) {
+        try { wall?.expire(scene); } catch { wall?.leave(scene); }
+    };
     root.WendyQuestAccessCaveTimingUpdate = function (scene) {
         try { caveTiming?.update(scene); } catch { caveTiming?.stop(scene); }
     };
@@ -732,6 +750,7 @@ function boot(root, nodeRequire, nodeProcess) {
         quests?.leave(scene);
         soundscape?.leave(scene);
         wall?.leave(scene);
+        footsteps?.leave(scene);
         beacon?.stop(scene);
         caveTiming?.stop(scene);
         audio?.retire(scene);
@@ -768,6 +787,7 @@ function boot(root, nodeRequire, nodeProcess) {
         quests?.leave(scene);
         soundscape?.leave(scene);
         wall?.leave(scene);
+        footsteps?.leave(scene);
         beacon?.stop(scene);
         caveTiming?.stop(scene);
         audio?.retire(scene);
@@ -798,7 +818,7 @@ function boot(root, nodeRequire, nodeProcess) {
         if (!scene) return;
         if (scene instanceof root.Scene_Title) root.WendyQuestAccessTitleReady(scene);
         else if (scene._wqaFileKind) root.WendyQuestAccessFilesReady(scene);
-        else if (scene._wqaFieldReady && (root.Graphics._wqaWallEnabled || root.Graphics._wqaCaveTimingEnabled))
+        else if (scene._wqaFieldReady && (root.Graphics._wqaWallEnabled || root.Graphics._wqaFootstepsEnabled || root.Graphics._wqaCaveTimingEnabled))
             root.WendyQuestAccessFieldReady(scene);
     };
 }

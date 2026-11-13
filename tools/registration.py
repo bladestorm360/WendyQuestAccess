@@ -141,6 +141,7 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'SceneManager._scene?._wqaInteractionActive||'
                  b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
+                 b'Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
                  b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaSoundscapeActive||'
                  b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance||'
@@ -447,9 +448,9 @@ def objects_notification(original):
                 b'direction=globalThis.WendyQuestAccessAutowalkInput?.(SceneManager._scene,this,direction,'
                 b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
-                b'(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive||SceneManager._scene._wqaAutowalkActive))'
+                b'(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||SceneManager._scene._wqaAutowalkActive))'
                 b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',
-        249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||SceneManager._scene._wqaBeaconActive||'
+        249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||'
                 b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||'
                 b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive||'
                 b'SceneManager._scene._wqaQuestTracking||SceneManager._scene._wqaQuestNavigation||'
@@ -625,7 +626,7 @@ def map_notification(original):
             !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||
             (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||
-            (!wqaWasFieldReady && (Graphics._wqaWallEnabled || Graphics._wqaCaveTimingEnabled)))
+            (!wqaWasFieldReady && (Graphics._wqaWallEnabled || Graphics._wqaFootstepsEnabled || Graphics._wqaCaveTimingEnabled)))
             globalThis.WendyQuestAccessFieldReady?.(this);
         if (this._wqaBeaconDue && Graphics.frameCount >= this._wqaBeaconDue &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY)
@@ -920,17 +921,17 @@ def action_notification(original):
         67814: BATTLE_TARGET_LEAVING + b';' + timing_leaving + b';'
                b'if(Graphics._wqaBattleCueEnabled&&SceneManager._scene?._wqaBattleStarted)'
                b'globalThis.WendyQuestAccessBattleCueBegin?.(SceneManager._scene,this);',
-        71224: cue_sample + b'0,_0x279acd,_0x3f6392,this._params.powerCritZoneAmountStart,'
+        71224: cue_sample + b'0,_0x279acd,this._params.powerCritZoneAmountStart,'
                 b'this._params.powerCritZoneAmountEnd,this._params.powerFailAmount,'
-                b'_0x17f391?_0x1fd196:-1,_0x7de663,_0x2f41e3>0,!!_0x26a0b4.Frosty,_0x21be67)',
+                b'_0x21be67||_0x17f391||_0x2f41e3>0)',
         71232: cue_end_sweep,
         72577: feedback_begin,
         72630: feedback_end,
         73686: b',this._wqaRadialWords&&(this._wqaRadialPaint={words:this._wqaRadialWords,attempts:0},'
                b'this._wqaRadialWords=null)',
         75351: b'this._wqaRadialPaint=null;',  # Power feedback has ended before accuracy input.
-        77631: cue_sample + b'1,_0x1327af,_0x3dbe15,_0x3d8aee,_0x357499,this._params.hitFailAmount,'
-                b'_0x2191e9?_0x8a92bb:-1,_0x44198f,_0x592e0d>0,!!_0x26a0b4.Frosty,_0x197d36)',
+        77631: cue_sample + b'1,_0x1327af,_0x3d8aee,_0x357499,this._params.hitFailAmount,'
+                b'_0x197d36||_0x2191e9||_0x592e0d>0)',
         77639: BATTLE_CUE_LEAVING + b';',
         79586: feedback_begin,
         79639: feedback_end,

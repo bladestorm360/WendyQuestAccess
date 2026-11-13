@@ -82,13 +82,13 @@ struct Owner {
         if (owner->reference) owner->api.napi_delete_reference(owner->env, owner->reference);
     }
 
-    int play(LONG epoch, bool use_hrtf, int cue, Bearing p, double gain, double pitch) {
-        const auto ready = [&] { return admitted(generation, epoch); };
+    int play(LONG epoch, bool use_hrtf, int cue, Bearing p, double gain, double pitch, int lane) {
+        const auto ready = [&] { return admitted(generation, epoch, lane); };
         if (!ready()) return 0;
         if (device_failed || dependencies.empty()) return -1;
         if (!device || !device->active()) {
             device = std::make_unique<Device>(generation);
-            if (!device->open(dependencies + L"SDL3.dll", epoch)) {
+            if (!device->open(dependencies + L"SDL3.dll", epoch, lane)) {
                 device_failed = ready();
                 return device_failed ? -1 : 0;
             }
@@ -110,7 +110,7 @@ struct Owner {
         const auto sound = static_cast<Cue>(cue);
         const bool rendered = use_hrtf && hrtf_ready && hrtf->render(samples, sound, p, gain, ready, pitch);
         if (!rendered && !stereo_cue(samples, sound, p, gain, ready, pitch)) return 0;
-        if (!device->publish(epoch, samples)) return ready() ? -1 : 0;
+        if (!device->publish(epoch, samples, lane)) return ready() ? -1 : 0;
         return rendered ? 2 : 1;
     }
 };
@@ -139,17 +139,17 @@ Value attach(Env env, Info info) {
     void* address = nullptr;
     size_t size = 0;
     if (owner->reference || owner->api.napi_get_buffer_info(env, args[0], &address, &size) || !address ||
-        size != sizeof(LONG) || reinterpret_cast<uintptr_t>(address) % alignof(LONG) ||
+        size != sizeof(LONG) * (output_lanes + 1) || reinterpret_cast<uintptr_t>(address) % alignof(LONG) ||
         owner->api.napi_create_reference(env, args[0], 1, &owner->reference)) return number(*owner, 0);
     owner->generation = static_cast<volatile LONG*>(address);
     return number(*owner, 1);
 }
 
 Value play(Env env, Info info) {
-    std::array<Value, 8> args{};
+    std::array<Value, 9> args{};
     const auto owner = arguments(env, info, args);
     if (!owner) return nullptr;
-    int32_t epoch = 0, hrtf = 0, cue = 0;
+    int32_t epoch = 0, hrtf = 0, cue = 0, lane = 0;
     Bearing p{};
     double gain = 0, pitch = 1;
     auto& api = owner->api;
@@ -158,9 +158,12 @@ Value play(Env env, Info info) {
         api.napi_get_value_double(env, args[3], &p.right) || api.napi_get_value_double(env, args[4], &p.up) ||
         api.napi_get_value_double(env, args[5], &p.forward) || api.napi_get_value_double(env, args[6], &gain) ||
         api.napi_get_value_double(env, args[7], &pitch) ||
+        api.napi_get_value_int32(env, args[8], &lane) || lane < 0 || lane >= output_lanes ||
+        (lane == wall_lane && (cue != static_cast<int>(Cue::wall_tone) || pitch != 1.0)) ||
+        (lane == 2 && cue != static_cast<int>(Cue::footstep)) ||
         !std::isfinite(pitch) || pitch < 0.75 || pitch > 1.25 ||
         !std::isfinite(gain) || gain < 0.0 || gain > 1.0) return number(*owner, -1);
-    try { return number(*owner, owner->play(epoch, hrtf == 1, cue, p, gain, pitch)); }
+    try { return number(*owner, owner->play(epoch, hrtf == 1, cue, p, gain, pitch, lane)); }
     catch (...) { return number(*owner, -1); }
 }
 }

@@ -61,7 +61,7 @@ function includeSavedBookmarks(snapshot, entries, current) {
     return items;
 }
 
-function captureWorld(root, routing = true, label, scene, bookmarks = []) {
+function captureWorld(root, routing = true, label, scene, bookmarks = [], routesOnly = false) {
     const map = root.$gameMap;
     const player = root.$gamePlayer;
     const data = root.$dataMap;
@@ -82,7 +82,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
 
     const events = [];
     const objects = [];
-    const quests = scene ? collectQuestDestinations(root, scene, mode) : null;
+    const quests = !routesOnly && scene ? collectQuestDestinations(root, scene, mode) : null;
     const tiles = routing ? new Set(map._tileEvents) : null;
     for (const event of map._events) {
         if (!event || (event._erased && mode !== 'airship')) continue;
@@ -100,7 +100,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
                 erased: event._erased === true,
                 discoveryFor: mode === 'airship' ? discoveryEntrance(id, event) : undefined });
         }
-        if (event._erased || !action) continue;
+        if (routesOnly || event._erased || !action) continue;
         const target = eventTarget(root, mode, event, entry, page);
         const quest = quests?.get(eventId);
         if (target && (!quest || target.category !== 'events')) {
@@ -113,8 +113,8 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
                 entryDirection, eventAction, bumpDirections, handoffs, quest });
         }
     }
-    if (mode === 'walk') objects.push(...boardingTargets(map));
-    if (mode === 'airship') objects.push({ id: 517, x: player._x, y: player._y, name: 'Nearest landing site',
+    if (!routesOnly && mode === 'walk') objects.push(...boardingTargets(map));
+    if (!routesOnly && mode === 'airship') objects.push({ id: 517, x: player._x, y: player._y, name: 'Nearest landing site',
         category: 'vehicles', nearestLanding: true });
     for (const bookmark of bookmarks) {
         if (bookmark.map !== id || bookmark.mode !== mode) continue;
@@ -132,7 +132,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
             if (current) objects.push({ ...current, ...label, event: current.id });
         }
     }
-    const snapshot = { map: id, mode, x: player._x, y: player._y, objects };
+    const snapshot = { map: id, mode, x: player._x, y: player._y, width, height, scrollType, objects };
     if (!routing) return snapshot;
     const vehicles = [];
     for (const vehicle of map._vehicles.slice(0, 2)) {

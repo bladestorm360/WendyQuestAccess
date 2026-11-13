@@ -141,8 +141,8 @@ int wmain(int argc, wchar_t** argv) {
 
     // The build runner sets SDL_AUDIO_DRIVER=dummy for this process only.
     // The real SDL driver callback consumes the pre-rendered PCM.
-    volatile LONG generation = 1;
-    Device device(&generation);
+    volatile LONG generation[4] = {1, 0, 0, 0};
+    Device device(generation);
     assert(device.open(root + L"\\SDL3.dll", 1));
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
     assert(device.callbacks() == 0);
@@ -150,13 +150,13 @@ int wmain(int argc, wchar_t** argv) {
     assert(device.publish(1, left));
     for (int i = 0; i < 40 && device.submitted() == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     assert(device.submitted() > 0);
-    InterlockedExchange(&generation, 0);
+    InterlockedExchange(generation, 0);
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     const auto stopped = device.submitted();
     const auto revoked = device.callbacks();
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     assert(device.submitted() == stopped && device.callbacks() == revoked && !device.publish(1, right));
-    InterlockedExchange(&generation, 2);
+    InterlockedExchange(generation, 2);
     assert(device.publish(2, battle_cues.back()));
     for (int i = 0; i < 40 && device.submitted() == stopped; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     assert(device.submitted() > stopped);
@@ -166,6 +166,35 @@ int wmain(int argc, wchar_t** argv) {
     const auto completed = device.callbacks();
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     assert(device.callbacks() == completed);
+    Stereo wall{}, foot{};
+    assert(stereo_cue(wall, Cue::wall_tone, {0, 0, -1}, 0.55, ready));
+    assert(stereo_cue(foot, Cue::footstep, {0, -1, 0.15}, 0.55, ready));
+    assert(energy(foot, 0) > 0 && foot != wall);
+    for (const bool spatial : {false, true}) {
+        if (spatial) assert(hrtf.render(wall, Cue::wall_tone, {1, 0, 0}, 0.55, ready));
+        // A seam is one normal sample-to-sample step, including the
+        // filter history in the HRTF path.
+        for (int channel = 0; channel < 2; ++channel) {
+            const auto seam = std::abs(wall[channel] - wall[2 * (cue_frames - 1) + channel]);
+            int steepest = 0;
+            for (int i = 1; i < cue_frames; ++i)
+                steepest = std::max(steepest, std::abs(wall[2 * i + channel] - wall[2 * (i - 1) + channel]));
+            assert(seam <= steepest + 8);
+        }
+    }
+    InterlockedExchange(generation + 3, static_cast<LONG>(unix_ms() + 450));
+    InterlockedExchange(generation + wall_lane, 3);
+    assert(device.publish(3, wall, wall_lane));
+    const int beforeLoop = device.submitted();
+    std::this_thread::sleep_for(std::chrono::milliseconds(160));
+    assert(device.submitted() - beforeLoop > cue_frames);
+    InterlockedExchange(generation + 2, 4);
+    assert(device.publish(4, foot, 2));
+    std::this_thread::sleep_for(std::chrono::milliseconds(450));
+    const auto expired = device.callbacks();
+    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    assert(device.callbacks() == expired);
+    std::puts("Verified periodic stereo/HRTF seams, concurrent footstep and wall voices, and independent wall expiry.");
     std::printf("Verified built-in HRTF, full rear-pitch fallback and SDL dummy output generation. Loopback init %.1f ms, five cues %.1f ms.\n",
         std::chrono::duration<double, std::milli>(initialized - begin).count(),
         std::chrono::duration<double, std::milli>(rendered - initialized).count());

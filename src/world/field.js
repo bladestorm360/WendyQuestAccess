@@ -76,7 +76,7 @@ function createField(root, host, notifications) {
     const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed) => {
         if (failed) host.beacon?.stop(scene);
         if (record && scene === host.manager._scene) command('navigationReport', record);
-        else if (failed) retire(scene);
+        else retire(scene);
     });
 
     function guideFor(scene) {
@@ -177,11 +177,35 @@ function createField(root, host, notifications) {
         present(job, record);
     }
 
+    function cancelBeaconRefresh(state) {
+        state.waiting = false;
+        if (inFlight?.beaconState !== state || !admission) return;
+        Atomics.store(admission, 0, 0);
+    }
+
+    function refreshBeacon(state) {
+        if (inFlight || active && !active.performed || sequence >= 0x7ffffffe || !ready(state.scene)) return false;
+        const snapshot = captureWorld(root, true, undefined, undefined, [], true);
+        if (!snapshot) {
+            host.beacon.refreshResult(state, state.revision, state.player._x, state.player._y, null);
+            return true;
+        }
+        const job = { scene: state.scene, sequence: ++sequence, beaconState: state, revision: state.revision };
+        state.waiting = true;
+        submit(job, snapshot, state.request);
+        return true;
+    }
+
     function received(packet) {
         const job = inFlight;
         if (!job || packet?.sequence !== job.sequence || packet.epoch !== job.sequence || packet.map !== job.map) return;
         inFlight = null;
         if (admission && Atomics.load(admission, 0) === job.sequence) Atomics.store(admission, 0, 0);
+        if (job.beaconState) {
+            host.beacon.refreshResult(job.beaconState, job.revision, job.x, job.y, packet.result);
+            if (navigationRequest(active) && !active.performed && ready(active.scene)) afterRender();
+            return;
+        }
         if (active === job && ready(job.scene) && root.$gameMap._mapId === job.map &&
             travelMode(root.$gameMap, root.$gamePlayer) === job.mode) {
             const player = root.$gamePlayer;
@@ -258,9 +282,22 @@ function createField(root, host, notifications) {
                     } else if (result.land) transfers.armAirship(job.scene, selection, result.arrival);
                 }
                 if (result.land && job.remote) transfers.armAirship(job.scene, job.remote.selection, result.arrival);
-                if (!result.reenter) host.beacon?.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
-                    warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type,
-                    { quest: job.quest, point: job.point });
+                if (!result.reenter && host.beacon?.enabled()) {
+                    // Transfer and landing handoffs own a previously verified
+                    // exact approach. Keep that approach fixed during refresh.
+                    const fixed = !!(job.remote || job.landingBookmark || result.land);
+                    const { x, y, facing } = result.arrival;
+                    const request = fixed ? { targetX: x, targetY: y, field: true, beacon: true } :
+                        { ...job.request, motion: undefined, autowalk: false };
+                    const destinationReady = (job.entrance || job.groundEntrance || result.land) ? () =>
+                        (!job.entrance || transfers.current(job.entrance)) &&
+                        (!job.groundEntrance || transfers.current(job.groundEntrance, 'walk')) &&
+                        (!result.land || canLand(root.$gameMap, x, y)) : null;
+                    host.beacon.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
+                        warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type,
+                        { quest: job.quest, point: job.point, request: { ...request, limit: 8, refreshFacing: fixed ? facing : undefined },
+                            destinationReady });
+                }
                 follow(job, result, { kind: 'routeDirections', name: job.label,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
                     reenter: result.reenter === true, enter: job.entrance?.action,
@@ -292,6 +329,7 @@ function createField(root, host, notifications) {
 
     function submit(job, snapshot, request, filtering = false) {
         job.filter = filtering ? snapshot : null;
+        job.request = request;
         try {
             if (!worker) {
                 admission = host.makeWord();
@@ -303,6 +341,8 @@ function createField(root, host, notifications) {
                     if (admission) Atomics.store(admission, 0, 0);
                     const dropped = inFlight;
                     inFlight = null;
+                    if (dropped?.beaconState)
+                        host.beacon.refreshResult(dropped.beaconState, dropped.revision, dropped.x, dropped.y, null);
                     if (dropped && active === dropped) {
                         dropped.performed = true;
                         dropped.scene._wqaQuestNavigation = false;
@@ -332,7 +372,8 @@ function createField(root, host, notifications) {
             inFlight = null;
             job.filter = null;
             job.performed = true;
-            status(job, filtering ? 'Reachable destinations unavailable' : 'Directions service unavailable');
+            if (job.beaconState) host.beacon.refreshResult(job.beaconState, job.revision, job.x, job.y, null);
+            else status(job, filtering ? 'Reachable destinations unavailable' : 'Directions service unavailable');
         }
     }
 
@@ -643,6 +684,7 @@ function createField(root, host, notifications) {
     return {
         ready,
         autowalk,
+        refreshBeacon, cancelBeaconRefresh,
         bookmarkContext(scene) {
             if (!ready(scene)) return null;
             const map = root.$gameMap;
@@ -678,6 +720,7 @@ function createField(root, host, notifications) {
             return true;
         },
         questRefresh(scene) {
+            if (host.beacon?.questActive(scene)) host.beacon.stop(scene);
             if (active?.scene !== scene || !scene._wqaQuestNavigation) return;
             autowalk.stop(scene);
             host.beacon?.stop(scene);

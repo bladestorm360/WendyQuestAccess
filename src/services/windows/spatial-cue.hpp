@@ -14,7 +14,7 @@ constexpr double tau = 6.283185307179586;
 enum class Cue : int {
     preview, wall_bump, wall_brush, beacon_pulse, beacon_turn, beacon_arrival, cave_go,
     entity_person, entity_exit, entity_door, entity_stairs, entity_treasure, entity_object, entity_checkpoint,
-    battle_lead, battle_power, battle_accuracy, battle_ice, count
+    battle_lead, battle_power, battle_accuracy, battle_ice, wall_tone, footstep, count
 };
 
 struct Bearing {
@@ -58,7 +58,17 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
         const auto note = std::min({1.0, segment / 0.003, std::max(0.0, (0.028 - segment) / 0.006)});
         return envelope * note * 0.57 * std::sin(tau * frequency * pitch * segment);
     }
-    if (cue >= Cue::battle_lead && cue < Cue::count) {
+    if (cue == Cue::wall_tone) {
+        // Exactly 25 cycles per loop, or 18 with the stereo rear pitch.
+        const auto phase = tau * (25.0 * frame / cue_frames) * pitch;
+        return 0.24 * std::sin(phase) + 0.08 * std::sin(2.0 * phase);
+    }
+    if (cue == Cue::footstep) {
+        const auto phase = tau * pitch * time;
+        return envelope * std::exp(-58.0 * time) *
+            (0.44 * std::sin(145.0 * phase) + 0.22 * std::sin(492.0 * phase) + 0.14 * std::sin(1085.0 * phase));
+    }
+    if (cue >= Cue::battle_lead && cue <= Cue::battle_ice) {
         const double frequency = cue == Cue::battle_lead ? 440.0 : cue == Cue::battle_power ? 625.0 :
             cue == Cue::battle_accuracy ? 950.0 : time < 0.022 ? 1360.0 : 1050.0;
         const auto segment = cue == Cue::battle_ice ? std::fmod(time, 0.022) : time;

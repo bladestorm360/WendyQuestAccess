@@ -1,6 +1,36 @@
 'use strict';
 
-const LOCAL_NAMES = Object.freeze({ 116: "Elder Tater's house" });
+// Native transfer destinations with empty display names. Floor and house
+// numbers distinguish locations without naming occupants or rewards.
+const LOCAL_NAMES = Object.freeze({
+    17: 'Salt Caverns entrance', 20: 'Salt Caverns exit', 28: 'Cauldron of Sauce',
+    32: 'Cauldron of Sauce', 33: 'Chillcrest cave', 35: 'Float Fort cave',
+    37: 'Frosty Peak cave', 44: 'Cauldron of Sauce', 48: 'Caves', 49: 'Breaded Bay',
+    50: 'Cauldron of Sauce', 51: 'Cauldron room 1', 53: 'Cauldron room 2',
+    55: 'Cauldron room 3', 60: 'Oasis', 61: 'Cave entrance', 62: 'Lava River',
+    63: 'Cauldron chamber', 98: 'Elevator, lower landing', 107: 'Arena', 113: 'World map',
+    116: "Elder Tater's house", 117: "Frygor's house, first floor", 118: "Frygor's house, second floor",
+    119: "Frostyna's house", 120: 'Russetwood workshop, first floor', 121: 'Russetwood house 1',
+    122: 'Russetwood workshop, second floor', 123: 'Russetwood house 2', 124: 'Russetwood house 3',
+    125: 'Russetwood house 4', 126: "Elder Frosty's house, first floor",
+    127: "Elder Frosty's house, second floor", 128: "Elder Frosty's house, third floor",
+    129: 'Chillcrest house 1', 130: 'Chillcrest house 2', 131: 'Chillcrest house 3',
+    132: 'Float Fort house, first floor', 133: 'Float Fort house, second floor', 134: 'Mech Café',
+    135: 'Breaded Bay house', 136: 'Caves house', 137: 'Oasis house', 138: 'Lava River house',
+    139: 'Nuggedor house 1', 140: 'Burgenburg house 2', 141: 'Nuggedor house 3',
+    142: 'Burgenburg house 1', 143: 'Nuggedor house 5', 144: 'Burgenburg house 3',
+    145: 'Nuggedor house 7', 146: 'Sunrise Bay house 1', 147: 'Sunrise Bay house 2',
+    148: 'Sunrise Bay house 3', 149: 'Sunrise Bay shop 1', 150: 'Sunrise Bay shop 2',
+    151: 'Sunrise Bay shop 3', 152: 'Scrambled Shores house', 153: 'Bacon Beach house',
+    154: 'Nuggedor house 2', 155: 'Nuggedor house 4', 156: 'Nuggedor house 6',
+    157: "Baconator's house, first floor", 158: "Baconator's house, second floor",
+    159: 'Patty Pit house 1', 160: 'Patty Pit house 2',
+    181: "Wendy's, Russetwood", 182: "Wendy's, Chillcrest", 183: "Wendy's, Nuggedor",
+    184: "Wendy's, Burgenburg", 186: "Wendy's, Sunrise Bay",
+    193: 'Elevator, upper landing', 194: 'Elevator', 195: "Elder Frosty's house, third floor",
+    203: 'Float Fort house, second floor', 204: 'Cold Brew Trail cave', 205: 'Cave',
+    206: 'Island', 207: 'Island', 208: 'Island', 209: 'Nugget Mine entrance'
+});
 
 function mapPlace(root) {
     const id = root.$gameMap?._mapId;

@@ -10,14 +10,26 @@
 #include <string>
 
 namespace wqa::audio {
-inline bool admitted(volatile LONG* word, LONG epoch) {
-    return word && epoch > 0 && InterlockedCompareExchange(word, 0, 0) == epoch;
+constexpr int output_lanes = 3;
+constexpr int wall_lane = 1;
+
+inline bool admitted(volatile LONG* word, LONG epoch, int lane = 0) {
+    return word && epoch > 0 && InterlockedCompareExchange(word + lane, 0, 0) == epoch;
+}
+
+inline uint32_t unix_ms() {
+    FILETIME time{};
+    GetSystemTimeAsFileTime(&time);
+    ULARGE_INTEGER ticks{};
+    ticks.LowPart = time.dwLowDateTime;
+    ticks.HighPart = time.dwHighDateTime;
+    return static_cast<uint32_t>((ticks.QuadPart - 116444736000000000ULL) / 10000);
 }
 
 class Device {
 #define WQA_SDL(X) X(SDL_GetVersion) X(SDL_IsMainThread) X(SDL_SetMainReady) X(SDL_SetHint) X(SDL_InitSubSystem) \
     X(SDL_QuitSubSystem) X(SDL_OpenAudioDeviceStream) X(SDL_ResumeAudioStreamDevice) X(SDL_DestroyAudioStream) \
-    X(SDL_LockAudioStream) X(SDL_UnlockAudioStream) X(SDL_PutAudioStreamData) X(SDL_ClearAudioStream) \
+    X(SDL_LockAudioStream) X(SDL_UnlockAudioStream) X(SDL_PutAudioStreamData) \
     X(SDL_SetAudioStreamGetCallback)
 #define FIELD(name) decltype(&::name) name##_ = nullptr;
     WQA_SDL(FIELD)
@@ -27,9 +39,13 @@ class Device {
     bool initialized_ = false;
     bool ready_ = false;
     volatile LONG* word_;
-    LONG epoch_ = 0;
-    Stereo samples_{};
-    int next_ = render_frames;
+    struct Voice {
+        LONG epoch = 0;
+        Stereo samples{};
+        int next = render_frames;
+        int attack = 0;
+    };
+    std::array<Voice, output_lanes> voices_{};
 #ifdef WQA_AUDIO_TEST
     int submitted_ = 0;
     int callbacks_ = 0;
@@ -41,27 +57,64 @@ class Device {
 #ifdef WQA_AUDIO_TEST
         ++self.callbacks_;
 #endif
-        if (!admitted(self.word_, self.epoch_)) {
-            self.SDL_SetAudioStreamGetCallback_(stream, nullptr, nullptr);
-            return;
-        }
-        int frames = std::min({amount / bytes_per_frame, render_frames - self.next_, 1024});
-        while (frames > 0 && admitted(self.word_, self.epoch_)) {
-            const int count = std::min(frames, 256);
-            if (!self.SDL_PutAudioStreamData_(stream, self.samples_.data() + self.next_ * 2, count * bytes_per_frame)) {
-                self.next_ = render_frames;
-                break;
+        int frames = std::min(amount / bytes_per_frame, 1024);
+        while (frames > 0) {
+            std::array<int32_t, 512> mix{};
+            const int capacity = std::min(frames, 256);
+            int mixed = 0;
+            for (int lane = 0; lane < output_lanes; ++lane) {
+                auto& voice = self.voices_[lane];
+                if (!admitted(self.word_, voice.epoch, lane)) continue;
+                int count = std::min(capacity, render_frames - voice.next);
+                int remaining = 0;
+                if (lane == wall_lane) {
+                    const auto deadline = static_cast<uint32_t>(InterlockedCompareExchange(self.word_ + output_lanes, 0, 0));
+                    const auto ms = static_cast<int32_t>(deadline - unix_ms());
+                    if (ms <= 0 || ms > 3000) continue;
+                    remaining = ms * (rate / 1000);
+                    count = std::min(capacity, remaining);
+                }
+                for (int i = 0; i < count; ++i) {
+                    int level = 256;
+                    if (lane == wall_lane) {
+                        level = std::min({256, voice.attack, remaining - i});
+                        if (voice.attack < 256) ++voice.attack;
+                    }
+                    for (int channel = 0; channel < 2; ++channel)
+                        mix[i * 2 + channel] += voice.samples[voice.next * 2 + channel] * level / 256;
+                    ++voice.next;
+                    if (lane == wall_lane && voice.next == cue_frames) voice.next = 0;
+                }
+                mixed = std::max(mixed, count);
             }
-            self.next_ += count;
-            frames -= count;
+            if (!mixed) break;
+            std::array<std::int16_t, 512> output{};
+            for (int i = 0; i < mixed * 2; ++i)
+                output[i] = static_cast<std::int16_t>(std::clamp(mix[i], -32768, 32767));
+            if (!self.SDL_PutAudioStreamData_(stream, output.data(), mixed * bytes_per_frame)) {
+                self.SDL_SetAudioStreamGetCallback_(stream, nullptr, nullptr);
+                return;
+            }
+            frames -= mixed;
 #ifdef WQA_AUDIO_TEST
-            self.submitted_ += count;
+            self.submitted_ += mixed;
 #endif
+            if (mixed < capacity) break;
         }
-        // SDL owns a recursive stream mutex while calling supply. Unsubscribe
-        // here so completed or revoked cues leave no periodic mod callback.
-        if (self.next_ == render_frames || !admitted(self.word_, self.epoch_))
-            self.SDL_SetAudioStreamGetCallback_(stream, nullptr, nullptr);
+        // SDL owns a recursive stream mutex during supply. An empty mix
+        // leaves no periodic mod callback until the worker publishes again.
+        bool active = false;
+        for (int lane = 0; lane < output_lanes; ++lane) {
+            const auto& voice = self.voices_[lane];
+            if (!admitted(self.word_, voice.epoch, lane) || voice.next == render_frames) continue;
+            if (lane == wall_lane) {
+                const auto deadline = static_cast<uint32_t>(InterlockedCompareExchange(self.word_ + output_lanes, 0, 0));
+                const auto ms = static_cast<int32_t>(deadline - unix_ms());
+                if (ms <= 0 || ms > 3000) continue;
+            }
+            active = true;
+        }
+        if (!active) self.SDL_SetAudioStreamGetCallback_(stream, nullptr, nullptr);
     }
 
 public:
@@ -76,33 +129,34 @@ public:
 
     bool active() const { return ready_; }
 
-    bool open(const std::wstring& path, LONG epoch) {
-        if (!admitted(word_, epoch) || GetModuleHandleW(L"SDL3.dll")) return false;
+    bool open(const std::wstring& path, LONG epoch, int lane = 0) {
+        if (!admitted(word_, epoch, lane) || GetModuleHandleW(L"SDL3.dll")) return false;
         library_ = LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (!library_) return false;
 #define BIND(name) name##_ = reinterpret_cast<decltype(name##_)>(GetProcAddress(library_, #name)); if (!name##_) return false;
         WQA_SDL(BIND)
 #undef BIND
-        if (SDL_GetVersion_() != SDL_VERSIONNUM(3, 4, 4) || !SDL_IsMainThread_() || !admitted(word_, epoch)) return false;
+        if (SDL_GetVersion_() != SDL_VERSIONNUM(3, 4, 4) || !SDL_IsMainThread_() || !admitted(word_, epoch, lane)) return false;
         SDL_SetMainReady_();
         SDL_SetHint_(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");
-        if (!admitted(word_, epoch) || !SDL_InitSubSystem_(SDL_INIT_AUDIO)) return false;
+        if (!admitted(word_, epoch, lane) || !SDL_InitSubSystem_(SDL_INIT_AUDIO)) return false;
         initialized_ = true;
-        if (!admitted(word_, epoch)) return false;
+        if (!admitted(word_, epoch, lane)) return false;
         const SDL_AudioSpec format{SDL_AUDIO_S16, 2, rate};
         stream_ = SDL_OpenAudioDeviceStream_(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &format, nullptr, nullptr);
-        if (!stream_ || !admitted(word_, epoch)) return false;
+        if (!stream_ || !admitted(word_, epoch, lane)) return false;
         ready_ = SDL_ResumeAudioStreamDevice_(stream_);
         return ready_;
     }
 
-    bool publish(LONG epoch, const Stereo& data) {
-        if (!ready_ || !admitted(word_, epoch) || !SDL_ClearAudioStream_(stream_) || !SDL_LockAudioStream_(stream_)) return false;
-        bool current = admitted(word_, epoch);
+    bool publish(LONG epoch, const Stereo& data, int lane = 0) {
+        if (!ready_ || !admitted(word_, epoch, lane) || !SDL_LockAudioStream_(stream_)) return false;
+        bool current = admitted(word_, epoch, lane);
         if (current) {
-            samples_ = data;
-            epoch_ = epoch;
-            next_ = 0;
+            auto& voice = voices_[lane];
+            voice.samples = data;
+            voice.epoch = epoch;
+            voice.next = voice.attack = 0;
             current = SDL_SetAudioStreamGetCallback_(stream_, supply, this);
         }
         SDL_UnlockAudioStream_(stream_);

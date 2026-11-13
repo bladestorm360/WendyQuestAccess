@@ -26,6 +26,8 @@ const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('../
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
 const { createAudio, CUE } = require('../src/runtime/audio');
 const { createWallAudio } = require('../src/world/wall-audio');
+const { createFootsteps } = require('../src/world/footsteps');
+const { captureWorld } = require('../src/world/snapshot');
 const { createBeacon } = require('../src/world/beacon');
 const { createCaveTiming } = require('../src/world/cave-timing');
 
@@ -214,18 +216,30 @@ function verifyPatrolContact() {
 
 function verifyWallFeedback() {
     const scene = c.SceneManager._scene;
-    const options = { enabled: true, wall: true, hrtf: true, wallVolume: 45 };
-    const worker = new EventEmitter();
-    const requests = [];
-    const queue = [];
-    const word = new Int32Array(new SharedArrayBuffer(4));
-    worker.unref = () => {};
-    worker.postMessage = request => requests.push(request);
-    const audio = createAudio({ makeWord: () => word, createAudioWorker: () => worker, schedule: task => queue.push(task) });
-    const wall = createWallAudio(c, (scene, moving) => moving && scene._wqaFieldReady &&
-        !scene._wqaSettingsActive && c.$gamePlayer._vehicleType === 'walk', audio, () => options);
-    c.WendyQuestAccessFieldMove = (scene, motion, success) => wall.move(scene, motion, success);
-    c.WendyQuestAccessFieldEvent = scene => wall.interrupt(scene);
+    const options = { enabled: true, wall: true, hrtf: true, wallVolume: 45, footsteps: true, footstepVolume: 50 };
+    let now = 1000;
+    let output = null;
+    const calls = [];
+    const audio = {
+        cues: CUE, isPrepared: () => true,
+        extendWall(_scene, until) { if (!output) return false; output.until = until; return true; },
+        play(_scene, _hrtf, cue, gain, bearing, ready, _complete, source, _pitch, until) {
+            assert(ready());
+            const record = { cue, gain, bearing, source, until };
+            calls.push(record);
+            if (source === 'wall') output = record;
+            return true;
+        },
+        retire(_scene, source) { if (source === 'wall') output = null; }
+    };
+    const fieldReady = owner => owner === scene && scene._wqaFieldReady && !scene._wqaSettingsActive;
+    const wall = createWallAudio(c, fieldReady, audio, () => options, () => now);
+    const footsteps = createFootsteps(c, fieldReady, audio, () => options);
+    c.WendyQuestAccessFieldMove = (scene, motion, success) => {
+        wall.move(scene, motion, success);
+        footsteps.move(scene, motion, success);
+    };
+    c.WendyQuestAccessFieldEvent = owner => { wall.interrupt(owner); footsteps.leave(owner); };
     c.Input = { dir4: 0 };
     c.$gameTemp = { clearDestination() {}, isDestinationValid: () => false };
     c.$gameMessage = { isBusy: () => false };
@@ -233,106 +247,69 @@ function verifyWallFeedback() {
     c.Graphics._wqaWallEnabled = true;
     scene._wqaFieldReady = true;
     const { gameMap, player } = load(19);
-    const place = (x, y, dir = 2) => Object.assign(c.$gamePlayer, { _x: x, _y: y, _realX: x, _realY: y,
-        _direction: dir, _followers: { areGathering: () => false, updateMove() {} } });
-    const press = (direction, frame = c.Graphics.frameCount) => {
-        c.Graphics.frameCount = frame;
+    const place = (x, y, dir = 2) => Object.assign(player, { _x: x, _y: y, _realX: x, _realY: y,
+        _direction: dir, _moveSpeed: 4, _followers: { areGathering: () => false, updateMove() {} } });
+    const press = direction => {
+        c.Graphics.frameCount++;
         c.Input.dir4 = direction;
-        c.$gamePlayer.moveByInput();
+        player.moveByInput();
+        for (let i = 0; i < 64 && player.isMoving(); i++) player.updateMove();
+        assert(!player.isMoving(), 'native step settles within the fixture bound');
     };
-    const send = () => {
-        while (queue.length) queue.shift()();
-        return requests.at(-1);
-    };
-    const ack = request => worker.emit('message', { epoch: request.epoch, status: 2 });
-    const follow = (x, y, d) => [gameMap.roundXWithDirection(x, d), gameMap.roundYWithDirection(y, d)];
-    const side = (x, y, d) => !gameMap.isValid(...follow(x, y, d)) || !player.isMapPassable(x, y, d);
-    const still = () => [player._x, player._y];
-    let corner;
+    const next = (x, y, d) => [gameMap.roundXWithDirection(x, d), gameMap.roundYWithDirection(y, d)];
     let edge;
-    for (let y = 0; y < gameMap.height(); y++) {
+    for (let y = 0; y < gameMap.height() && !edge; y++) {
         for (let x = 0; x < gameMap.width(); x++) {
-            if (gameMap.eventsXyNt(x, y).length) continue;
-            const [eastX, eastY] = follow(x, y, 6);
-            if (!gameMap.isValid(eastX, eastY) || !player.canPass(x, y, 6)) continue;
-            if (!corner && side(x, y, 8) && !gameMap.eventsXyNt(...follow(x, y, 8)).length) corner = [x, y];
-            if (!edge && side(x, y, 8) && side(eastX, eastY, 8) && !side(x, y, 2)) edge = [x, y];
+            const east = next(x, y, 6);
+            const east2 = next(...east, 6);
+            if (player.canPass(x, y, 6) && player.canPass(...east, 6) &&
+                !player.canPass(...east, 8) && !player.canPass(...east2, 8) &&
+                !gameMap.eventsXyNt(...east).length && !gameMap.eventsXyNt(...east2).length &&
+                !gameMap.eventsXyNt(...next(...east2, 8)).length) { edge = [x, y]; break; }
         }
     }
-    assert(corner && edge);
-    place(...corner);
-    wall.arm(scene);
-    const prepare = send();
-    assert.equal(prepare.cue, CUE.prepare);
+    assert(edge);
+    place(...edge, 6);
+    press(6);
+    assert.equal(output.cue, CUE.wallTone);
+    assert.deepEqual(output.bearing, [-1, 0, 0]);
+    assert.equal(output.until, 4000);
+    now = 1850;
+    press(6);
+    assert.equal(calls.filter(call => call.source === 'wall').length, 1, 'same wall extends without restarting');
+    assert.equal(output.until, 4850);
+    assert.deepEqual(calls.filter(call => call.source === 'footstep').map(call => call.bearing[0]), [-0.25, 0.25]);
+    now = 3500;
     press(8);
-    assert.equal(send(), prepare, 'a cold step must not turn into a delayed sound');
-    ack(prepare);
-    assert.equal(Atomics.load(word, 0), 0);
-    press(8, 101);
-    const bump = send();
-    assert.deepEqual(still(), corner);
-    assert.equal(player.isMovementSucceeded(), false);
-    assert.deepEqual([bump.cue, bump.right, bump.forward, bump.gain], [CUE.wallBump, 0, 1, 0.45]);
-    ack(bump);
-    press(8, 102);
-    assert.equal(send(), bump);
-    press(8, 119);
-    const again = send();
-    assert.notEqual(again.epoch, bump.epoch);
-    ack(again);
+    assert.equal(output.until, 4850, 'blocked movement does not extend wall playback');
+    assert.deepEqual(output.bearing, [0, 0, 1]);
+    assert.equal(calls.filter(call => call.source === 'footstep').length, 2);
+    now = 4849;
     wall.expire(scene);
-    assert.equal(Atomics.load(word, 0), 0);
-
-    place(...edge);
-    press(6, 140);
-    assert.equal(player.isMovementSucceeded(), true);
-    assert.deepEqual(still(), follow(...edge, 6));
-    const brush = send();
-    assert.deepEqual([brush.cue, brush.right, brush.forward], [CUE.wallBrush, -1, 0]);
-    ack(brush);
+    assert(output);
+    now = 4850;
+    wall.expire(scene);
+    assert.equal(output, null);
+    press(8);
+    assert.equal(output, null, 'held blocked movement cannot restart an expired tone');
+    wall.leave(scene);
+    place(...edge, 6);
+    press(6);
+    assert(output);
     scene._wqaSettingsActive = true;
-    place(...corner);
-    press(8, 160);
-    assert.equal(send(), brush);
-    wall.leave(scene);
-    assert.equal(Atomics.load(word, 0), 0);
+    wall.expire(scene);
+    assert.equal(output, null);
     scene._wqaSettingsActive = false;
-
-    press(8, 170);
-    const beforeContact = send();
-    assert.notEqual(beforeContact.epoch, brush.epoch);
-    ack(beforeContact);
-    assert.equal(Atomics.load(word, 0), beforeContact.epoch);
-    const cave = load(196);
-    const patrol = cave.gameMap._events[4];
-    patrol.lock = () => assert.equal(Atomics.load(word, 0), 0, 'close before native event lock');
-    const towardPlayer = [0, 2, 4, 6, 8][patrol.page().moveRoute.list[0].code];
-    place(cave.gameMap.roundXWithDirection(patrol.x, towardPlayer), cave.gameMap.roundYWithDirection(patrol.y, towardPlayer));
-    press(10 - towardPlayer, 180);
-    assert(patrol.isStarting());
-    assert.equal(cave.player.isMovementSucceeded(), false);
-    assert.equal(send(), beforeContact, 'the native patrol encounter must preempt the wall tone');
-    assert.equal(Atomics.load(word, 0), 0);
-
-    load(19);
-    place(...corner);
-    function attempts(enabled, base) {
-        c.Graphics._wqaWallEnabled = enabled;
-        wall.leave(scene);
-        const start = performance.now();
-        for (let i = 0; i < 120; i++) {
-            press(8, base + i);
-            if (queue.length) ack(send());
-            if (scene._wqaWallUntil && c.Graphics.frameCount >= scene._wqaWallUntil) wall.expire(scene);
-        }
-        return performance.now() - start;
-    }
-    const baseline = attempts(false, 300);
-    const withCue = attempts(true, 600);
+    options.footsteps = false;
+    const count = calls.filter(call => call.source === 'footstep').length;
+    place(...edge, 6);
+    press(6);
+    assert.equal(calls.filter(call => call.source === 'footstep').length, count);
     wall.leave(scene);
+    footsteps.leave(scene);
     scene._wqaFieldReady = false;
     c.Graphics._wqaWallEnabled = false;
-    console.log(`Throttled 120 native blocked attempts: ${baseline.toFixed(2)} ms baseline, ${withCue.toFixed(2)} ms with silent wall requests.`);
+    console.log('Verified native walking, persistent directional wall tone, exact inactivity expiry and separate footsteps.');
 }
 
 async function verifyNativeBeacon() {
@@ -388,8 +365,18 @@ async function verifyNativeBeacon() {
         c.Graphics.frameCount = 1000;
         scene._wqaFieldReady = true;
         const ready = (current, moving) => current === scene && scene._wqaFieldReady && (moving || !player.isMoving());
+        let latestRefresh = null;
+        const refresh = {
+            submit(state) {
+                const snapshot = captureWorld(c, true, undefined, undefined, [], true);
+                latestRefresh = { state, revision: state.revision, snapshot };
+                state.waiting = true;
+                return true;
+            },
+            cancel(state) { state.waiting = false; }
+        };
         const beacon = createBeacon(c, ready, audio, () => ({ enabled: true, beacon: true, beaconVolume: 70, hrtf: true }),
-            text => reports.push(text));
+            text => reports.push(text), refresh);
         c.WendyQuestAccessFieldMove = (owner, direction, success) => beacon.moved(owner, direction, success);
         c.WendyQuestAccessFieldEvent = owner => beacon.stop(owner);
         c.WendyQuestAccessBeaconActor = (owner, actor, direction) => beacon.actor(owner, actor, direction);
@@ -404,8 +391,9 @@ async function verifyNativeBeacon() {
             renderer.emit('postrender');
         }
         place(...point, 10 - first);
-        const start = () => assert(beacon.start(scene, sign, ...point, result, () =>
-            warningApproach(gameMap, player._x, player._y, sign)));
+        const start = (refresh = false) => assert(beacon.start(scene, sign, ...point, result, () =>
+            warningApproach(gameMap, player._x, player._y, sign), undefined,
+            refresh ? { request } : undefined));
         start();
         tick();
         assert(prepare?.ready() && sounds.length === 0);
@@ -466,6 +454,29 @@ async function verifyNativeBeacon() {
         place(player._x, player._y, player._direction);
         tick();
         assert.equal(reports.at(-1), 'Off route. Request directions again.');
+
+        place(...point, first);
+        start(true);
+        tick();
+        c.Input.dir4 = other;
+        player.moveByInput();
+        assert.equal(sounding, null);
+        place(player._x, player._y, player._direction);
+        tick();
+        assert(beacon.active(scene));
+        assert(latestRefresh);
+        const { state, snapshot, revision } = latestRefresh;
+        const reroute = solveRoute(geometry, snapshot.live, { ...request, x: snapshot.x, y: snapshot.y, limit: undefined });
+        assert.equal(reroute.status, 'ready');
+        reroute.course = Uint8Array.from(reroute.legs.flatMap(leg =>
+            Array.from({ length: leg.tiles }, (_, i) => (Math.min(63, leg.tiles - i) << 2) | DIRECTIONS.indexOf(leg.direction))));
+        beacon.refreshResult(state, revision - 1, snapshot.x, snapshot.y, reroute);
+        assert.equal(sounding, null);
+        beacon.refreshResult(state, revision, snapshot.x, snapshot.y, reroute);
+        tick();
+        assert(sounding?.ready(), 'the same selected beacon resumes after a detour');
+        assert.equal(reports.length, 1, 'refresh does not repeat the directions or the old off-route message');
+        beacon.stop(scene);
 
         place(...point, first);
         start();

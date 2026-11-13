@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { CUE, createAudio } = require('../src/runtime/audio');
 
-const word = new Int32Array(new SharedArrayBuffer(4));
+let word;
 const scheduled = [];
 const reports = [];
 const worker = new EventEmitter();
@@ -17,7 +17,8 @@ const audio = createAudio({
     makeWord: () => word,
     schedule: task => scheduled.push(task),
     createAudioWorker(admission) {
-        assert.equal(admission, word.buffer);
+        word = new Int32Array(admission);
+        assert.equal(word.length, 4);
         starts++;
         return worker;
     }
@@ -31,7 +32,7 @@ assert.equal(preview(), true);
 audio.retire(scene);
 run();
 assert.equal(starts, 0);
-assert.equal(Atomics.load(word, 0), 0);
+assert.equal(word, undefined);
 ready = false;
 assert.equal(preview(), false);
 assert.equal(scheduled.length, 0);
@@ -42,7 +43,7 @@ assert.equal(starts, 0);
 run();
 assert.equal(starts, 1);
 const cold = messages[0];
-assert.deepEqual(Object.keys(cold), ['epoch', 'hrtf', 'cue', 'right', 'up', 'forward', 'gain']);
+assert.deepEqual(Object.keys(cold), ['epoch', 'lane', 'hrtf', 'cue', 'right', 'up', 'forward', 'gain', 'pitch']);
 preview([-1, 0, 0]);
 preview([0, 0, -1], false);
 const latestEpoch = Atomics.load(word, 0);
@@ -54,7 +55,7 @@ worker.emit('message', { epoch: cold.epoch, status: 2 });
 assert.deepEqual(reports, []);
 run();
 assert.equal(messages.length, 2);
-assert.deepEqual(messages[1], { epoch: latestEpoch, hrtf: false, cue: CUE.preview, right: 0, up: 0, forward: -1, gain: 0.65 });
+assert.deepEqual(messages[1], { epoch: latestEpoch, lane: 0, hrtf: false, cue: CUE.preview, right: 0, up: 0, forward: -1, gain: 0.65, pitch: 1 });
 worker.emit('message', { epoch: latestEpoch, status: 1 });
 assert.deepEqual(reports, ['Preview uses stereo and rear pitch.']);
 assert.equal(audio.isPrepared(true), true);
@@ -93,6 +94,29 @@ assert.equal(Atomics.load(word, 0), crossing.epoch);
 worker.emit('message', { epoch: crossing.epoch, status: 2 });
 audio.retire(scene, 'cave');
 
+assert(audio.play(scene, true, CUE.wallTone, 0.5, [1, 0, 0], () => ready, null, 'wall', 1, Date.now() + 2900));
+assert(audio.play(scene, true, CUE.footstep, 0.5, [0, -1, 0], () => ready, null, 'footstep'));
+run();
+const loop = messages.at(-1);
+assert.equal(loop.lane, 1);
+worker.emit('message', { epoch: loop.epoch, status: 2 });
+run();
+const foot = messages.at(-1);
+assert.equal(foot.lane, 2);
+worker.emit('message', { epoch: foot.epoch, status: 2 });
+assert(audio.play(scene, true, CUE.beaconPulse, 0.5, [0, 0, 1], () => ready, null, 'beacon'));
+run();
+assert.equal(messages.at(-1).lane, 0);
+assert.equal(Atomics.load(word, 1), loop.epoch);
+assert.equal(Atomics.load(word, 2), foot.epoch);
+assert(audio.extendWall(scene, Date.now() + 3000));
+audio.retire(scene, 'wall');
+assert.equal(Atomics.load(word, 1), 0);
+assert.equal(Atomics.load(word, 2), foot.epoch);
+worker.emit('message', { epoch: messages.at(-1).epoch, status: 2 });
+audio.retire(scene);
+assert.deepEqual([...word.slice(0, 3)], [0, 0, 0]);
+
 preview();
 run();
 ready = false;
@@ -106,7 +130,7 @@ run();
 worker.emit('error', Error('Fixture worker loss'));
 assert.equal(Atomics.load(word, 0), 0);
 assert.equal(reports.at(-1), 'Mod audio output unavailable.');
-assert.equal(preview(), true);
+assert.equal(preview(), false);
 assert.equal(scheduled.length, 0);
 assert.equal(starts, 1);
 console.log('Audio preview admission, bounded replacement, readiness retirement and worker failure verified.');
