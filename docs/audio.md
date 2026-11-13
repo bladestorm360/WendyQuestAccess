@@ -16,7 +16,7 @@ The preview status reports the output mode selected for the cue. A request that 
 
 In **F8 → Audio**, **Wall sounds** and **Footstep sounds** are independent and default off. Their starting volumes are 65 and 50 percent. **Shift+H** toggles wall sounds in the field. The Audio panel offers front and left wall previews and a footstep preview.
 
-The wall tone points toward a currently blocked edge. A real step near the same edge extends the existing loop to three seconds from that step. Stepping beside a different wall or turning adjusts the bearing. The tone goes quiet when the obstacle is gone. A failed step can identify the edge but does not continually reset the timeout. The optional footstep alternates slightly left and right below Wendy for successful walking steps. Both features use native walking, including ordinary autowalk. Vehicles and scripted movement remain under their native audio.
+The wall tone points toward a currently blocked edge. A real step near the same edge extends the existing loop to three seconds from that step. Stepping beside a different wall or turning adjusts the bearing. The tone goes quiet when the obstacle is gone. A failed step can identify the edge but does not continually reset the timeout. The optional footstep plays a dry 25 ms noise click for each successful walking step. The click alternates slightly left and right below Wendy. Its short decay follows the Pixel Remaster accessibility mods, with a stepped noise texture for a retro sound. Both features use native walking, including ordinary autowalk. Vehicles and scripted movement remain under their native audio.
 
 `Game_Player.moveByInput` supplies the movement outcome at original byte 222850 of `rmmz_objects.js`. Accepted event entry at 249454 revokes both voices before native event lock. The wall owner checks up to four passage edges after movement and on a six-update cadence while its lease is live. It bounds active tile events at 32 and event slots at 513. An unchanged bearing only extends a shared deadline. The footstep observer publishes one short request for the current tile. Focus loss, native loading, menus, transfers and settings changes retire the affected output. [Wall owner](../src/world/wall-audio.js) · [Footsteps](../src/world/footsteps.js)
 
@@ -28,20 +28,20 @@ The native movement fixture verified direction, continuous extension, the three-
 
 The builder defaults to the checkout's `.deps/audio-sdk` and accepts `-AudioSdkRoot` for an equivalent local source. It verifies the key input hashes before staging the two runtime libraries and their notices in `audio-deps`. OpenAL Soft includes its MIT KEMAR measurements in the DLL. The matching corresponding-source URL and measurement attribution travel in `audio-deps/SOURCE.txt`. The Windows release must preserve those files and the SDL license. The current platform target is Windows x64. [SDL 3.4.4](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.4) · [OpenAL Soft 1.25.2 HRTF](https://github.com/kcat/openal-soft/blob/1.25.2/docs/hrtf.txt) · [MIT KEMAR measurements and terms](https://sound.media.mit.edu/resources/KEMAR.html)
 
-Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender scanned the exact payload on November 13, 2026 at 08:26 PST and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.281.0. The native files reported `NotSigned`. [Candidate, installer hashes and deployment status](deployment.md#wall-tone-fade-update)
+Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon exports `napi_register_module_v1` and imports `KERNEL32.dll`. The SDKs' static imports are Windows system libraries. Microsoft Defender scanned the exact payload on November 13, 2026 at 13:29 PST and reported no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.284.0. The native files reported `NotSigned`. [Candidate, installer hashes and deployment status](deployment.md#direction-speech-and-footstep-update)
 
 | Scanned file | SHA-256 |
 | --- | --- |
-| `WendyQuestAudio.node` | `f7c1badf84b3f60e3be624204b6355a330ccb13157fcb7c354f9cd67ef6de20b` |
+| `WendyQuestAudio.node` | `6edd790407fb444cb9269d4f0eb23294dfe7eea219c3da1a6b5b3e42e8f337f6` |
 | `SDL3.dll` | `132e7f953951944f7628861227ecaea8c37a5a484f004c2072b7f3a1c343fa73` |
 | `soft_oal.dll` | `3963b06e319180700be0bcc0d027336664bb3a4975876b4a5442f10746fab5b4` |
 | `WendyQuestSpeech.exe` | `4a8b8257359d2b2616381056485211ce4f023284c9ea780b6d0a2ed036bd3dfa` |
 | `prism.dll` | `7c7d09c8c7306e8e1a0c46d603ccb2a391c194c77843400c11b746e7dd56a467` |
-| `WendyQuestAccess.js` | `9dd5133072e9db5d65e597a8a3ef39803393dc3dc9144a9bc1d0a479c5b47300` |
+| `WendyQuestAccess.js` | `8421f78be06fca81057f4bc8c447978628970c5ff43e763e5595ba69dcd573fa` |
 | `audio-worker.cjs` | `23bcfcbd40113b9d5edfc9e4f5120360aa2fdaff48f75270ef6b616d8d1b7537` |
 | `speech-worker.cjs` | `1fe62b4525b0ae37e1460a983cfc91f0126baf2bfa4bfd1742d263a18235da7a` |
 | `route-worker.cjs` | `58c2ffd8b11b3ea1269956dc2c7d859910177c24c52f53e1d87e842c2874b83d` |
-| `speech-text.cjs` | `0a8697d8ccc5187f90af03b4d7811e6cc3f910157df76c8a822f7413139e5d92` |
+| `speech-text.cjs` | `ae566542a260b9532e6c0fe983eae9e803e070dab9f9483312ac9057e24b3b46` |
 | `routes.cjs` | `986000df9840026c3efa2dc0ad354b71632fb5710b36285604ee8772e275fb54` |
 | `walking-catalog.cjs` | `f036e3d683e667c5efee1ae89964b1db0ed125e85500bcb41f84dd2de02a45ad` |
 | `transfer-gates.cjs` | `024e7f6af78344efb093b4237440dbd231016aad6b2e3a84ac4f23a3e8397ae8` |

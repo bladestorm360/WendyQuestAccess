@@ -92,10 +92,11 @@ async function main() {
     assert.equal(first.live.terrain[0] & (MAX_CELLS - 1), 0);
     reply(first);
     f.frame();
-    assert.equal(formatSpeech(fieldSpeech()[2]), 'Wall clue. face south.');
+    assert.equal(formatSpeech(fieldSpeech()[2]), 'Face south.');
     assert.deepEqual([player._x, player._y], [26, 12]);
-    assert.equal(formatSpeech({ kind: 'routeDirections', name: 'Example', legs: [{ direction: 8, tiles: 1 },
-        { direction: 6, tiles: 3 }, { direction: 8, tiles: 4 }], facing: 2 }), 'Example. 1 north, 3 east, 4 north. face south.');
+    assert.equal(formatSpeech({ kind: 'routeDirections', name: 'Example', directionsOnly: true,
+        legs: [{ direction: 8, tiles: 1 }, { direction: 6, tiles: 3 }, { direction: 8, tiles: 4 }], facing: 2 }),
+    '1 north, 3 east, 4 north. face south.');
 
     key('l', { shiftKey: true });
     const filtered = publishBrowse();
@@ -649,10 +650,10 @@ async function verifyBeachHandoffs(tilesets) {
     assert.match(key('k', 75), /^Elder Tater, .*route stops at a floor event/);
     assert.match(key('l', 76, true), /^Exits, Elder Tater's house, .*route stops at a floor event/);
     assert.match(key('j', 74, true), /^NPC, Elder Tater, .*route stops at a floor event/);
-    assert.equal(key('p', 80), 'Elder Tater. 2 south, 2 east. Beach path one tile east. Move east to continue, then request directions again.');
+    assert.equal(key('p', 80), '2 south, 2 east. Beach path one tile east. Move east to continue, then request directions again.');
     assert.match(key('l', 76, true), /^Exits, Elder Tater's house/);
     assert.match(key('l', 76, true), /^Events, Scene trigger,/);
-    assert.equal(key('p', 80), 'Scene trigger. 1 south, 2 east. Move east to activate.');
+    assert.equal(key('p', 80), '1 south, 2 east. Move east to activate.');
     const selected = map._events[routePackets.at(-1).request.event];
     assert.equal(selected._erased, false, 'reading directions leaves the selected floor event to the player');
     selected._erased = true;
@@ -713,7 +714,7 @@ async function verifySurfaceField(tilesets) {
         f.frame();
     }
     reply(first);
-    assert.equal(formatSpeech(directions().at(-1)), 'Secret Island boat landing. 1 east.');
+    assert.equal(formatSpeech(directions().at(-1)), '1 east.');
     const pending = request();
     player._vehicleGettingOff = true;
     c.SceneManager.updateScene();
@@ -749,7 +750,7 @@ async function verifySurfaceField(tilesets) {
     assert.equal(formatSpeech(reports.at(-1)), 'Landing site changed. Request directions again.');
     landingAllowed = true;
     reply(request());
-    assert.equal(formatSpeech(directions().at(-1)), 'Nearest landing site. Press the action button to land.');
+    assert.equal(formatSpeech(directions().at(-1)), 'Press the action button to land.');
     console.log('Verified spoken sailing and airship directions, native transition gates and landing-site recheck.');
 }
 

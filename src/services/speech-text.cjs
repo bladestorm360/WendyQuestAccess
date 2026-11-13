@@ -176,7 +176,9 @@ function formatSpeech(message) {
             }
             else if (facing) parts.push(`face ${facing}`);
             if (!parts.length) parts.push('you are here');
-            text = `${name}. ${parts.join('. ')}.`;
+            const instructions = parts.join('. ') + '.';
+            text = message.directionsOnly === true ? instructions[0].toUpperCase() + instructions.slice(1) :
+                name + '. ' + instructions;
             limit = 512;
             break;
         }

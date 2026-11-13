@@ -170,6 +170,21 @@ int wmain(int argc, wchar_t** argv) {
     assert(stereo_cue(wall, Cue::wall_tone, {0, 0, -1}, 0.55, ready));
     assert(stereo_cue(foot, Cue::footstep, {0, -1, 0.15}, 0.55, ready));
     assert(energy(foot, 0) > 0 && foot != wall);
+    assert(hrtf.render(up, Cue::footstep, {-1, -0.2, 0}, 0.55, ready));
+    assert(energy(up, 0) > energy(up, 1));
+    constexpr int click_frames = rate * footstep_ms / 1000;
+    const auto tail = [](const Stereo& pcm, int frames) {
+        return std::all_of(pcm.begin() + frames * 2, pcm.end(), [](auto value) { return value == 0; });
+    };
+    assert(tail(foot, click_frames));
+    Stereo rear_foot{};
+    assert(stereo_cue(rear_foot, Cue::footstep, {0, 0, -1}, 0.55, ready));
+    assert(!tail(rear_foot, click_frames));
+    assert(tail(rear_foot, static_cast<int>(std::ceil(click_frames / rear_pitch))));
+    int changes = 0;
+    for (int i = 16; i < click_frames; i += 4)
+        if ((cue_sample(Cue::footstep, i, 1.0) < 0) != (cue_sample(Cue::footstep, i - 4, 1.0) < 0)) ++changes;
+    assert(changes > 90);
     for (const bool spatial : {false, true}) {
         if (spatial) assert(hrtf.render(wall, Cue::wall_tone, {1, 0, 0}, 0.55, ready));
         // A seam is one normal sample-to-sample step, including the
@@ -209,6 +224,7 @@ int wmain(int argc, wchar_t** argv) {
     const auto expired = device.callbacks();
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     assert(device.callbacks() == expired);
+    std::puts("Verified the 25 ms footstep noise click, HRTF placement, and stereo rear pitch.");
     std::puts("Verified periodic stereo/HRTF seams, concurrent footstep and wall voices, the 500 ms wall fade and independent expiry.");
     std::printf("Verified built-in HRTF, full rear-pitch fallback and SDL dummy output generation. Loopback init %.1f ms, five cues %.1f ms.\n",
         std::chrono::duration<double, std::milli>(initialized - begin).count(),

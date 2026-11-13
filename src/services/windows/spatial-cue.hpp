@@ -8,6 +8,7 @@
 namespace wqa::audio {
 constexpr int rate = 48000;
 constexpr int cue_frames = 4320;
+constexpr int footstep_ms = 25;
 constexpr int render_frames = cue_frames + 256;
 constexpr double rear_pitch = 0.72;
 constexpr double tau = 6.283185307179586;
@@ -64,9 +65,18 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
         return 0.24 * std::sin(phase) + 0.08 * std::sin(2.0 * phase);
     }
     if (cue == Cue::footstep) {
-        const auto phase = tau * pitch * time;
-        return envelope * std::exp(-58.0 * time) *
-            (0.44 * std::sin(145.0 * phase) + 0.22 * std::sin(492.0 * phase) + 0.14 * std::sin(1085.0 * phase));
+        // Short noise click in the style of the Pixel Remaster footstep.
+        // Hold each noise value for four source samples for a coarse texture.
+        constexpr int length = rate * footstep_ms / 1000;
+        const double source = frame * pitch;
+        if (source >= length) return 0.0;
+        uint32_t noise = (static_cast<uint32_t>(source / 4) + 1u) * 0x9e3779b9u;
+        noise ^= noise >> 16;
+        noise *= 0x7feb352du;
+        noise ^= noise >> 15;
+        const double value = (noise >> 24) / 127.5 - 1.0;
+        const double onset = std::min(1.0, source / 16.0);
+        return 0.30 * onset * value * std::exp(-8.0 * source / length);
     }
     if (cue >= Cue::battle_lead && cue <= Cue::battle_ice) {
         const double frequency = cue == Cue::battle_lead ? 440.0 : cue == Cue::battle_power ? 625.0 :

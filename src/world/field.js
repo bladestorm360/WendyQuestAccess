@@ -138,6 +138,10 @@ function createField(root, host, notifications) {
         if (active !== job) return;
         job.scene._wqaInteractionDeferred = false;
         if (!ready(job.scene, moving)) return;
+        // Arrival and stop reports have their own command owner. Only
+        // the requested route omits its heading in speech.
+        if (job.action === 'directions' && record.kind === 'routeDirections')
+            record = { ...record, directionsOnly: true };
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
             (!job.entrance || transfers.current(job.entrance)) &&
@@ -314,15 +318,15 @@ function createField(root, host, notifications) {
                     activate, boundaryName: handoff || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
                     manualHandoff: !!handoff, more: result.more === true });
             }
-            else if (result?.status === 'approachBlocked') status(job, 'A floor event blocks the approach to ' + job.label);
+            else if (result?.status === 'approachBlocked') status(job, 'A floor event blocks the approach');
             else if (job.remote && ['unreachable', 'unavailable'].includes(result?.status))
-                status(job, 'No verified reachable entrance for ' + job.remote.bookmark.name);
+                status(job, 'No verified reachable entrance');
             else if (result?.status === 'unreachable') {
-                const prefix = job.mode === 'walk' ? 'No walkable route to ' : job.mode === 'airship' ?
-                    'No connected landing for ' : 'No sailing route to ';
-                status(job, job.nearestLanding ? 'No landing site is available' : prefix + job.label);
+                const reason = job.mode === 'walk' ? 'No walkable route' : job.mode === 'airship' ?
+                    'No connected landing' : 'No sailing route';
+                status(job, job.nearestLanding ? 'No landing site is available' : reason);
             }
-            else if (result?.status === 'unavailable') status(job, 'Directions unavailable for ' + job.label);
+            else if (result?.status === 'unavailable') status(job, 'Directions unavailable');
             else retire(job.scene);
         } else if (navigationRequest(active) && ready(active.scene)) afterRender();
     }
@@ -446,9 +450,9 @@ function createField(root, host, notifications) {
         owner.remoteBookmark = null;
         if (localLandingAvailable(snapshot.map, snapshot.mode, bookmark))
             return job.action === 'directions' ? localLandingDirections(job, snapshot, bookmark) : status(job, display);
-        const reason = !sameMode ? ' Use the saved travel mode for directions.' :
-            sameMap ? ' Destination currently unavailable.' : ' Entrance directions are unavailable here.';
-        return status(job, display + reason);
+        const reason = !sameMode ? 'Use the saved travel mode for directions.' :
+            sameMap ? 'Destination currently unavailable.' : 'Entrance directions are unavailable here.';
+        return status(job, job.action === 'directions' ? reason : display + ' ' + reason);
     }
 
     function localLandingDirections(job, snapshot, bookmark) {
@@ -473,7 +477,7 @@ function createField(root, host, notifications) {
             destination ??= { event: id, waypoint: job.quest?.waypoint === true };
         }
         const edge = snapshot.mode === 'ship' ? transfers.islandLanding() : null;
-        if (snapshot.mode === 'ship' && !edge) return status(job, 'No verified boat landing for ' + bookmark.name);
+        if (snapshot.mode === 'ship' && !edge) return status(job, 'No verified boat landing');
         job.label = edge ? edge.name + ' toward ' + bookmark.name : 'Landing for ' + bookmark.name;
         job.target = edge?.event ?? destination.event;
         job.nearestLanding = !edge && !destination.event;
@@ -529,7 +533,7 @@ function createField(root, host, notifications) {
         const landing = snapshot.mode === 'airship';
         const current = landing ? ground : entrances;
         const island = snapshot.mode === 'ship' && ground.length ? transfers.islandLanding() : null;
-        if (!current.length && !island) return status(job, 'No verified reachable entrance for ' + bookmark.name);
+        if (!current.length && !island) return status(job, 'No verified reachable entrance');
         job.label = 'Entrance for ' + bookmark.name;
         const trail = [...new Set([...selection.trail, tileKey(snapshot.map, snapshot.x, snapshot.y)])];
         job.remote = { bookmark, entrances: current, ground, island, state, selection: { ...selection, trail } };

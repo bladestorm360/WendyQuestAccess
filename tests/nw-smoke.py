@@ -2090,7 +2090,7 @@ def main():
         if [item.get('name') for item in (first, second, third)] != ['Synthetic wall', 'Synthetic switch', 'Synthetic wall'] or \
                 any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
             raise RuntimeError(f'NW field selection or layout priority failed: {data}')
-        if any(item['kind'] != 'routeDirections' or item['speech'] != 'Synthetic wall. 1 east. face east.'
+        if any(item['kind'] != 'routeDirections' or item['speech'] != '1 east. face east.'
                for item in (route, pad_route)):
             raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
@@ -2098,7 +2098,7 @@ def main():
         browse_receipt_ms = float(receipt.with_suffix('.json.browse-receipt-ms').read_text(encoding='utf8'))
         if receipt.with_suffix('.json.autowalk').read_text(encoding='utf8') != 'At Synthetic wall. face east.':
             raise RuntimeError('NW autowalk did not announce its verified arrival')
-        if receipt.with_suffix('.json.autowalk-path').read_text(encoding='utf8') != 'Synthetic wall. 1 east. face east.' or \
+        if receipt.with_suffix('.json.autowalk-path').read_text(encoding='utf8') != '1 east. face east.' or \
                 receipt.with_suffix('.json.autowalk-stop').read_text(encoding='utf8') != 'Autowalk stopped.':
             raise RuntimeError('NW autowalk narration or explicit stop failed')
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
@@ -2137,18 +2137,18 @@ def main():
             'quest-detail': 'Synthetic quest. A shown clue. 1 of 2',
             'quest-restore-focus': 'Quest objective. Recovered clue. 0 of 1',
             'quest-nav-target': 'Quests, Synthetic quest anchor, 2 east',
-            'quest-nav-route': 'Synthetic quest anchor. 1 east. face east.',
+            'quest-nav-route': '1 east. face east.',
             'quest-nav-unavailable': 'Selected destination is unavailable',
-            'bookmark-route': 'Return marker. 1 north.',
+            'bookmark-route': '1 north.',
             'bookmark-browse': 'Bookmarks, Return marker, 1 north',
             'bookmark-arrival': 'At Return marker. you are here.',
             'bookmark-entity': 'Objects, Synthetic quest anchor, 2 east',
-            'cross-map-entrance': 'Entrance for Return marker. Move east to activate.',
+            'cross-map-entrance': 'Move east to activate.',
             'cross-map-event': 'Events, Scene trigger, 1 east',
-            'cross-map-event-route': 'Scene trigger. Move east to activate.',
+            'cross-map-event-route': 'Move east to activate.',
             'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
-            'cross-map-next': 'Next entrance toward Return marker. Move east to activate.',
-            'cross-map-arrived': 'Return marker. you are here.',
+            'cross-map-next': 'Move east to activate.',
+            'cross-map-arrived': 'You are here.',
             'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',
             'battle-hp': 'Synthetic hero. HP 8 of 14',
             'battle-log-auto': 'Synthetic turn result.',

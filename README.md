@@ -5,7 +5,7 @@ Launch WendyQuest through Steam. Press **F8** to open accessibility settings. Us
 ## Field controls
 
 - Use the game’s arrow keys or WASD to move. Use Enter or Space to interact when the game shows its prompt.
-- In the default Letters layout, press **J** or **L** to browse destinations. Use **Shift+J** or **Shift+L** to change category, **K** to read the selection and **P** for directions. Destinations are ordered by proximity, with your selection kept as you move.
+- In the default Letters layout, press **J** or **L** to browse destinations. Use **Shift+J** or **Shift+L** to change category, **K** to read the selection and **P** for route instructions. Destinations are ordered by proximity, with your selection kept as you move.
 - **All** combines available destinations and saved bookmarks. **NPC** lists available characters. **Events** gives directions to reachable scene triggers. Follow a marked trigger from **Quests**. Books, barrels and treasure use type labels. If a Crispy Beach route stops at a floor event, take the final step manually and request directions again after control returns. Save and load bookmarks under **Navigation → Bookmarks**.
 - Press **M** for the current map name or **Q** for the visible quest objective and count. The mod also announces named maps as you enter them.
 - Press **R** to repeat dialogue, **I** to read available details and **Shift+G** for supported puzzle guidance.
