@@ -82,7 +82,7 @@ struct Owner {
         if (owner->reference) owner->api.napi_delete_reference(owner->env, owner->reference);
     }
 
-    int play(LONG epoch, bool use_hrtf, int cue, Bearing p, double gain) {
+    int play(LONG epoch, bool use_hrtf, int cue, Bearing p, double gain, double pitch) {
         const auto ready = [&] { return admitted(generation, epoch); };
         if (!ready()) return 0;
         if (device_failed || dependencies.empty()) return -1;
@@ -108,8 +108,8 @@ struct Owner {
         Stereo samples{};
         p = normalized(p);
         const auto sound = static_cast<Cue>(cue);
-        const bool rendered = use_hrtf && hrtf_ready && hrtf->render(samples, sound, p, gain, ready);
-        if (!rendered && !stereo_cue(samples, sound, p, gain, ready)) return 0;
+        const bool rendered = use_hrtf && hrtf_ready && hrtf->render(samples, sound, p, gain, ready, pitch);
+        if (!rendered && !stereo_cue(samples, sound, p, gain, ready, pitch)) return 0;
         if (!device->publish(epoch, samples)) return ready() ? -1 : 0;
         return rendered ? 2 : 1;
     }
@@ -146,19 +146,21 @@ Value attach(Env env, Info info) {
 }
 
 Value play(Env env, Info info) {
-    std::array<Value, 7> args{};
+    std::array<Value, 8> args{};
     const auto owner = arguments(env, info, args);
     if (!owner) return nullptr;
     int32_t epoch = 0, hrtf = 0, cue = 0;
     Bearing p{};
-    double gain = 0;
+    double gain = 0, pitch = 1;
     auto& api = owner->api;
     if (api.napi_get_value_int32(env, args[0], &epoch) || api.napi_get_value_int32(env, args[1], &hrtf) ||
         api.napi_get_value_int32(env, args[2], &cue) || cue < -1 || cue >= static_cast<int>(Cue::count) ||
         api.napi_get_value_double(env, args[3], &p.right) || api.napi_get_value_double(env, args[4], &p.up) ||
         api.napi_get_value_double(env, args[5], &p.forward) || api.napi_get_value_double(env, args[6], &gain) ||
+        api.napi_get_value_double(env, args[7], &pitch) ||
+        !std::isfinite(pitch) || pitch < 0.75 || pitch > 1.25 ||
         !std::isfinite(gain) || gain < 0.0 || gain > 1.0) return number(*owner, -1);
-    try { return number(*owner, owner->play(epoch, hrtf == 1, cue, p, gain)); }
+    try { return number(*owner, owner->play(epoch, hrtf == 1, cue, p, gain, pitch)); }
     catch (...) { return number(*owner, -1); }
 }
 }

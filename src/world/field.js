@@ -260,7 +260,8 @@ function createField(root, host, notifications) {
                 follow(job, result, { kind: 'routeDirections', name: job.label,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
                     reenter: result.reenter === true, enter: job.entrance?.action,
-                    sailing: job.entrance?.mode === 'ship',
+                    sailing: job.mode === 'ship' || job.mode === 'boat',
+                    bump: job.eventAction === 'bump',
                     conversation: job.eventAction === 'talk',
                     board: !!job.vehicle, land: result.land === true,
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
@@ -334,6 +335,7 @@ function createField(root, host, notifications) {
         if (target.point) return { targetX: target.x, targetY: target.y };
         return { event: target.nearestLanding ? undefined : (target.event ?? target.id),
             vehicle: target.vehicle, entryDirection: target.entryDirection,
+            bumpDirections: target.eventAction === 'bump' ? target.bumpDirections ?? 15 : undefined,
             waypoint: target.waypoint === true || target.quest?.waypoint === true,
             nearestLanding: target.nearestLanding === true,
             ...(target.handoffs ? { handoffs: target.handoffs } : {}) };
@@ -417,9 +419,12 @@ function createField(root, host, notifications) {
                 job.quest = collectQuestDestinations(root, job.scene, 'walk')?.get(id);
                 if (!job.quest) return status(job, 'Saved destination is unavailable');
                 job.scene._wqaQuestNavigation = true;
-            } else if (eventTarget(root, 'walk', event, entry, page)?.category !== bookmark.category)
-                return status(job, 'Saved destination is unavailable');
-            destination = { event: id, waypoint: job.quest?.waypoint === true };
+            } else {
+                const target = eventTarget(root, 'walk', event, entry, page);
+                if (target?.category !== bookmark.category) return status(job, 'Saved destination is unavailable');
+                destination = destinationRequest({ ...target, id });
+            }
+            destination ??= { event: id, waypoint: job.quest?.waypoint === true };
         }
         const edge = snapshot.mode === 'ship' ? transfers.islandLanding() : null;
         if (snapshot.mode === 'ship' && !edge) return status(job, 'No verified boat landing for ' + bookmark.name);

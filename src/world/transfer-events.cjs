@@ -482,4 +482,4 @@ function cauldronIntroductionFinished(root) {
 }
 
 module.exports = { houseStair, houseBranches, transferOptions, catalogTransferOptions, cauldronIntroductionFinished,
-    SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount, worldDiscovery };
+    SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount, worldDiscovery, worldFacingEntrances };

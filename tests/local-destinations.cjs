@@ -5,7 +5,7 @@ const { captureWorld } = require('../src/world/snapshot');
 const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
-async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker) {
+async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, commonEvents) {
     const inBattle = c.$gameParty.inBattle;
     c.$gameParty.inBattle = () => false;
     c.$gameMessage = { isBusy: () => false };
@@ -213,6 +213,71 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker) {
     assert.equal(opened.gameMap._events[17]._pageIndex, 2);
     assert.equal(opened.player.canPass(24, 25, 8), true);
     c.$gameParty.members = partyMembers;
+
+    const common = c.$dataCommonEvents;
+    c.$dataCommonEvents = commonEvents;
+    for (const [map, id, x, y, kind, switches] of [
+        [12, 27, 2, 22, 'exits'], [25, 13, 23, 36, 'exits'], [27, 17, 21, 47, 'exits'],
+        [27, 44, 21, 47, 'exits'], [48, 3, 56, 7, 'exits'], [48, 4, 56, 7, 'exits'],
+        [48, 10, 30, 8, 'exits'], [48, 16, 34, 30, 'exits'], [76, 64, 15, 1, 'vehicles', [97, 267]],
+        [83, 27, 12, 19, 'exits'], [113, 59, 39, 26, 'exits'], [113, 60, 39, 26, 'exits'],
+        [113, 63, 41, 39, 'exits'], [113, 64, 39, 39, 'exits'], [116, 8, 5, 6, 'exits'],
+        [117, 11, 8, 12, 'exits'], [119, 3, 9, 11, 'exits'],
+        [58, 37, 6, 4, 'events', [462]], [58, 38, 6, 4, 'events', [462]], [58, 39, 6, 4, 'events', [462]],
+        [76, 64, 15, 1, 'events', [97]]
+    ]) {
+        const f = load(map, { switches });
+        const { gameMap, player, geometry } = f;
+        player.setPosition(x, y);
+        const view = captureWorld(c);
+        const target = view.objects.find(item => item.id === id && item.category === kind);
+        assert.equal(target?.eventAction, 'bump', `map ${map}, event ${id}`);
+        if (kind === 'events') assert.equal(target.name, 'Scene trigger');
+        const request = { x, y, event: id, bumpDirections: target.bumpDirections ?? 15, field: true };
+        const route = solveRoute(geometry, view.live, request);
+        assert.equal(route.status, 'ready', `map ${map}, event ${id} from ${x},${y}`);
+        assert.equal(findReachable(geometry, view.live, { x, y, candidates: [request] }).available[0], 1);
+        if (map === 116) {
+            assert.equal(target.name, 'Return to Crispy Beach');
+            await verifyWorker(f, { ...request, autowalk: true }, view.live, output => {
+                assert.deepEqual(output.arrival, route.arrival);
+                assert.equal(output.course.length, route.distance);
+                assert(!output.autowalkStop);
+            });
+        }
+        if (map === 113 && id === 59) {
+            assert.equal(route.arrival.facing, 8);
+            assert.notEqual(solveRoute(geometry, view.live, { ...request, bumpDirections: 1 }).status, 'ready');
+        }
+        verifyRoute(f, { x, y, targetX: route.arrival.x, targetY: route.arrival.y }, route);
+        const { x: atX, y: atY, facing } = route.arrival;
+        player.setPosition(atX, atY);
+        player.facing = facing;
+        assert(!player.canPass(atX, atY, facing));
+        player.checkEventTriggerTouch(gameMap.roundXWithDirection(atX, facing), gameMap.roundYWithDirection(atY, facing));
+        assert.equal(gameMap.events().find(event => event.isStarting())?.eventId(), id);
+        assert.match(formatSpeech({ kind: 'routeDirections', name: target.name, legs: route.legs.slice(0, 8), facing,
+            bump: true }), /Move (north|south|east|west) to activate/);
+    }
+
+    const shore = load(113);
+    shore.player.setPosition(46, 0);
+    const shoreline = captureWorld(c);
+    const fromShore = { x: shoreline.x, y: shoreline.y, event: 94, field: true, stopBeforeEvent: true };
+    assert(shoreline.objects.some(item => item.id === 94 && item.category === 'events' && item.name === 'Scene trigger'));
+    assert.deepEqual([...findReachable(shore.geometry, shoreline.live, { ...fromShore,
+        candidates: [{ event: 94, entryDirection: 4 }, { event: 94 }] }).available], [0, 1]);
+    const shoreRoute = solveRoute(shore.geometry, shoreline.live, fromShore);
+    assert.equal(shoreRoute.status, 'interrupted');
+    assert.equal(shoreRoute.boundary, 2);
+    assert.equal(shoreRoute.boundaryEvent, 94);
+
+    const unlocked = load(113, { switches: [221] });
+    unlocked.player.setPosition(46, 0);
+    const closedDock = captureWorld(c).objects.filter(item => item.id === 94);
+    assert.deepEqual(closedDock.map(item => item.category), ['events'], 'an active floor touch does not promise boarding');
+    c.$dataCommonEvents = common;
+    console.log('Verified all audited solid transfers, native approach directions, and the generic Cauldron and dock entries.');
 
     delete c.$gameSwitches.setValue;
     delete c.$gameSelfSwitches.setValue;

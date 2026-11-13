@@ -98,12 +98,12 @@ inline std::int16_t sample16(double value) {
 }
 
 template<class Ready>
-bool stereo_cue(Stereo& output, Cue cue, Bearing bearing, double gain, Ready ready) {
+bool stereo_cue(Stereo& output, Cue cue, Bearing bearing, double gain, Ready ready, double rate_scale = 1.0) {
     const auto horizontal = std::hypot(bearing.right, bearing.forward);
     const auto pan = horizontal < 1e-6 ? 0.0 : bearing.right / horizontal;
     const auto left = gain * std::sqrt(std::max(0.0, (1.0 - pan) * 0.5));
     const auto right = gain * std::sqrt(std::max(0.0, (1.0 + pan) * 0.5));
-    const auto pitch = bearing.forward < 0.0 ? rear_pitch : 1.0;
+    const auto pitch = rate_scale * (bearing.forward < 0.0 ? rear_pitch : 1.0);
     for (int i = 0; i < cue_frames; ++i) {
         if ((i % 128) == 0 && !ready()) return false;
         const auto sample = cue_sample(cue, i, pitch);

@@ -27,6 +27,20 @@ const EXITS = {
     205: { 8: ['Return to Caffeine Caverns', 87], 12: ['Return to Caffeine Caverns', 87] }
 };
 
+// These audited normal-priority pages start when the player tries to move
+// into the event. Keep their destinations tied to the active native page.
+const TOUCH_TRANSFERS = {
+    12: { 27: ["Frygor's house", 117] },
+    25: { 13: ["Frostyna's house", 119] },
+    27: { 17: ['Frosty Peak cave', 37], 44: ['Cold Brew Trail cave', 204] },
+    48: { 3: ['Return to Nuggedor', 45, 59], 4: ['Return to Nuggedor', 45, 59],
+        10: ['Return to Nuggedor', 45, 59], 16: ['Return to Nuggedor', 45, 59] },
+    83: { 27: ["Frygor's house", 23] },
+    116: { 8: ['Return to Crispy Beach', 13] },
+    117: { 11: ['Return to Russetwood', 12] },
+    119: { 3: ['Return to Chillcrest', 25] }
+};
+
 const PULLS = { 51: [2], 53: [3, 4], 55: [4] };
 
 // Only these authored Crispy Beach floor events can qualify a route up to
@@ -55,6 +69,22 @@ function localDestination(root, event, page) {
         const open = root.$gameSwitches?.value?.(stairs.switchId);
         if (typeof open !== 'boolean') return null;
         return { name: open ? 'Secret room stairs' : stairs.floor, category: 'exits' };
+    }
+    if (event._pageIndex === 0 && trigger === 1 && event._priorityType === 1) {
+        if (map === 58 && id >= 37 && id <= 39 && list.some(command =>
+            command.code === 201 && command.indent === 0 && command.parameters[0] === 0 && command.parameters[1] === 57))
+            return { name: 'Scene trigger', category: 'events', eventAction: 'bump' };
+        if (map === 76 && id === 64 && list.some(command =>
+            command.code === 201 && command.indent === 0 && command.parameters[0] === 0 && command.parameters[1] === 112)) {
+            // The first native branch turns Wendy away until switch 267 is on.
+            return root.$gameSwitches?.value?.(267) === true
+                ? { name: 'Board airship', category: 'vehicles', eventAction: 'bump' }
+                : { name: 'Scene trigger', category: 'events', eventAction: 'bump' };
+        }
+        const transfer = TOUCH_TRANSFERS[map]?.[id];
+        if (transfer && list.some(command => command.code === 201 && command.parameters[0] === 0 &&
+            transfer.includes(command.parameters[1], 1)))
+            return { name: transfer[0], category: 'exits', eventAction: 'bump' };
     }
     const exit = EXITS[map]?.[id];
     if (exit) {

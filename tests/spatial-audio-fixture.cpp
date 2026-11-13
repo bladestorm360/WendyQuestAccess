@@ -119,6 +119,26 @@ int wmain(int argc, wchar_t** argv) {
         for (size_t earlier = 0; earlier < i; ++earlier) assert(battle_cues[earlier] != ahead);
     }
 
+    // The meter's approach notes change pitch through each output path.
+    for (const bool spatial : {false, true}) {
+        Stereo low{}, high{};
+        const Bearing forward{0, 0, 1};
+        if (spatial) {
+            assert(hrtf.render(low, Cue::battle_lead, forward, 0.65, ready, 0.85));
+            assert(hrtf.render(high, Cue::battle_lead, forward, 0.65, ready, 1.13));
+        } else {
+            assert(stereo_cue(low, Cue::battle_lead, forward, 0.65, ready, 0.85));
+            assert(stereo_cue(high, Cue::battle_lead, forward, 0.65, ready, 1.13));
+        }
+        const auto rising = [](const Stereo& pcm) {
+            int count = 0;
+            for (int i = 600; i < 1400; ++i)
+                if (pcm[i * 2] > 0 && pcm[(i - 1) * 2] <= 0) count++;
+            return count;
+        };
+        assert(rising(high) > rising(low));
+    }
+
     // The build runner sets SDL_AUDIO_DRIVER=dummy for this process only.
     // The real SDL driver callback consumes the pre-rendered PCM.
     volatile LONG generation = 1;

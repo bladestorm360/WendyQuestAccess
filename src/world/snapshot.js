@@ -3,7 +3,7 @@
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination, eventDescription } = require('./destinations');
 const { localDestination } = require('./local-destinations');
-const { worldDestination, discoveryEntrance } = require('./world-destinations');
+const { worldDestination, worldEventDescription, discoveryEntrance } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
@@ -103,14 +103,16 @@ function captureWorld(root, routing = true, label, scene, bookmarks = []) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
         }
-        if (eventBrowser) {
-            const description = eventDescription(entry, page, event, target);
+        if (target?.category !== 'events') {
+            const description = worldEventDescription(root, mode, event, page) ||
+                (eventBrowser && eventDescription(entry, page, event, target));
             if (description) objects.push({ id: eventId, x, y, ...description });
         }
         const quest = quests?.get(eventId);
         if (quest && target !== null && (mode !== 'airship' || target?.category === 'exits')) {
             objects.push({ id: eventId, x, y, name: questDestinationLabel(entry, quest, target), category: 'quests',
-                entryDirection: target?.entryDirection, handoffs: target?.handoffs, quest });
+                entryDirection: target?.entryDirection, eventAction: target?.eventAction, bumpDirections: target?.bumpDirections,
+                handoffs: target?.handoffs, quest });
         }
     }
     if (mode === 'walk') objects.push(...boardingTargets(map));

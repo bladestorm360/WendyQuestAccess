@@ -2,12 +2,14 @@
 
 const { battlePresented, visibleSprite } = require('./presentation');
 
-// The earlier tone lets the player anticipate the tap tone. The tap tone is
-// requested shortly before the center to allow for a native frame and audio
-// submission. Both offsets are checked in the timed fixture and gameplay.
+// Short notes leave room for the native wind-up and input. The high note
+// starts shortly before the center to allow for frame and audio submission.
 const LEAD_SECONDS = 0.19;
+const NEAR_SECONDS = 0.10;
 const TAP_SECONDS = 0.034;
+const FALL_SECONDS = 0.10;
 const MAX_REQUEST_MS = 90;
+const NOTE_PITCH = [0, 0.85, 1.13, 1.16, 1.13, 0.85];
 const SOURCE = 'battleTiming';
 
 function secondsTo(progress, target, duration, slowStart, slowEnd) {
@@ -21,7 +23,7 @@ function timingWindow(start, end, limit, iceStart, iceEnd) {
     if (start < Math.min(end, limit)) return [Math.max(0, start), Math.min(end, limit)];
     // The game can show a sweep without a highlighted success band. Use its
     // last safe visible approach as a timing reference in that case.
-    return [Math.max(0, limit - 0.08), limit];
+    return [Math.max(0, limit - 0.14), limit - 0.04];
 }
 
 function createBattleCues(root, host, audio, preferences) {
@@ -91,28 +93,34 @@ function createBattleCues(root, host, audio, preferences) {
                 if (!(upper > lower)) return;
                 window = current.window = { kind, center: (lower + upper) / 2, upper, stage: 0 };
             }
-            if (progress >= window.upper) {
-                if (window.stage !== 3) audio.retire(scene, SOURCE);
-                window.stage = 3;
-                return;
-            }
-            if (window.stage >= 2) return;
             const slow = frosty && end > start;
             const slowStart = slow ? start : 0;
             const slowEnd = slow ? end : 0;
             const remaining = secondsTo(progress, window.center, duration, slowStart, slowEnd);
-            if (remaining > LEAD_SECONDS || (window.stage === 1 && remaining > TAP_SECONDS)) return;
+            const untilUpper = secondsTo(progress, window.upper, duration, slowStart, slowEnd);
+            const after = (progress - window.upper) * duration;
+            const stage = progress >= window.upper ? (after >= FALL_SECONDS ? 5 : 4) :
+                remaining <= TAP_SECONDS ? 3 : remaining <= NEAR_SECONDS ? 2 : remaining <= LEAD_SECONDS ? 1 : 0;
+            if (stage <= window.stage) return;
+            window.stage = stage;
+            const afterWindow = stage >= 4;
+            if (afterWindow && (progress >= limit || ice)) {
+                audio.retire(scene, SOURCE);
+                return;
+            }
             const config = enabled();
             if (!config || !ready(scene, action)) return retire(scene);
-            const tap = remaining <= TAP_SECONDS;
-            window.stage = tap ? 2 : 1;
-            const expires = host.now() + Math.min(MAX_REQUEST_MS,
-                secondsTo(progress, window.upper, duration, slowStart, slowEnd) * 1000);
+            // Only the high note means press. A falling pair indicates a
+            // window that was passed while the native sweep kept moving.
+            const note = stage === 3 ? kind : audio.cues.battleLead;
+            const pitch = NOTE_PITCH[stage];
+            const remainingMs = (afterWindow ? (limit - progress) * duration : untilUpper) * 1000;
+            const expires = host.now() + Math.min(MAX_REQUEST_MS, remainingMs);
             const angle = Math.PI * (phase === 0 ? 1 + window.center : 2 - window.center);
-            audio.play(scene, config.hrtf, tap ? kind : audio.cues.battleLead, config.battleTimingVolume / 100,
+            audio.play(scene, config.hrtf, note, config.battleTimingVolume / 100,
                 [Math.cos(angle), -Math.sin(angle), 1],
-                () => owner === current && current.window === window && window.stage < 3 &&
-                    host.now() < expires && ready(scene, action), undefined, SOURCE);
+                () => owner === current && current.window === window && window.stage === stage &&
+                    host.now() < expires && ready(scene, action), undefined, SOURCE, pitch);
         },
         endSweep,
         retire

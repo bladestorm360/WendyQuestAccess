@@ -25,11 +25,11 @@ const audio = {
     cues: CUE,
     isPrepared: () => prepared,
     prepare(_scene, _hrtf, ready, complete) { preparedReady = ready; preparedComplete = complete; return true; },
-    play(_scene, hrtf, cue, gain, bearing, ready) {
+    play(_scene, hrtf, cue, gain, bearing, ready, _complete, _source, pitch) {
         assert(ready());
         assert.equal(hrtf, true);
         assert.equal(gain, 0.65);
-        beats.push({ cue, at: now, progress: samples.at(-1)?.progress, bearing });
+        beats.push({ cue, at: now, progress: samples.at(-1)?.progress, bearing, pitch });
         latest = ready;
         return true;
     },
@@ -92,37 +92,49 @@ function run(method, scenario, play) {
 const ordinaryPower = { settings: {}, press: [774], lower: 0.9, upper: 1, iceStart: 0.4, iceEnd: 0.55 };
 const ordinary = run('observedPower', ordinaryPower, true);
 assert.deepEqual(ordinary.outcome, run('nativePower', ordinaryPower, false).outcome);
-assert.deepEqual(ordinary.beats.map(beat => beat.cue), [CUE.battleLead, CUE.battlePower]);
-assert(ordinary.beats[0].at + 110 < ordinary.beats[1].at);
-assert(ordinary.beats[1].progress >= 0.90 && ordinary.beats[1].progress < 0.98);
-assert(ordinary.beats[1].bearing[0] > 0.85);
+assert.deepEqual(ordinary.beats.map(beat => beat.cue), [CUE.battleLead, CUE.battleLead, CUE.battlePower]);
+assert(ordinary.beats[0].at + 110 < ordinary.beats[2].at);
+assert(ordinary.beats[0].pitch < ordinary.beats[1].pitch);
+assert(ordinary.beats[2].progress >= 0.90 && ordinary.beats[2].progress < 0.98);
+assert(ordinary.beats[2].bearing[0] > 0.85);
 assert.equal(latest, null, 'native sweep exit clears active output');
 
 const accuracy = { ...ordinaryPower, press: [760] };
 const second = run('observedAccuracy', accuracy, true);
 assert.deepEqual(second.outcome, run('nativeAccuracy', accuracy, false).outcome);
-assert.deepEqual(second.beats.map(beat => beat.cue), [CUE.battleLead, CUE.battleAccuracy]);
-assert(second.beats[1].progress > 0.88 && second.beats[1].progress < 0.95);
-assert(second.beats[1].bearing[0] < -0.85);
+assert.deepEqual(second.beats.map(beat => beat.cue), [CUE.battleLead, CUE.battleLead, CUE.battleAccuracy]);
+assert(second.beats[2].progress > 0.88 && second.beats[2].progress < 0.95);
+assert(second.beats[2].bearing[0] < -0.85);
 assert.equal(scene._wqaBattleCueActive, false);
+
+const mid = { ...accuracy, lower: 0.45, upper: 0.58, press: [690] };
+const middle = run('observedAccuracy', mid, true);
+assert.deepEqual(middle.outcome, run('nativeAccuracy', mid, false).outcome);
+assert.deepEqual(middle.beats.map(beat => beat.cue),
+    [CUE.battleLead, CUE.battleLead, CUE.battleAccuracy, CUE.battleLead, CUE.battleLead]);
+assert.deepEqual(middle.beats.map(beat => beat.pitch), [0.85, 1.13, 1.16, 1.13, 0.85]);
+assert(middle.beats[2].progress >= mid.lower && middle.beats[2].progress < mid.upper);
+assert(middle.beats[3].progress >= mid.upper);
+assert(middle.beats[4].progress > middle.beats[3].progress);
+assert.equal(latest, null);
 
 const frozen = { ...ordinaryPower, settings: { Frozen: true }, press: [410, 1274] };
 const ice = run('observedPower', frozen, true);
 assert.deepEqual(ice.outcome, run('nativePower', frozen, false).outcome);
-assert.deepEqual(ice.beats.map(beat => beat.cue), [CUE.battleLead, CUE.battleIce, CUE.battleLead, CUE.battlePower]);
-assert(ice.beats[1].progress >= 0.4 && ice.beats[1].progress < 0.55);
-assert(ice.beats[2].at > ice.beats[1].at + 500);
+assert.deepEqual(ice.beats.map(beat => beat.cue), [CUE.battleLead, CUE.battleLead, CUE.battleIce, CUE.battleLead, CUE.battleLead, CUE.battlePower]);
+assert(ice.beats[2].progress >= 0.4 && ice.beats[2].progress < 0.55);
+assert(ice.beats[3].at > ice.beats[2].at + 500);
 assert(ice.samples.some(sample => sample.paused), 'the native break pause is exercised');
 const iceAccuracy = { ...frozen, press: [410, 1260] };
 const frozenSecond = run('observedAccuracy', iceAccuracy, true);
 assert.deepEqual(frozenSecond.outcome, run('nativeAccuracy', iceAccuracy, false).outcome);
 assert.deepEqual(frozenSecond.beats.map(beat => beat.cue),
-    [CUE.battleLead, CUE.battleIce, CUE.battleLead, CUE.battleAccuracy]);
+    [CUE.battleLead, CUE.battleLead, CUE.battleIce, CUE.battleLead, CUE.battleLead, CUE.battleAccuracy]);
 
 const frosty = { ...ordinaryPower, settings: { Frosty: true }, press: [1070] };
 const slower = run('observedPower', frosty, true);
 assert.deepEqual(slower.outcome, run('nativePower', frosty, false).outcome);
-assert(slower.beats.find(beat => beat.cue === CUE.battlePower).at > ordinary.beats[1].at + 200);
+assert(slower.beats.find(beat => beat.cue === CUE.battlePower).at > ordinary.beats[2].at + 200);
 
 const soggy = { ...ordinaryPower, settings: { Soggy: true, Wobble: 0.35 }, press: [] };
 const reduced = run('observedPower', soggy, true);
@@ -130,7 +142,9 @@ assert.deepEqual(reduced.outcome, run('nativePower', soggy, false).outcome);
 assert(reduced.beats.some(beat => beat.cue === CUE.battlePower && beat.progress < 0.75));
 
 const missingBand = { ...accuracy, lower: 1, upper: 1 };
-assert.deepEqual(run('observedAccuracy', missingBand, true).beats.map(beat => beat.cue), [CUE.battleLead, CUE.battleAccuracy]);
+const reference = run('observedAccuracy', missingBand, true);
+assert.deepEqual(reference.beats.map(beat => beat.cue), [CUE.battleLead, CUE.battleLead, CUE.battleAccuracy]);
+assert(reference.beats[2].progress < 0.94, 'no-band cue leaves time before the native cutoff');
 const quick = { ...ordinaryPower, press: [120] };
 assert.deepEqual(run('observedPower', quick, true).beats, []);
 

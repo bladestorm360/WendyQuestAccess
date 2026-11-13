@@ -49,3 +49,7 @@ The maps with an interrupted target in the sampled walking matrix are 007, 012â€
 | Qualify ship trigger coverage and verify the world-map shoreline access state | 2â€“4 hours |
 
 Estimates include offline regression checks. Gameplay can confirm the nearest return door after Crispy Beach, then the relevant routes as progression permits. No change to game or mod files was required for this audit.
+
+## Fix verification
+
+The follow-up covered all 20 non-developer omissions. The native fixture verified the expected active category, the walkable approach, the final blocked movement and acceptance of the expected touch event. It also checked the direction-conditioned world entrances, the Cauldron pocket and a generic dock approach from the northern shoreline. A direction accepted by the event can still reach a branch that does not board. The generic label gives the player that distinction. The surface fixture verified both ship triggers and a course stopping before each. The normal-play state for the Cauldron pocket and the northern shoreline remains unconfirmed. [Controls and implementation](navigation.md#return-doors-and-other-audited-triggers)

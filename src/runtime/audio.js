@@ -63,10 +63,10 @@ function createAudio(host) {
                 worker.unref();
             }
             inFlight = request;
-            const { epoch, hrtf, cue, right, up, forward, gain } = request;
+            const { epoch, hrtf, cue, right, up, forward, gain, pitch } = request;
             // Only the bounded bearing and scalar settings cross to the worker.
             // The scene and readiness predicate remain in the renderer.
-            worker.postMessage({ epoch, hrtf, cue, right, up, forward, gain });
+            worker.postMessage({ epoch, hrtf, cue, right, up, forward, gain, pitch });
         } catch { failedWorker(); }
     }
 
@@ -76,7 +76,7 @@ function createAudio(host) {
         host.schedule(drain);
     }
 
-    function play(scene, hrtf, cue, gain, bearing, ready, complete, source = 'preview') {
+    function play(scene, hrtf, cue, gain, bearing, ready, complete, source = 'preview', pitch = 1) {
         if (!ready()) return false;
         if (source === 'soundscape' && active && active.source !== 'soundscape') return false;
         if (active?.scene === scene && source === 'beacon' && active.source === 'wall') return false;
@@ -90,7 +90,7 @@ function createAudio(host) {
         const [right, up, forward] = bearing;
         // Replacing the pending preview also revokes any previous native PCM.
         // The callback observes the same word without a worker round trip.
-        active = pending = { epoch: ++nextEpoch, scene, source, hrtf, cue, right, up, forward, gain, ready, complete };
+        active = pending = { epoch: ++nextEpoch, scene, source, hrtf, cue, right, up, forward, gain, pitch, ready, complete };
         Atomics.store(generation, 0, active.epoch);
         schedule();
         return true;

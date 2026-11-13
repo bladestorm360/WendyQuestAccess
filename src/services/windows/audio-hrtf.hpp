@@ -95,12 +95,13 @@ public:
     }
 
     template<class Ready>
-    bool render(Stereo& output, Cue cue, Bearing p, double gain, Ready ready) {
+    bool render(Stereo& output, Cue cue, Bearing p, double gain, Ready ready, double rate_scale = 1.0) {
         if (!available_ || !ready()) return false;
         alSourceStop_(source_);
         alSourcei_(source_, AL_BUFFER, static_cast<ALint>(buffers_[static_cast<int>(cue)]));
         alSource3f_(source_, AL_POSITION, static_cast<float>(p.right), static_cast<float>(p.up), static_cast<float>(-p.forward));
         alSourcef_(source_, AL_GAIN, static_cast<float>(gain));
+        alSourcef_(source_, AL_PITCH, static_cast<float>(rate_scale));
         if (!ready()) return false;
         alSourcePlay_(source_);
         for (int i = 0; i < render_frames; i += 128) {

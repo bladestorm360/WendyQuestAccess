@@ -3,7 +3,7 @@
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { captureWorld } = require('../src/world/snapshot');
-const { solveRoute } = require('../src/world/routes.cjs');
+const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { composeWorld, LAND, DIRECTIONS } = require('../src/world/geometry.cjs');
 const { travelMode } = require('../src/world/vehicle-navigation');
 const { worldBoundaryName } = require('../src/world/world-destinations');
@@ -121,7 +121,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     ship.setLocation(113, 35, 9);
     assert.equal(travelMode(gameMap, player), 'ship');
     const landing = directions(coast, 51);
-    assert.deepEqual(landing.view.objects.map(target => target.id), [30, 31, 51]);
+    assert.deepEqual(landing.view.objects.map(target => target.id), [24, 30, 31, 51, 158]);
     assert.equal(landing.result.legs.at(-1).direction, 6);
     await verifyWorker(coast, landing.request, landing.view.live, result => {
         assert.deepEqual(result.arrival, landing.result.arrival);
@@ -239,6 +239,26 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     assert.equal(forced.player._vehicleType, '');
     assert.equal(captureWorld(c).mode, 'walk');
     assert.equal(forced.ship._mapId, 113);
+
+    for (const event of [24, 158]) {
+        const sailing = begin(113, [38, 221]);
+        sailing.ship.setLocation(113, 18, 6);
+        sailing.ship._driving = true;
+        sailing.player._vehicleType = 'ship';
+        sailing.player.setPosition(18, 6);
+        const view = captureWorld(c);
+        assert.equal(view.objects.find(item => item.id === event && item.category === 'events')?.name, 'Scene trigger');
+        const request = { x: 18, y: 6, event, field: true, surface: true, stopBeforeEvent: true, autowalk: true };
+        assert.equal(findReachable(sailing.geometry, view.live, { ...request, candidates: [request] }).available[0], 1);
+        await verifyWorker(sailing, request, view.live, route => {
+            assert.equal(route.status, 'interrupted');
+            assert.equal(route.boundaryEvent, event);
+            assert.equal(route.course.length, route.distance);
+            follow(sailing, { ...route, legs: [...route.legs, { direction: route.boundary, tiles: 1 }],
+                arrival: { x: sailing.gameMap.roundXWithDirection(route.arrival.x, route.boundary),
+                    y: sailing.gameMap.roundYWithDirection(route.arrival.y, route.boundary) } }, event);
+        });
+    }
 
     await verifyPortBookmarks();
     await verifyLandingBookmarks();

@@ -127,6 +127,7 @@ function run(prefix, sample, expected, suspend = false) {
 }
 
 const cases = [
+    [{ powerAmount: 1, accuracyAmount: 1, settings: {} }, 'Power 35%, LATE. Accuracy 35%, LATE.'],
     [{ powerAmount: 0.62, accuracyAmount: 0.92, settings: {} }, 'Power 77%, GOOD. Accuracy 92%, NICE.'],
     [{ powerAmount: 0.85, accuracyAmount: 0.85, settings: {} }, 'Power 125%, PERFECT. Accuracy 100%, CRITICAL HIT.'],
     [{ powerAmount: 1, accuracyAmount: 1, powerFrozen: true, accuracyFrozen: true, settings: { Frozen: true } },
@@ -141,6 +142,6 @@ for (const [sample, expected] of cases) {
     baseline += native.milliseconds;
     observed += result.milliseconds;
 }
-run('observed', cases[0][0], cases[0][1], true);
+run('observed', cases[1][0], cases[1][1], true);
 console.log('Verified the installed radial result and native glyph paint for normal, critical and frozen attempts, with animation gating and battle log review.');
-console.log('Throttled three complete result episodes', baseline.toFixed(2), 'ms native,', observed.toFixed(2), 'ms enabled.');
+console.log('Throttled four complete result episodes', baseline.toFixed(2), 'ms native,', observed.toFixed(2), 'ms enabled.');

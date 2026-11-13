@@ -1930,7 +1930,7 @@ parentPort.postMessage = packet => {
     }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 15 && active.right > 0.9 && active.forward === 1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.battle-cue'),
-            JSON.stringify({ status: packet.status, at: Date.now() }));
+            JSON.stringify({ status: packet.status, pitch: active.pitch, at: Date.now() }));
     }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 12 && active.forward === 2) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.soundscape'), String(packet.status));
@@ -2052,7 +2052,8 @@ def main():
             raise RuntimeError('NW route beacon did not publish stereo PCM to SDL')
         beacon_ms = float(receipt.with_suffix('.json.beacon-ms').read_text(encoding='utf8'))
         battle_cue_ms = float(receipt.with_suffix('.json.battle-cue-ms').read_text(encoding='utf8'))
-        if json.loads(receipt.with_suffix('.json.battle-cue').read_text(encoding='utf8'))['status'] != 1:
+        battle_cue = json.loads(receipt.with_suffix('.json.battle-cue').read_text(encoding='utf8'))
+        if battle_cue['status'] != 1 or battle_cue['pitch'] != 1.16:
             raise RuntimeError('NW battle timing cue did not submit stereo PCM to SDL')
         if receipt.with_suffix('.json.cave-cue').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL')
