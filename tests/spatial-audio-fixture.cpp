@@ -167,12 +167,18 @@ int wmain(int argc, wchar_t** argv) {
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     assert(device.callbacks() == completed);
     Stereo wall{}, foot{};
-    assert(stereo_cue(wall, Cue::wall_tone, {0, 0, -1}, 0.55, ready));
+    assert(stereo_cue(wall, Cue::wall_south, {0, 0, -1}, 0.55, ready));
     assert(stereo_cue(foot, Cue::footstep, {0, -1, 0.15}, 0.55, ready));
     assert(energy(foot, 0) > 0 && foot != wall);
     assert(hrtf.render(up, Cue::footstep, {-1, -0.2, 0}, 0.55, ready));
     assert(energy(up, 0) > energy(up, 1));
-    constexpr int click_frames = rate * footstep_ms / 1000;
+    constexpr int click_frames = footstep_toe_frame + footstep_pip_frames;
+    const auto silent = [&foot](int start, int end) {
+        return std::all_of(foot.begin() + start * 2, foot.begin() + end * 2, [](auto value) { return value == 0; });
+    };
+    assert(!silent(0, footstep_pip_frames));
+    assert(silent(footstep_pip_frames, footstep_toe_frame));
+    assert(!silent(footstep_toe_frame, click_frames));
     const auto tail = [](const Stereo& pcm, int frames) {
         return std::all_of(pcm.begin() + frames * 2, pcm.end(), [](auto value) { return value == 0; });
     };
@@ -181,12 +187,26 @@ int wmain(int argc, wchar_t** argv) {
     assert(stereo_cue(rear_foot, Cue::footstep, {0, 0, -1}, 0.55, ready));
     assert(!tail(rear_foot, click_frames));
     assert(tail(rear_foot, static_cast<int>(std::ceil(click_frames / rear_pitch))));
-    int changes = 0;
-    for (int i = 16; i < click_frames; i += 4)
-        if ((cue_sample(Cue::footstep, i, 1.0) < 0) != (cue_sample(Cue::footstep, i - 4, 1.0) < 0)) ++changes;
-    assert(changes > 90);
-    for (const bool spatial : {false, true}) {
-        if (spatial) assert(hrtf.render(wall, Cue::wall_tone, {1, 0, 0}, 0.55, ready));
+    const auto crossings = [](Cue cue, int first, int end, double pitch = 1.0) {
+        int count = 0;
+        for (int i = first + 1; i < end; ++i)
+            if (cue_sample(cue, i, pitch) > 0 && cue_sample(cue, i - 1, pitch) <= 0) ++count;
+        return count;
+    };
+    const int heel = crossings(Cue::footstep, 0, footstep_pip_frames);
+    const int toe = crossings(Cue::footstep, footstep_toe_frame, click_frames);
+    assert(heel > 15 && toe > heel * 1.3);
+    struct WallCase { Cue cue; Bearing bearing; int cycles; };
+    for (const auto& [cue, bearing, cycles] : std::array<WallCase, 4>{{
+        {Cue::wall_north, {0, 0, 1}, 26}, {Cue::wall_east, {1, 0, 0}, 22},
+        {Cue::wall_west, {-1, 0, 0}, 18}, {Cue::wall_south, {0, 0, -1}, 15}
+    }}) {
+      assert(crossings(cue, 0, cue_frames) == cycles);
+      if (bearing.forward < 0) assert(crossings(cue, 0, cue_frames, rear_pitch) == 11);
+      for (const bool spatial : {false, true}) {
+        assert(spatial ? hrtf.render(wall, cue, bearing, 0.55, ready) : stereo_cue(wall, cue, bearing, 0.55, ready));
+        if (bearing.right > 0) assert(energy(wall, 1) > energy(wall, 0));
+        if (bearing.right < 0) assert(energy(wall, 0) > energy(wall, 1));
         // A seam is one normal sample-to-sample step, including the
         // filter history in the HRTF path.
         for (int channel = 0; channel < 2; ++channel) {
@@ -196,10 +216,11 @@ int wmain(int argc, wchar_t** argv) {
                 steepest = std::max(steepest, std::abs(wall[2 * i + channel] - wall[2 * (i - 1) + channel]));
             assert(seam <= steepest + 8);
         }
+      }
     }
     // Check the exact gain curve used by the callback independently of SDL
     // buffer scheduling. An extended deadline must recover without a jump.
-    static_assert(wall_fade_frames == 24000);
+    static_assert(wall_lease_ms == 3500 && wall_fade_frames == 24000);
     int level = wall_fade_frames;
     assert(wall_level(level, rate) == level);
     for (int remaining = wall_fade_frames; remaining >= 0; --remaining) {
@@ -224,7 +245,7 @@ int wmain(int argc, wchar_t** argv) {
     const auto expired = device.callbacks();
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     assert(device.callbacks() == expired);
-    std::puts("Verified the 25 ms footstep noise click, HRTF placement, and stereo rear pitch.");
+    std::puts("Verified the two-pip noise step and four wall pitches with HRTF placement and stereo rear pitch.");
     std::puts("Verified periodic stereo/HRTF seams, concurrent footstep and wall voices, the 500 ms wall fade and independent expiry.");
     std::printf("Verified built-in HRTF, full rear-pitch fallback and SDL dummy output generation. Loopback init %.1f ms, five cues %.1f ms.\n",
         std::chrono::duration<double, std::milli>(initialized - begin).count(),

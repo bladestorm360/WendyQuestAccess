@@ -339,7 +339,9 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
                 course = result;
             });
             worker.emit('message', { ...packet, result: course });
-            assert.match(formatSpeech(records.at(-1)), new RegExp('^' + portName + ' toward Town marker'));
+            assert.equal(records.at(-1).name, `${portName} toward Town marker`);
+            assert.match(formatSpeech(records.at(-1)), /^\d+ (?:north|south|east|west)/);
+            assert.doesNotMatch(formatSpeech(records.at(-1)), /Town marker/);
             follow(port, course, id);
             assert(c.Graphics._wqaBookmarkTransferPending);
             source.command357 = () => true; // Keep quest presentation out of the movement fixture.
@@ -466,8 +468,11 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
                 result = output;
             });
             worker.emit('message', { ...packet, result });
-            assert.match(formatSpeech(records.at(-1)), aircraft ? /Landing (?:for|toward) Walking marker.*action button to land/ :
+            assert.match(records.at(-1).name, aircraft ? /^Landing (?:for|toward) Walking marker/ :
                 /^Secret Island boat landing toward Walking marker/);
+            assert.match(formatSpeech(records.at(-1)), aircraft ? /action button to land/i :
+                /^\d+ (?:north|south|east|west)/);
+            assert.doesNotMatch(formatSpeech(records.at(-1)), /Walking marker/);
             follow(landing, result, aircraft ? undefined : 51);
             if (aircraft) assert(player.triggerButtonAction());
             else execute(source);
@@ -501,7 +506,9 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             assert.equal(walking.live.mode, 'walk');
             if (reveal) {
                 await followEntrance(reveal, entrance);
-                assert.match(formatSpeech(records.at(-1)), /Scene trigger toward Walking marker/);
+                assert.match(records.at(-1).name, /Scene trigger toward Walking marker/);
+                assert.match(formatSpeech(records.at(-1)), /^\d+ (?:north|south|east|west)/);
+                assert.doesNotMatch(formatSpeech(records.at(-1)), /Walking marker/);
                 source.command357 = ([plugin, name, , args]) => {
                     assert.equal(plugin, 'Tyruswoo_TileControl');
                     assert.equal(name, 'set_tile');

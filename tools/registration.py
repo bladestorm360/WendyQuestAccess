@@ -193,11 +193,13 @@ def insert(original, sha, sites):
 
 
 def files_ready(scene):
-    # Native completion sites publish only flags. The precondition bypasses
-    # the mod callback when a scene is loading, changing, fading or retired.
+    # The save selector can take input once its drawn cards start to appear.
+    # Other file screens still wait for the fade to finish.
     ready = f'''{scene}&&{scene}._wqaFileKind&&{scene}===SceneManager._scene&&
-!SceneManager._nextScene&&!SceneManager._exiting&&{scene}._started&&{scene}._active&&
-{scene}._fadeDuration===0&&{scene}._fadeOpacity===0&&Graphics.app?.stage==={scene}&&!Graphics._wqaResize&&
+!SceneManager._nextScene&&!SceneManager._exiting&&!SceneManager._wqaNativeAutosaves&&{scene}._started&&{scene}._active&&
+(({scene}._fadeDuration===0&&{scene}._fadeOpacity===0)||({scene}._wqaFileKind===1&&
+!{scene}._wqaPresentation&&{scene}._fadeSign===1&&{scene}._fadeDuration>0&&{scene}._fadeOpacity<255))&&
+Graphics.app?.stage==={scene}&&!Graphics._wqaResize&&
 (({scene}._wqaFileKind===1&&{scene}._listWindow?._wqaCards===true)||
 ({scene}._wqaFileKind===2&&{scene}._wqaDetailText===true&&{scene}._wqaDetailArt===true&&!{scene}._destroySave)||
 ({scene}._wqaFileKind===3&&({scene}._deleteCount===0||{scene}._wqaDeleteStatus))||

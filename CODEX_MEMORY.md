@@ -106,3 +106,5 @@ The [field audio and destination update](docs/deployment.md#field-audio-and-dest
 The [wall tone fade update](docs/deployment.md#wall-tone-fade-update) verified and installed a 500 ms fade ending at the existing three-second cutoff. The gain curve and its recovery on another step passed the audio fixture. Physical playback remains a gameplay check.
 
 The [direction speech and footstep update](docs/deployment.md#direction-speech-and-footstep-update) removes repeated destination names from direction requests and changes footsteps to a 25 ms noise click. The exact field, spatial audio, packaged and installer checks passed. The C: Steam installation and save hashes were verified.
+
+The [title focus and directional audio update](docs/deployment.md#title-focus-and-directional-audio-update) reads the first visible save slot during fade-in and uses four fixed wall pitches and two short footstep pips. Offline and local installation checks passed. The private `main` branch is the checkpoint destination. Audible gameplay confirmation remains open.

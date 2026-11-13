@@ -24,9 +24,14 @@ function fileWindow(scene) {
 function isReady(host, scene, window) {
     if (!scene || !window || scene._wqaSettingsActive || host.graphics._wqaResize ||
         fileWindow(scene) !== window || host.manager._scene !== scene ||
-        host.manager._nextScene || host.manager._exiting || !scene._started || !scene._active ||
-        scene._fadeDuration !== 0 || scene._fadeOpacity !== 0 || host.graphics.app?.stage !== scene ||
+        host.manager._nextScene || host.manager._exiting || host.manager._wqaNativeAutosaves ||
+        !scene._started || !scene._active || host.graphics.app?.stage !== scene ||
         !window.visible || !window.active || window.openness !== 255) return false;
+    // After the native cards are drawn, admit their first visible render.
+    const clear = scene._fadeDuration === 0 && scene._fadeOpacity === 0;
+    const cardsAppearing = scene._wqaFileKind === SLOTS && scene._fadeSign === 1 &&
+        scene._fadeDuration > 0 && scene._fadeOpacity < 255;
+    if (!clear && !cardsAppearing) return false;
     if (scene._wqaFileKind === SLOTS) return window._wqaCards === true;
     if (scene._wqaFileKind === DETAILS) return scene._wqaDetailArt === true &&
         scene._wqaDetailText === true && !scene._destroySave;

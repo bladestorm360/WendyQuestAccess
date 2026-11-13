@@ -1,9 +1,14 @@
 'use strict';
 
-const { CARDINAL, bearing } = require('./spatial-direction');
+const { CARDINAL } = require('./spatial-direction');
 const { travelMode } = require('./vehicle-navigation');
 
-const IDLE_MS = 3000;
+// Screen directions stay fixed as Wendy turns. The final 500 ms are the audio fade.
+const WALL_CUES = {
+    2: { cue: 'wallSouth', bearing: [0, 0, -1] }, 4: { cue: 'wallWest', bearing: [-1, 0, 0] },
+    6: { cue: 'wallEast', bearing: [1, 0, 0] }, 8: { cue: 'wallNorth', bearing: [0, 0, 1] }
+};
+const IDLE_MS = 3500;
 const CHECK_FRAMES = 6;
 
 function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
@@ -65,13 +70,12 @@ function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
         if (!direction) return silence(state);
         const { hrtf, wallVolume } = preferences();
         if (!audio.isPrepared(hrtf)) return arm(scene);
-        if (direction === prior && facing === state.facing && audio.extendWall(scene, state.until)) return;
+        if (direction === prior && audio.extendWall(scene, state.until)) return;
         const valid = () => owner === state && ready(scene) && now() < state.until &&
-            state.player === root.$gamePlayer && state.map === root.$gameMap &&
-            player._direction === facing && state.direction === direction;
+            state.player === root.$gamePlayer && state.map === root.$gameMap && state.direction === direction;
         state.direction = direction;
-        state.facing = facing;
-        if (!audio.play(scene, hrtf, audio.cues.wallTone, wallVolume / 100, bearing(facing, direction),
+        const { cue, bearing } = WALL_CUES[direction];
+        if (!audio.play(scene, hrtf, audio.cues[cue], wallVolume / 100, bearing,
             valid, status => { if (status < 0 && owner === state) leave(scene); }, 'wall', 1, state.until)) silence(state);
     }
 
@@ -85,7 +89,7 @@ function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
         if (!scene._wqaWallUntil) scene._wqaWallUntil = frame + CHECK_FRAMES;
         // Repeated attempts against the same edge do not extend the lease.
         if (!succeeded && state.x === state.player._x && state.y === state.player._y &&
-            state.attempt === direction && state.facing === state.player._direction) return;
+            state.attempt === direction) return;
         state.x = state.player._x;
         state.y = state.player._y;
         state.attempt = direction;

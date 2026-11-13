@@ -12,6 +12,7 @@
 namespace wqa::audio {
 constexpr int output_lanes = 3;
 constexpr int wall_lane = 1;
+constexpr int wall_lease_ms = 3500;
 constexpr int wall_fade_frames = rate / 2;
 constexpr int wall_attack_step = (wall_fade_frames + 255) / 256;
 
@@ -80,7 +81,7 @@ class Device {
                 if (lane == wall_lane) {
                     const auto deadline = static_cast<uint32_t>(InterlockedCompareExchange(self.word_ + output_lanes, 0, 0));
                     const auto ms = static_cast<int32_t>(deadline - block_start);
-                    if (ms <= 0 || ms > 3000) continue;
+                    if (ms <= 0 || ms > wall_lease_ms) continue;
                     // Keep the envelope advancing when SDL requests more
                     // than one chunk of audio in a single callback.
                     remaining = ms * (rate / 1000) - (requested - frames);
@@ -123,7 +124,7 @@ class Device {
             if (lane == wall_lane) {
                 const auto deadline = static_cast<uint32_t>(InterlockedCompareExchange(self.word_ + output_lanes, 0, 0));
                 const auto ms = static_cast<int32_t>(deadline - unix_ms());
-                if (ms <= 0 || ms > 3000) continue;
+                if (ms <= 0 || ms > wall_lease_ms) continue;
             }
             active = true;
         }

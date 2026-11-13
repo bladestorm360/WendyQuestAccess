@@ -271,23 +271,24 @@ function verifyWallFeedback() {
     assert(edge);
     place(...edge, 6);
     press(6);
-    assert.equal(output.cue, CUE.wallTone);
-    assert.deepEqual(output.bearing, [-1, 0, 0]);
-    assert.equal(output.until, 4000);
+    assert.equal(output.cue, CUE.wallNorth);
+    assert.deepEqual(output.bearing, [0, 0, 1]);
+    assert.equal(output.until, 4500);
     now = 1850;
     press(6);
     assert.equal(calls.filter(call => call.source === 'wall').length, 1, 'same wall extends without restarting');
-    assert.equal(output.until, 4850);
+    assert.equal(output.until, 5350);
     assert.deepEqual(calls.filter(call => call.source === 'footstep').map(call => call.bearing[0]), [-0.25, 0.25]);
     now = 3500;
     press(8);
-    assert.equal(output.until, 4850, 'blocked movement does not extend wall playback');
+    assert.equal(output.until, 5350, 'blocked movement does not extend wall playback');
+    assert.equal(calls.filter(call => call.source === 'wall').length, 1, 'facing the same wall does not restart its loop');
     assert.deepEqual(output.bearing, [0, 0, 1]);
     assert.equal(calls.filter(call => call.source === 'footstep').length, 2);
-    now = 4849;
+    now = 5349;
     wall.expire(scene);
     assert(output);
-    now = 4850;
+    now = 5350;
     wall.expire(scene);
     assert.equal(output, null);
     press(8);
@@ -305,6 +306,20 @@ function verifyWallFeedback() {
     place(...edge, 6);
     press(6);
     assert.equal(calls.filter(call => call.source === 'footstep').length, count);
+    for (const [direction, cue, bearing] of [
+        [6, CUE.wallEast, [1, 0, 0]], [4, CUE.wallWest, [-1, 0, 0]], [2, CUE.wallSouth, [0, 0, -1]]
+    ]) {
+        wall.leave(scene);
+        const cells = Array.from({ length: gameMap.width() * gameMap.height() }, (_, index) =>
+            [index % gameMap.width(), Math.floor(index / gameMap.width())]);
+        const blocked = cells.find(([x, y]) => !gameMap.eventsXyNt(x, y).length &&
+            !gameMap.eventsXyNt(...next(x, y, direction)).length && !player.canPass(x, y, direction));
+        assert(blocked);
+        place(...blocked);
+        press(direction);
+        assert.equal(output.cue, cue);
+        assert.deepEqual(output.bearing, bearing);
+    }
     wall.leave(scene);
     footsteps.leave(scene);
     scene._wqaFieldReady = false;

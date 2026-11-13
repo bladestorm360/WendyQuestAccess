@@ -379,8 +379,10 @@ function createSettingsMenu(root, host) {
             soundscape: button(owner, 'Soundscape', () => showSoundscape(owner))
         };
         const preview = (bearing, cue, gain, pitch) => previewAudio(owner, bearing, cue, gain, pitch);
-        button(owner, 'Preview wall tone ahead', () => preview([0, 0, 1], 'wallTone', audio.wallVolume / 100));
-        button(owner, 'Preview wall tone on the left', () => preview([-1, 0, 0], 'wallTone', audio.wallVolume / 100));
+        button(owner, 'Preview wall tone ahead', () => preview([0, 0, 1], 'wallNorth', audio.wallVolume / 100));
+        button(owner, 'Preview wall tone on the right', () => preview([1, 0, 0], 'wallEast', audio.wallVolume / 100));
+        button(owner, 'Preview wall tone behind', () => preview([0, 0, -1], 'wallSouth', audio.wallVolume / 100));
+        button(owner, 'Preview wall tone on the left', () => preview([-1, 0, 0], 'wallWest', audio.wallVolume / 100));
         button(owner, 'Preview footstep', () => preview([0, -1, 0.15], 'footstep', audio.footstepVolume / 100));
         button(owner, 'Preview beacon ahead', () => preview([0, 0, 1], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconTurn', audio.beaconVolume / 100));

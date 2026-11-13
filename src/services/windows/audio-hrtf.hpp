@@ -102,7 +102,7 @@ public:
         alSource3f_(source_, AL_POSITION, static_cast<float>(p.right), static_cast<float>(p.up), static_cast<float>(-p.forward));
         alSourcef_(source_, AL_GAIN, static_cast<float>(gain));
         alSourcef_(source_, AL_PITCH, static_cast<float>(rate_scale));
-        const bool loop = cue == Cue::wall_tone;
+        const bool loop = wall_cycles(cue) != 0;
         alSourcei_(source_, AL_LOOPING, loop ? AL_TRUE : AL_FALSE);
         if (!ready()) return false;
         alSourcePlay_(source_);

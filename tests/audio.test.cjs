@@ -94,7 +94,7 @@ assert.equal(Atomics.load(word, 0), crossing.epoch);
 worker.emit('message', { epoch: crossing.epoch, status: 2 });
 audio.retire(scene, 'cave');
 
-assert(audio.play(scene, true, CUE.wallTone, 0.5, [1, 0, 0], () => ready, null, 'wall', 1, Date.now() + 2900));
+assert(audio.play(scene, true, CUE.wallEast, 0.5, [1, 0, 0], () => ready, null, 'wall', 1, Date.now() + 2900));
 assert(audio.play(scene, true, CUE.footstep, 0.5, [0, -1, 0], () => ready, null, 'footstep'));
 run();
 const loop = messages.at(-1);

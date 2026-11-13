@@ -8,15 +8,29 @@
 namespace wqa::audio {
 constexpr int rate = 48000;
 constexpr int cue_frames = 4320;
-constexpr int footstep_ms = 25;
+constexpr int footstep_pip_frames = rate * 13 / 1000;
+constexpr int footstep_toe_frame = rate * 22 / 1000;
 constexpr int render_frames = cue_frames + 256;
 constexpr double rear_pitch = 0.72;
 constexpr double tau = 6.283185307179586;
 enum class Cue : int {
     preview, wall_bump, wall_brush, beacon_pulse, beacon_turn, beacon_arrival, cave_go,
     entity_person, entity_exit, entity_door, entity_stairs, entity_treasure, entity_object, entity_checkpoint,
-    battle_lead, battle_power, battle_accuracy, battle_ice, wall_tone, footstep, count
+    battle_lead, battle_power, battle_accuracy, battle_ice, wall_north, footstep,
+    wall_east, wall_south, wall_west, count
 };
+
+constexpr int wall_cycles(Cue cue) {
+    // Pixel Remaster's directional pitches, rounded to complete cycles
+    // in a 90 ms loop so both spatial output modes join cleanly.
+    switch (cue) {
+    case Cue::wall_north: return 26;
+    case Cue::wall_east: return 22;
+    case Cue::wall_south: return 15;
+    case Cue::wall_west: return 18;
+    default: return 0;
+    }
+}
 
 struct Bearing {
     double right;
@@ -59,24 +73,24 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
         const auto note = std::min({1.0, segment / 0.003, std::max(0.0, (0.028 - segment) / 0.006)});
         return envelope * note * 0.57 * std::sin(tau * frequency * pitch * segment);
     }
-    if (cue == Cue::wall_tone) {
-        // Exactly 25 cycles per loop, or 18 with the stereo rear pitch.
-        const auto phase = tau * (25.0 * frame / cue_frames) * pitch;
+    if (const int cycles = wall_cycles(cue)) {
+        const auto phase = tau * std::round(cycles * pitch) * frame / cue_frames;
         return 0.24 * std::sin(phase) + 0.08 * std::sin(2.0 * phase);
     }
     if (cue == Cue::footstep) {
-        // Short noise click in the style of the Pixel Remaster footstep.
-        // Hold each noise value for four source samples for a coarse texture.
-        constexpr int length = rate * footstep_ms / 1000;
+        // The heel holds each noise sample longer for a bassier texture.
+        // A short gap separates the brighter, independently seeded toe pip.
         const double source = frame * pitch;
-        if (source >= length) return 0.0;
-        uint32_t noise = (static_cast<uint32_t>(source / 4) + 1u) * 0x9e3779b9u;
+        const bool toe = source >= footstep_toe_frame;
+        const double offset = toe ? source - footstep_toe_frame : source;
+        if (offset >= footstep_pip_frames) return 0.0;
+        uint32_t noise = (static_cast<uint32_t>(offset / (toe ? 4 : 7)) + (toe ? 257u : 1u)) * 0x9e3779b9u;
         noise ^= noise >> 16;
         noise *= 0x7feb352du;
         noise ^= noise >> 15;
         const double value = (noise >> 24) / 127.5 - 1.0;
-        const double onset = std::min(1.0, source / 16.0);
-        return 0.30 * onset * value * std::exp(-8.0 * source / length);
+        const double onset = std::min(1.0, offset / 16.0);
+        return (toe ? 0.30 : 0.27) * onset * value * std::exp(-7.0 * offset / footstep_pip_frames);
     }
     if (cue >= Cue::battle_lead && cue <= Cue::battle_ice) {
         const double frequency = cue == Cue::battle_lead ? 440.0 : cue == Cue::battle_power ? 625.0 :

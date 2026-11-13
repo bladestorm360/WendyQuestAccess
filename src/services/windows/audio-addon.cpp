@@ -159,7 +159,7 @@ Value play(Env env, Info info) {
         api.napi_get_value_double(env, args[5], &p.forward) || api.napi_get_value_double(env, args[6], &gain) ||
         api.napi_get_value_double(env, args[7], &pitch) ||
         api.napi_get_value_int32(env, args[8], &lane) || lane < 0 || lane >= output_lanes ||
-        (lane == wall_lane && (cue != static_cast<int>(Cue::wall_tone) || pitch != 1.0)) ||
+        (lane == wall_lane && (!wall_cycles(static_cast<Cue>(cue)) || pitch != 1.0)) ||
         (lane == 2 && cue != static_cast<int>(Cue::footstep)) ||
         !std::isfinite(pitch) || pitch < 0.75 || pitch > 1.25 ||
         !std::isfinite(gain) || gain < 0.0 || gain > 1.0) return number(*owner, -1);

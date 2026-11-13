@@ -463,6 +463,7 @@ for (const imagesBeforeStage of [false, true]) {
     Object.setPrototypeOf(c.Window_SavefileList.prototype, c.Window_Selectable.prototype);
     const window = new c.Window_SavefileList();
     const scene = f.show(new c.Scene_Load(), window);
+    scene.slowFadeSpeed = () => 60;
     window.refresh = () => {};
     window.loadImages();
     scene.start();
@@ -470,10 +471,23 @@ for (const imagesBeforeStage of [false, true]) {
     c.SceneManager.onSceneStart();
     readyFrame(f);
     assert.equal(f.saveReads(), 0);
-    for (let step = 0; step < 2; step++) c.Scene_Base.prototype.updateFade.call(scene);
-    if (!imagesBeforeStage) f.images.shift()();
+    c.Scene_Base.prototype.updateFade.call(scene);
+    assert.equal(scene._fadeDuration, 59);
+    assert(scene._fadeOpacity > 0 && scene._fadeOpacity < 255);
+    if (!imagesBeforeStage) {
+        readyFrame(f);
+        assert.equal(f.saveReads(), 0, 'visible fade alone is insufficient while cards are loading');
+        f.images.shift()();
+    }
+    assert.equal(f.saveReads(), 0, 'first visible cards still wait for postrender');
     readyFrame(f);
     assert.equal(f.messages.length, 1);
+    assert.match(formatSpeech(f.messages[0]), /^Save slot 1/);
+    assert.equal(scene._fadeDuration, 59, 'first focus is read on the first visible render');
+    for (let step = 0; step < 3; step++) {
+        c.Scene_Base.prototype.updateFade.call(scene);
+        assert.equal(f.renderer.listenerCount('postrender'), 0, 'no recurring admission during fade-in');
+    }
     window.select(1);
     readyFrame(f);
     assert.equal(formatSpeech(f.messages[1]), 'Save slot 2, Start new game');
