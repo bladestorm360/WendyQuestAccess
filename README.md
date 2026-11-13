@@ -9,7 +9,7 @@ Launch WendyQuest through Steam. Press **F8** to open accessibility settings. Us
 - **All** combines available destinations and saved bookmarks. **NPC** lists available characters. **Events** gives directions to reachable scene triggers. Follow a marked trigger from **Quests**. Books, barrels and treasure use type labels. If a Crispy Beach route stops at a floor event, take the final step manually and request directions again after control returns. Save and load bookmarks under **Navigation → Bookmarks**.
 - Press **M** for the current map name or **Q** for the visible quest objective and count. The mod also announces named maps as you enter them.
 - Press **R** to repeat dialogue, **I** to read available details and **Shift+G** for supported puzzle guidance.
-- **F8 → Audio** has separate switches for **Navigation beacon**, **Wall sounds**, and **Footstep sounds**. The beacon refreshes as you walk. The wall tone lasts up to three seconds after your last step.
+- **F8 → Audio** has separate switches for **Navigation beacon**, **Wall sounds**, and **Footstep sounds**. The beacon refreshes as you walk. The wall tone fades over the last half-second of its three-second timeout.
 - Press **H** for Wendy’s HP. The field reports the bar percentage. The pause menu reports the exact values. Press **G** to read the gold shown in the pause menu or shop.
 - On a default Xbox-style controller, use the **right stick** to browse and **left trigger** for directions. Press and release **View**, then press **A** to read the selected destination or **Menu** for settings.
 

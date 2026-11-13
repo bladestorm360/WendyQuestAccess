@@ -182,7 +182,22 @@ int wmain(int argc, wchar_t** argv) {
             assert(seam <= steepest + 8);
         }
     }
-    InterlockedExchange(generation + 3, static_cast<LONG>(unix_ms() + 450));
+    // Check the exact gain curve used by the callback independently of SDL
+    // buffer scheduling. An extended deadline must recover without a jump.
+    static_assert(wall_fade_frames == 24000);
+    int level = wall_fade_frames;
+    assert(wall_level(level, rate) == level);
+    for (int remaining = wall_fade_frames; remaining >= 0; --remaining) {
+        level = wall_level(level, remaining);
+        assert(level == remaining);
+    }
+    level = wall_fade_frames / 4;
+    const int raised = wall_level(level, rate * 3);
+    assert(raised > level && raised - level == wall_attack_step);
+    for (int i = 0; i < 256; ++i) level = wall_level(level, rate * 3 - i);
+    assert(level == wall_fade_frames);
+
+    InterlockedExchange(generation + 3, static_cast<LONG>(unix_ms() + 650));
     InterlockedExchange(generation + wall_lane, 3);
     assert(device.publish(3, wall, wall_lane));
     const int beforeLoop = device.submitted();
@@ -190,11 +205,11 @@ int wmain(int argc, wchar_t** argv) {
     assert(device.submitted() - beforeLoop > cue_frames);
     InterlockedExchange(generation + 2, 4);
     assert(device.publish(4, foot, 2));
-    std::this_thread::sleep_for(std::chrono::milliseconds(450));
+    std::this_thread::sleep_for(std::chrono::milliseconds(550));
     const auto expired = device.callbacks();
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     assert(device.callbacks() == expired);
-    std::puts("Verified periodic stereo/HRTF seams, concurrent footstep and wall voices, and independent wall expiry.");
+    std::puts("Verified periodic stereo/HRTF seams, concurrent footstep and wall voices, the 500 ms wall fade and independent expiry.");
     std::printf("Verified built-in HRTF, full rear-pitch fallback and SDL dummy output generation. Loopback init %.1f ms, five cues %.1f ms.\n",
         std::chrono::duration<double, std::milli>(initialized - begin).count(),
         std::chrono::duration<double, std::milli>(rendered - initialized).count());

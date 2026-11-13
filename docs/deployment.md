@@ -203,3 +203,9 @@ Microsoft Defender found no threats in the final payload, geometry, plan and bui
 The Steam installation verified all 16 native patches, 38 payload files and 240 geometry entries. Original recovery and all four save-directory file hashes were preserved.
 
 For gameplay confirmation, enter a previously unnamed house and press **M**. Use **Q** with a visible objective. Select a nearby destination, take a wrong step and listen for the updated beacon. With Wall sounds and Footstep sounds enabled, walk beside a wall, stop for three seconds and check that the tone ends. In battle, enable **Battle timing assist** and listen for the perfect-window note. Hardware onset, physical input timing and cumulative in-game responsiveness remain unverified. [Field audio](audio.md#wall-feedback-and-footsteps) · [Battle timing](battle.md#radial-timing-tones)
+
+## Wall tone fade update
+
+November 13, 2026. Plan SHA-256 `99b345cf99ecd6a026b915924e13c1739d0a42096f66d52ea931b602fae977e9`. The focused build compiled only the Windows audio addon and the spatial audio fixture using the 768 MB bounded runner. It verified the 37 reused payload files and 240 geometry entries. The fixture verified the 24,000-frame gain curve at 48 kHz, smooth recovery on renewed movement, concurrent footsteps and callback retirement with silent SDL. NW.js 0.48.4 smoke and exact installer interruption and recovery checks passed.
+
+Defender found no threats in the exact payload, plan, geometry and four build and installation scripts at 08:26:24 PST. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.281.0. The four script hashes match the previous checkpoint. The rebuilt addon is unsigned. The C: Steam install verified 16 script patches, 38 payload files, all geometry, original recovery and four preserved save-directory file hashes. Actual speaker or headphone playback remains a gameplay check. [Fade behavior and audio hash](audio.md#wall-feedback-and-footsteps)

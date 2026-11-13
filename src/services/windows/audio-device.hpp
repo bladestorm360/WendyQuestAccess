@@ -12,6 +12,14 @@
 namespace wqa::audio {
 constexpr int output_lanes = 3;
 constexpr int wall_lane = 1;
+constexpr int wall_fade_frames = rate / 2;
+constexpr int wall_attack_step = (wall_fade_frames + 255) / 256;
+
+constexpr int wall_level(int previous, int remaining) {
+    // Fade to silence over the last half-second of the existing lease.
+    // A fresh step can extend that lease while the same loop ramps back up.
+    return std::min({wall_fade_frames, remaining, previous + wall_attack_step});
+}
 
 inline bool admitted(volatile LONG* word, LONG epoch, int lane = 0) {
     return word && epoch > 0 && InterlockedCompareExchange(word + lane, 0, 0) == epoch;
@@ -19,7 +27,7 @@ inline bool admitted(volatile LONG* word, LONG epoch, int lane = 0) {
 
 inline uint32_t unix_ms() {
     FILETIME time{};
-    GetSystemTimeAsFileTime(&time);
+    GetSystemTimePreciseAsFileTime(&time);
     ULARGE_INTEGER ticks{};
     ticks.LowPart = time.dwLowDateTime;
     ticks.HighPart = time.dwHighDateTime;
@@ -43,7 +51,7 @@ class Device {
         LONG epoch = 0;
         Stereo samples{};
         int next = render_frames;
-        int attack = 0;
+        int level = 0;
     };
     std::array<Voice, output_lanes> voices_{};
 #ifdef WQA_AUDIO_TEST
@@ -58,6 +66,8 @@ class Device {
         ++self.callbacks_;
 #endif
         int frames = std::min(amount / bytes_per_frame, 1024);
+        const int requested = frames;
+        const auto block_start = admitted(self.word_, self.voices_[wall_lane].epoch, wall_lane) ? unix_ms() : 0;
         while (frames > 0) {
             std::array<int32_t, 512> mix{};
             const int capacity = std::min(frames, 256);
@@ -69,19 +79,22 @@ class Device {
                 int remaining = 0;
                 if (lane == wall_lane) {
                     const auto deadline = static_cast<uint32_t>(InterlockedCompareExchange(self.word_ + output_lanes, 0, 0));
-                    const auto ms = static_cast<int32_t>(deadline - unix_ms());
+                    const auto ms = static_cast<int32_t>(deadline - block_start);
                     if (ms <= 0 || ms > 3000) continue;
-                    remaining = ms * (rate / 1000);
-                    count = std::min(capacity, remaining);
+                    // Keep the envelope advancing when SDL requests more
+                    // than one chunk of audio in a single callback.
+                    remaining = ms * (rate / 1000) - (requested - frames);
+                    count = std::clamp(remaining, 0, capacity);
                 }
                 for (int i = 0; i < count; ++i) {
-                    int level = 256;
                     if (lane == wall_lane) {
-                        level = std::min({256, voice.attack, remaining - i});
-                        if (voice.attack < 256) ++voice.attack;
+                        voice.level = wall_level(voice.level, remaining - i - 1);
+                        for (int channel = 0; channel < 2; ++channel)
+                            mix[i * 2 + channel] += voice.samples[voice.next * 2 + channel] * voice.level / wall_fade_frames;
+                    } else {
+                        for (int channel = 0; channel < 2; ++channel)
+                            mix[i * 2 + channel] += voice.samples[voice.next * 2 + channel];
                     }
-                    for (int channel = 0; channel < 2; ++channel)
-                        mix[i * 2 + channel] += voice.samples[voice.next * 2 + channel] * level / 256;
                     ++voice.next;
                     if (lane == wall_lane && voice.next == cue_frames) voice.next = 0;
                 }
@@ -156,7 +169,7 @@ public:
             auto& voice = voices_[lane];
             voice.samples = data;
             voice.epoch = epoch;
-            voice.next = voice.attack = 0;
+            voice.next = voice.level = 0;
             current = SDL_SetAudioStreamGetCallback_(stream_, supply, this);
         }
         SDL_UnlockAudioStream_(stream_);
