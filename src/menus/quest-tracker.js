@@ -19,7 +19,8 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
             root.$gameScreen?._brightness === 255 && !root.$gamePlayer?._transferring &&
             !root.$gamePlayer?._vehicleGettingOn && !root.$gamePlayer?._vehicleGettingOff &&
             root.$gameMap?.inactiveTime < 30 &&
-            (!root.$gameMap._needsRefresh || (root.$gameMap._mapId === 13 && scene._wqaLightningRefreshOnly)) &&
+            // The native marker qualifies this weather-only write on the current map.
+            (!root.$gameMap._needsRefresh || scene._wqaLightningRefreshOnly) &&
             !root.$gameMap._needsTilemapRefresh;
     }
 

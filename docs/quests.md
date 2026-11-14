@@ -18,6 +18,10 @@ The tracker stages at most 24 text draws of at most 96 characters from a paint. 
 
 The field and tracker retain native references on the renderer. The speech service receives only bounded output records. Hiding, focus loss, resize, settings, events and scene departure revoke current output. The tracker can capture a native paint during a settled visible dialogue wait, then publish only when the field is ready. Transfer, fade, save, resource and event-entry gates prevent tracker paint sampling in protected phases. [Tracker owner](../src/menus/quest-tracker.js) · [Native lifecycle](engine-evidence.md#loader-and-lifecycle-candidates)
 
+## French Fry Forest and Russetwood
+
+Denied-key diagnostics showed Q reaching both maps with field movement ready, the tracker visible and only the native lightning refresh pending. The tracker now accepts the same qualified weather refresh as the field controls on every map marked by the native lightning hook. An unrelated refresh still retires the active review. The native fixture checks Q before and after clearing that qualification on maps 12 and 15. Press Q for the current goal or I for both visible objective rows.
+
 ## Restoring the visible tracker
 
 Native destruction saves the target fold state in `Game_Temp`. A replacement tracker can paint while loading and then sit in the small state without another redraw. A tracker refreshed while slid offscreen can also show the already-painted contents. After field handback, the mod waits for postrender and checks the same staged window, completed native paint, contents bitmap, ready font and active navigation quest before recovering these pages.

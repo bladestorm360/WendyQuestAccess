@@ -331,6 +331,23 @@ stale.next.update();
 renderer.emit('postrender');
 assert(tracker.available(stale.next), 'the next real paint supersedes the failed replay');
 
+// The forest and Russetwood use the same qualified native lightning
+// refresh as the beach. An unrelated refresh must still retire speech.
+for (const mapId of [12, 15]) {
+    root.$gameMap._mapId = mapId;
+    root.$gameMap._needsRefresh = true;
+    stale.next._wqaLightningRefreshOnly = true;
+    stale.next.QuestNavNeedRefresh();
+    stale.next.update();
+    renderer.emit('postrender');
+    assert(tracker.command(stale.next, 'questObjective'));
+    assert.equal(spoken(), 'Quest objective. Secret route after reveal. 0 of 1');
+    stale.next._wqaLightningRefreshOnly = false;
+    assert.equal(tracker.command(stale.next, 'questObjective'), false);
+    assert.equal(tracker.visibleObjective(stale.next), undefined);
+}
+root.$gameMap._needsRefresh = false;
+
 const bindings = normalizeController({ currentDestination: 3, beaconToggle: 12 });
 assert.equal(bindings.currentDestination, 3);
 assert.equal(bindings.beaconToggle, 12);
