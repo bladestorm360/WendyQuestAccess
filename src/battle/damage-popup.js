@@ -35,13 +35,7 @@ function enemyLabel(scene, enemy) {
     const enemies = set?._enemySprites;
     if (!Array.isArray(enemies) || enemies.length > MAX_BATTLERS || !enemies.includes(enemy) || enemy?.parent !== field) return '';
     if (!attached(enemy, field)) return '';
-    // Keep the left-to-right index stable as earlier enemies collapse.
-    const presented = enemies.filter(sprite => Number.isFinite(sprite.x) && sprite?.parent === field)
-        .sort((left, right) => left.x - right.x);
-    const position = presented.indexOf(enemy);
-    if (position < 0) return 'Enemy';
-    const name = drawnText(enemy, enemy._nameSprite, 48) || enemyName(enemy);
-    return presented.length > 1 ? (name ? name + ', enemy ' : 'Enemy ') + (position + 1) : name || 'Enemy';
+    return drawnText(enemy, enemy._nameSprite, 48) || enemyName(enemy) || 'Enemy';
 }
 
 // The game uses separate lightweight skills for regular companion turns and

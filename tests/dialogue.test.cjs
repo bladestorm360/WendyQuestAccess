@@ -1129,8 +1129,17 @@ async function verifySpeakerDetails() {
     }
     scene._spriteset._characterSprites[0].worldTransform.tx = -100;
     readSpeaker('Dave', 36, /^No visual description for this speaker/);
-    assert.equal(formatSpeech({ kind: 'dialoguePage', text: '\x01177\x02 Jr. Bacon Cheeseburger acquired!' }),
+    const common = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', 'CommonEvents.json'), 'utf8'));
+    const reward = common.flatMap(event => event?.list || []).find(command => command.code === 401 &&
+        command.parameters[0].startsWith('\\I[177]') && command.parameters[0].endsWith('acquired!'));
+    Object.assign(settings, { text: reward.parameters[0], speaker: '' });
+    f.until(() => window.pause);
+    f.tick();
+    assert.equal(formatSpeech(f.records.findLast(record => record.kind === 'dialoguePage')),
         'Jr. Bacon Cheeseburger acquired!');
+    details();
+    assert.match(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')), /^Item icon\. A small cheeseburger/);
+    f.advance();
     assert.equal(formatSpeech({ kind: 'dialoguePage', text: 'Try a \x01177\x02 today.' }),
         'Try a Junior Bacon Cheeseburger today.');
     console.log('Verified active-dialogue details, frame and speaker identity, portrait readiness, and native handback.');

@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { createBattleLog } = require('../src/battle/action-log');
 const { recordAttackSource } = require('../src/battle/damage-popup');
+const { recordCollapse } = require('../src/battle/outcomes');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { nativeTextHost } = require('./native-text-host.cjs');
 
@@ -215,6 +216,10 @@ battle._action = action(skills[83], { missed: true });
 battle.invokeNormalAction(right._battler, ally._battler);
 advance(40);
 assert.equal(seen.at(-1), 'Lil Pink Salty misses.');
+right.bitmap = { isReady: () => true };
+recordCollapse(scene, right);
+advance(1);
+assert.equal(seen.at(-1), 'Lil Pink Salty defeated.');
 const reused = new c.Game_ActionResult();
 reused._wqaAttackSource = 'Frygor';
 reused.clear();
