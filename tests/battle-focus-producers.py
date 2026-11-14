@@ -53,7 +53,10 @@ def animated_text_methods():
 
 
 if sys.argv[2:] == ['damage']:
-    methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy')]
+    methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy'),
+               manager_method(battle, 'invokeNormalAction')]
+    start = battle.index("Game_ActionResult['prototype']['clear']=function(")
+    methods.append(battle[start:battle.index('},Game_Actor', start) + 1] + ';')
     methods.extend(animated_text_methods())
     damage_names = ('initialize', 'setup', 'setupCriticalEffect', 'createMiss', 'createDigits',
                     'createChildSprite', 'update', 'updateChild', 'updateFlash', 'updateOpacity', 'isPlaying')
@@ -139,6 +142,12 @@ if sys.argv[2:] == ['log']:
     methods.append(sprite_method(battle, 'Window_BattleLog', 'addText'))
     baseline_draw = sprite_method(untouched, 'Window_BattleActionLog', 'drawItem')
     methods.append(baseline_draw.replace("['drawItem']", "['fixtureNativeDraw']", 1))
+    methods.append(sprite_method(battle, 'Scene_Battle', 'logAction'))
+    start = battle.index("BattleHelper['logAction']=function(")
+    end = battle.index('},BattleHelper', start)
+    methods.append(battle[start:end + 1] + ';')
+    start = stock.index('Window_BattleLog.prototype.displayItemMessage = function(')
+    methods.append(stock[start:stock.index('\n};', start) + 3])
     print(json.dumps(methods))
     sys.exit(0)
 

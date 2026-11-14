@@ -73,6 +73,13 @@ function createDialogueObserver(host, notifications) {
             submit(context, { kind: 'dialoguePage', text, speaker });
         }
 
+        if (pageVisible && paint && context.epoch && scene._wqaVictoryCondition &&
+            context.page?.paint === paint && paint.spoken === paint.end) {
+            const condition = scene._wqaVictoryCondition;
+            scene._wqaVictoryCondition = null;
+            submit(context, { kind: 'battleLog', lines: [condition], append: true });
+        }
+
         if (diagram) {
             context.diagram = diagram;
             context.hasReview = true;

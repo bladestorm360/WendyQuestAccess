@@ -92,7 +92,8 @@ parentPort.on('message', message => {
                 result = solveRoute(base, live, { ...request, entrances, groundEntrances, discoveries }, cancelled);
             }
             else result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
-            const follows = result.status === 'ready' && !result.reenter && (request.beacon === true || request.autowalk === true);
+            const follows = (result.status === 'ready' || result.status === 'enemyBlocked') &&
+                !result.reenter && (request.beacon === true || request.autowalk === true);
             if (follows || (result.status === 'interrupted' && request.autowalk === true)) {
                 // Two direction bits and the bounded distance to the next turn.
                 // The renderer advances one byte per accepted native step.
@@ -117,7 +118,7 @@ parentPort.on('message', message => {
                     result.autowalkMore = result.legs.length - (last.tiles === 1 ? 1 : 0) > request.limit;
                 }
             }
-            if ((result.status === 'ready' || result.status === 'interrupted') &&
+            if ((result.status === 'ready' || result.status === 'interrupted' || result.status === 'enemyBlocked') &&
                 Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
                 result.legs.length > request.limit) {
                 result.more = true;

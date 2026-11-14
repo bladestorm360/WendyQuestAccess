@@ -161,6 +161,11 @@ async function verifyQuestDestinations(c, game, read, load, verifyRoute, verifyW
     open.player.setPosition(24, 17);
     const openScene = stage(open, 'quest10');
     assert.deepEqual(quests(openScene).filter(row => [31, 32, 33].includes(row.id)).map(row => row.id), [31, 32, 33]);
+    const buttons = targets(openScene, true).objects.filter(row => row.category === 'objects' && [31, 32, 33].includes(row.id));
+    assert.deepEqual(buttons.map(({ id, name, showBlocked }) => ({ id, name, showBlocked })), [31, 32, 33].map(id =>
+        ({ id, name: 'Gate switch', showBlocked: true })));
+    for (const button of buttons) assert.equal(open.gameMap._events[button.id]._trigger, 0);
+    assert(!targets(openScene).objects.some(row => row.category === 'events' && [31, 32, 33].includes(row.id)));
     const selected = quests(openScene).find(row => row.id === 31);
     open.gameMap._events[31]._pageIndex = 0;
     assert(!questDestinationCurrent(c, openScene, selected.quest), 'the worker lease carries the effective event page');

@@ -33,6 +33,7 @@ async function enter(map, mapId = 19, battle = false) {
     c.Window_ChoiceList = function () {};
     c.Window_NumberInput = function () {};
     c.Scene_Battle = function () {};
+    c.Sprite_BattleScreenParticipant = function () {};
     Object.setPrototypeOf(c.Scene_Battle.prototype, c.Scene_Message.prototype);
     c.Window = { prototype: c.Window_Base.prototype };
     Object.defineProperty(c.Window_Base.prototype, 'openness', {
@@ -361,6 +362,22 @@ async function verifyMapDiagrams() {
     assert.match(formatSpeech(diagramPackets().at(-1)), /Crossed-out ruin location, northeast/);
     pictures[27]._name = 'Other picture';
     assert.equal(tapPuzzleKey(f, 'i'), false);
+    f.advance();
+
+    pictures.length = layer.children.length = 0;
+    picture(atlas, 17, 320, 180);
+    picture(atlas, 45, 268, 256);
+    const questPin = picture(events[160].list, 0, 262, 215);
+    c.WendyQuestAccessSceneLeaving(scene);
+    c.$gameMessage.clear();
+    wait(events[137].list, 1);
+    f.tick();
+    assert.equal(formatSpeech(diagramPackets().at(-1)), 'World Atlas');
+    assert(tapPuzzleKey(f, 'i'));
+    assert.match(formatSpeech(diagramPackets().at(-1)), /Quest marker, north of Wendy/);
+    assert.match(formatSpeech(diagramPackets().at(-1)), /Fry Fields/);
+    questPin.worldAlpha = 0;
+    assert.equal(tapPuzzleKey(f, 'i'), false, 'the rendered quest pin owns its review line');
     f.advance();
 
     const { localDestination } = require('../src/world/local-destinations');

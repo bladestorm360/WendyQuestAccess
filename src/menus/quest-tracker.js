@@ -178,6 +178,11 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
             if (current?.scene === scene) retireSpeech(current);
         },
         available(scene) { return current?.scene === scene && ready(current); },
+        visibleObjective(scene) {
+            const window = scene._questNavWindow;
+            const draft = window?._wqaQuestDraft;
+            if (drawable(scene, window, draft)) return drawnQuestPage(window, draft, host.graphics)?.objective;
+        },
         command(scene, action) {
             const page = current;
             if (page?.scene !== scene || !ready(page)) return false;

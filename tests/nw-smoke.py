@@ -774,7 +774,7 @@ const interval = setInterval(() => {
             beaconDetourStep = 1;
             return;
         }
-        // Check that the detour produced a new turn cue through the real worker.
+        // Check that the detour produced an updated absolute cue through the real worker.
         if (beaconDetourStep === 1 && fs.existsSync(receipt + '.beacon-refresh')) {
             fs.unlinkSync(receipt + '.beacon-detour');
             const player = $gamePlayer;
@@ -2005,10 +2005,10 @@ let active;
 parentPort.on('message', request => { active = request; });
 const post = parentPort.postMessage.bind(parentPort);
 parentPort.postMessage = packet => {
-    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 3 && active.forward === 1) {
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 3 && active.right === 1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.beacon'), String(packet.status));
     }
-    if (packet.status > 0 && packet.epoch === active.epoch && (active.cue === 4 && active.forward !== 1 || active.cue === 3 && active.forward === 1) &&
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 3 && (active.right === 1 || active.forward === 1) &&
         fs.existsSync(path.join(__dirname, '..', 'receipt.json.beacon-detour'))) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.beacon-refresh'), String(packet.status));
     }

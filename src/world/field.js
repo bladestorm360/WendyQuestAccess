@@ -9,13 +9,22 @@ const { localHandoffName } = require('./local-destinations');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { tileKey } = require('./geometry.cjs');
-const { browse, createDestinationBrowser } = require('./destinations');
+const { browse, createDestinationBrowser, activeMovingEnemy } = require('./destinations');
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
 const { mapPlace } = require('./map-banner');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
+
+function currentEnemy(root, result) {
+    const map = root.$gameMap;
+    const enemy = map?._events?.[result.enemy];
+    const { x, y } = result.arrival || {};
+    return Number.isInteger(x) && Number.isInteger(y) && HEADINGS[result.boundary] &&
+        activeMovingEnemy(root, enemy) && enemy._x === map.roundXWithDirection(x, result.boundary) &&
+        enemy._y === map.roundYWithDirection(y, result.boundary);
+}
 const HEADINGS = Object.freeze({ 2: [0, 1], 4: [-1, 0], 6: [1, 0], 8: [0, -1] });
 
 function spokenRouteBounds(x, y, legs) {
@@ -144,6 +153,7 @@ function createField(root, host, notifications) {
             record = { ...record, directionsOnly: true };
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
+            (!job.enemyCurrent || job.enemyCurrent()) &&
             (!job.entrance || transfers.current(job.entrance)) &&
             (!job.groundEntrance || transfers.current(job.groundEntrance, 'walk')) &&
             (!job.scene._wqaPreviewUntil || host.graphics.frameCount < job.scene._wqaPreviewUntil));
@@ -169,6 +179,8 @@ function createField(root, host, notifications) {
                     }
                     present(job, { ...record, legs, more: result.autowalkMore, activate: result.autowalkStop }, true);
                 } else present(job, record, true);
+            } else if (record.enemyBlocked) {
+                present(job, { kind: 'fieldStatus', name: 'Route blocked by an enemy.' }, true);
             }
             return;
         }
@@ -228,7 +240,8 @@ function createField(root, host, notifications) {
                 snapshot.objects = snapshot.objects.filter((target, index) => {
                     const available = result.available[index];
                     if (available === 2) target.handoff = true;
-                    return (available === 1 || available === 2) &&
+                    if (!available && target.showBlocked) target.outOfReach = true;
+                    return (available === 1 || available === 2 || target.outOfReach) &&
                         (!target.quest || questDestinationCurrent(root, job.scene, target.quest));
                 });
                 job.performed = true;
@@ -300,7 +313,7 @@ function createField(root, host, notifications) {
                     host.beacon.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
                         warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type,
                         { quest: job.quest, point: job.point, request: { ...request, limit: 8, refreshFacing: fixed ? facing : undefined },
-                            destinationReady });
+                            destinationReady, enemyCurrent: obstacle => currentEnemy(root, obstacle) });
                 }
                 follow(job, result, { kind: 'routeDirections', name: job.label,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
@@ -310,6 +323,23 @@ function createField(root, host, notifications) {
                     conversation: job.eventAction === 'talk',
                     board: !!job.vehicle, land: result.land === true,
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
+            }
+            else if (result?.status === 'enemyBlocked') {
+                if (!currentEnemy(root, result)) {
+                    if (job.retries < ACTOR_RETRIES) {
+                        job.retries++;
+                        job.performed = false;
+                        return afterRender();
+                    }
+                    return status(job, 'The enemy moved. Request directions again.');
+                }
+                if (host.beacon?.enabled()) host.beacon.start(job.scene, job.target, job.x, job.y, result,
+                    null, undefined, { quest: job.quest, point: job.point, request: { ...job.request, autowalk: false, beacon: true },
+                        enemyCurrent: obstacle => currentEnemy(root, obstacle), alreadyReported: true });
+                job.enemyCurrent = () => currentEnemy(root, result);
+                const record = { kind: 'routeDirections', name: job.label, legs: result.legs,
+                    enemyBlocked: true, boundary: result.boundary, more: result.more === true };
+                follow(job, result, record);
             }
             else if (result?.status === 'interrupted') {
                 const handoff = !job.eventAction && localHandoffName(job.map, result.boundaryEvent);
@@ -794,7 +824,7 @@ function createField(root, host, notifications) {
             afterRender();
         },
         changed(scene, steppedActor) {
-            autowalk.dirty(scene);
+            if (!steppedActor || steppedActor === root.$gamePlayer) autowalk.dirty(scene);
             const job = active;
             if (!steppedActor || steppedActor === root.$gamePlayer || job?.scene !== scene ||
                 scene._wqaCaveReview || sequence >= 0x7ffffffe) return retire(scene);
@@ -803,7 +833,8 @@ function createField(root, host, notifications) {
             if (inFlight !== job) {
                 // A fresh capture already sees the next pose. Once browse
                 // speech starts, ordinary ambient steps need no new result.
-                if (!job.performed || job.action !== 'directions' || outsideSpokenRoute(job, steppedActor)) return;
+                if (!job.performed || job.action !== 'directions' || outsideSpokenRoute(job, steppedActor) ||
+                    (job.enemyCurrent && job.enemyCurrent())) return;
                 return retire(scene);
             }
             if (!ready(scene)) return retire(scene);

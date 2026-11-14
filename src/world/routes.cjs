@@ -704,7 +704,47 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
 function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     if (cancelled()) return { status: 'cancelled' };
     const world = composeWorld(geometry, snapshot, cancelled);
-    return world ? solveWorldRoute(world, request, cancelled) : { status: 'cancelled' };
+    if (!world) return { status: 'cancelled' };
+    const result = solveWorldRoute(world, request, cancelled);
+    if (!['unreachable', 'approachBlocked'].includes(result.status) || request.field !== true || world.mode !== 'walk' ||
+        request.area || request.entrances !== undefined || request.vehicle) return result;
+
+    // Only relax verified moving encounter tiles in a second worker solve.
+    // Keep static geometry, rectangles and floor events in both searches.
+    const enemies = world.events.filter(event => event.movingEnemy && event.normal && !event.through &&
+        !event.erased && event.id !== request.event && !event.rectangle && !Number.isInteger(event.tileFlag));
+    if (cancelled()) return { status: 'cancelled' };
+    if (!enemies.length) return result;
+    const occupied = new Map(enemies.map(event => [indexOf(world, event.x, event.y), event.id]));
+    const excluded = new Set(enemies);
+    const relaxed = composeWorld(geometry, { ...snapshot,
+        events: snapshot.events.filter(event => !excluded.has(event)) }, cancelled);
+    if (!relaxed) return { status: 'cancelled' };
+    const possible = solveWorldRoute(relaxed, request, cancelled);
+    if (possible.status !== 'ready' || possible.reenter) return possible.status === 'cancelled' ? possible : result;
+    const legs = [];
+    let cell = indexOf(world, request.x, request.y);
+    let distance = 0;
+    for (const leg of possible.legs) {
+        const heading = DIRECTIONS.indexOf(leg.direction);
+        let walked = 0;
+        while (walked < leg.tiles) {
+            if ((distance & 63) === 0 && cancelled()) return { status: 'cancelled' };
+            const next = step(world, cell, heading);
+            if (next < 0) {
+                const enemy = occupied.get(offset(world, cell, heading));
+                if (!enemy) return result;
+                if (walked) legs.push({ ...leg, tiles: walked });
+                return { status: 'enemyBlocked', enemy, boundary: leg.direction, legs, distance,
+                    arrival: { x: cell % world.width, y: Math.floor(cell / world.width), facing: null } };
+            }
+            cell = next;
+            walked++;
+            distance++;
+        }
+        legs.push(leg);
+    }
+    return result;
 }
 
 module.exports = { solveRoute, solveWorldRoute, findReachable, walkingLanding, routeGoals, inside };

@@ -29,6 +29,7 @@ const { createWallAudio } = require('../src/world/wall-audio');
 const { createFootsteps } = require('../src/world/footsteps');
 const { captureWorld } = require('../src/world/snapshot');
 const { createBeacon } = require('../src/world/beacon');
+const { bearing } = require('../src/world/spatial-direction');
 const { createCaveTiming } = require('../src/world/cave-timing');
 
 const game = path.resolve(process.argv[2]);
@@ -354,6 +355,95 @@ function verifyWallFeedback() {
     console.log('Verified native walking, persistent directional wall tone, exact inactivity expiry and separate footsteps.');
 }
 
+async function verifyEnemyBlockedBeacon() {
+    const fixture = load(14);
+    Object.assign(fixture.player, { _x: 0, _y: 0 });
+    const live = captureWorld(c, true, undefined, undefined, [], true).live;
+    const enemy = live.events.find(event => event.movingEnemy);
+    assert(enemy, 'an authored moving encounter from Fry Fields');
+    const geometry = { width: 5, height: 2, scrollType: 0, cells: new Uint8Array(10), hasLandings: false };
+    geometry.cells.fill(15, 0, 5);
+    const request = { x: 0, y: 0, targetX: 4, targetY: 0, field: true };
+    const blocked = { ...enemy, x: 2, y: 0 };
+    const world = { ...live, terrain: [], events: [blocked], vehicles: [] };
+    const result = solveRoute(geometry, world, request);
+    assert.deepEqual(result, { status: 'enemyBlocked', enemy: enemy.id, boundary: 6,
+        legs: [{ direction: 6, tiles: 1 }], distance: 1, arrival: { x: 1, y: 0, facing: null } });
+    const adjacent = solveRoute(geometry, world, { ...request, x: 1 });
+    assert.equal(adjacent.distance, 0);
+    assert.equal(solveRoute(geometry, { ...world, events: [{ ...blocked, movingEnemy: false }] }, request).status, 'unreachable');
+    geometry.cells.fill(15);
+    assert.equal(solveRoute(geometry, world, request).status, 'ready', 'an open detour takes priority');
+    geometry.cells.fill(0, 5);
+
+    const map = c.$gameMap;
+    const player = c.$gamePlayer;
+    const scene = c.SceneManager._scene;
+    const renderer = new EventEmitter();
+    const pulses = [];
+    const reports = [];
+    let present = true;
+    let pending;
+    Object.assign(player, { _x: 0, _y: 0, _direction: 4, canPass: (x, y, dir) => !(present && x === 1 && dir === 6) });
+    Object.assign(c.Graphics, { app: { renderer }, frameCount: 1 });
+    const beacon = createBeacon(c, () => true, {
+        cues: CUE, isPrepared: () => true, retire() {},
+        play(_scene, _hrtf, cue, _gain, bearing, ready) { assert(ready()); pulses.push({ cue, bearing }); return true; }
+    }, () => ({ enabled: true, beacon: true, beaconVolume: 70 }), text => reports.push(text), {
+        submit(state) { state.waiting = true; pending = { state, revision: state.revision }; return true; },
+        cancel(state) { state.waiting = false; }
+    });
+    function tick(frame = c.Graphics.frameCount) {
+        c.Graphics.frameCount = frame;
+        if (scene._wqaBeaconUntil && frame >= scene._wqaBeaconUntil) beacon.expire(scene);
+        if (scene._wqaBeaconDue && frame >= scene._wqaBeaconDue) beacon.update(scene);
+        renderer.emit('postrender');
+    }
+    const east = tiles => Uint8Array.from({ length: tiles }, (_, i) => ((tiles - i) << 2) | 2);
+    assert(beacon.start(scene, 0, 0, 0, { status: 'ready', course: east(4), distance: 4,
+        arrival: { x: 4, y: 0, facing: null } }, null, undefined,
+    { point: true, request, enemyCurrent: () => present }));
+    tick();
+    assert.deepEqual(pulses.at(-1), { cue: CUE.beaconPulse, bearing: [1, 0, 0] });
+    player._x = 1;
+    beacon.moved(scene, 6, true);
+    tick(3);
+    assert.equal(pulses.length, 1, 'taking a step does not restart the cadence');
+    const reply = { ...adjacent, course: east(0) };
+    beacon.refreshResult(pending.state, pending.revision, 1, 0, reply);
+    tick(30);
+    assert.equal(pulses.length, 1, 'the blocked tile never plays arrival');
+    assert.match(reports[0], /Blocked by an enemy/);
+    assert(beacon.active(scene));
+    present = false;
+    beacon.actor(scene, { _eventId: enemy.id }, 4);
+    tick();
+    beacon.refreshResult(pending.state, pending.revision, 1, 0, {
+        status: 'ready', course: east(3), distance: 3, arrival: { x: 4, y: 0, facing: null }
+    });
+    tick(67);
+    assert.equal(pulses.length, 2, 'the same beacon resumes after the enemy clears');
+    for (const [x, frame] of [[2, 72], [3, 73]]) {
+        player._x = x;
+        beacon.moved(scene, 6, true);
+        tick(frame + 1);
+    }
+    tick(89);
+    assert.equal(scene._wqaBeaconDue, 107, 'one tile remaining uses an 18-frame pulse interval');
+    player._x = 4;
+    beacon.moved(scene, 6, true);
+    tick(108);
+    if (pending.state.waiting) beacon.refreshResult(pending.state, pending.revision, 4, 0, {
+        status: 'ready', course: east(0), distance: 0, arrival: { x: 4, y: 0, facing: null }
+    });
+    tick(109);
+    assert.equal(pulses.at(-1).cue, CUE.beaconArrival);
+    tick(122);
+    assert(!beacon.active(scene));
+    assert.equal(c.$gameMap, map);
+    console.log('Verified moving-enemy safe prefix and beacon handback, absolute right, cadence and arrival.');
+}
+
 async function verifyNativeBeacon() {
     const fixture = load(196);
     const { player, gameMap, geometry } = fixture;
@@ -443,8 +533,9 @@ async function verifyNativeBeacon() {
         prepare.done(2);
         c.Graphics.frameCount++;
         tick();
-        assert.deepEqual(sounding.bearing, [0, 0, -1]);
-        assert.equal(sounding.cue, CUE.beaconTurn);
+        assert.deepEqual(sounding.bearing, bearing(8, first));
+        assert.equal(sounding.cue, CUE.beaconPulse);
+        assert.equal(scene._wqaBeaconDue - c.Graphics.frameCount, 90);
         assert(sounding.ready());
         function walk() {
             const start = performance.now();
@@ -453,7 +544,10 @@ async function verifyNativeBeacon() {
                 c.Input.dir4 = direction;
                 player.moveByInput();
                 assert(player.isMovementSucceeded());
-                assert.equal(sounding, null, 'accepted movement revokes the old pulse');
+                const emitted = sounds.length;
+                c.Graphics.frameCount++;
+                tick();
+                assert(sounds.length <= emitted + 1, 'there is at most one scheduled cue during a moving update');
                 while (player.isMoving()) {
                     player.updateMove();
                     c.Graphics.frameCount++;
@@ -465,7 +559,6 @@ async function verifyNativeBeacon() {
         const enabledMs = walk();
         assert.deepEqual([player._x, player._y], [result.arrival.x, result.arrival.y]);
         if (result.arrival.facing !== null && player._direction !== result.arrival.facing) {
-            assert.equal(sounding.cue, CUE.beaconTurn);
             player.setDirection(result.arrival.facing);
             tick();
         }
@@ -515,6 +608,8 @@ async function verifyNativeBeacon() {
         beacon.refreshResult(state, revision - 1, snapshot.x, snapshot.y, reroute);
         assert.equal(sounding, null);
         beacon.refreshResult(state, revision, snapshot.x, snapshot.y, reroute);
+        tick();
+        c.Graphics.frameCount += 90;
         tick();
         assert(sounding?.ready(), 'the same selected beacon resumes after a detour');
         assert.equal(reports.length, 1, 'refresh does not repeat the directions or the old off-route message');
@@ -963,6 +1058,7 @@ async function main() {
     verifyPatrolContact();
     verifyWallFeedback();
     await verifyNativeBeacon();
+    await verifyEnemyBlockedBeacon();
     verifyNativePatrolMotion();
     verifyCaveProgression(c, load, snapshot, verifyRoute, read);
     await verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read);

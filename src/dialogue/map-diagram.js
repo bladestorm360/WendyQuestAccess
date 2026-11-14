@@ -14,6 +14,15 @@ const PATHWAYS = [
     'Pathway 2 crosses the northeast, with branches near the east edge.',
     'Pathway 3 crosses the southern half. A small red symbol marks its southwest end.'
 ];
+// Positions of recognizable, painted atlas landmarks, checked against
+// the matching ordinary overworld entrances. The unmarked art stays unnamed.
+const LANDMARKS = [
+    ['Crispy Beach', 67, 263], ['Crispy Ruins', 62, 225], ['Russetwood', 128, 209],
+    ['Fry Fields', 143, 249], ['French Fry Forest', 113, 236], ['Salt Caverns', 104, 188],
+    ['Chillcrest', 105, 129], ['Float Fort', 120, 56], ['Frosty Peak', 67, 96],
+    ['Burgenburg', 184, 124], ['Nuggedor', 320, 152], ['Cauldron of Sauce', 314, 98],
+    ['Sunrise Bay', 299, 202], ['Breakfast Stone Island', 191, 263]
+];
 const SECTORS = [
     ['northwest', 'north', 'northeast'], ['west', 'center', 'east'], ['southwest', 'south', 'southeast']
 ];
@@ -40,11 +49,31 @@ function namedPicture(screen, container, sprites, id, name, graphics) {
     return bounds && { picture, sprite, bounds };
 }
 
-function sector(map, sprite) {
-    const { tx, ty } = sprite.worldTransform;
-    const column = Math.floor(3 * (tx - map.x) / map.width);
-    const row = Math.floor(3 * (ty - map.y) / map.height);
+function sector(x, y) {
+    const column = Math.floor(3 * x / 380);
+    const row = Math.floor(3 * y / 320);
     return SECTORS[row]?.[column] || '';
+}
+
+function mapPoint(map, entry, pin = false) {
+    const { tx, ty } = entry.sprite.worldTransform;
+    // The quest pin is anchored at its middle. Its painted point is lower.
+    const y = pin ? entry.bounds.y + entry.bounds.height * (28 / 48) : ty;
+    return [(tx - map.x) * 380 / map.width, (y - map.y) * 320 / map.height];
+}
+
+function compass(dx, dy) {
+    if (Math.hypot(dx, dy) < 6) return '';
+    const points = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+    return points[(Math.round(Math.atan2(dx, -dy) * 4 / Math.PI) + 8) % 8];
+}
+
+function landmarks(x, y) {
+    return LANDMARKS.map(([name, left, top]) => ({ name, dx: left - x, dy: top - y,
+        distance: (left - x) ** 2 + (top - y) ** 2 }))
+        .filter(entry => entry.distance <= 56 ** 2)
+        .sort((a, b) => a.distance - b.distance).slice(0, 3)
+        .map(({ name, dx, dy }) => name + ', ' + (compass(dx, dy) || 'at Wendy’s marker'));
 }
 
 function pictureLabel(name, ruins) {
@@ -55,7 +84,7 @@ function pictureLabel(name, ruins) {
     return name === QUEST ? 'Quest marker' : '';
 }
 
-function captureDiagram(root, graphics, scene, window) {
+function captureDiagram(root, graphics, scene, window, objective) {
     const screen = root.$gameScreen;
     const source = root.$gameMessage?.interpreter;
     if (!scene._wqaMapRestored || !window.pause || source?._waitMode !== 'message' ||
@@ -77,12 +106,12 @@ function captureDiagram(root, graphics, scene, window) {
     // Let a pending alpha/position update settle before taking the snapshot.
     if (slots.some(id => screen._pictures[id]?._duration > 0)) return null;
     const ruins = name === ATLAS && Object.keys(RUINS).find(id => root.$dataCommonEvents?.[id]?.list === source._list);
-    const lines = [name === CAVERN ?
-        'North is up. Cliffs divide the cavern into northern passages and a broad southern area.' :
-        'North is up. Snow northwest, desert northeast, greenery southwest, rivers southeast.'];
+    const lines = [];
     const shown = [[27, name, base]];
     const player = namedPicture(screen, container, sprites, 38, PLAYER, graphics);
-    const here = player && sector(base.bounds, player.sprite);
+    const position = player && mapPoint(base.bounds, player);
+    const here = position && sector(...position);
+    if (name === CAVERN) lines.push('North is up. Cliffs divide the cavern into northern passages and a broad southern area.');
     if (here) {
         shown.push([38, PLAYER, player]);
         lines.push('Wendy marker, ' + here + ' of the map');
@@ -100,16 +129,28 @@ function captureDiagram(root, graphics, scene, window) {
             paths++;
         }
     } else {
-        for (const id of slots.slice(1)) {
+        const pin = namedPicture(screen, container, sprites, 50, QUEST, graphics);
+        const pinPosition = pin && mapPoint(base.bounds, pin, true);
+        const region = pinPosition && sector(...pinPosition);
+        if (region) {
+            shown.push([50, QUEST, pin]);
+            const bearing = here && compass(pinPosition[0] - position[0], pinPosition[1] - position[1]);
+            lines.push('Quest marker, ' + (here ? bearing ? bearing + ' of Wendy' : 'at Wendy’s marker' :
+                region + ' of the map'));
+        }
+        if (!ruins && objective) lines.push('Quest tracker. ' + objective);
+        for (const id of slots.slice(1, -1)) {
             const marker = screen._pictures[id]?._name;
             const label = pictureLabel(marker, ruins);
             if (!label) continue;
             const visible = namedPicture(screen, container, sprites, id, marker, graphics);
-            const area = visible && sector(base.bounds, visible.sprite);
+            const area = visible && sector(...mapPoint(base.bounds, visible));
             if (!area) continue;
             shown.push([id, marker, visible]);
             lines.push(label + ', ' + area + ' of the map');
         }
+        if (!ruins && here) lines.push(...landmarks(...position));
+        lines.push('North is up. Snow northwest, desert northeast, greenery southwest, rivers southeast.');
     }
 
     const list = source._list;

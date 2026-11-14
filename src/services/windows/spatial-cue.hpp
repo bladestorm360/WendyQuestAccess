@@ -12,6 +12,7 @@ constexpr int footstep_pip_frames = rate * 13 / 1000;
 constexpr int footstep_toe_frame = rate * 22 / 1000;
 constexpr int render_frames = cue_frames + 256;
 constexpr double rear_pitch = 0.72;
+constexpr double beacon_rear_pitch = 0.88;
 constexpr double tau = 6.283185307179586;
 enum class Cue : int {
     preview, wall_bump, wall_brush, beacon_pulse, beacon_turn, beacon_arrival, cave_go,
@@ -61,10 +62,12 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
         return envelope * (0.24 * std::sin(phase) + 0.13 * std::sin(4.6 * phase));
     }
     if (cue == Cue::beacon_pulse || cue == Cue::beacon_turn || cue == Cue::beacon_arrival) {
-        const auto segment = cue == Cue::beacon_pulse ? time : std::fmod(time, 0.045);
+        const bool arrival = cue == Cue::beacon_arrival;
+        const double length = arrival ? 0.030 : 0.045;
+        const auto segment = cue == Cue::beacon_pulse ? time : std::fmod(time, length);
         const double frequency = cue == Cue::beacon_pulse ? 520.0 : cue == Cue::beacon_turn ? 830.0 :
-            time < 0.045 ? 630.0 : 940.0;
-        const auto note = std::min({1.0, segment / 0.004, std::max(0.0, (0.043 - segment) / 0.010)});
+            time < 0.030 ? 630.0 : time < 0.060 ? 800.0 : 1010.0;
+        const auto note = std::min({1.0, segment / 0.004, std::max(0.0, (length - 0.002 - segment) / 0.008)});
         return envelope * note * 0.57 * std::sin(tau * frequency * pitch * segment);
     }
     if (cue == Cue::cave_go) {
@@ -137,7 +140,8 @@ bool stereo_cue(Stereo& output, Cue cue, Bearing bearing, double gain, Ready rea
     const auto pan = horizontal < 1e-6 ? 0.0 : bearing.right / horizontal;
     const auto left = gain * std::sqrt(std::max(0.0, (1.0 - pan) * 0.5));
     const auto right = gain * std::sqrt(std::max(0.0, (1.0 + pan) * 0.5));
-    const auto pitch = rate_scale * (bearing.forward < 0.0 ? rear_pitch : 1.0);
+    const auto pitch = rate_scale * (bearing.forward < 0.0 ?
+        (cue == Cue::beacon_pulse ? beacon_rear_pitch : rear_pitch) : 1.0);
     for (int i = 0; i < cue_frames; ++i) {
         if ((i % 128) == 0 && !ready()) return false;
         const auto sample = cue_sample(cue, i, pitch);

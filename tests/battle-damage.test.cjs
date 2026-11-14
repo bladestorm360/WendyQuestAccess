@@ -4,8 +4,10 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
+const fs = require('node:fs');
 const vm = require('node:vm');
 const { createBattleLog } = require('../src/battle/action-log');
+const { recordAttackSource } = require('../src/battle/damage-popup');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { nativeTextHost } = require('./native-text-host.cjs');
 
@@ -51,7 +53,7 @@ for (const name of ['setDrawColour', 'setOutline', 'setAlignment', 'setShadow', 
     Sprite_Text.prototype[name] = function () { return this; };
 Sprite_Text.prototype.setBlendColor = () => {};
 const c = vm.createContext({
-    ...host, Sprite_Damage, Sprite_Battler, Game_Enemy, Scene_Battle: function () {}, Scene_Message: function () {},
+    ...host, Sprite_Damage, Sprite_Battler, Game_Enemy, Game_ActionResult: function () {}, Scene_Battle: function () {}, Scene_Message: function () {},
     Sprite_Damage_prototype_initialize: function () { Sprite.prototype.initialize.call(this); this._flashColor = []; },
     SceneManager: { _scene: scene }, Graphics: { app: { stage: scene, renderer }, width: 640, height: 360 }, BattleManager: battle,
     a2_0x990531() { throw Error('Unresolved battle property'); },
@@ -153,6 +155,60 @@ assert.equal(seen.length, 7, 'a popup beyond the viewport does not speak');
 right._damages[0].x = right.x = 430;
 frame();
 assert.equal(seen.at(-1), 'Enemy 2, 9 HP damage.');
+
+const data = name => JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', name), 'utf8'));
+const actors = data('Actors.json');
+const skills = data('Skills.json');
+ally._actor = ally._battler;
+ally._actor.actor = () => actors[1];
+ally._battlerName = actors[1].battlerName;
+ally._mainSprite = ally.addChild(Object.assign(new Sprite(), { bitmap: { isReady: () => true } }));
+for (const sprite of [enemy, right]) sprite._enemy = sprite._battler;
+const frygor = scene._spriteset._subActorSprite = field.addChild(Object.assign(new Sprite(), {
+    _actor: actors[3], _battlerName: actors[3].battlerName
+}));
+frygor._mainSprite = frygor.addChild(Object.assign(new Sprite(), { bitmap: { isReady: () => true } }));
+let delayed;
+frygor.ActionTargetAnimation = () => [6, 60];
+c.SkillUtility = { ExtractMetaData: item => item.note ? JSON.parse(item.note.slice(item.note.indexOf('{'))) : {} };
+c.BattleHelper = { GetSubActorSprite: id => id === 3 ? frygor : null };
+c.AudioManager = { playSe() {} };
+c.CoroutineManager = { StartCoroutine(run) { delayed = run.finish; } };
+c.OverTime = function (_duration, finish) { this.finish = finish; };
+c.WendyQuestAccessAttackSource = (target, performer, subject, companion) =>
+    recordAttackSource(scene, target, performer, subject, companion);
+battle.applySubstitute = () => enemy._battler;
+battle._logWindow.push = () => {};
+battle._logWindow.displayActionResults = (_subject, target) => assert.equal(target, enemy._battler);
+const action = item => ({
+    isSkill: () => true, isItem: () => false, item: () => item, rollMissChance() {},
+    apply(target) {
+        const popupResult = new c.Game_ActionResult();
+        popupResult.clear();
+        Object.assign(popupResult, { used: true, hpAffected: true, hpDamage: 17 });
+        target.paintResult = popupResult;
+    }
+});
+battle._action = action(skills[9]);
+battle.invokeNormalAction(ally._battler, right._battler);
+assert.equal(enemy._battler.paintResult, null);
+delayed(1);
+advance(40);
+assert.equal(seen.at(-1), 'Frygor to Enemy 1, 17 HP damage.');
+battle._action = action({ note: '' });
+battle.invokeNormalAction(ally._battler, enemy._battler);
+advance(40);
+assert.equal(seen.at(-1), 'Wendy to Enemy 1, 17 HP damage.');
+battle.applySubstitute = () => ally._battler;
+battle._logWindow.displayActionResults = () => {};
+battle.invokeNormalAction(right._battler, ally._battler);
+advance(40);
+assert.equal(seen.at(-1), 'Enemy 2 to Wendy, 17 HP damage.');
+const reused = new c.Game_ActionResult();
+reused._wqaAttackSource = 'Frygor';
+reused.clear();
+assert.equal(reused._wqaAttackSource, null);
+console.log('Verified Wendy, enemy and Frygor attribution through native apply, substitution and popup setup.');
 console.log('Verified the installed damage popup for HP, recovery, miss, block, visible modifiers and unsigned FP, with repeated events and animation gating.');
 console.log('Throttled completed popup to formatted receipt', delay.toFixed(2), 'ms. 250 stable updates',
     baseline.toFixed(2), 'ms native,', stable.toFixed(2), 'ms enabled.');

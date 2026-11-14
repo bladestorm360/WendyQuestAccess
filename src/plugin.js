@@ -11,6 +11,7 @@ const { createBattleTargets } = require('./battle/targets');
 const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createBattleLog } = require('./battle/action-log');
+const { recordAttackSource, abilitySource } = require('./battle/damage-popup');
 const { recordCollapse, recordCondition } = require('./battle/outcomes');
 const { createRadialResult } = require('./battle/radial-result');
 const { battleVitals, menuVitals } = require('./battle/party-vitals');
@@ -154,7 +155,8 @@ function boot(root, nodeRequire, nodeProcess) {
         battleLog = createBattleLog(root, host, notifications, battleFocus.appendFeedback);
         radialResult = createRadialResult(root, host);
         host.speechPreferences = () => speechPreferences;
-        host.dialogueDiagram = (scene, window) => captureDiagram(root, host.graphics, scene, window);
+        host.dialogueDiagram = (scene, window) =>
+            captureDiagram(root, host.graphics, scene, window, quests?.visibleObjective(scene));
         dialogue = createDialogueObserver(host, notifications);
         credits = createCredits(root, host, notifications, host.speechPreferences);
         field = createField(root, host, notifications);
@@ -534,6 +536,33 @@ function boot(root, nodeRequire, nodeProcess) {
     };
     root.WendyQuestAccessBattleRadialLeaving = function (scene) { radialResult?.retire(scene); };
 
+    root.WendyQuestAccessAttackSource = function (target, performer, subject, companionAction) {
+        try {
+            const scene = outcomeScene();
+            if (scene) recordAttackSource(scene, target, performer, subject, companionAction);
+        } catch { /* Native results stay in charge. */ }
+    };
+    root.WendyQuestAccessAbilitySource = function (item, format) {
+        try {
+            const scene = outcomeScene();
+            if (scene) return abilitySource(scene, item, format);
+        } catch { /* Preserve the native ability line. */ }
+        return undefined;
+    };
+    root.WendyQuestAccessVictoryCondition = function (sprite) {
+        try {
+            const scene = root.SceneManager._scene;
+            const set = scene?._spriteset;
+            // Victory dialogue owns this cue. The normal battle status
+            // observer retains ordinary mid-battle expiration.
+            if (!scene?._wqaBattleStarted || scene._fadeDuration !== 0 || scene._fadeOpacity !== 0 ||
+                root.SceneManager._nextScene || root.SceneManager._exiting || root.SceneManager._wqaNativeAutosaves ||
+                root.Graphics._wqaResize || root.Graphics.app?.stage !== scene || !root.document.hasFocus() ||
+                root.$gameTroop?._interpreter?._list || scene._wqaBattleInterpreter?._list ||
+                sprite.parent !== set?._battleField || !sprite.worldVisible || !(sprite.worldAlpha > 0)) return;
+            scene._wqaVictoryCondition = 'Crispy Shield ended.';
+        } catch { /* Keep the native particle cleanup in charge. */ }
+    };
     root.WendyQuestAccessBattleLogReady = function (scene, window) {
         try { battleLog?.observe(scene, window); } catch { battleLog?.retire(scene); }
     };
@@ -678,7 +707,7 @@ function boot(root, nodeRequire, nodeProcess) {
         if (!steppedActor || steppedActor === root.$gamePlayer) footsteps?.leave(scene);
         caveTiming?.stop(scene);
         if (scene?._wqaTerrainWork) beacon?.stop(scene);
-        else beacon?.invalidate(scene);
+        else if (!steppedActor) beacon?.invalidate(scene);
         field?.changed(scene, steppedActor);
     };
     root.WendyQuestAccessTreasureStarted = function (scene, animation) {

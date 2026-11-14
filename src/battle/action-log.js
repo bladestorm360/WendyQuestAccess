@@ -100,7 +100,7 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             if (row._wqaLogSeen || !window.items.includes(row) || !(row.pos > 0)) continue;
             row._wqaLogSeen = true;
             const text = readable(paint);
-            if (text) lines.push(text);
+            if (text) lines.push(row._wqaSource ? row._wqaSource + ' uses ' + text : text);
         }
         for (const sprite of damage) {
             const caption = damageCaption(scene, host.graphics, sprite);

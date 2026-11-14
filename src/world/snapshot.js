@@ -1,7 +1,7 @@
 'use strict';
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
-const { destination, eventDescription } = require('./destinations');
+const { destination, eventDescription, activeMovingEnemy } = require('./destinations');
 const { localDestination, localHandoffName } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
@@ -98,6 +98,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             events.push({ id: eventId, x, y, normal: event._priorityType === 1, through: event._through === true,
                 tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action,
                 erased: event._erased === true,
+                movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
                 discoveryFor: mode === 'airship' ? discoveryEntrance(id, event) : undefined });
         }
         if (routesOnly || event._erased || !action) continue;

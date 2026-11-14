@@ -59,6 +59,7 @@ for name, tail in [
     ("BattleManager['isBusy']", "},BattleManager['showEnemySelectionArrows']"),
     ("BattleManager['processDefeat']", "},BattleManager['processVictory']"),
     ("BattleManager['processVictory']", "},BattleManager['displayExp']"),
+    ("Sprite_BattleScreenParticipant['prototype']['StateAnimationCleanUp']", "},Sprite_Battler['prototype']['initialize']"),
     ("BattleManager['displayExp']", "},Game_Unit['prototype']['makeActions']"),
 ]:
     methods.append(between(battle, f'{name}=function(', tail) + '};')

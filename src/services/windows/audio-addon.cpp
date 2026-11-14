@@ -108,7 +108,8 @@ struct Owner {
         Stereo samples{};
         p = normalized(p);
         const auto sound = static_cast<Cue>(cue);
-        const bool rendered = use_hrtf && hrtf_ready && hrtf->render(samples, sound, p, gain, ready, pitch);
+        const double hrtf_pitch = sound == Cue::beacon_pulse && p.forward < 0.0 ? pitch * beacon_rear_pitch : pitch;
+        const bool rendered = use_hrtf && hrtf_ready && hrtf->render(samples, sound, p, gain, ready, hrtf_pitch);
         if (!rendered && !stereo_cue(samples, sound, p, gain, ready, pitch)) return 0;
         if (!device->publish(epoch, samples, lane)) return ready() ? -1 : 0;
         return rendered ? 2 : 1;

@@ -65,7 +65,9 @@ const BEACH_HANDOFF_NAMES = Object.freeze({
 const BEACH_HANDOFFS = Object.freeze(Object.keys(BEACH_HANDOFF_NAMES).map(Number));
 
 function localHandoffName(map, event) {
-    return map === 13 ? BEACH_HANDOFF_NAMES[event] : undefined;
+    if (map === 13) return BEACH_HANDOFF_NAMES[event];
+    if (map === 15 && event >= 46 && event <= 49) return 'Scene trigger';
+    return undefined;
 }
 
 function localDestination(root, event, page) {
@@ -127,7 +129,10 @@ function localDestination(root, event, page) {
     // The three pantry props share a label in both native interaction states.
     if (map === 116 && [7, 9, 10].includes(id)) return { name: 'Pantry', category: 'objects' };
     if (PULLS[map]?.includes(id)) return event._pageIndex === 0 ? { name: 'Pull handle', category: 'objects' } : null;
-    if (map === 15 && id >= 31 && id <= 33) return { name: 'Gate switch', category: 'objects' };
+    // All three physical forest buttons use the native action button.
+    // Keep them browsable even while a floor scene or obstacle blocks access.
+    if (map === 15 && id >= 31 && id <= 33 && page.image?.characterName === '!Button')
+        return { name: 'Gate switch', category: 'objects', showBlocked: true };
     if (map === 87 && id >= 121 && id <= 130 && page.list[35]?.parameters?.[3]?.pictureName === 'system/Caffeine Caverns Map')
         return { name: 'Map board', category: 'objects' };
     if ((map === 128 && id === 11) || (map === 133 && id === 4))

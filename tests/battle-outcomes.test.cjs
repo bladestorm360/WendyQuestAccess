@@ -57,6 +57,22 @@ async function verifyBattleOutcomes() {
         labels.obtainExp.replace('%1', '30').replace('%2', system.terms.basic[8]),
         labels.obtainGold.replace('%1', '12').replace('\\G', system.currencyUnit)
     ].join(' ').replace(/\s+/g, ' '));
+    const { c, scene } = won;
+    c.$dataStates = installedData('States.json');
+    c.ExtractMetaData = state => JSON.parse(state.note.slice(state.note.indexOf('{')));
+    let shieldCleanups = 0;
+    c.BattleAnimations = { CrispyStateCleanup() { shieldCleanups++; } };
+    const field = {};
+    scene._spriteset = { _battleField: field };
+    const wendySprite = Object.assign(new c.Sprite_BattleScreenParticipant(), {
+        parent: field, worldVisible: true, worldAlpha: 1, _battler: { _actorId: 1 }
+    });
+    wendySprite.StateAnimationCleanUp(19);
+    assert.equal(shieldCleanups, 1);
+    const shieldSpeech = () => won.records.find(record => record.kind === 'battleLog');
+    won.until(() => shieldSpeech());
+    assert.equal(formatSpeech(shieldSpeech()), 'Crispy Shield ended.');
+    assert.equal(shieldSpeech().append, true);
     won.advance();
     won.until(() => won.packets().length === 2);
     assert.equal(formatSpeech(won.packets()[1]), labels.obtainItem.replace('%1', item.name));

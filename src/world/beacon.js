@@ -7,6 +7,8 @@ const { questDestinationCurrent } = require('./quest-destinations');
 
 const MAX_EVENTS = 513;
 const PULSE_LIFETIME = 12;
+const SLOW_INTERVAL = 90;
+const FAST_INTERVAL = 18;
 const NORMAL_TRIGGERS = [0, 1, 2];
 
 function nextTile(map, x, y, direction) {
@@ -80,12 +82,17 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
         if (route === state) state.scene._wqaBeaconDue = Math.max(1, frame() + delay);
     }
 
+    function schedule(state, delay = 0) {
+        const due = state.scene._wqaBeaconDue;
+        if (!due || frame() + delay < due) wake(state, delay);
+    }
+
     function next(state) {
         const step = state.course[state.index];
         return step ? DIRECTIONS[step & 3] : state.arrival.facing;
     }
 
-    function start(scene, id, x, y, result, approachReady, vehicle, { quest, point = false, request, destinationReady } = {}) {
+    function start(scene, id, x, y, result, approachReady, vehicle, { quest, point = false, request, destinationReady, enemyCurrent, alreadyReported = false } = {}) {
         if (!enabled() || !fieldReady(scene)) return false;
         const map = root.$gameMap;
         const player = root.$gamePlayer;
@@ -100,7 +107,10 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
         stop();
         route = { scene, map, player, id, vehicle, quest, target, aircraft, point, mode: travelMode(map, player),
             targetX: target?._x, targetY: target?._y, page: target?._pageIndex,
-            x, y, course, arrival, approachReady, request, destinationReady, revision: 0, dirty: false, index: 0, facing: player._direction, queued: false, preparing: false, arriving: false };
+            x, y, course, arrival, approachReady, request, destinationReady, enemyCurrent,
+            enemyBlock: result.status === 'enemyBlocked' ? result : null,
+            reportedEnemy: alreadyReported ? result.enemy : undefined, revision: 0, dirty: false, index: 0,
+            initialDistance: course.length, lastPing: null, queued: false, preparing: false, arriving: false };
         scene._wqaBeaconActive = scene._wqaPresentation = true;
         wake(route);
         return true;
@@ -125,25 +135,27 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
         reroute.cancel(state);
     }
 
-    function invalidate(scene, keepPreparation = false, routeChanged = true) {
+    function invalidate(scene) {
         const state = route;
         if (!state || state.scene !== scene) return;
         state.arriving = false;
-        if (routeChanged) refresh(state);
-        if (!keepPreparation || !state.preparing) pulseOff(state);
+        refresh(state);
+        pulseOff(state);
         wake(state);
     }
 
     function actor(scene, character, direction) {
         const state = route;
         if (!state || state.scene !== scene) return;
-        if (character === state.player && CARDINAL[direction] ) {
-            if (!state.preparing) pulseOff(state);
+        // The native input callback confirms accepted steps. Simple facing
+        // changes have no effect on absolute compass audio.
+        if (character === state.player) {
+            if (!direction) schedule(state);
             return;
         }
-        if (character === state.player) return invalidate(scene, true);
-        if (character === state.target || !CARDINAL[direction] ||
-            state.index === state.course.length) return invalidate(scene);
+        if (character === state.target || state.enemyBlock && character._eventId === state.enemyBlock.enemy ||
+            !CARDINAL[direction]) return invalidate(scene);
+        if (!next(state)) return;
         const upcoming = nextTile(state.map, state.x, state.y, next(state));
         const [newX, newY] = nextTile(state.map, character._x, character._y, direction);
         const dx = newX - character._x;
@@ -158,7 +170,10 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
         const expected = next(state);
         if (success) {
             refresh(state);
-            if (direction !== expected || state.index >= state.course.length) state.offCourse = true;
+            if (direction !== expected || state.index >= state.course.length) {
+                state.offCourse = true;
+                pulseOff(state);
+            }
             else {
                 const [x, y] = nextTile(state.map, state.x, state.y, direction);
                 if (state.player._x !== x || state.player._y !== y) state.offCourse = true;
@@ -169,10 +184,8 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
                 }
             }
         }
-        const turned = state.facing !== state.player._direction;
-        state.facing = state.player._direction;
         if (!success && direction === expected && !state.waiting && !state.waitForMove && !state.dirty) refresh(state);
-        if (success || turned || direction === expected) invalidate(scene, !state.offCourse, false);
+        if (success || direction === expected) schedule(state, state.index === state.course.length ? 0 : 1);
     }
 
     function fail(state, text) {
@@ -184,7 +197,7 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
         if (route !== state) return;
         state.queued = false;
         if (!enabled() || !fieldReady(scene, true)) return stop(scene);
-        if (!fieldReady(scene)) return wake(state, 1);
+        const settled = fieldReady(scene);
         if (!validTarget(state, false) || !Array.isArray(map._events) || map._events.length > MAX_EVENTS)
             return fail(state, 'Destination changed. Request directions again.');
         if (state.approachReady && !state.approachReady()) return fail(state, 'Patrol approach changed. Request directions again.');
@@ -193,17 +206,31 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
         const direction = next(state);
         const blocked = !displaced && step && !player.canPass(x, y, direction);
         if (state.request && reroute) {
+            if (state.enemyBlock && !state.enemyCurrent?.(state.enemyBlock) && !state.dirty && !state.waiting) refresh(state);
             if ((displaced || blocked) && !state.dirty && !state.waiting && !state.waitForMove) refresh(state);
             if (state.dirty && !state.waiting) {
-                if (reroute.submit(state)) state.dirty = false;
-                else wake(state, 4);
+                if (settled && reroute.submit(state)) state.dirty = false;
+                else schedule(state, 4);
             }
-            if (state.waitForMove || displaced || blocked || (!step && (state.waiting || state.dirty))) return;
+            if (state.waitForMove || displaced || blocked || (!step && (state.waiting || state.dirty))) {
+                if (state.enemyBlock) schedule(state, 18);
+                return;
+            }
         } else {
             if (displaced) return fail(state, validTarget(state) ?
                 'Off route. Request directions again.' : 'Destination changed. Request directions again.');
             if (blocked) return fail(state, 'Route blocked. Request directions again.');
         }
+        if (!step && state.enemyBlock) return wake(state, 18);
+        const facing = player._direction;
+        const arrived = !step && (direction === null || direction === facing);
+        if (!step && !settled) return schedule(state, 4);
+        const remaining = state.course.length - state.index;
+        const progress = Math.max(0, Math.min(1, (remaining - 1) / Math.max(1, state.initialDistance - 1)));
+        const interval = FAST_INTERVAL + Math.round((SLOW_INTERVAL - FAST_INTERVAL) * progress);
+        if (!arrived && state.lastPing !== null && frame() - state.lastPing < interval)
+            return schedule(state, state.lastPing + interval - frame());
+
         const { hrtf, beaconVolume } = preferences();
         if (!audio.isPrepared(hrtf)) {
             if (!state.preparing) {
@@ -216,16 +243,7 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
             }
             return wake(state, 8);
         }
-        const facing = player._direction;
-        let cue = cues.beaconPulse;
-        let interval = 18;
-        let gain = beaconVolume / 100;
-        if (step) {
-            const distance = step >> 2;
-            interval = distance <= 3 ? 14 : distance <= 10 ? 20 : 26;
-            gain *= distance <= 3 ? 1 : distance <= 10 ? 0.8 : 0.65;
-            cue = direction === facing ? cue : cues.beaconTurn;
-        } else {
+        if (!step) {
             let matches;
             if (state.point) matches = true;
             else if (state.aircraft) matches = canLand(map, x, y);
@@ -234,20 +252,24 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
             else matches = atApproach(map, player, state.target, state.arrival);
             if (x !== state.arrival.x || y !== state.arrival.y || !matches)
                 return fail(state, 'Approach changed. Request directions again.');
-            cue = direction === null || direction === facing ? cues.beaconArrival : cues.beaconTurn;
         }
-        const source = cue === cues.beaconArrival ? [0, 0, 1] : bearing(facing, direction);
+        const cue = arrived ? cues.beaconArrival : cues.beaconPulse;
+        const source = arrived ? [0, 0, 1] : bearing(8, direction);
         if (!source) return fail(state, 'Beacon direction is unavailable.');
         const until = frame() + PULSE_LIFETIME;
-        const ready = () => route === state && fieldReady(scene) && validTarget(state) && frame() < until &&
-            player._x === x && player._y === y && player._direction === facing;
-        if (!audio.play(scene, hrtf, cue, gain, source, ready, status => {
+        const ready = () => route === state && fieldReady(scene, !arrived) &&
+            validTarget(state) && frame() < until && !state.offCourse &&
+            (!arrived || player._x === x && player._y === y && player._direction === facing);
+        if (!audio.play(scene, hrtf, cue, beaconVolume / 100, source, ready, status => {
             if (status < 0) fail(state, 'Beacon audio is unavailable.');
         }, 'beacon')) return wake(state, 4);
         if (route !== state) return;
         scene._wqaBeaconUntil = until;
         if (cue === cues.beaconArrival) state.arriving = true;
-        else wake(state, interval);
+        else {
+            state.lastPing = frame();
+            schedule(state, interval);
+        }
     }
 
     return {
@@ -255,12 +277,18 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
         refreshResult(state, revision, x, y, result) {
             if (route !== state || state.revision !== revision) return;
             state.waiting = false;
-            if (!fieldReady(state.scene) || !validTarget(state, false) || state.player._x !== x || state.player._y !== y) {
+            if (!fieldReady(state.scene, true) || !validTarget(state, false) || state.player._x !== x || state.player._y !== y) {
                 if (fieldReady(state.scene, true)) { state.dirty = true; wake(state); }
                 return;
             }
             const { course, arrival } = result || {};
-            if (result?.status !== 'ready' || result.reenter || Object.prototype.toString.call(course) !== '[object Uint8Array]' ||
+            const enemyBlock = result?.status === 'enemyBlocked' ? result : null;
+            if (enemyBlock && !state.enemyCurrent?.(enemyBlock)) {
+                state.dirty = true;
+                pulseOff(state);
+                return wake(state, 18);
+            }
+            if ((!enemyBlock && result?.status !== 'ready') || result.reenter || Object.prototype.toString.call(course) !== '[object Uint8Array]' ||
                 course.length !== result.distance || course.length >= MAX_CELLS || !arrival ||
                 !Number.isInteger(arrival.x) || !Number.isInteger(arrival.y) ||
                 (arrival.facing !== null && !CARDINAL[arrival.facing])) {
@@ -270,13 +298,16 @@ function createBeacon(root, fieldReady, audio, preferences, report, reroute) {
                 pulseOff(state);
                 return;
             }
-            if (state.request.refreshFacing !== undefined) arrival.facing = state.request.refreshFacing;
-            const sameEdge = !state.offCourse && state.x === x && state.y === y &&
-                state.course[state.index] === course[0] && state.arrival.facing === arrival.facing;
-            if (!sameEdge) pulseOff(state);
-            Object.assign(state, { x, y, course, arrival, index: 0, offCourse: false, waitForMove: false,
+            if (!enemyBlock && state.request.refreshFacing !== undefined) arrival.facing = state.request.refreshFacing;
+            const wasOffCourse = state.offCourse;
+            Object.assign(state, { x, y, course, arrival, enemyBlock, index: 0, offCourse: false, waitForMove: false,
                 targetX: state.target?._x, targetY: state.target?._y });
-            if (!sameEdge || !course.length || !state.scene._wqaBeaconDue) wake(state);
+            if (enemyBlock && state.reportedEnemy !== enemyBlock.enemy) {
+                state.reportedEnemy = enemyBlock.enemy;
+                report(course.length ? 'Route blocked by an enemy. Beacon leads to the last clear tile.' : 'Blocked by an enemy.');
+            } else if (!enemyBlock) state.reportedEnemy = undefined;
+            if (wasOffCourse || !course.length) schedule(state);
+            else schedule(state, Math.max(0, (state.lastPing ?? frame()) - frame() + FAST_INTERVAL));
         },
         active: scene => route?.scene === scene,
         questActive: scene => route?.scene === scene && !!route.quest,

@@ -4,6 +4,8 @@ const { DIRECTIONS, MAX_CELLS, MAX_EVENTS } = require('./geometry.cjs');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { questDestinationCurrent } = require('./quest-destinations');
 
+const { activeMovingEnemy } = require('./destinations');
+
 const TOUCH_TRIGGERS = [1, 2];
 
 function createAutowalk(root, ready, preferences, report) {
@@ -73,18 +75,22 @@ function createAutowalk(root, ready, preferences, report) {
             return 0;
         }
         if (!preferences().autowalk || state.dirty || state.pending || !valid(state)) return changed(state);
-        const { map, index, course, arrival, record } = state;
+        const { map, index, course, arrival, record, job } = state;
         if (index === course.length) {
             if (player._x !== arrival.x || player._y !== arrival.y ||
                 (record.land && !canLand(map, arrival.x, arrival.y))) return changed(state);
+            if (record.enemyBlocked && !job.enemyCurrent?.()) return changed(state);
             const name = record.boundary ? record.name : 'At ' + record.name;
-            return end(state, { ...record, name, legs: [], more: false });
+            return end(state, { ...record, name, legs: [], more: false, directionsOnly: record.enemyBlocked === true });
         }
         const step = DIRECTIONS[course[index] & 3];
         const x = map.roundXWithDirection(player._x, step);
         const y = map.roundYWithDirection(player._y, step);
-        if (!player.canPass(player._x, player._y, step))
+        if (!player.canPass(player._x, player._y, step)) {
+            if (job.mode === 'walk' && player.findEventsAt(x, y).some(event => activeMovingEnemy(root, event)))
+                return end(state, { kind: 'fieldStatus', name: 'Autowalk stopped. Blocked by an enemy.' });
             return changed(state, 'Autowalk stopped. The next tile is blocked.');
+        }
         if (player.canStartLocalEvents()) {
             const floor = player.findEventsAt(x, y).find(event =>
                 player.canTriggerEvent(event, TOUCH_TRIGGERS, false) && event.list()?.length > 1);

@@ -45,6 +45,30 @@ function enemyLabel(scene, enemy, includeCollapsed = true) {
     return presented.length > 1 ? (name ? name + ', enemy ' : 'Enemy ') + (position + 1) : name || 'Enemy';
 }
 
+function recordAttackSource(scene, target, performer, subject, companionAction) {
+    const result = target.result();
+    if (!result?.used) return;
+    const spriteset = scene._spriteset;
+    const actors = spriteset?._actorSprites;
+    const enemies = spriteset?._enemySprites;
+    const main = Array.isArray(actors) && actors.length <= MAX_BATTLERS && actors.find(sprite => sprite._actor === subject);
+    const enemy = Array.isArray(enemies) && enemies.length <= MAX_BATTLERS &&
+        enemies.find(sprite => sprite._enemy === subject);
+    // Companion metadata is also used by the native visual dispatcher.
+    // When its sprite is unavailable, the engine can fall back to Wendy.
+    if (companionAction && main && performer !== spriteset._subActorSprite) return;
+    const visibleActor = portraitActor(scene, performer || main);
+    const name = visibleActor?.name || (enemy && enemyLabel(scene, enemy));
+    if (name) result._wqaAttackSource = name;
+}
+
+function abilitySource(scene, item, format) {
+    // The two Rise and Shine command rows omit the caster from native text.
+    if (item.message1 !== format) return '';
+    const performer = portraitActor(scene, scene._spriteset?._subActorSprite);
+    return performer?.actor.id === 2 ? performer.name : '';
+}
+
 function damageCaption(scene, graphics, popup) {
     const paint = popup._wqaDamageCaption;
     if (!paint || !attached(popup, scene._spriteset?._battleField) || !(popup._duration > 0)) return '';
@@ -54,7 +78,8 @@ function damageCaption(scene, graphics, popup) {
     if (!text) return '';
     const who = popupOwner(scene, popup, paint.target);
     if (!who) return '';
-    if (text === 'MISS') return who + ', miss';
+    const source = paint.source ? paint.source + ' to ' + who : who;
+    if (text === 'MISS') return paint.source ? paint.source + ' misses ' + who : who + ', miss';
 
     const number = NUMBER.exec(text);
     if (!number) return '';
@@ -64,7 +89,8 @@ function damageCaption(scene, graphics, popup) {
         popup._colorType === 1 ? ' HP recovered' : ' HP damage');
     const effectiveness = element === '(' ? 'elemental weakness' : element === ')' ? 'elemental resistance' : '';
     const adjustment = status === '[' ? 'boosted' : status === ';' ? 'reduced' : status === ';;' ? 'strongly reduced' : '';
-    return [who, result, effectiveness, adjustment].filter(Boolean).join(', ');
+    return [amount === 'BLOCKED' && paint.source ? paint.source + ' blocked by ' + who :
+        source, amount === 'BLOCKED' && paint.source ? '' : result, effectiveness, adjustment].filter(Boolean).join(', ');
 }
 
-module.exports = { damageCaption, enemyLabel };
+module.exports = { damageCaption, enemyLabel, recordAttackSource, abilitySource };

@@ -8,6 +8,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const { createBattleLog } = require('../src/battle/action-log');
 const { recordCollapse, recordCondition } = require('../src/battle/outcomes');
+const { abilitySource } = require('../src/battle/damage-popup');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
@@ -28,7 +29,7 @@ const battle = { _phase: 'action', _spriteset: { isBusy: () => spritesBusy }, _l
 const c = vm.createContext({
     Scene_Battle: function () {}, Scene_Message: function () {}, Window_BattleActionLog: function () {},
     Window_Base: function () {}, Window_BattleLog: function () {}, Sprite_Enemy: function () {},
-    BattleHelper: { logAction(text) { if (text) log.pushMessage(text, 6); } },
+    BattleHelper: { IsBattleScene: () => true },
     a2_0x990531() { throw Error('Unresolved battle property'); },
     SceneManager: { _scene: scene }, Graphics: { app: { stage: scene, renderer }, frameCount: 0, height: 540 }, BattleManager: battle,
     $dataStates: JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/States.json'), 'utf8')),
@@ -157,7 +158,7 @@ const icon = sprite._stateIconSprite = { _battler: enemy, parent: sprite, bitmap
     worldVisible: true, worldAlpha: 1, _iconIndex: 72, _frame: { width: 32, height: 32, x: 256, y: 128 } };
 legacyLog._lines = [];
 legacyLog.wait = () => {};
-legacyLog.push = (method, text) => { if (method === 'addText') legacyLog.addText(text); };
+legacyLog.push = (method, text, caster) => { if (method === 'addText') legacyLog.addText(text, caster); };
 vm.runInContext("String.prototype.format = function(name) { return this.replace('%1', name); };", c);
 c.WendyQuestAccessBattleCondition = (window, target, state, added, speak) => {
     assert.equal(window, legacyLog);
@@ -188,6 +189,20 @@ frame();
 assert.equal(lines.length, afterKo, 'an already collapsed enemy never produces a second KO');
 assert.match(observer.latest(scene).lines.at(-1), /Enemy defeated/);
 observer.leave(scene);
+
+const gameData = name => JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data', name), 'utf8'));
+const baconator = gameData('Actors.json')[2];
+const companion = scene._spriteset._subActorSprite = { _actor: baconator, _battlerName: baconator.battlerName };
+companion._mainSprite = { parent: companion, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } };
+c.WendyQuestAccessAbilitySource = (item, format) => abilitySource(scene, item, format);
+const ability = gameData('Skills.json')[31];
+c.fixtureAbility = ability;
+c.fixtureLog = legacyLog;
+vm.runInContext("fixtureLog.displayItemMessage(fixtureAbility.message1, {name: () => 'Wendy'}, fixtureAbility);", c);
+log.cooldown = 0;
+frame();
+assert(painted.includes(ability.message1), 'the native text remains intact');
+assert.match(lines.at(-1), /Baconator uses Rise and Shine/);
 
 console.log('Verified native log paint, repeated events, animation cancellation, written and icon-only conditions, enemy KO, and review.');
 console.log('Throttled battle log paint through synthetic postrender and formatted receipt', first.toFixed(2), 'ms.');

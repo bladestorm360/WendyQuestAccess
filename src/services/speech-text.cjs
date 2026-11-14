@@ -161,7 +161,9 @@ function formatSpeech(message) {
             const facing = HEADINGS[message.facing];
             const boundary = HEADINGS[message.boundary];
             const activate = HEADINGS[message.activate];
-            if (message.more) parts.push('More directions available');
+            if (message.more) parts.push(message.enemyBlocked === true ? 'Route ends at an enemy. More directions available' :
+                'More directions available');
+            else if (message.enemyBlocked === true && boundary) parts.push('Blocked by an enemy one tile ' + boundary);
             else if (activate) parts.push(`Move ${activate} to activate`);
             else if (boundary) {
                 parts.push(`${label({ name: message.boundaryName }) || 'Floor event'} one tile ${boundary}`);

@@ -196,6 +196,12 @@ int wmain(int argc, wchar_t** argv) {
     const int heel = crossings(Cue::footstep, 0, footstep_pip_frames);
     const int toe = crossings(Cue::footstep, footstep_toe_frame, click_frames);
     assert(heel > 15 && toe > heel * 1.3);
+    assert(crossings(Cue::beacon_pulse, 192, 1824, beacon_rear_pitch) <
+        crossings(Cue::beacon_pulse, 192, 1824));
+    const int first_note = crossings(Cue::beacon_arrival, 192, 1248);
+    const int second_note = crossings(Cue::beacon_arrival, 1632, 2688);
+    const int third_note = crossings(Cue::beacon_arrival, 3072, 4128);
+    assert(first_note > 0 && first_note < second_note && second_note < third_note);
     struct WallCase { Cue cue; Bearing bearing; int cycles; };
     for (const auto& [cue, bearing, cycles] : std::array<WallCase, 4>{{
         {Cue::wall_north, {0, 0, 1}, 26}, {Cue::wall_east, {1, 0, 0}, 22},

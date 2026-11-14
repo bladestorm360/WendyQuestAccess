@@ -492,6 +492,9 @@ def windows_notification(original):
                 b'globalThis.WendyQuestAccessBattleCondition?.(this,target,state,true,!stateText);\n',
         172025: b'        if (state.iconIndex > 0 && !state.message4) '
                 b'globalThis.WendyQuestAccessBattleCondition?.(this,target,state,false,true);\n',
+        # Carry the source of the native ability line as a separate queue argument.
+        166632: b', (item?.id===31||item?.id===32)?'
+                b'globalThis.WendyQuestAccessAbilitySource?.(item,fmt):undefined',
         162511: b'    if(SceneManager._scene?._wqaBattleStarted&&SceneManager._scene._logWindow===this){'
                 b'BattleManager._wqaBattleSpritesBusy=undefined;' + BATTLE_LOG_LEAVING + b';}\n',
         7547: b'\n        if (text && (textState._wqaMessage || textState._wqaPaint)) this._wqaRecordPaint(textState, text);',
@@ -562,7 +565,10 @@ def dialogue_update(context_ready):
             (this._wqaDiagramAttempts || 0) < 30 && $gameScreen._pictures?.[27];
         const wqaDiagramWaiting = !!(wqaPicture && !wqaPicture._duration &&
             (wqaPicture._name === "system/Caffeine Caverns Map" || wqaPicture._name === "system/Savoria Map"));
-        if ((wqaPageWaiting || wqaChoiceWaiting || wqaNumberWaiting || wqaDiagramWaiting) && !this._wqaDialoguePending &&
+        const wqaVictoryCondition = this._wqaVictoryCondition && this._wqaDialogue &&
+            wqaPaint && wqaMessage.openness === 255;
+        if ((wqaPageWaiting || wqaChoiceWaiting || wqaNumberWaiting || wqaDiagramWaiting || wqaVictoryCondition) &&
+            !this._wqaDialoguePending &&
             __WQA_CONTEXT__ && this._started && this._active &&
             this._fadeDuration === 0 && this._fadeOpacity === 0 && !($gameScreen._fadeOutDuration > 0) &&
             this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
@@ -641,8 +647,7 @@ def map_notification(original):
             (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||
             (!wqaWasFieldReady && (Graphics._wqaWallEnabled || Graphics._wqaFootstepsEnabled || Graphics._wqaCaveTimingEnabled)))
             globalThis.WendyQuestAccessFieldReady?.(this);
-        if (this._wqaBeaconDue && Graphics.frameCount >= this._wqaBeaconDue &&
-            $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY)
+        if (this._wqaBeaconDue && Graphics.frameCount >= this._wqaBeaconDue)
             globalThis.WendyQuestAccessBeaconUpdate?.(this);
         if (this._wqaCaveCueDue && Graphics.frameCount >= this._wqaCaveCueDue)
             globalThis.WendyQuestAccessCaveTimingUpdate?.(this);
@@ -870,7 +875,12 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         contents:this.contents, list:this._data, enabled:false, quantity:undefined
     }:null;
 '''
+    attack_source = (b'wqaAction===this._action&&globalThis.WendyQuestAccessAttackSource?.('
+                     b'_0x5a64fd,wqaPerformer,_0x15034e,!!_0x3b66aa?.SubBattlerID),')
     return insert(original, BATTLE_SHA, {
+        # Native Crispy cleanup schedules the visible particles and sound.
+        42051: b'if(BattleManager._phase==="battleEnd"&&this._battler?._actorId===1)'
+               b'globalThis.WendyQuestAccessVictoryCondition?.(this);',
         155370: command_leaving,  # Accepted activation, before native effects
         155394: b')',
         156577: command_leaving,  # Native loss of this exact sprite's focus
@@ -890,9 +900,20 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         193508: b')',
         196596: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
                 BATTLE_CUE_LEAVING + b';' + BATTLE_LOG_LEAVING + b';',
+        # Keep the renderer's selected performer with the actual result,
+        # including the delayed branch and companions whose action uses Wendy.
+        198700: b'const wqaAction=this._action;let wqaPerformer=null;',
+        199255: b'wqaPerformer=_0x258fbd;',
+        199967: attack_source,
+        200118: attack_source,
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=BattleManager._wqaBattleSpritesBusy=undefined;',
         242214: target_update + bag_update + timing_update + radial_update + log_update + dialogue_update(ready),
+        # Optional speaker metadata stays on its native row through queuing and paint.
+        239515: b',wqaSource',  # Scene_Battle.logAction
+        239613: b',wqaSource',
+        244188: b',wqaSource',  # Window_BattleActionLog.pushMessage
+        244271: b'_wqaSource:wqaSource,',
         247196: log_paint,
         247397: b'if(wqaLogPaint){this._wqaBattleLogPaint=null;if(wqaLogPaint.text){'
                 b'wqaLogPaint.row._wqaLogQueued=true;(this._wqaBattleLogRows||=[]).push(wqaLogPaint);}}',
@@ -906,8 +927,14 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         255249: b'):' + original[255216:255249] + b')',
         257237: BATTLE_BAG_LEAVING + b';',  # Native force-hide
         257461: BATTLE_BAG_LEAVING + b';',  # Native cancel or hide
+        261932: b',wqaSource',  # Window_BattleLog.addText
+        261995: b',wqaSource',
+        287369: b',wqaSource',  # BattleHelper.logAction
+        287578: b',wqaSource',
+        # This installed plugin overrides the stock result clear method.
+        234266: b'if(this._wqaAttackSource)this._wqaAttackSource=null;',
         274246: b'if(_0x11e1e4&&SceneManager._scene?._wqaBattleStarted)'
-                b'this._wqaDamageCaption={text:_0x11e1e4,target:_0x51b330};',
+                b'this._wqaDamageCaption={text:_0x11e1e4,target:_0x51b330,source:_0x550832._wqaAttackSource};',
         276706: damage_update,
     })
 

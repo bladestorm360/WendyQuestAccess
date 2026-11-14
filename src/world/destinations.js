@@ -169,4 +169,23 @@ function browse(state, snapshot, changes) {
         (previousCategory && previousCategory !== state.category) ? CATEGORY_LABELS[state.category] : '' };
 }
 
-module.exports = { destination, eventDescription, eventName, treasureName, createDestinationBrowser, browse };
+const encounterPages = new WeakMap();
+
+function movingEnemy(page) {
+    // Authored pages are immutable. Cache the command-list check so the
+    // first snapshot classifies each candidate and subsequent steps reuse it.
+    if (!(page?.moveType > 0 && page.priorityType === 1 && !page.through &&
+        [0, 1, 2].includes(page.trigger) && page.image?.characterName?.startsWith('~'))) return false;
+    if (!encounterPages.has(page)) {
+        const list = page.list;
+        encounterPages.set(page, Array.isArray(list) && list.length <= 192 && list.some(command => command.code === 301));
+    }
+    return encounterPages.get(page);
+}
+
+function activeMovingEnemy(root, event) {
+    return !!(event && !event._erased && !event._through && event._priorityType === 1 &&
+        movingEnemy(root.$dataMap?.events?.[event._eventId]?.pages?.[event._pageIndex]));
+}
+
+module.exports = { destination, eventDescription, eventName, treasureName, createDestinationBrowser, browse, movingEnemy, activeMovingEnemy };

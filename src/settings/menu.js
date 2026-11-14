@@ -218,7 +218,8 @@ function createSettingsMenu(root, host) {
                     '. Read displayed gold ' + gestureName(keys.gold) + '. Read Wendy’s status ' + gestureName(keys.wendyStatus) + '.',
                 'Review previous and next lines with ' + gestureName(keys.reviewPrevious) + ' and ' +
                     gestureName(keys.reviewNext) + '. First and last with ' + gestureName(keys.reviewFirst) + ' and ' +
-                    gestureName(keys.reviewLast) + '.'
+                    gestureName(keys.reviewLast) + '.',
+                'Open World Map from Items. Read details for the quest pin and nearby atlas landmarks.'
             ],
             Pathfinder: [
                 'Previous destination ' + binding('previousDestination') + '. Next destination ' +
@@ -383,7 +384,7 @@ function createSettingsMenu(root, host) {
         button(owner, 'Preview wall tone on the left', () => preview([-1, 0, 0], 'wallWest', audio.wallVolume / 100));
         button(owner, 'Preview footstep', () => preview([0, -1, 0.15], 'footstep', audio.footstepVolume / 100));
         button(owner, 'Preview beacon ahead', () => preview([0, 0, 1], 'beaconPulse', audio.beaconVolume / 100));
-        button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconTurn', audio.beaconVolume / 100));
+        button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon arrival', () => preview([0, 0, 1], 'beaconArrival', audio.beaconVolume / 100));
         button(owner, 'Preview cave crossing tone', () => preview([0, 0, 1], 'caveGo', audio.caveVolume / 100));
         button(owner, 'Preview battle power tone', () => preview([1, 0, 1], 'battlePower', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
