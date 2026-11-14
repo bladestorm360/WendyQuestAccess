@@ -119,3 +119,5 @@ The [simultaneous walls and treasure popup update](docs/deployment.md#simultaneo
 The [Wendy status shortcut](docs/deployment.md#wendy-status-shortcut-update) is verified offline and installed. Wendy is the only full battle actor. H reads her full visible status across the field, battle and pause/Inventory HUDs. Custom H-action remaps migrate and the numbered party actions are retired. [Native role and HUD evidence](docs/battle.md#wendys-battle-status)
 
 The [critical field health update](docs/deployment.md#critical-field-health-update) verified matching field and menu condition rows, the native 25% heartbeat and the H cue. HUD and packaged checks passed. Installation awaits the Steam game closing.
+
+Private main was verified at `9deeba3871cfa95af72d8df7f8a27154e09e2e50` for the [centered battle cues, cutscene descriptions and sunny-map routing update](docs/deployment.md#cutscene-narration-appearance-and-sunny-map-routing). The exact payload passed offline verification and was installed in the C: Steam library with saves and recovery intact. Gameplay confirmation is pending.
