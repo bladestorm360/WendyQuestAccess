@@ -1,7 +1,7 @@
 'use strict';
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
-const { destination, eventDescription, activeMovingEnemy } = require('./destinations');
+const { destination, excludedDestination, eventDescription, activeMovingEnemy } = require('./destinations');
 const { localDestination, localHandoffName } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
@@ -10,6 +10,7 @@ const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
 function eventTarget(root, mode, event, entry, page) {
+    if (excludedDestination(entry, page)) return null;
     const map = root.$gameMap._mapId;
     let target = worldDestination(root, mode, event, entry, page);
     if (target === undefined) target = localDestination(root, event, page);

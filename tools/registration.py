@@ -36,6 +36,7 @@ CAFFEINE_REL = Path('package.nw/data/Map087.json')
 TITLE_SHA = 'a3c35f004b66a6d4e7a918e36b8bc7e48f2383875165ce1c00ae1a5a031e5634'
 REGISTRY_SHA = '083317d6b2ee7ba9655762dee7671564a64b0bba82bb33d8cbacd52a7e7b3ab7'
 TITLE_INSERTION = 17749
+TITLE_CONTINUE_OUTRO = slice(4451, 4548)
 TITLE_EVENT = (b';if(typeof globalThis.WendyQuestAccessTitleReady==="function")'
                b'{globalThis.WendyQuestAccessTitleReady(this);}')
 MENU_SHA = 'b4426d78f76e1d799f178e31b981292d404cc60a819b767f80573c133b1cd82a'
@@ -187,7 +188,11 @@ def title_notification(original):
         raise ValueError('Title plugin does not match the supported Steam build')
     if original[TITLE_INSERTION:TITLE_INSERTION + 1] != b';':
         raise ValueError('The title activation callback boundary does not match')
-    return original[:TITLE_INSERTION] + TITLE_EVENT + original[TITLE_INSERTION:]
+    # Start Game already deactivates the command and reserves Scene_Load.
+    # Its outgoing title fade and window close both hold SceneManager's busy
+    # gate. Leave native scene loading and the selector's entry fade intact.
+    candidate = original[:TITLE_INSERTION] + TITLE_EVENT + original[TITLE_INSERTION:]
+    return candidate[:TITLE_CONTINUE_OUTRO.start] + candidate[TITLE_CONTINUE_OUTRO.stop:]
 
 
 def insert(original, sha, sites):

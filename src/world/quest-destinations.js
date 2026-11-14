@@ -1,6 +1,6 @@
 'use strict';
 
-const { destination, eventName, treasureName } = require('./destinations');
+const { destination, excludedDestination, eventName, treasureName } = require('./destinations');
 
 const PLUGIN = 'Ayatam_HighQualityQuestSystem';
 const MAX_MARKERS = 128;
@@ -79,10 +79,9 @@ function collectQuestDestinations(root, scene, mode) {
             const entry = root.$dataMap.events[id];
             const page = entry?.pages[event?._pageIndex];
             if (!event || event._erased || !Array.isArray(page?.list) || page.list.length < 2 ||
-                (typeof entry.name === 'string' && /^(?:test|debug|developer)/i.test(entry.name.trim())) ||
                 (!ACTION.includes(event._trigger) && (marker._generated || event._trigger !== 4))) continue;
             if ((commands += page.list.length) > MAX_COMMANDS) return null;
-            if (!linkedPage(root, page, marker, nav, name, objective)) continue;
+            if (excludedDestination(entry, page) || !linkedPage(root, page, marker, nav, name, objective)) continue;
             const waypoint = !ACTION.includes(event._trigger) || !hasAction(page);
             if (waypoint && mode !== 'walk') continue;
             targets.set(id, { markers, index, marker, bitmap: marker.bitmap, nav, map, id, event, page,

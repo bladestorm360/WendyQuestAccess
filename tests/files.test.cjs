@@ -461,6 +461,111 @@ for (const imagesFirst of [false, true]) {
     assert.equal(f.messages.at(-1).kind, 'cancel');
 }
 
+// Run both versions of the title command through the game's effective scene
+// loop. Only scene construction, loaded assets and rendering use stand-ins.
+const handoff = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
+    path.join(__dirname, 'file-producers.py'), game, 'title-handoff'], { encoding: 'utf8', timeout: 6000 }));
+for (const variant of ['stock', 'accessible']) {
+    const f = fixture();
+    const c = f.context;
+    const manager = c.SceneManager;
+    for (const [name, method] of Object.entries(handoff)) {
+        if (name === 'stock' || name === 'accessible') continue;
+        vm.runInContext(method, c, { timeout: 100 });
+    }
+    vm.runInContext(handoff[variant], c, { timeout: 100 });
+    manager.goto = f.nativeGoto;
+    manager._stack = [];
+    manager.isGameActive = () => true;
+    manager.onBeforeSceneStart = () => assert.equal(f.epoch(), 0);
+    manager.onSceneCreate = () => assert.equal(f.epoch(), 0);
+    manager.onSceneTerminate = () => {};
+    c.Time.Update = () => {};
+    c.CoroutineManager.UpdateCoroutines = () => {};
+    c.a18_0x52f0af = () => {};
+    c.a20_0x5ef528 = () => {};
+    const command = new c.Window_Selectable();
+    const title = f.show(new c.Scene_Title(), command);
+    delete title.slowFadeSpeed;
+    Object.setPrototypeOf(c.Scene_Title.prototype, c.Scene_Base.prototype);
+    Object.assign(title, {
+        update: c.Scene_Title.prototype.update,
+        isBusy: c.Scene_Title.prototype.isBusy,
+        spr_ui_start: { alpha: 1 },
+        spr_black_rect: { alpha: 0 },
+        updateColorFilter() {},
+        terminate() { assert.equal(f.epoch(), 0); }
+    });
+    title.update = function () {
+        c.Scene_Title.prototype.update.call(this);
+        if (closing && --closingFrames === 0) closing = false;
+    };
+    c.Scene_Base.prototype.update = function () { this.updateFade(); };
+    let closing = false;
+    let closingFrames = 0;
+    Object.assign(command, {
+        _list: [{ name: 'Start test', enabled: true }], _index: 0,
+        _handlers: { continue: title.commandContinue.bind(title) },
+        visible: true, active: true, openness: 255, open() {},
+        isClosing: () => closing,
+        close() { closing = true; closingFrames = 8; },
+        currentSymbol: () => 'continue',
+        callOkHandler: c.Window_Command.prototype.callOkHandler,
+        isCurrentItemEnabled: () => true,
+        deactivate() { this.active = false; },
+        updateInputData() {},
+        playOkSound() {}
+    });
+    title._commandWindow = command;
+    Object.setPrototypeOf(c.Window_SavefileList.prototype, c.Window_Selectable.prototype);
+    let slotUpdate = 0;
+    const loadPrototype = c.Scene_Load.prototype;
+    loadPrototype.create = function () {
+        const start = this.start;
+        const window = new c.Window_SavefileList();
+        f.show(this, window);
+        Object.assign(this, {
+            _started: false, _active: false, isReady: () => true,
+            isStarted: c.Scene_Base.prototype.isStarted,
+            update() { slotUpdate++; },
+            start() {
+                this._started = this._active = true;
+                start.call(this);
+            }
+        });
+        window.select(2);
+    };
+    c.Graphics.app.stage = title;
+    c.WendyQuestAccessTitleReady(title);
+    readyFrame(f);
+    assert.equal(displayed(f)[0], 'Start test');
+
+    command.processOk();
+    assert.equal(command.active, false, 'native Confirm deactivates the title command');
+    assert.equal(f.epoch(), 0, 'the old producer retires before the native transition');
+    assert.equal(manager._stack[0], c.Scene_Title);
+    const expectedFrame = variant === 'stock' ? 49 : 1;
+    for (let frame = 1; frame <= expectedFrame; frame++) {
+        const start = performance.now();
+        manager.changeScene();
+        manager.updateScene();
+        flushSpeech(f);
+        if (frame < expectedFrame) {
+            assert.equal(manager._scene, title);
+            assert.equal(f.saveReads(), 0);
+        } else {
+            assert(manager._scene instanceof c.Scene_Load);
+            assert.equal(manager._scene._fadeOpacity, 255, 'save selector still fades in normally');
+            assert.equal(slotUpdate, 0, 'publish before the first native input update');
+            assert.equal(displayed(f).at(-1), 'Save slot 3, Level 11');
+            console.log(`Title handoff ${variant}: frame ${frame}; prepared-scene frame to packet ${(performance.now() - start).toFixed(2)} ms.`);
+        }
+    }
+    manager.changeScene();
+    manager.updateScene();
+    assert.equal(slotUpdate, 1);
+}
+
 for (const imagesBeforeStage of [false, true]) {
     const f = fixture();
     const c = f.context;

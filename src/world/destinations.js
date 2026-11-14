@@ -1,6 +1,7 @@
 'use strict';
 
 const NON_INTERACTION_COMMANDS = new Set([0, 108, 214, 408, 657]);
+const WEATHER_SETUP_COMMANDS = new Set([0, 108, 223, 224, 225, 230, 236, 245, 246, 250, 408, 657]);
 const SENSITIVE_NAME = /\b(?:gold|coins?|reward|easter\s*egg)\b/i;
 const CATEGORY_LABELS = Object.freeze({ all: 'All', objects: 'Objects', people: 'NPC', merchants: 'Merchants', exits: 'Exits',
     events: 'Events', treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
@@ -26,10 +27,19 @@ function bookName(entry) {
     return /book|\bdiary\b|guide to combat|combat\s*volume|^woa\s+easter egg\b/i.test(name) ? 'Book' : '';
 }
 
+function excludedDestination(entry, page) {
+    if (typeof entry.name === 'string' && /^(?:play[ _-]?test|test|debug|developer)/i.test(entry.name.trim()))
+        return true;
+    // A blank event may still be a real interaction with an independently
+    // drawn prop. Omit only pages that set weather and have no other effects
+    // beyond presentation, audio, comments and waits.
+    return !page.image?.characterName && !page.image?.tileId &&
+        page.list.some(command => command.code === 236) &&
+        page.list.every(command => WEATHER_SETUP_COMMANDS.has(command.code));
+}
+
 function destination(entry, page, trigger, map) {
     if (!page || page.list.length < 2 || trigger < 0 || trigger > 2 || !Number.isInteger(trigger)) return null;
-    const raw = typeof entry.name === 'string' ? entry.name.trim() : '';
-    if (/^(?:test|debug|developer)/i.test(raw)) return null;
     const name = eventName(entry);
     const sprite = page.image?.characterName || '';
     const npc = /^~|npc/i.test(sprite);
@@ -94,7 +104,7 @@ function destination(entry, page, trigger, map) {
 // Classify only otherwise unlisted native touch events. Authored names
 // and dialogue never enter this generic description.
 function eventDescription(entry, page, event, keepCleanup) {
-    if (![1, 2].includes(event._trigger) || /^(?:test|debug|developer)/i.test(entry.name?.trim())) return null;
+    if (![1, 2].includes(event._trigger)) return null;
     if (!keepCleanup && !page.list.some(command => !NON_INTERACTION_COMMANDS.has(command.code))) return null;
     if (event._priorityType !== 1) return { category: 'events', name: 'Scene trigger', eventAction: 'step' };
     if (page.list.some(command => command.code === 101 || command.code === 301))
@@ -188,4 +198,4 @@ function activeMovingEnemy(root, event) {
         movingEnemy(root.$dataMap?.events?.[event._eventId]?.pages?.[event._pageIndex]));
 }
 
-module.exports = { destination, eventDescription, eventName, treasureName, createDestinationBrowser, browse, movingEnemy, activeMovingEnemy };
+module.exports = { destination, excludedDestination, eventDescription, eventName, treasureName, createDestinationBrowser, browse, movingEnemy, activeMovingEnemy };

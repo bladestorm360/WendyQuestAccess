@@ -8,8 +8,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from registration import (CORE_REL, MANAGERS_REL, MENU_REL, SCENES_REL, WINDOW_REL, core_notification,
-                          managers_notification, menu_notifications, scenes_notification, window_notification)
+from registration import (CORE_REL, MANAGERS_REL, MENU_REL, SCENES_REL, TITLE_REL, WINDOW_REL, core_notification,
+                          managers_notification, menu_notifications, scenes_notification, title_notification, window_notification)
 
 
 def load_decoder():
@@ -27,8 +27,35 @@ def between(source, start, end):
     return source[first:last]
 
 
+def title_handoff(root):
+    decode = load_decoder()
+    original = (root / TITLE_REL).read_bytes()
+    result = {}
+    for variant, data in [('stock', original), ('accessible', title_notification(original))]:
+        source, _ = decode(data.decode('utf8'))
+        result[variant] = between(source, "Scene_Title['prototype']['commandContinue']=function(",
+                                  "},Scene_Title['prototype']['commandWindowRect']") + '};'
+    source, _ = decode(window_notification((root / WINDOW_REL).read_bytes()).decode('utf8'))
+    for name, tail in [('changeScene', 'updateScene'), ('updateScene', 'isGameActive')]:
+        result[name] = between(source, f"SceneManager['{name}']=function(",
+                               f"}},SceneManager['{tail}']") + '};'
+    for rel, names in [
+        (MANAGERS_REL, ['SceneManager.push', 'SceneManager.isSceneChanging', 'SceneManager.isCurrentSceneBusy']),
+        (SCENES_REL, [f'Scene_Base.prototype.{name}' for name in
+                      ('fadeSpeed', 'slowFadeSpeed', 'startFadeOut', 'isFading', 'isBusy', 'isStarted', 'stop')]
+         + ['Scene_Title.prototype.isBusy', 'Scene_Title.prototype.update']),
+    ]:
+        source = (root / rel).read_text(encoding='utf8')
+        for name in names:
+            result[name] = between(source, name + ' = function(', '\n};') + '\n};'
+    return result
+
+
 def main():
     root = Path(sys.argv[1])
+    if sys.argv[2:] == ['title-handoff']:
+        print(json.dumps(title_handoff(root)))
+        return
     decode = load_decoder()
     menu, _ = decode(menu_notifications((root / MENU_REL).read_bytes()).decode('utf8'))
     manager = managers_notification((root / MANAGERS_REL).read_bytes()).decode('utf8')

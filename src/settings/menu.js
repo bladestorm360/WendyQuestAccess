@@ -45,11 +45,18 @@ function normalizeAudio(value) {
         narration: normalizeNarration(value?.narration) };
 }
 
+const NARRATION_SPEED = Object.freeze({ min: 80, max: 250, defaultValue: 200 });
+
 function normalizeNarration(value) {
-    const { volume, speed } = value || {};
+    const { volume, playbackPercent, speed } = value || {};
+    // A legacy 100 was stored even when only volume or enable changed.
+    // A new explicit 100 is distinguishable by its playbackPercent key.
+    const previousChoice = Number.isInteger(speed) && speed >= 80 && speed <= 130 && speed !== 100;
+    const chosenRate = playbackPercent ?? (previousChoice ? speed : NARRATION_SPEED.defaultValue);
     return { enabled: value?.enabled === true,
         volume: Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : 65,
-        speed: Number.isInteger(speed) && speed >= 80 && speed <= 130 ? speed : 100 };
+        playbackPercent: Number.isInteger(chosenRate) && chosenRate >= NARRATION_SPEED.min && chosenRate <= NARRATION_SPEED.max
+            ? chosenRate : NARRATION_SPEED.defaultValue };
 }
 
 const ENGLISH_LOCALE = 'en-US';
@@ -392,7 +399,7 @@ function createSettingsMenu(root, host) {
         };
         for (const [key, label, step, min, max] of [
             ['volume', 'cutscene description volume', 10, 0, 100],
-            ['speed', 'cutscene description speed', 10, 80, 130]
+            ['playbackPercent', 'cutscene description speed', 10, NARRATION_SPEED.min, NARRATION_SPEED.max]
         ]) {
             for (const [action, direction] of [['Decrease', -1], ['Increase', 1]]) {
                 const control = `${key}${action}`;

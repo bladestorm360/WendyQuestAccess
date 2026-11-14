@@ -178,7 +178,7 @@ function createNarration(root, host, preferences) {
                 audio.addEventListener('error', () => { if (clip?.audio === audio) leave(scene); }, { once: true });
                 audio.volume = setting.volume / 100;
                 if ('preservesPitch' in audio) audio.preservesPitch = true;
-                audio.defaultPlaybackRate = audio.playbackRate = setting.speed / 100;
+                audio.defaultPlaybackRate = audio.playbackRate = setting.playbackPercent / 100;
                 audio.src = url;
                 audio.play()?.catch(() => { if (clip?.audio === audio) leave(scene); });
             } catch { leave(scene); }

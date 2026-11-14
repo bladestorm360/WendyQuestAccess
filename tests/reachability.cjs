@@ -26,15 +26,17 @@ async function verifyReachability(c, load, verifyWorker) {
     assert.equal(blocked.status, 'interrupted');
     const blockedTargets = { ...destination, candidates: [{ event: 16 }, { event: blocked.boundaryEvent }] };
     assert.deepEqual([...findReachable(guard.geometry, guardView.live, blockedTargets).available], [0, 1]);
-    const speechMap = load(19);
-    const actor = speechMap.gameMap.event(93);
+    assert(!view.objects.some(item => item.id === 17 || item.id === 93),
+        'the broad cave list excludes weather setup and the playtest conversation');
+    const speechMap = load(183);
+    const actor = speechMap.gameMap.event(8);
     speechMap.player.setPosition(actor.x, actor.y + 1);
     const dialogueView = captureWorld(c);
     const matching = dialogueView.objects.filter(item => item.id === actor.eventId());
     assert.equal(matching.length, 1);
     const [conversation] = matching;
     assert.equal(conversation.category, 'people');
-    assert.equal(conversation.name, 'Chomps');
+    assert.equal(conversation.name, 'Sir Chicken');
     assert.equal(conversation.eventAction, 'talk');
     const talk = { x: dialogueView.x, y: dialogueView.y, field: true, event: actor.eventId() };
     assert.equal(findReachable(speechMap.geometry, dialogueView.live, { ...talk, candidates: [talk] }).available[0], 1);
@@ -42,7 +44,7 @@ async function verifyReachability(c, load, verifyWorker) {
     assert.equal(talkRoute.status, 'ready');
     assert(talkRoute.arrival.facing);
     assert.match(formatSpeech({ kind: 'routeDirections', name: conversation.name, legs: talkRoute.legs,
-        facing: talkRoute.arrival.facing, conversation: true }), /^Chomps\. .*press the action button to talk\.$/);
+        facing: talkRoute.arrival.facing, conversation: true }), /^Sir Chicken\. .*press the action button to talk\.$/);
     const opened = load(57, { switches: [81] });
     opened.player.setPosition(20, 23);
     assert.equal(findReachable(opened.geometry, captureWorld(c).live,

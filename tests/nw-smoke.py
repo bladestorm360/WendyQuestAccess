@@ -1770,7 +1770,7 @@ const interval = setInterval(() => {
             choose('Cutscene descriptions, off');
             endingStep = 80;
         } else if (endingStep === 80 && menuStatus() === 'Audio settings saved') {
-            choose('Increase cutscene description speed');
+            choose('Increase cutscene description speed, 200 percent');
             endingStep++;
         } else if (endingStep === 81 && menuStatus() === 'Audio settings saved') {
             choose('Decrease cutscene description volume');
@@ -1825,7 +1825,7 @@ const interval = setInterval(() => {
             $gameMap._events[35]._realY--;
             narrationFrame();
             if (!narrationAudio || narrationAudio.volume !== 0.55 ||
-                narrationAudio.playbackRate !== 1.1) throw Error('Narration did not use saved speed and volume');
+                narrationAudio.playbackRate !== 2.1) throw Error('Narration did not use saved speed and volume');
             narrationStarted = performance.now();
             endingStep++;
         } else if (endingStep === 84 && narrationAudio?.currentTime > 0.005) {
@@ -2353,8 +2353,8 @@ def main():
                     'Soundscape, on', 'Decrease volume, 35 percent', 'Exits, off']:
             raise RuntimeError(f'NW settings did not survive restart in the isolated profile: {reloaded}')
         if reloaded.get('narration') != ['Cutscene descriptions, on', 'Decrease cutscene description volume, 55 percent',
-                'Increase cutscene description volume, 55 percent', 'Decrease cutscene description speed, 110 percent',
-                'Increase cutscene description speed, 110 percent']:
+                'Increase cutscene description volume, 55 percent', 'Decrease cutscene description speed, 210 percent',
+                'Increase cutscene description speed, 210 percent']:
             raise RuntimeError(f'Cutscene narration preferences did not survive restart: {reloaded}')
         narration_ms = float(receipt.with_suffix('.json.cutscene-narration-ms').read_text(encoding='utf8'))
         print(f'Verified cutscene clip decode, volume, rate, delay until visible movement, and transfer retirement. '

@@ -35,6 +35,9 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     let checked = 0;
     let fallbackCount = 0;
     let icePages = 0;
+    let weatherSetupPages = 0;
+    let playtestPages = 0;
+    let storyChomps = 0;
     const coveredChests = new Map([[14, 20], [15, 15], [29, 11], [134, 22]]);
     const discoveredCovers = new Map();
     const transfers = new Set();
@@ -75,11 +78,20 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                         discoveredCovers.set(id, parameters[0]);
                     }
                 }
-                if (page.list.length < 2 || ![0, 1, 2].includes(page.trigger)) continue;
-                checked++;
+                const weatherSetup = /^NoRain$/i.test(entry.name);
+                const playtest = /^Playtest/i.test(entry.name);
+                if (page.list.length < 2 || (!weatherSetup && ![0, 1, 2].includes(page.trigger))) continue;
+                if ([0, 1, 2].includes(page.trigger)) checked++;
                 const event = { _eventId: entry.id, _pageIndex: index, _trigger: page.trigger,
                     _priorityType: page.priorityType, _characterName: page.image.characterName };
                 const ordinary = eventTarget(root, 'walk', event, entry, page);
+                if (weatherSetup || playtest) {
+                    assert.equal(ordinary, null, `excluded event at map ${id} event ${entry.id}`);
+                    if (weatherSetup) weatherSetupPages++;
+                    else playtestPages++;
+                }
+                if (entry.name === 'Chomps' && ordinary?.name === 'Chomps' && ordinary.category === 'people')
+                    storyChomps++;
                 if (page.list.some(({ code, parameters }) =>
                     code === 250 && parameters[0]?.name === 'WQ/SFX_IceBlockMelt')) {
                     assert.deepEqual(ordinary, { name: 'Ice block', category: 'objects' });
@@ -97,6 +109,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         }
     }
     assert.equal(icePages, 46);
+    assert(weatherSetupPages > 1 && playtestPages === 1 && storyChomps > 0);
+    console.log(`Excluded ${weatherSetupPages} No Rain setup pages and ${playtestPages} playtest page. Retained ${storyChomps} story Chomps NPC pages.`);
     assert.deepEqual(discoveredCovers, new Map([...coveredChests].filter(([id]) => id !== 29)));
     console.log(`Checked ${icePages} ice interactions and native chest sprite reveals across all maps.`);
     console.log(`Verified ${fallbackCount} fallback place names against native transfers.`);

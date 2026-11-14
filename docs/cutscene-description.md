@@ -1,6 +1,6 @@
 # Cutscene audio description
 
-Enable **Cutscene descriptions** in **F8 → Audio**. It defaults to off. The same menu sets the narration volume and speed independently of screen reader speech. The default speed is 100 percent and the default volume is 65 percent. The speed range is 80–130 percent. The Mod sounds switch controls whether this playback is available.
+Enable **Cutscene descriptions** in **F8 → Audio**. It defaults to off. The same menu sets the narration volume and speed independently of screen reader speech. The default speed is 200 percent and the default volume is 65 percent. The speed range is 80–250 percent in 10-point steps. The Mod sounds switch controls whether this playback is available. The update applies the new default to settings that still used 100 percent and preserves other saved speeds.
 
 ## Audit and coverage
 
