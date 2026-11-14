@@ -247,6 +247,7 @@ function createSettingsMenu(root, host) {
                 'All combines destinations and bookmarks. Use ' + binding('filterToggle') +
                     ' to switch between all active destinations and reachable destinations only.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
+                'Turn on Spoiler mode under Navigation to find marked optional secrets before discovering them in the game.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
                 'Toggle the beacon ' + binding('beaconToggle') + '. Toggle wall sounds ' + binding('wallToggle') +
                     '. Stop current navigation ' + binding('beaconStop') + '. Toggle footstep sounds under Audio.'
@@ -446,7 +447,9 @@ function createSettingsMenu(root, host) {
             { ...navigation, layout: layout === 'letters' ? 'brackets' : 'letters' }, 'layout', 'navigation'));
         const reachable = button(owner, 'Reachable destinations only, ' + (navigation.reachableOnly ? 'on' : 'off'), () =>
             change(owner, { ...navigation, reachableOnly: !navigation.reachableOnly }, 'reachableOnly', 'navigation'));
-        let focused = { autowalk, speakAutowalkPath: narration, reachableOnly: reachable }[selection] || keymap;
+        const spoilers = button(owner, 'Spoiler mode, ' + (navigation.spoilers ? 'on' : 'off'), () =>
+            change(owner, { ...navigation, spoilers: !navigation.spoilers }, 'spoilers', 'navigation'));
+        let focused = { autowalk, speakAutowalkPath: narration, reachableOnly: reachable, spoilers }[selection] || keymap;
         for (const [action, name] of Object.entries(ACTIONS)) {
             const gesture = bindings[layout][action];
             const occupied = nativeNavigationConflict(root, gesture, undefined, action) ? ', used by the game' : '';

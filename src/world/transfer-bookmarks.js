@@ -6,12 +6,13 @@ const { discoveryEntrance } = require('./world-destinations');
 const { travelMode, vehicleOnMap } = require('./vehicle-navigation');
 const { transferState, gateAllows } = require('./transfer-gates.cjs');
 const { tileKey } = require('./geometry.cjs');
+const { concealedDestination } = require('./local-destinations');
 
-function liveEntrances(root, event, state, mode) {
+function liveEntrances(root, event, state, mode, spoilers) {
     const map = root.$gameMap;
     const id = event?._eventId;
     if (!Number.isInteger(id) || id < 1 || map?._events?.[id] !== event || event._erased ||
-        event._through || event._moveRouteForcing) return [];
+        event._through || event._moveRouteForcing || !spoilers && concealedDestination(map._mapId, event)) return [];
     const entry = root.$dataMap?.events?.[id];
     const page = entry?.pages?.[event._pageIndex];
     if (!page || event._trigger !== page.trigger || event._priorityType !== page.priorityType) return [];
@@ -51,6 +52,7 @@ function discoveryComplete(root, { event, completion }) {
 }
 
 function createTransferBookmarks(root, host) {
+    const spoilers = () => host.navigationPreferences?.().spoilers === true;
     let approach = null;
     let pending = null;
 
@@ -69,7 +71,7 @@ function createTransferBookmarks(root, host) {
         if (mode !== edge.mode) return false;
         const event = map?._events?.[edge.event];
         const choices = edge.discoveryFor ? [liveDiscovery(root, event, edge.discoveryFor)] :
-            liveEntrances(root, event, transferState(root), mode);
+            liveEntrances(root, event, transferState(root), mode, spoilers());
         return choices.some(entrance => entrance && entrance.craft === edge.craft && entrance.list === edge.list &&
             entrance.map === edge.map && entrance.x === edge.x && entrance.y === edge.y && entrance.direction === edge.direction &&
             entrance.approach === edge.approach && entrance.action === edge.action &&
@@ -149,7 +151,7 @@ function createTransferBookmarks(root, host) {
         clear, current, accepted, landingAccepted, reserved, settle,
         islandLanding() {
             const map = root.$gameMap;
-            return liveEntrances(root, map?._events?.[ISLAND_DOCK], null, travelMode(map, root.$gamePlayer))[0] || null;
+            return liveEntrances(root, map?._events?.[ISLAND_DOCK], null, travelMode(map, root.$gamePlayer), spoilers())[0] || null;
         },
         matchesState: state => transferState(root).every((value, index) => state[index] === value),
         discovery(event, target) { return liveDiscovery(root, root.$gameMap._events?.[event], target); },
@@ -173,10 +175,11 @@ function createTransferBookmarks(root, host) {
             const events = mode === 'walk' ? map._events :
                 mode === 'ship' ? Object.keys(SHIP_PORTS).map(id => map._events[id]) : [];
             const entrances = [];
-            for (const event of events) entrances.push(...liveEntrances(root, event, state, mode));
+            const reveal = spoilers();
+            for (const event of events) entrances.push(...liveEntrances(root, event, state, mode, reveal));
             const ground = [];
             if (mode === 'ship' || mode === 'airship') {
-                for (const event of map._events) ground.push(...liveEntrances(root, event, state, 'walk'));
+                for (const event of map._events) ground.push(...liveEntrances(root, event, state, 'walk', reveal));
             }
             return { entrances, ground, state };
         },

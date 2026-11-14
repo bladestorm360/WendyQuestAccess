@@ -62,7 +62,8 @@ function normalizeNavigation(saved, reserved = []) {
         bindings[layout] = proposed;
     }
     return { layout: saved?.layout === 'brackets' ? 'brackets' : 'letters', bindings, autowalk: saved?.autowalk === true,
-        speakAutowalkPath: saved?.speakAutowalkPath === true, reachableOnly: saved?.reachableOnly === true };
+        speakAutowalkPath: saved?.speakAutowalkPath === true, reachableOnly: saved?.reachableOnly === true,
+        spoilers: saved?.spoilers === true };
 }
 
 function navigationAction(settings, gesture) {

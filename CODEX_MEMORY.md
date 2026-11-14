@@ -133,3 +133,6 @@ The [Start Game handoff, cave labels and narration rate update](docs/deployment.
 The [battle appearance, Chillcrest terrain and ice prerequisite update](docs/deployment.md#battle-appearance-chillcrest-terrain-and-ice-prerequisites) is installed and verified on C:. It combines the earlier verified title, cave listings and narration rate fix with the latest descriptions and native ice handback. [Battle artwork ownership](docs/battle.md#party-battle-sprites-and-visible-effects) and [melt verification](docs/navigation.md#ice-blocks-that-open-walking-routes) record the exact sources and focused checks.
 
 The [Chillcrest follow-up](docs/deployment.md#chillcrest-speakers-consumed-events-and-filter-shortcut) verifies frame-based speaker details, consumed event pruning, spoiler-free book and interaction labels, and the active keymap’s destination filter shortcut. Private main commit \`3b66a197a0ec733fa61c842e5664b22fe984d65a\` contains the verified implementation. The candidate is installed and verified on C:, with gameplay confirmation pending.
+
+
+The [Chillcrest west exit and Spoiler mode update](docs/deployment.md#chillcrest-west-exit-and-spoiler-mode) passed native, matching NW, installer and exact Defender checks. The staged update awaits closed-game installation.

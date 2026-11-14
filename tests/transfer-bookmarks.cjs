@@ -85,7 +85,8 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
     c.$gameParty.inBattle = () => false;
     c.$gameMessage = { isBusy: () => false };
     c.$dataCommonEvents = common;
-    const transfers = createTransferBookmarks(c, { graphics: c.Graphics });
+    let spoilers = false;
+    const transfers = createTransferBookmarks(c, { graphics: c.Graphics, navigationPreferences: () => ({ spoilers }) });
     c.WendyQuestAccessBookmarkEntranceAccepted = transfers.accepted;
     c.WendyQuestAccessBookmarkTransferReserved = transfers.reserved;
     c.WendyQuestAccessSceneLeaving = transfers.leave;
@@ -139,10 +140,14 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         assert.equal(transfers.candidates().entrances.find(edge => edge.event === 2).map, 203);
         for (const self of [[], ['87,91,A']]) {
             const cave = load(87, { self });
+            cave.player.setPosition(12, 64);
+            assert.equal(transfers.candidates().entrances.some(candidate => candidate.event === 91), self.length > 0);
+            spoilers = !self.length;
             const edge = reserveSpecial(cave, 91, [12, 64], 205);
             cave.gameMap._mapId = edge.map;
             cave.player.setPosition(edge.x, edge.y);
             assert.deepEqual(transfers.settle({}), { ...marker, trail: ['205/14/4'] });
+            spoilers = false;
         }
         c.$gameSelfSwitches.setValue = (key, value) => {
             const before = c.$gameSelfSwitches.value;

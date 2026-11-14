@@ -56,6 +56,41 @@ const TOUCH_TRANSFERS = {
 };
 
 const PULLS = { 51: [2], 53: [3, 4], 55: [4] };
+const WEST_CHILLCREST = [14, 18, 19];
+
+// All three tiles share a story check before the west exit is opened. The
+// dialogue pages must remain scenes while their transfer branch is disabled.
+function chillcrestExit(root, event, page) {
+    if (!page || root.$gameMap._mapId !== 25) return undefined;
+    const id = event._eventId;
+    const west = WEST_CHILLCREST.includes(id);
+    const east = id === 7 || id === 15 || id === 16;
+    if (!west && !east && id !== 6) return undefined;
+    const { list } = page;
+    const conditional = west && event._pageIndex === 0;
+    if (conditional && root.$gameSwitches?.value?.(33) !== true) return undefined;
+    const x = west ? 12 : east ? 14 : 13;
+    const y = id === 6 ? 18 : 17;
+    const transfer = list.find(command => command.code === 201 && command.indent === (conditional ? 1 : 0) &&
+        command.parameters[0] === 0 && command.parameters[1] === 113 &&
+        command.parameters[2] === x && command.parameters[3] === y);
+    if (!transfer) return undefined;
+    if (conditional) {
+        const start = list.findIndex(command => command.code === 111 && command.indent === 0 &&
+            command.parameters[0] === 0 && command.parameters[1] === 33 && command.parameters[2] === 1);
+        const otherwise = list[list.indexOf(transfer) - 1];
+        if (start < 0 || otherwise?.code !== 411 || otherwise.indent !== 0) return undefined;
+    }
+    if (event._trigger !== 0 && event._trigger !== 1) return undefined;
+    return { name: west ? 'West exit toward Cold Brew Trail' : east ? 'East exit toward Frosty Float' :
+        'South exit toward Salt Caverns', category: 'exits', eventAction: event._trigger === 1 ? 'step' : undefined,
+        ...(west ? { handoffs: WEST_CHILLCREST } : {}) };
+}
+
+function chillcrestQuestExit(root) {
+    return root.$gameMap._mapId === 25 && root.$gameParty?.getNav?.() === 'quest15' &&
+        root.$gameSwitches?.value?.(33) === true && root.$gameSwitches.value(38) === false;
+}
 // These events exist before their ice block's movement route assigns the
 // chest sprite. The stock page image can stay blank even after the reveal.
 const COVERED_CHESTS = { 14: 20, 15: 15, 29: 11, 134: 22 };
@@ -126,11 +161,21 @@ function iceOpensPassage(entry, page) {
     return icePages.get(page);
 }
 
+// Hand-audited discovery pages. The authored cave return page and the
+// stairs to a room opened in play remain normal destinations.
+function concealedDestination(map, event) {
+    if (event?._pageIndex !== 0) return false;
+    const id = event._eventId;
+    return map === 128 && id === 11 || map === 133 && id === 4 || map === 87 && id === 91;
+}
+
 function localDestination(root, event, page) {
     const map = root.$gameMap._mapId;
     const id = event._eventId;
     const trigger = event._trigger;
     const list = page.list;
+    const townExit = chillcrestExit(root, event, page);
+    if (townExit) return townExit;
     const stairs = houseStair(map, id);
     if (stairs) {
         // The landing changes within the same native page when the hidden
@@ -210,8 +255,9 @@ function localDestination(root, event, page) {
         return { name: 'Map board', category: 'objects' };
     // The base game shows a generic prompt and identifies these only after OK.
     if ((map === 128 && id === 11) || (map === 133 && id === 4))
-        return { name: 'Interaction', category: 'objects' };
+        return { name: 'Hidden passage button', category: 'objects' };
     return undefined;
 }
 
-module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene };
+module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, concealedDestination,
+    chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST };

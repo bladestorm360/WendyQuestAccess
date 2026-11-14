@@ -28,7 +28,7 @@ function offset(map, player, event) {
     return [map.deltaX(event._realX, player._realX), map.deltaY(event._realY, player._realY)];
 }
 
-function createSoundscape(root, fieldReady, audio, preferences) {
+function createSoundscape(root, fieldReady, audio, preferences, navigationPreferences = () => ({})) {
     let owner = null;
     const frame = () => root.Graphics.frameCount;
 
@@ -83,6 +83,7 @@ function createSoundscape(root, fieldReady, audio, preferences) {
             if (event && map._events[event._eventId] === event) indices.set(event, index);
         }
         const choices = Object.create(null);
+        const spoilers = navigationPreferences().spoilers === true;
         for (const event of map._events) {
             if (!event || event._erased || event._pageIndex < 0 || event._trigger < 0 || event._trigger > 2) continue;
             const [dx, dy] = offset(map, player, event);
@@ -92,7 +93,7 @@ function createSoundscape(root, fieldReady, audio, preferences) {
             const entry = data.events?.[id];
             const page = entry?.pages[event._pageIndex];
             if (!page || page.trigger !== event._trigger || page.list.length < 2 || page.list.length > MAX_COMMANDS) continue;
-            const target = eventTarget(root, mode, event, entry, page);
+            const target = eventTarget(root, mode, event, entry, page, spoilers);
             const index = indices.get(event);
             const sprite = sprites[index];
             const kind = categoryCue(root, map, spriteset._tilemap, event, entry, page, target, sprite);

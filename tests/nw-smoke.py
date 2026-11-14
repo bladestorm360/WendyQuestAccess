@@ -303,13 +303,17 @@ function verifySettings() {
         tap('n', 'KeyN');
         settingsStep++;
     } else if (settingsStep === 7 && menuStatus() === 'Navigation settings saved') {
+        if (document.activeElement.textContent !== 'Spoiler mode, on') {
+            choose('Spoiler mode, off');
+            return;
+        }
         tap('Escape');
         if (document.activeElement.textContent !== 'Navigation') throw Error('Navigation parent focus was lost');
         choose('Audio');
         if (document.activeElement.textContent !== 'Mod sounds, on') throw Error('Sound defaults were not applied');
         audioStarted = performance.now();
         choose('Preview ahead');
-        settingsStep++;
+        settingsStep = 8;
     } else if (settingsStep === 8 && menuStatus() === 'Preview uses HRTF.') {
         require('fs').writeFileSync(receipt + '.audio-init-ms', String(performance.now() - audioStarted));
         choose('HRTF');
@@ -466,7 +470,7 @@ const interval = setInterval(() => {
             const controller = [...buttons.slice(0, 2), buttons.find(item => item.startsWith('Next category, '))];
             tap('Escape');
             choose('Navigation');
-            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 6).map(item => item.textContent);
+            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 7).map(item => item.textContent);
             choose('Bookmarks');
             const bookmarks = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
             if (bookmarks.join('|') !== 'Return marker, Map 1, saved on foot|Back')
@@ -2373,7 +2377,7 @@ def main():
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, RT', 'Next category, Unassigned'] or \
                 reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on',
-                                               'Navigation keymap, Brackets and backslash', 'Reachable destinations only, off', 'Previous destination, Left bracket',
+                                               'Navigation keymap, Brackets and backslash', 'Reachable destinations only, off', 'Spoiler mode, on', 'Previous destination, Left bracket',
                                                'Next destination, N'] or reloaded.get('audio') != [
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
                     'Increase wall volume, 55 percent', 'Footstep sounds, on', 'Decrease footstep volume, 50 percent',

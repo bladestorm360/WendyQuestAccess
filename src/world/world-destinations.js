@@ -59,7 +59,8 @@ function worldDestination(root, mode, event, entry, page) {
             if (id === 13 && transfersTo(list[1], 206)) return { name: 'Secret Island', category: 'exits' };
             const floor = FLOOR_EXITS[id];
             if (floor && transferOptions(map, entry, page, root.$dataCommonEvents).some(edge => edge.map === floor[1]))
-                return { name: floor[0], category: 'exits' };
+                return id === 19 ? { name: floor[0], category: 'exits', eventAction: 'step' } :
+                    { name: floor[0], category: 'exits' };
             if (id === 43 && transferOptions(map, entry, page, root.$dataCommonEvents).some(edge =>
                 edge.map === 57 || edge.map === 58))
                 return { name: 'Cauldron', category: 'exits' };

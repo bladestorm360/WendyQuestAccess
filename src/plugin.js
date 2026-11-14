@@ -178,7 +178,7 @@ function boot(root, nodeRequire, nodeProcess) {
             submit: field.refreshBeacon, cancel: field.cancelBeaconRefresh
         });
         caveTiming = host.caveTiming = createCaveTiming(root, field.ready, audio, () => audioPreferences, field.report);
-        soundscape = createSoundscape(root, field.ready, audio, () => audioPreferences);
+        soundscape = createSoundscape(root, field.ready, audio, () => audioPreferences, host.navigationPreferences);
         function readyScene() {
             const scene = host.manager._scene;
             if (settingsScene !== scene || !scene?._wqaPresentation || !host.hasFocus() ||

@@ -5,7 +5,7 @@ const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
-const { localHandoffName, iceOpensPassage } = require('./local-destinations');
+const { localHandoffName, iceOpensPassage, chillcrestExit, chillcrestQuestExit, concealedDestination } = require('./local-destinations');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { tileKey } = require('./geometry.cjs');
@@ -19,6 +19,17 @@ const { mapDescription } = require('./map-descriptions');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
+
+function routeExitName(root, eventId) {
+    const map = root.$gameMap;
+    const event = map._events?.[eventId];
+    const entry = root.$dataMap?.events?.[eventId];
+    const page = entry?.pages?.[event?._pageIndex];
+    if (!page || event._erased) return '';
+    if (map._mapId === 113 && eventId === 19)
+        return eventTarget(root, 'walk', event, entry, page)?.category === 'exits' ? 'Chillcrest entrance' : '';
+    return chillcrestExit(root, event, page)?.name || '';
+}
 
 function currentEnemy(root, result) {
     const map = root.$gameMap;
@@ -163,6 +174,7 @@ function createField(root, host, notifications) {
             record = { ...record, directionsOnly: true };
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
+            (!job.questExit || chillcrestQuestExit(root)) &&
             (!job.enemyCurrent || job.enemyCurrent()) &&
             (!job.entrance || transfers.current(job.entrance)) &&
             (!job.groundEntrance || transfers.current(job.groundEntrance, 'walk')) &&
@@ -257,7 +269,8 @@ function createField(root, host, notifications) {
                 job.performed = true;
                 return select(job, snapshot);
             }
-            if (job.quest && !questDestinationCurrent(root, job.scene, job.quest)) {
+            if ((job.quest && !questDestinationCurrent(root, job.scene, job.quest)) ||
+                (job.questExit && !chillcrestQuestExit(root))) {
                 job.quest = null;
                 job.scene._wqaQuestNavigation = false;
                 return status(job, 'Quest destination changed. Request directions again.');
@@ -389,9 +402,12 @@ function createField(root, host, notifications) {
             }
             else if (result?.status === 'interrupted') {
                 const handoff = !job.eventAction && localHandoffName(job.map, result.boundaryEvent);
+                const exit = routeExitName(root, result.boundaryEvent);
+                const useExit = !!exit && (job.target === result.boundaryEvent || job.request.handoffs?.includes(result.boundaryEvent));
                 const activate = job.eventAction === 'step' && job.target === result.boundaryEvent ? result.boundary : undefined;
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
-                    guide: job.guide, activate, boundaryName: handoff || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
+                    guide: job.guide, activate, exit, useExit,
+                    boundaryName: handoff || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
                     manualHandoff: !!handoff, more: result.more === true });
             }
             else if (result?.status === 'approachBlocked') status(job, (job.guide ? job.guide + ' ' : '') + 'A floor event blocks the approach');
@@ -474,6 +490,7 @@ function createField(root, host, notifications) {
         const destination = destinationRequest(target);
         job.target = destination.event;
         job.eventAction = target.eventAction;
+        job.questExit = target.questExit === true;
         job.point = target.point === true;
         job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
         job.nearestLanding = target.nearestLanding === true;
@@ -547,7 +564,7 @@ function createField(root, host, notifications) {
                 if (!job.quest) return status(job, 'Saved destination is unavailable');
                 job.scene._wqaQuestNavigation = true;
             } else {
-                const target = eventTarget(root, 'walk', event, entry, page);
+                const target = eventTarget(root, 'walk', event, entry, page, preferences().spoilers === true);
                 if (target?.category !== bookmark.category) return status(job, 'Saved destination is unavailable');
                 destination = destinationRequest({ ...target, id });
             }
@@ -648,7 +665,8 @@ function createField(root, host, notifications) {
         const label = salt.available(job.scene) ? (id, fallback) => salt.label(job.scene, id, fallback) : undefined;
         const bookmarks = host.bookmarks?.();
         const saltGuide = job.action === 'puzzleGuide' && salt.available(job.scene);
-        const snapshot = captureWorld(root, filtering || routing && !timed || saltGuide, label, job.scene, bookmarks);
+        const snapshot = captureWorld(root, filtering || routing && !timed || saltGuide, label, job.scene, bookmarks,
+            false, preferences().spoilers === true);
         if (!snapshot) return status(job, 'Map information unavailable');
         if (navigationRequest(job)) snapshot.bookmarks = bookmarks;
         if (filtering && snapshot.objects.length) {
@@ -795,9 +813,10 @@ function createField(root, host, notifications) {
             const event = map._events?.[target.id];
             const entry = data.events?.[target.id];
             const page = entry?.pages?.[event?._pageIndex];
-            if (!event || event._erased || !(page?.list?.length >= 2)) return context;
+            if (!event || event._erased || !(page?.list?.length >= 2) ||
+                !preferences().spoilers && concealedDestination(map._mapId, event)) return context;
             const current = target.quest ? questDestinationCurrent(root, scene, target.quest) :
-                eventTarget(root, mode, event, entry, page)?.category === target.category;
+                eventTarget(root, mode, event, entry, page, preferences().spoilers === true)?.category === target.category;
             if (current) context.entity = { kind: 'entity', map: point.map, mode, event: target.id, category: target.category };
             return context;
         },

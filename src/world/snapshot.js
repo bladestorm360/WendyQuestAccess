@@ -2,16 +2,18 @@
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
-const { localDestination, iceOpensPassage, inactiveFloorScene } = require('./local-destinations');
+const { localDestination, iceOpensPassage, inactiveFloorScene, concealedDestination,
+    chillcrestQuestExit, WEST_CHILLCREST } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
-function eventTarget(root, mode, event, entry, page) {
-    if (!pageHasInteraction(page) || inactiveFloorScene(root, event, page) || excludedDestination(entry, page)) return null;
+function eventTarget(root, mode, event, entry, page, spoilers = false) {
     const map = root.$gameMap._mapId;
+    if ((!spoilers && concealedDestination(map, event)) || !pageHasInteraction(page) ||
+        inactiveFloorScene(root, event, page) || excludedDestination(entry, page)) return null;
     let target = worldDestination(root, mode, event, entry, page);
     if (target === undefined) target = localDestination(root, event, page);
     if (target === undefined) target = checkpointTarget(map, event._eventId, event._pageIndex, event._trigger)
@@ -63,7 +65,7 @@ function includeSavedBookmarks(snapshot, entries, current) {
     return items;
 }
 
-function captureWorld(root, routing = true, label, scene, bookmarks = [], routesOnly = false) {
+function captureWorld(root, routing = true, label, scene, bookmarks = [], routesOnly = false, spoilers = false) {
     const map = root.$gameMap;
     const player = root.$gamePlayer;
     const data = root.$dataMap;
@@ -107,10 +109,10 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
                 discoveryFor: mode === 'airship' ? discoveryEntrance(id, event) : undefined });
         }
-        if (routesOnly || event._erased) continue;
+        if (routesOnly || event._erased || !spoilers && concealedDestination(id, event)) continue;
         const quest = quests?.get(eventId);
         if (!action && !quest?.waypoint) continue;
-        const target = action ? eventTarget(root, mode, event, entry, page) : undefined;
+        const target = action ? eventTarget(root, mode, event, entry, page, spoilers) : undefined;
         if (target && (!quest || target.category !== 'events')) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
@@ -120,6 +122,15 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             objects.push({ id: eventId, x, y, name: questDestinationLabel(entry, quest, target), category: 'quests',
                 entryDirection, eventAction, bumpDirections, handoffs, quest });
         }
+    }
+    // The authored marker exists on the earlier conversation page. Once
+    // Frostyna joins, the published quest still leads out of town via this exit.
+    if (!routesOnly && scene && mode === 'walk' && chillcrestQuestExit(root) &&
+        !objects.some(item => item.category === 'quests' && WEST_CHILLCREST.includes(item.id))) {
+        const west = objects.filter(item => item.category === 'exits' && WEST_CHILLCREST.includes(item.id))
+            .sort((a, b) => Math.abs(a.x - player._x) + Math.abs(a.y - player._y) -
+                Math.abs(b.x - player._x) - Math.abs(b.y - player._y))[0];
+        if (west) objects.push({ ...west, category: 'quests', questExit: true });
     }
     if (!routesOnly && mode === 'walk') objects.push(...boardingTargets(map));
     if (!routesOnly && mode === 'airship') objects.push({ id: 517, x: player._x, y: player._y, name: 'Nearest landing site',

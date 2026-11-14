@@ -181,6 +181,11 @@ function formatSpeech(message) {
             else if (message.more) parts.push(message.enemyBlocked === true ? 'Route ends at an enemy. More directions available' :
                 'More directions available');
             else if (message.enemyBlocked === true && boundary) parts.push('Blocked by an enemy one tile ' + boundary);
+            else if (boundary && label({ name: message.exit })) {
+                const exit = label({ name: message.exit });
+                if (message.useExit) parts.push('Move ' + boundary + ' to take the ' + exit);
+                else parts.push(exit + ' one tile ' + boundary + '. No verified onward route through this exit');
+            }
             else if (activate) parts.push(`Move ${activate} to activate`);
             else if (boundary) {
                 parts.push(`${label({ name: message.boundaryName }) || 'Floor event'} one tile ${boundary}`);

@@ -134,7 +134,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     function select(fixture, event, start, name, category = 'exits') {
         const { gameMap, player, geometry } = fixture;
         player.setPosition(...start);
-        const view = captureWorld(c);
+        const view = captureWorld(c, true, undefined, undefined, [], false, true);
         const target = view.objects.find(item => item.id === event);
         assert.equal(target?.name, name, `map ${fixture.id}, event ${event}`);
         assert.equal(target.category, category);
@@ -267,6 +267,30 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     eventAvailability(25, [475], [45, 46], true);
     eventAvailability(25, [475, 511], [45, 46], false);
     eventAvailability(25, [475, 33], [45, 46], false);
+    assert(captureWorld(c).objects.some(item => item.id === 14 && item.category === 'exits'));
+    const oldQuest = c.$gameParty.getNav;
+    try {
+        c.$gameParty.getNav = () => 'quest15';
+        const exit = load(25, { switches: [33, 475] });
+        exit.player.setPosition(1, 17);
+        const view = captureWorld(c, true, undefined, {});
+        assert.equal(new Set(view.objects.filter(item => item.category === 'exits' &&
+            /(?:West|East|South) exit/.test(item.name)).map(item => item.name)).size, 3);
+        const quest = view.objects.find(item => item.category === 'quests');
+        assert(quest?.questExit);
+        assert.equal(quest.name, 'West exit toward Cold Brew Trail');
+        const route = solveRoute(exit.geometry, view.live, { x: 1, y: 17, event: quest.id, field: true, stopBeforeEvent: true });
+        assert.equal(route.status, 'interrupted');
+        assert.equal(route.boundary, 4);
+        assert.equal(route.boundaryEvent, 14);
+        const blocked = load(25, { switches: [475] });
+        blocked.player.setPosition(1, 17);
+        const before = captureWorld(c, false, undefined, {});
+        assert(before.objects.some(item => item.id === 14 && item.category === 'events'));
+        assert(!before.objects.some(item => item.questExit));
+    } finally {
+        c.$gameParty.getNav = oldQuest;
+    }
     const nativeHasItem = c.$gameParty.hasItem;
     try {
         c.$gameParty.hasItem = () => false;
@@ -285,11 +309,23 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     transfer(load(132), 2, [12, 2], 'Second floor', 133, [12, 9]);
     transfer(load(132, { switches: [525] }), 2, [12, 2], 'Secret room stairs', 203, [12, 11]);
     transfer(load(203), 1, [12, 11], 'First floor', 132, [12, 2]);
-    transfer(load(87), 91, [12, 64], 'Hidden cave entrance', 205, [14, 4]);
+    const concealedCave = load(87);
+    concealedCave.player.setPosition(12, 64);
+    assert(!captureWorld(c).objects.some(item => item.id === 91));
+    assert(captureWorld(c).live.events.some(item => item.id === 91 && item.normal && item.action));
+    transfer(concealedCave, 91, [12, 64], 'Hidden cave entrance', 205, [14, 4]);
+    const foundCave = load(87, { self: ['87,91,A'] });
+    foundCave.player.setPosition(12, 64);
+    assert(captureWorld(c).objects.some(item => item.id === 91 && item.category === 'exits'));
     transfer(load(87, { self: ['87,91,A'] }), 91, [12, 64], 'Hidden cave entrance', 205, [14, 4]);
     transfer(load(205), 12, [14, 4], 'Return to Caffeine Caverns', 87, [12, 64]);
     for (const [id, event, x, y, gate, index] of [[128, 11, 1, 6, 503, 13], [133, 4, 6, 5, 525, 11]]) {
-        const source = select(load(id), event, [x, y], 'Interaction', 'objects');
+        const fixture = load(id);
+        fixture.player.setPosition(x, y);
+        const hidden = captureWorld(c);
+        assert(!hidden.objects.some(item => item.id === event));
+        assert(hidden.live.events.some(item => item.id === event && item.action), 'hide only the mod destination');
+        const source = select(fixture, event, [x, y], 'Hidden passage button', 'objects');
         let set;
         c.$gameSwitches.setValue = (...values) => { set = values; };
         source._index = index;
