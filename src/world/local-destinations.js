@@ -75,6 +75,32 @@ function localHandoffName(map, event) {
     return undefined;
 }
 
+const icePages = new WeakMap();
+
+function iceOpensPassage(entry, page) {
+    if (!/^Ice(?:Block|$)/.test(entry?.name || '') || page?.trigger !== 0) return false;
+    if (!icePages.has(page)) {
+        const gameplay = page.list.filter(({ code }) => ![0, 108, 408, 657].includes(code));
+        const [sound, animation, done] = gameplay;
+        const next = entry.pages[entry.pages.indexOf(page) + 1];
+        // Verify the ordinary melt followed by an erase-only page. Other
+        // variants can stage a chest, a cutscene or combat as part of melting.
+        const opens = gameplay.length === 3 && sound.code === 250 &&
+            sound.parameters[0]?.name === 'WQ/SFX_IceBlockMelt' &&
+            animation.code === 357 && animation.parameters[0] === 'MapScene' &&
+            animation.parameters[1] === 'AnimatedObjectSetState' &&
+            animation.parameters[3]?.animationState === 'melt' && animation.parameters[3]?.wait === 'true' &&
+            done.code === 123 && done.indent === 0 && done.parameters[1] === 0 &&
+            next?.trigger === 4 && next.conditions?.selfSwitchValid === true &&
+            !next.conditions.switch1Valid && !next.conditions.switch2Valid && !next.conditions.variableValid &&
+            !next.conditions.itemValid && !next.conditions.actorValid &&
+            next.conditions.selfSwitchCh === done.parameters[0] &&
+            next.list.length === 2 && next.list[0]?.code === 214 && next.list[1]?.code === 0;
+        icePages.set(page, opens);
+    }
+    return icePages.get(page);
+}
+
 function localDestination(root, event, page) {
     const map = root.$gameMap._mapId;
     const id = event._eventId;
@@ -162,4 +188,4 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { localDestination, localHandoffName };
+module.exports = { localDestination, localHandoffName, iceOpensPassage };

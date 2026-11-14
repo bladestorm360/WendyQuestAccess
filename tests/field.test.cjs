@@ -207,10 +207,105 @@ async function main() {
     }
     profileSnapshot(flags);
     await verifyOpeningField(flags);
+    await verifyIceHandback(flags);
     await verifyRuinsHandback();
     await verifyBeachHandoffs(flags);
     await verifySurfaceField(flags);
     console.log('Verified native field admission, spoken object selection and route, restored tiles, and stale-route retirement.');
+}
+
+async function verifyIceHandback(flags) {
+    const data = mapData(25);
+    const f = fixture(data);
+    const { c, routePackets, frame } = f;
+    const { routeThroughIce } = require('../src/world/terrain-controls.cjs');
+    const geometry = bakeMap(data, flags[data.tilesetId].flags);
+    const map = c.$gameMap;
+    const player = c.$gamePlayer;
+    c.$dataTilesets = flags;
+    Object.assign(map, { _mapId: 25, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
+        _vehicles: [], _nameDisplay: false });
+    for (const id of [13, 26, 27, 28]) {
+        const entry = data.events[id];
+        const index = id === 13 ? 0 : 1;
+        const page = entry.pages[index];
+        const event = f.event(id, index);
+        Object.assign(event, { _x: entry.x, _y: entry.y, _pageIndex: index,
+            _trigger: page.trigger, _priorityType: page.priorityType, _through: page.through,
+            clearStartingFlag() { this._starting = false; } });
+        if (index) {
+            const args = entry.pages[0].list.find(cmd => cmd.code === 357 && cmd.parameters[1] === 'SetBlocker').parameters[3];
+            event.blockerProperties = { x1: +args.minX, y1: +args.minY, x2: +args.maxX, y2: +args.maxY };
+        }
+        map._events[id] = event;
+        map.fixtureEvents.push(event);
+    }
+    player._vehicleType = 'walk';
+    player.setPosition(28, 34);
+    player.reserveTransfer(25, 28, 34, 2, 0);
+    c.SceneManager.goto(c.Scene_Map);
+    c.SceneManager.changeScene();
+    c.DataManager.ready = c.ImageManager.ready = true;
+    c.SceneManager.updateScene();
+    const scene = c.Graphics.app.stage;
+    scene._fadeDuration = scene._fadeOpacity = 0;
+    c.SceneManager.updateScene();
+    f.idleCallbacks.shift()();
+    c.SceneManager.updateScene();
+    frame();
+    await new Promise(setImmediate);
+    const key = (value, shiftKey = false) => {
+        const ev = { key: value, keyCode: value.toUpperCase().charCodeAt(0), shiftKey };
+        f.dispatchWindowEvent('keydown', ev);
+        f.dispatchWindowEvent('keyup', ev);
+        frame();
+    };
+    const directions = () => f.packets.filter(record => record.kind === 'routeDirections');
+    c.SceneManager.updateScene();
+    frame();
+    assert(scene._wqaFieldReady, 'Chillcrest fixture is ready for keys');
+    key('l', true);
+    assert.match(formatSpeech(f.packets.at(-1)), /Exits.*Frostyna/);
+    key('p');
+    const request = routePackets.at(-1);
+    assert.equal(request.request.event, 13);
+    const result = routeThroughIce(geometry, request.live, request.request, () => false);
+    assert.equal(result?.event, 27);
+    f.routeReply({ epoch: request.epoch, sequence: request.sequence, map: request.map,
+        result: { ...result, legs: result.legs.slice(0, 8), more: true } });
+    frame();
+    assert.match(formatSpeech(directions().at(-1)), /Route to the ice block.*More directions available/);
+    player.setPosition(result.arrival.x, result.arrival.y);
+    key('p');
+    const near = routePackets.at(-1);
+    const approach = routeThroughIce(geometry, near.live, near.request, () => false);
+    f.routeReply({ epoch: near.epoch, sequence: near.sequence, map: near.map, result: approach });
+    frame();
+    assert.match(formatSpeech(directions().at(-1)), /Route to the ice block.*Face north and press the action button/);
+    assert.match(formatSpeech(directions().at(-1)), /Directions resume after the ice melts/);
+    const ice = map._events[27];
+    const before = routePackets.length;
+    ice.start();
+    assert.equal(f.epoch(), 0, 'starting the ice event retires speech before native setup');
+    assert(map.setupStartingMapEvent());
+    assert.equal(map._interpreter._eventId, 27);
+    assert(scene._wqaIceRoute, 'the matching native interpreter retains the route intent');
+    c.SceneManager.updateScene();
+    frame();
+    assert.equal(routePackets.length, before, 'no work while the melt interpreter is active');
+    map._interpreter.clear();
+    c.SceneManager.updateScene();
+    frame();
+    assert.equal(routePackets.length, before, 'the blocker must actually be erased');
+    ice._erased = true;
+    c.SceneManager.updateScene();
+    frame();
+    assert.equal(routePackets.length, before + 1, 'resumes once without another key');
+    const onward = routePackets.at(-1);
+    assert.equal(onward.request.event, 13);
+    assert.equal(solveRoute(geometry, onward.live, onward.request).status, 'ready');
+    assert.equal(scene._wqaIceRoute, false);
+    console.log('Verified the native ice event closes admission and resumes directions to the original destination.');
 }
 
 async function verifyRuinsHandback() {

@@ -5,7 +5,7 @@ const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
-const { localHandoffName } = require('./local-destinations');
+const { localHandoffName, iceOpensPassage } = require('./local-destinations');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { tileKey } = require('./geometry.cjs');
@@ -84,6 +84,7 @@ function createField(root, host, notifications) {
     let speech = 0;
     let renderOwner = null;
     let control = null;
+    let iceRoute = null;
     const preferences = host.navigationPreferences;
     const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed) => {
         if (failed) host.beacon?.stop(scene);
@@ -131,6 +132,12 @@ function createField(root, host, notifications) {
         return owner;
     }
 
+    function clearIceRoute(scene) {
+        if (iceRoute?.scene !== scene) return;
+        scene._wqaIceRoute = false;
+        iceRoute = null;
+    }
+
     function retire(scene) {
         if (!owner || owner.scene !== scene) return;
         if (admission) Atomics.store(admission, 0, 0);
@@ -169,8 +176,8 @@ function createField(root, host, notifications) {
             job.action === 'puzzleGuide' && salt.available(job.scene) || BROWSE.has(job.action));
     }
 
-    function follow(job, result, record) {
-        if (job.autowalk && autowalk.start(job, result, record)) {
+    function follow(job, result, record, walkingJob = job) {
+        if (job.autowalk && autowalk.start(walkingJob, result, record)) {
             // The movement owner now watches native outcomes. Ordinary
             // position notifications must leave its path narration admitted.
             job.scene._wqaRouteActive = false;
@@ -327,6 +334,24 @@ function createField(root, host, notifications) {
                     board: !!job.vehicle, land: result.land === true,
                     guideAction: job.action === 'puzzleGuide' && !!result.arrival.facing && !!saltControlName(job.target),
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
+            }
+            else if (result?.status === 'iceRoute') {
+                const map = root.$gameMap;
+                const block = map._events[result.event];
+                const entry = root.$dataMap.events[result.event];
+                const page = entry?.pages[block?._pageIndex];
+                if (!block || block._erased || block._trigger !== 0 || !iceOpensPassage(entry, page))
+                    return status(job, 'The ice changed. Request directions again.');
+                // Keep only the selected destination and the identity of the
+                // native ice event. Speech, routes and movement retire at
+                // native entry and resume from a fresh settled snapshot.
+                iceRoute = { scene: job.scene, map, block, browser: owner.browser, started: false };
+                job.scene._wqaIceRoute = true;
+                if (host.beacon?.enabled()) host.beacon.start(job.scene, result.event, job.x, job.y, result,
+                    null, undefined, { request: { event: result.event, field: true, beacon: true, limit: 8 } });
+                follow(job, result, { kind: 'routeDirections', name: 'Ice block', legs: result.legs,
+                    facing: result.arrival.facing, more: result.more === true, prerequisite: 'the ice block',
+                    resumeIce: true }, { ...job, target: result.event, quest: null, point: false });
             }
             else if (result?.status === 'controlRoute') {
                 const prerequisite = CONTROLS[job.map]?.[result.event];
@@ -663,7 +688,7 @@ function createField(root, host, notifications) {
     for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
         transfers.clear();
         autowalk.stop();
-        if (owner) retire(owner.scene);
+        if (owner) { clearIceRoute(owner.scene); retire(owner.scene); }
     });
     function queue(job) {
         const { scene } = job;
@@ -686,11 +711,13 @@ function createField(root, host, notifications) {
         const scene = host.manager._scene;
         if (action === 'beaconStop') {
             if (!ready(scene, true)) return false;
+            const waitingForIce = iceRoute?.scene === scene;
+            clearIceRoute(scene);
             const walking = autowalk.stop(scene) || pendingAutowalk(scene);
             const beaming = host.beacon?.stop(scene);
-            if (!walking && !beaming) return false;
+            if (!walking && !beaming && !waitingForIce) return false;
             transfers.clear();
-            command('navigationReport', { kind: 'fieldStatus', name: walking ? 'Autowalk stopped.' : 'Beacon stopped.' });
+            command('navigationReport', { kind: 'fieldStatus', name: walking ? 'Autowalk stopped.' : beaming ? 'Beacon stopped.' : 'Directions stopped.' });
             return true;
         }
         if (action === 'puzzleStop') {
@@ -718,6 +745,7 @@ function createField(root, host, notifications) {
         if (!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' &&
             action !== 'status' && action !== 'mapName' && action !== 'mapDescription' && !reporting && !puzzle && !vitals) return false;
         if (BROWSE.has(action) || action === 'directions' || puzzle) {
+            clearIceRoute(scene);
             autowalk.stop(scene);
             host.beacon?.stop(scene);
             host.caveTiming?.cancelPlan(scene);
@@ -738,6 +766,7 @@ function createField(root, host, notifications) {
     }
 
     function activateBookmark(scene, entry, remote = false, trail = []) {
+        clearIceRoute(scene);
         browserOwner(scene);
         owner.remoteBookmark = remote ? { id: entry.id, revision: entry.revision, trail } : null;
         owner.browser.category = 'bookmarks';
@@ -809,6 +838,20 @@ function createField(root, host, notifications) {
         bookmarkEntranceAccepted: transfers.accepted,
         bookmarkLandingAccepted: transfers.landingAccepted,
         bookmarkTransferReserved: transfers.reserved,
+        clearIceRoute,
+        iceEventStarted(scene, event) {
+            if (iceRoute?.scene !== scene) return;
+            if (iceRoute.block === event && !event._erased && event._trigger === 0) iceRoute.started = true;
+            else clearIceRoute(scene);
+        },
+        iceRouteReady(scene) {
+            if (iceRoute?.scene !== scene || !ready(scene)) return;
+            const { map, block, browser: selection, started } = iceRoute;
+            if (map !== root.$gameMap || browser !== selection) return clearIceRoute(scene);
+            if (!started || !block._erased) return;
+            clearIceRoute(scene);
+            command('directions');
+        },
         observeReady(scene) {
             if (!ready(scene)) return;
             const arrived = transfers.settle(scene);
@@ -883,7 +926,9 @@ function createField(root, host, notifications) {
             retire(scene);
             if (control?.scene === scene) control = null;
         },
-        leave(scene) {
+        leave(scene, mapEventId) {
+            if (!(iceRoute?.scene === scene && iceRoute.started && iceRoute.block._eventId === mapEventId))
+                clearIceRoute(scene);
             transfers.leave(scene);
             autowalk.stop(scene);
             if (scene) scene._wqaFieldReady = false;

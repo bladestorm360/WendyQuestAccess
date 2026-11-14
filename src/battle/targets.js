@@ -1,6 +1,6 @@
 'use strict';
 
-const { battlePresented, drawnText, enemyName, visibleSprite } = require('./presentation');
+const { battlePresented, drawnText, enemyName, statusAppearance, visibleSprite } = require('./presentation');
 const { enemyState } = require('./enemy-state');
 const { enemyArt } = require('../dialogue/character-art');
 const { reviewLines, moveReview } = require('../menus/review');
@@ -90,7 +90,7 @@ function createBattleTargets(root, host, notifications, preferences) {
         const { sprite, enemy } = row;
         const art = sprite._battlerName === enemy.battlerName?.() &&
             sprite.worldVisible && sprite.worldAlpha > 0 && sprite.texture?.valid && enemyArt(sprite._battlerName);
-        return reviewLines([statusLine(row) || row.name, ...(art || [])]);
+        return reviewLines([statusLine(row) || row.name, ...(art || []), ...statusAppearance(sprite)]);
     }
 
     function publish(job) {

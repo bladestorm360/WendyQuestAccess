@@ -69,7 +69,7 @@ function verifySplash() {
 
 async function verifyInteraction(mapId, eventId, pageIndex = 0, testPathfinder = false) {
     const data = mapData(mapId);
-    const f = fixture(data);
+    const f = fixture(data, false, testPathfinder ? { reachableOnly: true } : undefined);
     const { c } = f;
     const player = c.$gamePlayer;
     const map = c.$gameMap;
@@ -149,6 +149,8 @@ async function verifyInteraction(mapId, eventId, pageIndex = 0, testPathfinder =
     tick();
     const announcements = () => f.packets.filter(packet => packet.kind === 'interactionPrompt').map(formatSpeech);
     if (testPathfinder) {
+        await new Promise(setImmediate);
+        tick();
         f.dispatchWindowEvent('keydown', { key: 'k', keyCode: 75 });
         tick();
         const request = f.routePackets.at(-1);

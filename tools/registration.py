@@ -469,9 +469,11 @@ def objects_notification(original):
                 b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||'
                 b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive||'
                 b'SceneManager._scene._wqaQuestTracking||SceneManager._scene._wqaQuestNavigation||'
-                b'SceneManager._scene._wqaRouteActive||SceneManager._scene._wqaInteractionActive))'
-                b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene);\n        ',  # Accepted event start
-        255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + narration_leaving() + MAP_LEAVING +
+                b'SceneManager._scene._wqaRouteActive||SceneManager._scene._wqaInteractionActive||'
+                b'SceneManager._scene._wqaIceRoute))'
+                b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene,this);\n        ',  # Accepted event start
+        255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + narration_leaving() +
+                MAP_LEAVING.replace(b'?.(SceneManager._scene);', b'?.(SceneManager._scene,this===$gameMap?._interpreter?eventId:0);') +
                 b'if(SceneManager._scene?._wqaBattleFocusActive)'
                 b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);' +
                 BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
@@ -666,6 +668,8 @@ def map_notification(original):
             if (this._wqaPlaceFrames === 30)
                 globalThis.WendyQuestAccessMapEntranceReady?.(this);
         }
+        if (this._wqaIceRoute && !$gameMap._interpreter?._list)
+            globalThis.WendyQuestAccessIceRouteReady?.(this);
         if (this._wqaStepNavigation && $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY)
             globalThis.WendyQuestAccessStepNavigationReady?.(this);
         const wqaIcon = $gamePlayer._iconState === 1 && $gamePlayer._interactIcon?.visible ? $gamePlayer._interactIcon : null;

@@ -8,7 +8,7 @@ const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, CELL_BITS } = require('./geome
 const { solveRoute, findReachable } = require('./routes.cjs');
 const { MAX_CATALOG_BYTES, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
-const { routeThroughControl } = require('./terrain-controls.cjs');
+const { routeThroughControl, routeThroughIce } = require('./terrain-controls.cjs');
 const { solveSaltRoute } = require('./puzzles/salt-route.cjs');
 
 const BUILD = '26578620';
@@ -118,7 +118,9 @@ parentPort.on('message', message => {
             }
             if (['unreachable', 'approachBlocked'].includes(result.status))
                 result = routeThroughControl(base, live, request, manifest.maps[map].controls, cancelled) || result;
-            const follows = (result.status === 'ready' || result.status === 'enemyBlocked') &&
+            if (!request.refresh && ['unreachable', 'approachBlocked'].includes(result.status))
+                result = routeThroughIce(base, live, request, cancelled) || result;
+            const follows = (result.status === 'ready' || result.status === 'enemyBlocked' || result.status === 'iceRoute') &&
                 !result.reenter && (request.beacon === true || request.autowalk === true);
             if (follows || (result.status === 'interrupted' && request.autowalk === true)) {
                 // Two direction bits and the bounded distance to the next turn.
@@ -144,7 +146,7 @@ parentPort.on('message', message => {
                     result.autowalkMore = result.legs.length - (last.tiles === 1 ? 1 : 0) > request.limit;
                 }
             }
-            if ((result.status === 'ready' || result.status === 'interrupted' || result.status === 'enemyBlocked' || result.status === 'saltRoute' || result.status === 'controlRoute') &&
+            if ((result.status === 'ready' || result.status === 'interrupted' || result.status === 'enemyBlocked' || result.status === 'saltRoute' || result.status === 'controlRoute' || result.status === 'iceRoute') &&
                 Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
                 result.legs.length > request.limit) {
                 result.more = true;

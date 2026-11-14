@@ -17,7 +17,7 @@ Enable **Cutscene descriptions** in **F8 → Audio** to hear short descriptions 
 
 ## Battle
 
-At the start of battle, the mod reads the enemy formation before the first focused command. Highlight a target to hear its visible HP percentage. Press **I** to hear appearance, current HP and conditions. Appearance is read only when requested. Press **I** on a dialogue line to describe the active speaker when there is a verified portrait or sprite. Map diagrams still use **I** for their details.
+At the start of battle, the mod reads the enemy formation before the first focused command. Highlight a target to hear its visible HP percentage. Press **I** to hear appearance, current HP and conditions. With battle commands open, **I** describes the active fighter’s sprite and visible status effects. On a companion ability, **I** reads the ability and **Shift+I** describes the companion. Appearance is read only when requested. Press **I** on a dialogue line to describe the active speaker when there is a verified portrait or sprite. Map diagrams still use **I** for their details.
 
 Confirm to start the timing meter. Confirm again for power, then for accuracy. **F8 → Audio → Battle timing assist** adds one note when a perfect window opens. Press Confirm when you hear it. The game’s wind-up sounds provide the rest of the timing. When the game shows its resistance popup, speech reports that Wendy resisted a status effect.
 

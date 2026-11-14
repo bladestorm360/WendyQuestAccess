@@ -81,7 +81,7 @@ function createAutowalk(root, ready, preferences, report) {
                 (record.land && !canLand(map, arrival.x, arrival.y))) return changed(state);
             if (record.enemyBlocked && !job.enemyCurrent?.()) return changed(state);
             const name = record.boundary ? record.name : 'At ' + record.name;
-            return end(state, { ...record, name, legs: [], more: false, directionsOnly: record.enemyBlocked === true });
+            return end(state, { ...record, name, legs: [], more: false, directionsOnly: record.enemyBlocked === true || record.resumeIce === true });
         }
         const step = DIRECTIONS[course[index] & 3];
         const x = map.roundXWithDirection(player._x, step);

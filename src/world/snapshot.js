@@ -2,7 +2,7 @@
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination, excludedDestination, eventDescription, activeMovingEnemy } = require('./destinations');
-const { localDestination, localHandoffName } = require('./local-destinations');
+const { localDestination, localHandoffName, iceOpensPassage } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
@@ -101,6 +101,8 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             events.push({ id: eventId, x, y, normal: event._priorityType === 1, through: event._through === true,
                 tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action,
                 erased: event._erased === true,
+                meltable: mode === 'walk' && action && trigger === 0 && (rectangle || event._priorityType === 1) &&
+                    iceOpensPassage(entry, page),
                 movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
                 discoveryFor: mode === 'airship' ? discoveryEntrance(id, event) : undefined });
         }

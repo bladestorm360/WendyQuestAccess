@@ -1,5 +1,7 @@
 'use strict';
 
+const { renderedSprite } = require('../runtime/rendered-sprite');
+
 function battleScenePresented(root, host, scene) {
     return !!(scene?._wqaBattleStarted && scene._started && scene._active && scene._fadeDuration === 0 &&
         scene._fadeOpacity === 0 && scene === host.manager._scene && host.graphics.app?.stage === scene &&
@@ -42,4 +44,25 @@ function enemyName(sprite) {
     return typeof name === 'string' && name.length <= 48 ? name.trim() : '';
 }
 
-module.exports = { battleScenePresented, battlePresented, visibleSprite, drawnText, enemyName };
+// Native state cleanup can leave stopped coroutine references behind.
+// Check attached, visible overlays and particles from the exact game art.
+function statusAppearance(art) {
+    if (!art || !art.worldVisible || !(art.worldAlpha > 0)) return [];
+    const children = art.children;
+    const hasParticle = name => Array.isArray(children) && children.length <= 64 && children.some(sprite =>
+        renderedSprite(sprite, art) && sprite.animator?._animationData?.fileName === 'ParticleEffects/' + name);
+    const ghosts = art.__GhostClones;
+    return [
+        renderedSprite(art.__FrozenOverlay, art) && 'Blue ice streaks coat the sprite.',
+        renderedSprite(art.__FireOverlay, art) && 'Red and orange flames ripple across the sprite.',
+        renderedSprite(art.__RageOverlay, art) && 'Red and orange zigzags surge across the sprite.',
+        renderedSprite(art.__FrostyHat, art) && 'A pale, curled Frosty hat sits on the head.',
+        renderedSprite(art.__SuperShieldOverlay, art) && 'A golden mesh of triangles covers the sprite.',
+        Array.isArray(ghosts) && ghosts.length <= 3 && ghosts.some(sprite => renderedSprite(sprite, art)) &&
+            'Faint copies drift out from the sprite.',
+        hasParticle('Sog') && 'Blue water drops fall around the sprite.',
+        hasParticle('Crispy') && 'Golden sparks flicker around the sprite.'
+    ].filter(Boolean);
+}
+
+module.exports = { battleScenePresented, battlePresented, visibleSprite, drawnText, enemyName, statusAppearance };

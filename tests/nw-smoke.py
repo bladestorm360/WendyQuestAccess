@@ -1408,6 +1408,17 @@ const interval = setInterval(() => {
         } else if (endingStep === 37 && fs.existsSync(receipt + '.battle-companion-focus')) {
             for (const digit of ['1', '2', '3', '4'])
                 if (!tap(digit, 'Digit' + digit)) throw Error('A numbered party shortcut claimed native input');
+            const scene = SceneManager._scene;
+            const companion = scene._spriteset._subActorSprite;
+            companion.parent = scene._spriteset._battleField;
+            companion._battlerName = companion._actor.battlerName = 'Frygor';
+            Object.assign(companion, { texture: { valid: true }, _frame: { x: 0, y: 0, width: 64, height: 64 } });
+            companion.__FrozenOverlay = { parent: companion, worldVisible: true, worldAlpha: 1, texture: { valid: true } };
+            companion._frameAnimator = { _sprite: companion, bitmap: companion.bitmap,
+                _animationData: { fileName: 'sv_actors/Frygor' } };
+            tap('I', 'KeyI', { shiftKey: true });
+            endingStep = 85;
+        } else if (endingStep === 85 && fs.existsSync(receipt + '.battle-appearance')) {
             tap('h', 'KeyH');
             endingStep = 38;
         } else if (endingStep === 38 && fs.existsSync(receipt + '.battle-wendy-status')) {
@@ -1963,7 +1974,7 @@ parentPort.on('message', message => {
             const suffix = message.kind === 'menuFocus' ? (speech.startsWith('Synthetic companion') ? 'companion-focus' : 'focus') :
                 message.kind === 'battleLog' ? (vitals?.startsWith('Power ') ? 'radial' :
                     vitals?.startsWith('Synthetic target, 17 HP damage') ? 'damage' : message.append ? 'log-auto' : 'log-repeat') :
-                message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'wendy-status') :
+                message.kind === 'menuDetails' ? (vitals === 'Synthetic companion' ? 'appearance' : vitals === 'Synthetic hero' ? (target ? 'vitals' : 'wendy-status') :
                     message.append ? 'autodetail' : 'details') :
                 message.kind === 'menuReview' ? (target && message.append ? 'timing' : 'review') :
                 message.kind === 'dialoguePage' ? 'outcome' :
@@ -2287,6 +2298,7 @@ def main():
             'battle-formation': 'Enemy formation. 1 Synthetic archer.',
             'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',
             'battle-companion-focus': 'Synthetic companion, Battle commands, Synthetic guard, 1 of 1',
+            'battle-appearance': 'Synthetic companion. His gold crest sticks up from a red headband. He crouches with a short red bow held low. Blue ice streaks coat the sprite.',
             'battle-wendy-status': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-log-auto': 'Synthetic turn result.',
             'battle-log-repeat': 'Synthetic turn result.',

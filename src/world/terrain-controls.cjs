@@ -26,4 +26,41 @@ function routeThroughControl(geometry, live, request, controls, cancelled) {
     return null;
 }
 
-module.exports = { routeThroughControl };
+function routeThroughIce(geometry, live, request, cancelled) {
+    if (live.mode !== 'walk' || request.entrances || request.vehicle || request.area || request.motion) return null;
+    const ice = live.events.filter(event => event.meltable && !event.erased && event.id !== request.event);
+    if (!ice.length || ice.length > 8) return null;
+    const queue = [{ x: request.x, y: request.y, removed: 0, first: null }];
+    const visited = new Set();
+    // A node clears only verified one-use blockers. Replay normal collision
+    // and event ordering for each candidate approach. Copying and search
+    // happen on the existing routing worker under its cancellation epoch.
+    for (let index = 0; index < queue.length && index < 64; index++) {
+        if (cancelled()) return { status: 'cancelled' };
+        const { x, y, removed, first } = queue[index];
+        const events = removed ? live.events.filter(event =>
+            !ice.some((block, slot) => block === event && (removed & (1 << slot)))) : live.events;
+        const world = composeWorld(geometry, { ...live, events }, cancelled);
+        if (!world) return { status: 'cancelled' };
+        if (first) {
+            const goal = solveWorldRoute(world, { ...request, x, y }, cancelled);
+            if (goal.status === 'cancelled') return goal;
+            if (goal.status === 'ready') return { ...first, status: 'iceRoute' };
+        }
+        for (const [slot, block] of ice.entries()) {
+            if (removed & (1 << slot)) continue;
+            const approach = solveWorldRoute(world, { x, y, event: block.id, field: true }, cancelled);
+            if (approach.status === 'cancelled') return approach;
+            if (approach.status !== 'ready') continue;
+            const next = removed | (1 << slot);
+            const { x: arrivalX, y: arrivalY } = approach.arrival;
+            const key = next + ':' + arrivalX + ':' + arrivalY;
+            if (visited.has(key) || queue.length >= 64) continue;
+            visited.add(key);
+            queue.push({ x: arrivalX, y: arrivalY, removed: next, first: first || { ...approach, event: block.id } });
+        }
+    }
+    return null;
+}
+
+module.exports = { routeThroughControl, routeThroughIce };

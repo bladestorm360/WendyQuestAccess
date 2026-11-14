@@ -174,7 +174,8 @@ function formatSpeech(message) {
                     parts.push(move ? 'Move ' + move + ' to continue' :
                         (facing ? 'Face ' + facing + ' and press' : 'Press') + ' the action button');
                     if (message.remainingActions > 0) parts.push('More steps follow');
-                    parts.push('Request directions again after the passage changes');
+                    parts.push(message.resumeIce ? 'Directions resume after the ice melts' :
+                        'Request directions again after the passage changes');
                 }
             }
             else if (message.more) parts.push(message.enemyBlocked === true ? 'Route ends at an enemy. More directions available' :

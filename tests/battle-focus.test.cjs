@@ -151,6 +151,64 @@ assert.match(messages[3], /Reduce incoming damage.*Cost x2/);
 const page = observer.controlOwner(scene);
 assert(observer.command(page, 'details'));
 assert.match(messages.at(-1), /Reduce incoming damage.*Cost x2/);
+const { portraitArt } = require('../src/dialogue/character-art');
+assert.match(portraitArt('WendySad').join(' '), /spatula handles/);
+assert.match(portraitArt('Frygor').join(' '), /short bow/);
+function actorSprite(name, key, width, height, x, y, companion = true) {
+    const _frame = { x: width * x, y: height * y, width, height };
+    const bitmap = { isReady: () => true };
+    const data = { name, battlerName: key };
+    const art = { _frame, bitmap, worldVisible: true, worldAlpha: 1, texture: { valid: true } };
+    const sprite = { parent: battlefield, worldVisible: true, worldAlpha: 1, texture: { valid: true },
+        _mainSprite: art, _actor: companion ? data : { actor: () => data }, _battlerName: key,
+        _frameAnimator: { _sprite: art, bitmap, _animationData: { fileName: 'sv_actors/' + key } } };
+    if (companion) {
+        Object.assign(sprite, art, { parent: battlefield, _mainSprite: sprite });
+        sprite._frameAnimator._sprite = sprite;
+    } else art.parent = sprite;
+    return sprite;
+}
+const wendy = actorSprite('Wendy', 'Wendy_Combat', 64, 64, 0, 0, false);
+scene._spriteset._actorSprites = [wendy];
+wendy.battleOptions = actor.battleOptions;
+wendy._battleOptionsActive = 0;
+skill._followTarget = wendy;
+observer.command(page, 'details');
+assert.match(messages.at(-2), /two silver spatulas with brown handles/);
+assert.match(messages.at(-1), /Reduce incoming damage/);
+wendy._mainSprite._frame.x = 3 * 64;
+const frozen = wendy._mainSprite.__FrozenOverlay = { parent: wendy._mainSprite, worldVisible: true, worldAlpha: 1,
+    texture: { valid: true } };
+observer.command(page, 'details');
+assert.match(messages.at(-2), /crouches low with a silver spatula.*Blue ice streaks/);
+frozen.worldVisible = false;
+observer.command(page, 'details');
+assert.doesNotMatch(messages.at(-2), /Blue ice/);
+for (const [name, key, width, height, attackFrame, idle, action] of [
+    ['Frygor', 'Frygor', 64, 64, 3, /bow held low/, /raises and draws/],
+    ['Frostyna', 'Frostyna', 96, 96, 2, /spiral-headed staff/, /thrusts her golden staff/],
+    ['Baconator', 'Baconator', 141, 64, 2, /curved sword upright/, /curved sword low/],
+    ['Sir Chicken', 'SirChicken', 80, 64, 2, /drumstick-shaped flail head/, /swings his orange flail/]
+]) {
+    const companion = actorSprite(name, key, width, height, 0, 0);
+    scene._spriteset._subActorSprite = companion;
+    companion.battleOptions = actor.battleOptions;
+    companion._battleOptionsActive = 0;
+    skill._followTarget = companion;
+    observer.command(page, 'details');
+    assert.match(messages.at(-1), /Reduce incoming damage/);
+    assert.doesNotMatch(messages.at(-1), new RegExp(name));
+    assert(observer.command(page, 'battleAppearance'));
+    assert.match(messages.at(-1), new RegExp(name));
+    assert.match(messages.at(-1), idle);
+    companion._mainSprite._frame.x = width * attackFrame;
+    observer.command(page, 'battleAppearance');
+    assert.match(messages.at(-1), action);
+    companion._mainSprite.bitmap = { isReady: () => true };
+    assert.equal(observer.command(page, 'battleAppearance'), false, 'a stale bitmap withholds the description');
+}
+skill._followTarget = actor;
+assert.doesNotMatch(messages[3], /spatula/, 'Autodetail has only the native command description');
 assert(observer.command(page, 'reviewLast'));
 assert.match(messages.at(-1), /Cost x2/);
 pressed = true;

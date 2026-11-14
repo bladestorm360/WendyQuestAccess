@@ -334,6 +334,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 radialResult.retire(scene);
                 quests.suspend(scene);
                 field.autowalk.stop(scene);
+                field.clearIceRoute(scene);
                 field.changed(scene);
                 scene._wqaPresentation = true;
                 root.Input?.clear();
@@ -348,6 +349,8 @@ function boot(root, nodeRequire, nodeProcess) {
             menuCommand(action) {
                 const scene = host.manager._scene;
                 try {
+                    if (action === 'battleAppearance') return !battleTargets.controlOwner(scene) &&
+                        battleFocus.command(battleFocus.controlOwner(scene), action);
                     const handled = menus.command(menus.controlOwner(scene), action);
                     if (handled || action === 'gold') return handled;
                     return battleFocus.command(battleFocus.controlOwner(scene), action) ||
@@ -793,7 +796,8 @@ function boot(root, nodeRequire, nodeProcess) {
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
         try { footsteps?.move(scene, direction, succeeded); } catch { footsteps?.leave(scene); }
     };
-    root.WendyQuestAccessFieldEvent = function (scene) {
+    root.WendyQuestAccessFieldEvent = function (scene, event) {
+        field?.iceEventStarted(scene, event);
         interaction?.leave(scene);
         treasure?.leave(scene);
         autosaveNotice?.leave(scene);
@@ -805,6 +809,9 @@ function boot(root, nodeRequire, nodeProcess) {
         beacon?.stop(scene);
         wall?.interrupt(scene);
         footsteps?.leave(scene);
+    };
+    root.WendyQuestAccessIceRouteReady = function (scene) {
+        try { field?.iceRouteReady(scene); } catch { field?.clearIceRoute(scene); }
     };
     root.WendyQuestAccessAutowalkInput = function (scene, player, direction, manual) {
         try { return field?.autowalk.input(scene, player, direction, manual) ?? direction; }
@@ -836,7 +843,7 @@ function boot(root, nodeRequire, nodeProcess) {
     // Direct native scene changes and developer reload can bypass the active
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
-    root.WendyQuestAccessSceneLeaving = function (scene) {
+    root.WendyQuestAccessSceneLeaving = function (scene, mapEventId) {
         root.WendyQuestAccessSplashLeaving(scene);
         quests?.leave(scene);
         soundscape?.leave(scene);
@@ -867,7 +874,7 @@ function boot(root, nodeRequire, nodeProcess) {
         credits?.leave(scene);
         dialogue?.leave(scene);
         treasure?.leave(scene);
-        field?.leave(scene);
+        field?.leave(scene, mapEventId);
     };
 
     root.WendyQuestAccessResizeStarting = function () {

@@ -136,16 +136,19 @@ const ENEMIES = new Map([
 const PORTRAITS = new Map([
     ["Wendy", [
         "A young woman with bright blue eyes, freckles and red hair in two tied pigtails.",
-        "She wears silver armor over red-striped sleeves, with a ribbon at her collar."
+        "She wears silver armor over red-striped sleeves, with a ribbon at her collar.",
+        "Two brown-wrapped spatula handles stick up behind her shoulders."
     ]],
     ["Frygor", [
         "A young man with tan skin, brown eyes and a friendly, rounded face.",
         "A red headband holds his high golden crest, and a pale cape drapes over his quiver strap.",
-        "A bundle of fry-shaped arrows sticks up behind his shoulder."
+        "A bundle of fry-shaped arrows sticks up behind his shoulder.",
+        "Part of his short bow shows beneath his hands."
     ]],
     ["FrygorUNHINGED", [
         "A tan young man with wide brown eyes, raised eyebrows and tightly clenched teeth.",
-        "His red headband holds a tall golden crest, and his pale cape covers a quiver strap."
+        "His red headband holds a tall golden crest, and his pale cape covers a quiver strap.",
+        "Golden arrows fan out behind his shoulder, and part of his short bow shows below."
     ]],
     ["Frostyna", [
         "A young woman with lavender-blue skin, dark eyes and pale hair swept into icy curls.",
@@ -215,6 +218,52 @@ const PORTRAITS = new Map([
     ['MrArrow', ENEMIES.get('GoldenArcher')]
 ]);
 
+// These poses describe the painted side-view atlas cells. The equipment
+// inventory can assign different items without changing the artwork.
+const PARTY_BATTLE_ART = new Map([
+    ['Wendy_Combat', { size: [64, 64], idle: [
+        'Her red pigtails and blue skirt frame her silver armor.',
+        'She holds two silver spatulas with brown handles, one raised to each side.'
+    ], attack: ['She crouches low with a silver spatula extended in each hand.'],
+        guard: ['She raises her two spatulas close in front of her face.'],
+        hurt: ['She recoils with her eyes squeezed shut and both spatulas lowered.'],
+        action: ['She raises one spatula high and holds the other out to the side.'],
+        down: ['She kneels with her head bowed and both spatulas lowered to the ground.'] }],
+    ['Frygor', { size: [64, 64], idle: [
+        'His gold crest sticks up from a red headband. He crouches with a short red bow held low.'
+    ], attack: ['He raises and draws his red bow. A red quiver of golden arrows crosses his back.'] }],
+    ['Frostyna', { size: [96, 96], idle: [
+        'Icy curls frame her lavender-blue face above a long dark blue coat.',
+        'She holds a golden spiral-headed staff across her body.'
+    ], attack: ['She thrusts her golden staff straight out in front of her.'] }],
+    ['Baconator', { size: [141, 64], idle: [
+        'A broad, bearded man in red armor and a cape, holding a huge curved sword upright.',
+        'The broad brown blade has a bright metal edge.'
+    ], attack: ['He lunges and sweeps his broad, curved sword low. His red cape flares behind him.'] }],
+    ['SirChicken', { size: [80, 64], idle: [
+        'He wears gold armor and a winged helmet with a white feathered mantle.',
+        'A chain hangs from his handle, ending in an orange drumstick-shaped flail head.'
+    ], attack: ['He swings his orange flail in a wide arc, the chain stretched taut.'] }]
+]);
+
+function partyBattleArt(name, frame) {
+    const art = PARTY_BATTLE_ART.get(name);
+    if (!art || !frame || frame.width !== art.size[0] || frame.height !== art.size[1]) return;
+    const x = frame.x / frame.width;
+    const y = frame.y / frame.height;
+    if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0) return;
+    if (name === 'Wendy_Combat') {
+        if (y === 0 && x < 6) return x < 3 ? art.idle : art.attack;
+        if (y === 3 && x < 3 || y === 5 && x < 3) return art.guard;
+        if (y === 4 && x < 3) return art.hurt;
+        if (y === 5 && x < 9) return x < 6 ? art.action : art.down;
+        return;
+    }
+    if (y !== 0) return;
+    if (x < 2) return art.idle;
+    if (name === 'Frygor' ? x >= 3 && x <= 5 : name === 'SirChicken' ? x <= 4 : x === 2) return art.attack;
+}
+
 const TOWNSPEOPLE = new Map([
     ['NPCs - 32x32', [
         ['A round-faced woman with brown hair, dark eyes and a white bonnet.',
@@ -277,4 +326,4 @@ function fieldArt(name, index) {
     return ['A gray-faced figure with red eyes.', ...description.slice(1)];
 }
 
-module.exports = { enemyArt, portraitArt, fieldArt };
+module.exports = { enemyArt, portraitArt, fieldArt, partyBattleArt };

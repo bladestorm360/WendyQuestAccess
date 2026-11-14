@@ -29,6 +29,7 @@ const { createWallAudio } = require('../src/world/wall-audio');
 const { createFootsteps } = require('../src/world/footsteps');
 const { captureWorld } = require('../src/world/snapshot');
 const { createBeacon } = require('../src/world/beacon');
+const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { mapDescription } = require('../src/world/map-descriptions');
 const { bearing } = require('../src/world/spatial-direction');
 const { createCaveTiming } = require('../src/world/cave-timing');
@@ -1043,9 +1044,15 @@ async function main() {
     }
     for (let map = 1; map <= 239; map++) {
         const description = mapDescription({ $gameMap: { _mapId: map } });
-        assert(description.length <= 512 && description.split(/[.!?]+/).filter(Boolean).length <= 6);
+        assert(description.length <= 512 && formatSpeech({ kind: 'mapDescription', description }) === description);
     }
     assert.match(mapDescription({ $gameMap: { _mapId: 19 } }), /Lighting the torches gradually/);
+    const chillcrestDescription = mapDescription({ $gameMap: { _mapId: 25 } });
+    assert.match(chillcrestDescription, /ice-cream terraces/);
+    assert.match(chillcrestDescription, /Frostyna’s large blue house/);
+    assert.match(chillcrestDescription, /red-roofed Wendy’s/);
+    assert.equal(formatSpeech({ kind: 'mapDescription', description: chillcrestDescription }), chillcrestDescription);
+
     const salt = load(19);
     compare(salt);
     const saltPlan = require('../src/world/puzzles/salt-route.cjs').solveSaltRoute;
@@ -1140,6 +1147,49 @@ async function main() {
         });
     }
     console.log('Verified seven ordinary terrain-control prerequisite routes through the packaged worker.');
+    const { routeThroughIce } = require('../src/world/terrain-controls.cjs');
+    const { iceOpensPassage } = require('../src/world/local-destinations');
+    let verifiedIce = 0;
+    for (const info of read('MapInfos.json').filter(Boolean)) {
+        const data = read(`Map${String(info.id).padStart(3, '0')}.json`);
+        for (const entry of data.events.filter(Boolean))
+            for (const page of entry.pages)
+                if (iceOpensPassage(entry, page)) verifiedIce++;
+    }
+    assert.equal(verifiedIce, 40);
+    const chillcrest = load(25, { self: [26, 27, 28].map(id => '25,' + id + ',A') });
+    const { gameMap, player, geometry } = chillcrest;
+    player.setPosition(28, 34);
+    for (const id of [26, 27, 28]) {
+        const event = gameMap.event(id);
+        const block = chillcrest.map.events[id].pages[0].list.find(command =>
+            command.code === 357 && command.parameters[1] === 'SetBlocker').parameters[3];
+        event.SetBlocker(+block.minX, +block.minY, +block.maxX, +block.maxY);
+    }
+    const house = { x: 28, y: 34, event: 13, field: true, bumpDirections: 15 };
+    let view = captureWorld(c);
+    assert.equal(solveRoute(geometry, view.live, house).status, 'unreachable');
+    const frozen = routeThroughIce(geometry, view.live, house, () => false);
+    assert.equal(frozen?.status, 'iceRoute');
+    assert.equal(frozen.event, 27);
+    assert.equal(routeThroughIce(geometry, view.live, house, () => true).status, 'cancelled');
+    await verifyWorker(chillcrest, house, view.live, output => assert.deepEqual(output, frozen));
+    verifyRoute(chillcrest, { ...house, event: frozen.event, bumpDirections: undefined }, { ...frozen, status: 'ready' });
+    assert.equal(player._x, frozen.arrival.x);
+    assert.equal(player._y, frozen.arrival.y);
+    const event = gameMap.event(frozen.event);
+    assert.equal(event.list().find(command => command.code === 123).parameters[0], 'C');
+    const old = c.$gameSelfSwitches.value;
+    c.$gameSelfSwitches.value = key => key.join(',') === '25,27,C' || old(key);
+    const erasePage = event.findProperPageIndex();
+    assert.equal(event.event().pages[erasePage].list[0].code, 214);
+    event._erased = true;
+    view = captureWorld(c);
+    const onward = { ...house, x: player._x, y: player._y };
+    assert.equal(solveRoute(geometry, view.live, onward).status, 'ready');
+    await verifyWorker(chillcrest, onward, view.live, output => assert.equal(output.status, 'ready'));
+    console.log(`Audited ${verifiedIce} ordinary melting pages and verified the route from Chillcrest to Frostyna's house.`);
+
     const lava = load(62);
     const block = lava.map.events[22].pages.flatMap(page => page.list).find(command =>
         command.code === 357 && command.parameters[1] === 'SetBlocker').parameters[3];

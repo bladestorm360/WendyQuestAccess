@@ -254,6 +254,7 @@ function createSettingsMenu(root, host) {
                 'Confirm to start the timing meter. Confirm again for power, then for accuracy.',
                 'Turn on Battle timing assist under Audio for one note when a perfect window opens. Press Confirm at the note.',
                 'Use Read details ' + gestureName(keys.details) + ' to describe selected enemies and read their displayed HP and conditions.',
+                'At battle commands, Read details describes the active fighter. Hold Shift with that key to describe a companion when their ability is highlighted.',
                 'Read Wendy’s status ' + gestureName(keys.wendyStatus) + '.'
             ],
             Controller: [
@@ -750,10 +751,11 @@ function createSettingsMenu(root, host) {
             return;
         }
         const review = reviewGesture(event);
+        const appearance = keys.details && review === 'Shift+' + keys.details && !nativeConflict(root, review, event.keyCode);
         const menuAction = review ? Object.keys(REVIEW_KEYS).find(action => keys[action] === review &&
             (review.includes('Arrow') || !nativeConflict(root, review, event.keyCode))) :
             key && !nativeConflict(root, key, event.keyCode) ? key === keys.gold ? 'gold' : key === keys.details ? 'details' : '' : '';
-        if (menuAction && host.menuCommand(menuAction)) {
+        if ((appearance && host.menuCommand('battleAppearance')) || (menuAction && host.menuCommand(menuAction))) {
             if (physical && held.size < 64) held.add(physical);
             event.preventDefault();
             event.stopPropagation();

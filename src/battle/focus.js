@@ -1,8 +1,9 @@
 'use strict';
 
-const { battlePresented, drawnText, enemyName } = require('./presentation');
+const { battlePresented, drawnText, enemyName, statusAppearance } = require('./presentation');
 const { renderedSprite } = require('../runtime/rendered-sprite');
 const { portraitActor } = require('./party-vitals');
+const { partyBattleArt } = require('../dialogue/character-art');
 const { reviewLines, moveReview } = require('../menus/review');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
@@ -22,6 +23,19 @@ function formation(scene) {
     }
     return groups.size ? { kind: 'battleLog',
         lines: ['Enemy formation', ...Array.from(groups, ([name, count]) => count + ' ' + name)] } : null;
+}
+
+function partyAppearance(scene, sprite) {
+    const actor = portraitActor(scene, sprite);
+    const art = sprite?._mainSprite;
+    const animator = sprite?._frameAnimator;
+    if (!actor || sprite.parent !== scene._spriteset._battleField || !sprite.worldVisible ||
+        !(sprite.worldAlpha > 0) || sprite.visible === false || sprite.renderable === false ||
+        !renderedSprite(art, art === sprite ? sprite.parent : sprite) || animator?._sprite !== art || animator.bitmap !== art.bitmap ||
+        animator._animationData?.fileName !== 'sv_actors/' + sprite._battlerName) return null;
+    const pose = partyBattleArt(sprite._battlerName, art._frame);
+    if (!pose) return null;
+    return { kind: 'menuDetails', lines: reviewLines([actor.name, ...pose, ...statusAppearance(art)]) };
 }
 
 function createBattleFocus(root, host, notifications, preferences, onReady) {
@@ -137,7 +151,18 @@ function createBattleFocus(root, host, notifications, preferences, onReady) {
         controlOwner(scene) { return current?.scene === scene && live(current) ? current : null; },
         command(page, action) {
             if (!page || page !== current || !live(page)) return false;
-            if (action === 'details') show(page, details(page));
+            if (action === 'details' || action === 'battleAppearance') {
+                const sprite = page.option._followTarget;
+                const companion = sprite === page.scene._spriteset?._subActorSprite;
+                if (action === 'details' && companion && page.lines.length) show(page, details(page));
+                else {
+                    const appearance = partyAppearance(page.scene, sprite);
+                    if (action === 'battleAppearance' && !appearance) return false;
+                    show(page, appearance || details(page));
+                    if (appearance && page.lines.length && action === 'details')
+                        notifications.focus(page.epoch, { ...details(page), append: true });
+                }
+            }
             else if (REVIEW.has(action) && page.lines.length)
                 show(page, { ...moveReview(page, action), indexed: preferences().indexing });
             else return false;
