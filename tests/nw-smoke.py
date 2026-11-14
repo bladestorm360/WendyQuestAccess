@@ -2300,9 +2300,9 @@ def main():
             raise RuntimeError(f'NW exited {result} without a receipt: {errors!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result or data.get('error') or len(records) != 19 or not all(r.get('sameEpoch') for r in records):
+        if result or data.get('error') or len(records) != 20 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, cave, timed, page, choice, repeat, dialogue_mode, pad_repeat, number = records
+        title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, beacon_autowalk, cave, timed, page, choice, repeat, dialogue_mode, pad_repeat, number = records
         if any(item['name'] != title['name'] for item in (returned_title, controller_title)) or \
                 len({title['epoch'], returned_title['epoch'], controller_title['epoch']}) != 3:
             raise RuntimeError(f'NW fixture did not restore the title focus: {data}')
@@ -2317,7 +2317,8 @@ def main():
                 any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
             raise RuntimeError(f'NW field selection or layout priority failed: {data}')
         if route['kind'] != 'routeDirections' or route['speech'] != '1 east. face east.' or \
-                pad_route['kind'] != 'routeDirections' or pad_route['speech'] != 'Synthetic wall. 1 east. face east.':
+                pad_route['kind'] != 'routeDirections' or pad_route['speech'] != 'Synthetic wall. 1 east. face east.' or \
+                beacon_autowalk['kind'] != 'routeDirections' or beacon_autowalk['speech'] != '1 east. face east.':
             raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
         browse_submit_ms = float(receipt.with_suffix('.json.browse-submit-ms').read_text(encoding='utf8'))

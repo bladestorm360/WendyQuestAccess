@@ -119,8 +119,12 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         }
         if (quest && target !== null && (mode !== 'airship' || target?.category === 'exits')) {
             const { entryDirection, eventAction, bumpDirections, handoffs } = target || {};
+            // A painted quest marker can own a touch action even when its
+            // native page has no separate scene or encounter to list.
+            const touch = action && !quest.waypoint && (trigger === 1 || trigger === 2);
             objects.push({ id: eventId, x, y, name: questDestinationLabel(entry, quest, target), category: 'quests',
-                entryDirection, eventAction, bumpDirections, handoffs, quest });
+                entryDirection, eventAction: eventAction ?? (touch ? event._priorityType === 1 ? 'bump' : 'step' : undefined),
+                bumpDirections, handoffs, quest });
         }
     }
     // Follow the published rescue objective through the native region
