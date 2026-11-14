@@ -179,11 +179,12 @@ if (!restart) {
 document.addEventListener('keydown', event => { if (event.code === 'KeyZ') nativeZ++; });
 document.addEventListener('keydown', event => { if (event.code === 'ArrowDown') nativeMenuArrows++; });
 function key(type, key, code, repeat = false, modifiers = {}) {
-    document.dispatchEvent(new KeyboardEvent(type, { key, code, repeat, bubbles: true, cancelable: true, ...modifiers }));
+    return document.dispatchEvent(new KeyboardEvent(type, { key, code, repeat, bubbles: true, cancelable: true, ...modifiers }));
 }
 function tap(keyValue, code = keyValue, modifiers) {
-    key('keydown', keyValue, code, false, modifiers);
+    const native = key('keydown', keyValue, code, false, modifiers);
     key('keyup', keyValue, code);
+    return native;
 }
 function pad(...buttons) {
     return WendyQuestAccessPadSample(0, 'standard', 'Xbox fixture', buttons.reduce((mask, button) => mask | 1 << button, 0));
@@ -590,12 +591,14 @@ const interval = setInterval(() => {
                 hud[fillName] = { ...visible(hud), mask };
             }
             hud.backingFP = visible(hud);
+            fs.writeFileSync(receipt + '.field-vitals-keyboard', '');
             tap('h', 'KeyH');
             Graphics.app.renderer.emit('postrender');
             mapVitalsStep++;
             return;
         }
-        if (mapVitalsStep === 1 && fs.existsSync(receipt + '.field-vitals-hp')) {
+        if (mapVitalsStep === 1 && fs.existsSync(receipt + '.field-vitals-h')) {
+            fs.unlinkSync(receipt + '.field-vitals-keyboard');
             pad();
             if (padTap(7) !== 1 << 7) throw Error('Map vitals did not enter controller mod mode');
             mapVitalsStep++;
@@ -1364,12 +1367,22 @@ const interval = setInterval(() => {
             if (padTap(3) !== 0) throw Error('Battle results action did not return to native input');
             endingStep = 45;
         } else if (endingStep === 45 && fs.existsSync(receipt + '.battle-log-repeat')) {
-            tap('h', 'KeyH');
+            const scene = SceneManager._scene;
+            const hero = scene._spriteset._actorSprites[0];
+            const companion = scene._spriteset._subActorSprite;
+            const option = hero.battleOptions[0][0];
+            Object.assign(companion, { _battleOptionsActive: 0, battleOptions: [[option]] });
+            WendyQuestAccessBattleFocusLeaving(scene);
+            option._followTarget = companion;
+            WendyQuestAccessBattleFocusReady(scene, option);
+            Graphics.app.renderer.emit('postrender');
             endingStep = 37;
-        } else if (endingStep === 37 && fs.existsSync(receipt + '.battle-hp')) {
-            tap('2', 'Digit2');
+        } else if (endingStep === 37 && fs.existsSync(receipt + '.battle-companion-focus')) {
+            for (const digit of ['1', '2', '3', '4'])
+                if (!tap(digit, 'Digit' + digit)) throw Error('A numbered party shortcut claimed native input');
+            tap('h', 'KeyH');
             endingStep = 38;
-        } else if (endingStep === 38 && fs.existsSync(receipt + '.battle-slot2')) {
+        } else if (endingStep === 38 && fs.existsSync(receipt + '.battle-wendy-status')) {
             const scene = SceneManager._scene;
             WendyQuestAccessBattleFocusLeaving(scene);
             fs.writeFileSync(receipt + '.battle-target-stage', '');
@@ -1586,9 +1599,11 @@ const interval = setInterval(() => {
             tap('g', 'KeyG');
             endingStep = 70;
         } else if (endingStep === 70 && fs.existsSync(receipt + '.menu-gold')) {
+            fs.writeFileSync(receipt + '.menu-vitals-keyboard', '');
             tap('h', 'KeyH');
             endingStep = 56;
-        } else if (endingStep === 56 && fs.existsSync(receipt + '.menu-vitals-hp')) {
+        } else if (endingStep === 56 && fs.existsSync(receipt + '.menu-vitals-h')) {
+            fs.unlinkSync(receipt + '.menu-vitals-keyboard');
             pad();
             if (padTap(7) !== 1 << 7) throw Error('Menu vitals mod mode did not claim the binding');
             endingStep = 57;
@@ -1782,7 +1797,7 @@ parentPort.on('message', message => {
     if (fs.existsSync(receipt + '.field-vitals-stage')) {
         const speech = formatSpeech(message);
         if (message.kind === 'menuDetails')
-            fs.writeFileSync(receipt + (message.lines.length > 2 ? '.field-vitals-full' : '.field-vitals-hp'), speech);
+            fs.writeFileSync(receipt + (fs.existsSync(receipt + '.field-vitals-keyboard') ? '.field-vitals-h' : '.field-vitals-full'), speech);
         if (message.kind === 'fieldStatus' && speech.includes('X reads vitals'))
             fs.writeFileSync(receipt + '.field-vitals-mode', speech);
         parentPort.postMessage('ack');
@@ -1808,7 +1823,7 @@ parentPort.on('message', message => {
         if (fs.existsSync(receipt + '.menu-vitals-stage')) {
             if (message.kind === 'menuReview') fs.writeFileSync(receipt + '.menu-gold', speech);
             if (message.kind === 'menuDetails')
-                fs.writeFileSync(receipt + (message.lines.length > 2 ? '.menu-vitals-full' : '.menu-vitals-hp'), speech);
+                fs.writeFileSync(receipt + (fs.existsSync(receipt + '.menu-vitals-keyboard') ? '.menu-vitals-h' : '.menu-vitals-full'), speech);
             if (message.kind === 'controllerStatus' && speech.includes('X reads vitals'))
                 fs.writeFileSync(receipt + '.menu-vitals-mode', speech);
             parentPort.postMessage('ack');
@@ -1834,11 +1849,11 @@ parentPort.on('message', message => {
         if (fs.existsSync(receipt + '.battle-stage')) {
             const target = fs.existsSync(receipt + '.battle-target-stage');
             const vitals = message.lines?.[0];
-            const suffix = message.kind === 'menuFocus' ? 'focus' :
+            const suffix = message.kind === 'menuFocus' ? (speech.startsWith('Synthetic companion') ? 'companion-focus' : 'focus') :
                 message.kind === 'battleLog' ? (vitals?.startsWith('Power ') ? 'radial' :
                     vitals?.startsWith('Synthetic target, 17 HP damage') ? 'damage' : message.append ? 'log-auto' : 'log-repeat') :
-                message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'hp') :
-                    vitals === 'Synthetic companion' ? 'slot2' : message.append ? 'autodetail' : 'details') :
+                message.kind === 'menuDetails' ? (vitals === 'Synthetic hero' ? (target ? 'vitals' : 'wendy-status') :
+                    message.append ? 'autodetail' : 'details') :
                 message.kind === 'menuReview' ? (target && message.append ? 'timing' : 'review') :
                 message.kind === 'dialoguePage' ? 'outcome' :
                 message.kind === 'controllerStatus' ? 'mode' : '';
@@ -2150,7 +2165,8 @@ def main():
             'cross-map-next': 'Move east to activate.',
             'cross-map-arrived': 'You are here.',
             'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',
-            'battle-hp': 'Synthetic hero. HP 8 of 14',
+            'battle-companion-focus': 'Synthetic companion, Battle commands, Synthetic guard, 1 of 1',
+            'battle-wendy-status': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-log-auto': 'Synthetic turn result.',
             'battle-log-repeat': 'Synthetic turn result.',
             'battle-radial': 'Power 81%. Accuracy 93%, NICE.',
@@ -2164,7 +2180,7 @@ def main():
             'shop-quantity': 'Purchase quantity, Synthetic shop item, quantity 3, Total 57 Gold',
             'shop-quantity-details': 'Quantity 3, total 57 Gold. Shown effect. Owned 2. Balance 12 Gold',
             'menu-gold': '17 Gold',
-            'menu-vitals-hp': 'Synthetic menu hero. HP 8 of 14',
+            'menu-vitals-h': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent',
             'menu-vitals-full': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent',
             'coupon-list-stone': 'Available rewards, Fry Stone, 1 of 5',
             'coupon-list-locked': 'Locked reward, unavailable, 2 of 5',
@@ -2172,7 +2188,6 @@ def main():
             'coupon-response-auto': 'SYNTHETIC COUPON. REDEEM. Shown instructions.',
             'coupon-response-details': 'SYNTHETIC COUPON. REDEEM. Shown instructions. Coupon code, X 1 dash Z 9',
             'coupon-response-copy': 'Copied to Clipboard',
-            'battle-slot2': 'Synthetic companion. Shared FP 3 of 5',
             'battle-target-vitals': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-autodetail': 'Shield raised. Cost 2 MP',
             'battle-details': 'Shield raised. Cost 2 MP',
@@ -2225,7 +2240,7 @@ def main():
         print('Verified Auto language detection and fallback, manual persistence, saved mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
         for suffix, expected in {
-            'field-vitals-hp': 'Synthetic map hero. HP bar 57 percent',
+            'field-vitals-h': 'Synthetic map hero. HP bar 57 percent. FP bar 60 percent. Level 7',
             'field-vitals-full': 'Synthetic map hero. HP bar 57 percent. FP bar 60 percent. Level 7',
         }.items():
             if receipt.with_suffix('.json.' + suffix).read_text(encoding='utf8') != expected:

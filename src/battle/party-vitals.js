@@ -118,17 +118,16 @@ function meter(label, percent) {
     return percent === null ? '' : label + ' bar ' + percent + ' percent';
 }
 
-function hudVitals(hud, graphics, name, hpOnly, includeExperience = false, mapMeters = false) {
+function hudVitals(hud, graphics, name, includeExperience = false, mapMeters = false) {
     const hp = pairedValue(hud, 'HP', hud._HPIcon, hud._numberSprite, hud._dividerSprite, hud._totalSprite) ||
         (mapMeters && meter('HP', radialPercent(hud, hud.fillSprite, hud.fillMask, 43, 1.21 * Math.PI)));
-    if (hpOnly && !hp) return null;
-    const fp = !hpOnly && (pairedValue(hud, 'FP', hud._FPIcon, hud._FPSprite, hud._dividerSpriteFP, hud._totalSpriteFP) ||
+    const fp = pairedValue(hud, 'FP', hud._FPIcon, hud._FPSprite, hud._dividerSpriteFP, hud._totalSpriteFP) ||
         (mapMeters && visibleSprite(hud, hud.backingFP) &&
-            meter('FP', radialPercent(hud, hud.fillFPSprite, hud.fillFPMask, 57, Math.PI))));
-    const level = !hpOnly && number(hud, hud.levelNumberSprite);
+            meter('FP', radialPercent(hud, hud.fillFPSprite, hud.fillFPMask, 57, Math.PI)));
+    const level = number(hud, hud.levelNumberSprite);
     const progress = level && includeExperience && experience(hud);
     const lines = reviewLines([name, hp, fp, level && 'Level ' + level + (progress ? ', ' + progress : ''),
-        !hpOnly && momentum(hud), ...(hpOnly ? [] : statusLines(hud, graphics))]);
+        momentum(hud), ...statusLines(hud, graphics)]);
     return lines.length > 1 ? { kind: 'menuDetails', lines } : null;
 }
 
@@ -137,39 +136,28 @@ function fieldVitalsVisible(scene) {
     return visibleSprite(scene, hud) && hud.offsetY === 0 && !!hud.battler;
 }
 
-function sceneVitals(scene, graphics, hpOnly, mapMeters) {
+function sceneVitals(scene, graphics, mapMeters) {
     if (!fieldVitalsVisible(scene)) return null;
     const hud = scene._statusWindow;
     const name = hud.battler.actor?.()?.name;
     return hudVitals(hud, graphics, typeof name === 'string' && name.length <= 48 && name ? name : 'Party status',
-        hpOnly, true, mapMeters);
+        true, mapMeters);
 }
 
-function fieldVitals(scene, graphics, hpOnly) {
-    return sceneVitals(scene, graphics, hpOnly, true);
+function fieldVitals(scene, graphics) {
+    return sceneVitals(scene, graphics, true);
 }
 
-function menuVitals(scene, graphics, hpOnly) {
-    return scene._wqaMenuStatus === scene._statusWindow ? sceneVitals(scene, graphics, hpOnly, false) : null;
+function menuVitals(scene, graphics) {
+    return scene._wqaMenuStatus === scene._statusWindow ? sceneVitals(scene, graphics, false) : null;
 }
 
-function partyVitals(scene, graphics, sprite, hpOnly = false) {
-    const displayed = portraitActor(scene, sprite);
-    if (!displayed) return null;
-    const hud = scene._statusWindow;
-    const main = scene._spriteset?._actorSprites?.[0];
-    const open = visibleSprite(scene, hud) && hud.offsetY === 0 && hud.battler && hud.battler === main?._actor;
-    if (displayed.companion) {
-        const fp = !hpOnly && open && pairedValue(hud, 'Shared FP', hud._FPIcon, hud._FPSprite,
-            hud._dividerSpriteFP, hud._totalSpriteFP);
-        const icon = sprite._FPIcon;
-        const ready = !hpOnly && visibleSprite(sprite, icon) && icon._frame?.x === 32 &&
-            ({ 0: 'Companion skill available', 32: 'Companion skills unavailable' }[icon._frame.y]);
-        return { kind: 'menuDetails', lines: reviewLines([displayed.name, fp, ready, !fp && !ready &&
-            (hpOnly ? 'HP unavailable' : 'Vitals unavailable')]) };
-    }
-    if (!open || hud.battler !== displayed.actor) return null;
-    return hudVitals(hud, graphics, displayed.name, hpOnly);
+function battleVitals(scene, graphics) {
+    // The native HUD binds only the first battle member. Companion command
+    // focus and Swap do not change the owner of the visible vitals.
+    const main = portraitActor(scene, scene._spriteset?._actorSprites?.[0]);
+    if (!main || !fieldVitalsVisible(scene) || scene._statusWindow.battler !== main.actor) return null;
+    return hudVitals(scene._statusWindow, graphics, main.name);
 }
 
-module.exports = { portraitActor, partyVitals, menuVitals, fieldVitals, fieldVitalsVisible, visibleCondition };
+module.exports = { portraitActor, battleVitals, menuVitals, fieldVitals, fieldVitalsVisible, visibleCondition };

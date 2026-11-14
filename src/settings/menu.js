@@ -1,6 +1,6 @@
 'use strict';
 
-const { DEFAULT_KEYS, BATTLE_KEYS, PUZZLE_KEYS, REVIEW_KEYS, keyName, nativeConflict,
+const { DEFAULT_KEYS, PUZZLE_KEYS, REVIEW_KEYS, keyName, nativeConflict,
     normalizeKeys, puzzleGesture, reviewGesture } = require('./keyboard');
 const { openSettings } = require('./storage');
 const { ACTIONS, DEFAULTS: NAVIGATION_DEFAULTS, LAYOUT_NAMES, navigationGesture, nativeNavigationConflict,
@@ -13,10 +13,9 @@ const { HIT_NOTE_PITCH } = require('../battle/timing-cues');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
     puzzleGuide: 'Start or review puzzle guidance', puzzleStop: 'Stop puzzle guidance',
-    details: 'Read details', gold: 'Read displayed gold', battleHP: 'Read active HP', battleSlot1: 'Read party slot 1',
-    battleSlot2: 'Read party slot 2 in battle', reviewPrevious: 'Previous review line', reviewNext: 'Next review line',
+    details: 'Read details', gold: 'Read displayed gold', wendyStatus: 'Read Wendy’s status',
+    reviewPrevious: 'Previous review line', reviewNext: 'Next review line',
     reviewFirst: 'First review line', reviewLast: 'Last review line' });
-const BATTLE_ACTIONS = Object.keys(BATTLE_KEYS);
 const MENU_KEYS = Object.freeze({ ArrowUp: 'previous', ArrowLeft: 'previous',
     ArrowDown: 'next', ArrowRight: 'next', Enter: 'confirm' });
 const POINTER_EVENTS = ['mousedown', 'mouseup', 'mousemove', 'wheel', 'touchstart', 'touchmove', 'touchend', 'touchcancel'];
@@ -216,7 +215,7 @@ function createSettingsMenu(root, host) {
             'Menus and reading': [
                 'Use the arrows to move, Enter to activate and Escape to go back. Settings key ' + gestureName(keys.settings) + '.',
                 'Repeat dialogue ' + gestureName(keys.repeat) + '. Read details ' + gestureName(keys.details) +
-                    '. Read displayed gold ' + gestureName(keys.gold) + '. Read HP ' + gestureName(keys.battleHP) + '.',
+                    '. Read displayed gold ' + gestureName(keys.gold) + '. Read Wendy’s status ' + gestureName(keys.wendyStatus) + '.',
                 'Review previous and next lines with ' + gestureName(keys.reviewPrevious) + ' and ' +
                     gestureName(keys.reviewNext) + '. First and last with ' + gestureName(keys.reviewFirst) + ' and ' +
                     gestureName(keys.reviewLast) + '.'
@@ -236,8 +235,7 @@ function createSettingsMenu(root, host) {
             Battle: [
                 'Confirm to start the timing meter. Confirm again for power, then for accuracy.',
                 'Turn on Battle timing assist under Audio for one note when a perfect window opens. Press Confirm at the note.',
-                'Read active HP ' + gestureName(keys.battleHP) + '. Read party slots with ' + gestureName(keys.battleSlot1) +
-                    ' and ' + gestureName(keys.battleSlot2) + '.'
+                'Read Wendy’s status ' + gestureName(keys.wendyStatus) + '.'
             ],
             Controller: [
                 'Press and release ' + padName('mode') + ' for mod mode, then ' + padName('settings') +
@@ -460,7 +458,7 @@ function createSettingsMenu(root, host) {
                 if (loading || saving) return;
                 owner.capture = owner.selected = action;
                 const available = REVIEW_KEYS[action] ? 'Shift and an arrow or letter' : { settings: 'a letter or F8', puzzleGuide: 'Shift and a letter',
-                    puzzleStop: 'Ctrl and a letter' }[action] || (BATTLE_KEYS[action] ? 'a letter or digit from 1 to 9' : 'a letter');
+                    puzzleStop: 'Ctrl and a letter' }[action] || (action === 'wendyStatus' ? 'a letter or digit from 1 to 9' : 'a letter');
                 status(owner, `Press ${available} for ${LABELS[action].toLowerCase()}. Press Escape to cancel.`);
             });
             if (action === selection) focused = item;
@@ -654,13 +652,12 @@ function createSettingsMenu(root, host) {
             change(owner, { ...keys, [action]: review }, action);
             return;
         }
-        if (!key || (key === 'F8' && action !== 'settings') || (/^[1-9]$/.test(key) && !BATTLE_KEYS[action])) return;
+        if (!key || (key === 'F8' && action !== 'settings') || (/^[1-9]$/.test(key) && action !== 'wendyStatus')) return;
         const other = action === 'settings' ? 'repeat' : 'settings';
-        const battleConflict = BATTLE_KEYS[action] ?
-            ['settings', 'repeat', 'details', ...BATTLE_ACTIONS].some(id => id !== action && keys[id] === key) :
-            BATTLE_ACTIONS.some(id => keys[id] === key);
+        const statusConflict = action === 'wendyStatus' ?
+            ['settings', 'repeat', 'details'].some(id => keys[id] === key) : key === keys.wendyStatus;
         const goldConflict = action === 'gold' ? key === keys.details || key === keys.repeat : key === keys.gold;
-        if (nativeConflict(root, key, event.keyCode) || key === keys[other] || battleConflict || goldConflict ||
+        if (nativeConflict(root, key, event.keyCode) || key === keys[other] || statusConflict || goldConflict ||
             (action === 'settings' && key === keys.details) ||
             (action === 'settings' && navigationAction(navigation, key))) {
             status(owner, `${key} is already in use. Choose another key.`);
@@ -711,8 +708,7 @@ function createSettingsMenu(root, host) {
         }
         if (event.repeat || event.target?.closest?.('input, textarea, select, [contenteditable]')) return;
         const key = keyName(event);
-        const battleAction = key && BATTLE_ACTIONS.find(action => keys[action] === key);
-        if (battleAction && !nativeConflict(root, key, event.keyCode) && host.battleCommand?.(battleAction)) {
+        if (key && key === keys.wendyStatus && !nativeConflict(root, key, event.keyCode) && host.readWendyStatus?.()) {
             if (physical && held.size < 64) held.add(physical);
             event.preventDefault();
             event.stopPropagation();

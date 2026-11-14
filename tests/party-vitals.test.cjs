@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
-const { partyVitals, portraitActor, menuVitals, fieldVitals, fieldVitalsVisible } = require('../src/battle/party-vitals');
+const { battleVitals, portraitActor, menuVitals, fieldVitals, fieldVitalsVisible } = require('../src/battle/party-vitals');
 const { nativeTextHost } = require('./native-text-host.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { normalizeKeys } = require('../src/settings/keyboard');
@@ -71,7 +71,7 @@ companion.addChild(companion._FPIcon);
 companion._FPIcon.setFrame(32, 32, 32, 32);
 scene._spriteset = { _actorSprites: [main], _subActorSprite: companion };
 const graphics = { height: 360 };
-const read = (sprite, hpOnly) => formatSpeech(partyVitals(scene, graphics, sprite, hpOnly) || {});
+const read = () => formatSpeech(battleVitals(scene, graphics) || {});
 
 hud.SetBattler(actor);
 hud.AddState(actualState);
@@ -80,25 +80,24 @@ hud.update();
 assert.equal(portraitActor(scene, main).name, actors[1].name);
 assert.equal(portraitActor(scene, companion).name, actors[2].name);
 const start = performance.now();
-assert.equal(read(main), [actors[1].name, 'HP 19 of 24', 'FP 3 of 7', 'Level 4', 'Momentum 1 of 2',
+assert.equal(read(), [actors[1].name, 'HP 19 of 24', 'FP 3 of 7', 'Level 4', 'Momentum 1 of 2',
     'Status, ' + actualState.name].join('. '));
 const measured = performance.now() - start;
-assert.equal(read(main, true), actors[1].name + '. HP 19 of 24');
-assert.equal(read(companion), actors[2].name + '. Shared FP 3 of 7. Companion skills unavailable');
+assert.doesNotMatch(read(), new RegExp(actors[2].name));
 hud._totalSprite.worldVisible = false;
 hud._FPSprite.setText('6');
-assert.equal(read(main, true), actors[1].name + '. HP 19');
-assert.doesNotMatch(read(main), /FP 6|HP 19 of 24/);
+assert.match(read(), /HP 19\./);
+assert.doesNotMatch(read(), /FP 6|HP 19 of 24/);
 hud.update();
-assert.match(read(main), /FP 6 of 7/);
+assert.match(read(), /FP 6 of 7/);
 hud.stateIcons[actualState.id].y = 370;
-assert.doesNotMatch(read(main), /Status,/);
+assert.doesNotMatch(read(), /Status,/);
 hud.RemoveState(actualState.id);
 hud.offsetY = -200;
-assert.equal(read(main), '');
-assert.equal(read(companion), actors[2].name + '. Companion skills unavailable');
-companion.bitmap = null;
-assert.equal(read(companion), '');
+assert.equal(read(), '');
+hud.offsetY = 0;
+hud.battler = companion._actor;
+assert.equal(read(), '', 'the battle read requires the main actor to own the HUD');
 
 Sprite.prototype.show = function () { this.worldVisible = true; };
 Sprite.prototype.hide = function () { this.worldVisible = false; };
@@ -171,15 +170,14 @@ for (const kind of [c.Scene_Menu, c.Scene_Item, c.Scene_Map]) {
     assert.match(formatSpeech(read(menu, graphics)), /experience bar empty/);
     status.levelMetreFillSprite.worldVisible = false;
     assert.doesNotMatch(formatSpeech(read(menu, graphics)), /experience bar/);
-    assert.equal(formatSpeech(read(menu, graphics, true)), actors[1].name + '. ' + hp);
     if (inMap) {
         status.currentHPFill = 1;
-        assert.match(formatSpeech(read(menu, graphics, true)), /79 percent/);
+        assert.match(formatSpeech(read(menu, graphics)), /HP bar 79 percent/);
         status.UpdateMask();
-        assert.match(formatSpeech(read(menu, graphics, true)), /100 percent/);
+        assert.match(formatSpeech(read(menu, graphics)), /HP bar 100 percent/);
         status.currentHPFill = 0;
         status.UpdateMask();
-        assert.match(formatSpeech(read(menu, graphics, true)), /0 percent/);
+        assert.match(formatSpeech(read(menu, graphics)), /HP bar 0 percent/);
         status.backingFP.worldVisible = false;
         assert.doesNotMatch(formatSpeech(read(menu, graphics)), /FP/);
     }
@@ -187,11 +185,13 @@ for (const kind of [c.Scene_Menu, c.Scene_Item, c.Scene_Map]) {
     assert.equal(read(menu, graphics), null);
 }
 
-const keys = normalizeKeys({ details: 'H', battleSlot1: '7' });
-assert.equal(keys.details, 'H');
-assert.equal(keys.battleHP, null);
-assert.equal(keys.battleSlot1, '7');
-assert.equal(keys.battleSlot2, '2');
+const keys = normalizeKeys({ battleSlot1: '7', battleSlot2: '8' });
+assert.equal(keys.wendyStatus, 'H');
+assert(!Object.hasOwn(keys, 'battleSlot1') && !Object.hasOwn(keys, 'battleSlot2'));
+assert.equal(normalizeKeys({ battleHP: 'V' }).wendyStatus, 'V');
+assert.equal(normalizeKeys({ battleHP: null }).wendyStatus, null);
+assert.equal(normalizeKeys({ battleHP: 'V', wendyStatus: 'U' }).wendyStatus, 'U');
+assert.equal(normalizeKeys({ details: 'H' }).wendyStatus, null);
 assert.equal(normalizeController({}).battleVitals, 2);
 assert.equal(normalizeController({ details: 2 }).battleVitals, null);
 assert.equal(normalizeController({ battleVitals: 4 }).battleVitals, 4);

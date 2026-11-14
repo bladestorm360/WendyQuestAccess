@@ -557,7 +557,7 @@ function createField(root, host, notifications) {
         if (job.action === 'fieldVitals') {
             // The map scene owns its attached RadialStatus. Read the glyphs
             // after this frame only while the same HUD is still presented.
-            const record = fieldVitals(job.scene, host.graphics, job.text === true);
+            const record = fieldVitals(job.scene, host.graphics);
             if (record) present(job, record);
             else retire(job.scene);
             return;

@@ -13,7 +13,7 @@ const { createBattleCues } = require('./battle/timing-cues');
 const { createBattleLog } = require('./battle/action-log');
 const { recordCollapse, recordCondition } = require('./battle/outcomes');
 const { createRadialResult } = require('./battle/radial-result');
-const { partyVitals, menuVitals } = require('./battle/party-vitals');
+const { battleVitals, menuVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createInteractionPrompt } = require('./world/interaction-prompt');
@@ -220,24 +220,20 @@ function boot(root, nodeRequire, nodeProcess) {
             battleFocus.announce(owner, record || { kind: 'menuReview', name: 'No battle log yet.' });
             return true;
         }
-        function battleVitalsAction(action, context) {
+        function wendyStatus(context) {
             const scene = host.manager._scene;
             const owner = context || battleFocus.controlOwner(scene) || battleTargets.controlOwner(scene) ||
                 menus.controlOwner(scene);
-            if (!owner) return action !== 'battleSlot2' && field.command('fieldVitals', action === 'battleHP');
+            if (!owner) return field.command('fieldVitals');
             if (owner.scene !== scene) return false;
             if (owner.kind === 'menu') {
-                if (!owner.vitals || action === 'battleSlot2') return false;
-                const record = menuVitals(scene, host.graphics, action === 'battleHP');
+                if (!owner.vitals) return false;
+                const record = menuVitals(scene, host.graphics);
                 if (!record) return false;
                 menus.announce(owner, record);
                 return true;
             }
-            const main = scene._spriteset?._actorSprites?.[0];
-            const active = owner.kind === 'battle' ? owner.option._followTarget :
-                main?._actor === root.BattleManager?._subject ? main : null;
-            const sprite = action === 'battleSlot1' ? main : action === 'battleSlot2' ? scene._spriteset?._subActorSprite : active;
-            const record = partyVitals(scene, host.graphics, sprite, action === 'battleHP');
+            const record = battleVitals(scene, host.graphics);
             if (!record) return false;
             (owner.kind === 'battle' ? battleFocus : battleTargets).announce(owner, record);
             return true;
@@ -349,7 +345,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 }
                 catch { return false; }
             },
-            battleCommand(action) { try { return battleVitalsAction(action); } catch { return false; } },
+            readWendyStatus() { try { return wendyStatus(); } catch { return false; } },
             fieldCommand(key) { try { return fieldAction(key); } catch { return false; } }
         });
         controller = createController({
@@ -365,7 +361,7 @@ function boot(root, nodeRequire, nodeProcess) {
                     if (context.kind === 'credits') credits.command(context.scene, 'details');
                     else dialogue.repeatPage();
                 }
-                else if (action === 'battleVitals') battleVitalsAction(action, context);
+                else if (action === 'battleVitals') wendyStatus(context);
                 else if (action === 'battleLog') battleLogAction(context);
                 else if (action === 'puzzleStop') field.command(action);
                 else if (action === 'modeLeft') announce(context, 'Mod mode off');
