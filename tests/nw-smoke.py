@@ -246,8 +246,8 @@ function verifySettings() {
         tap('ArrowDown');
         if (!document.activeElement.textContent.includes('map name M')) throw Error('Help did not show the map key');
         tap('ArrowDown');
-        if (!document.activeElement.textContent.includes('Active destinations are listed by default') ||
-            !document.activeElement.textContent.includes('Reachable destinations only'))
+        if (!document.activeElement.textContent.includes('Shift+P') ||
+            !document.activeElement.textContent.includes('all active destinations and reachable destinations only'))
             throw Error('Help did not explain the optional reachable filter');
         tap('Escape');
         if (document.activeElement.textContent !== 'Pathfinder') throw Error('Help section did not restore focus');
@@ -741,7 +741,17 @@ const interval = setInterval(() => {
         if (!scene._wqaSoundscapeSample) throw Error('Ambient sample lost its native scene ownership');
         WendyQuestAccessFieldEvent(scene);
         if (scene._wqaSoundscapeActive || scene._wqaSoundscapeSample) throw Error('Native event retained ambient audio');
-        fieldStep++;
+        fieldStep = 100;
+        tap('|', 'Backslash', { shiftKey: true });
+        Graphics.app.renderer.emit('postrender');
+    }
+    if (fieldStep === 100 && require('fs').existsSync(receipt + '.filter-on')) {
+        fieldStep = 101;
+        tap('|', 'Backslash', { shiftKey: true });
+        Graphics.app.renderer.emit('postrender');
+    }
+    if (fieldStep === 101 && require('fs').existsSync(receipt + '.filter-off')) {
+        fieldStep = 1;
         browseStarted = performance.now();
         tap('p', 'KeyP');
         Graphics.app.renderer.emit('postrender');
@@ -1870,6 +1880,15 @@ const records = [];
 parentPort.on('message', message => {
     const receipt = require('path').join(__dirname, '..', 'receipt.json');
     if (message.kind === 'cancel') return;
+    if (message.kind === 'fieldStatus') {
+        const state = { 'Destination filter. Reachable only.': 'on', 'Destination filter. All destinations.': 'off' }[message.name];
+        if (state) {
+            if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
+                fs.writeFileSync(receipt + '.filter-' + state, message.name);
+            parentPort.postMessage('ack');
+            return;
+        }
+    }
     if (message.kind === 'silence') {
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch) {
             fs.writeFileSync(receipt + '.silenced', '');
@@ -2404,6 +2423,7 @@ def main():
         print('Verified the Quests category, packaged route and marker replacement handback.')
         print('Verified controller bookmark naming, keyboard save, native tile arrival, linked event removal and persistence.')
         print('Verified packaged Events speech and the manual activation step, two native transfers and restored bookmark selection.')
+        print('Verified the bracket-layout filter shortcut changed both spoken destination modes.')
         cross_map = [float(receipt.with_suffix('.json.cross-map-' + name + '-ms').read_text(encoding='utf8'))
                      for name in ('submission', 'receipt', 'handback')]
         print(f'Throttled cross-map submission {cross_map[0]:.1f} ms, silent speech receipt {cross_map[1]:.1f} ms '

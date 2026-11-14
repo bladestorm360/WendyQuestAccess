@@ -244,7 +244,8 @@ function createSettingsMenu(root, host) {
                 'Read the current map name ' + binding('mapName') + '. Describe the map ' + binding('mapDescription') +
                     '. Read the visible quest objective ' +
                     binding('questObjective') + '.',
-                'All combines destinations and bookmarks. Active destinations are listed by default. Turn on Reachable destinations only under Navigation to filter by the current path.',
+                'All combines destinations and bookmarks. Use ' + binding('filterToggle') +
+                    ' to switch between all active destinations and reachable destinations only.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
                 'Toggle the beacon ' + binding('beaconToggle') + '. Toggle wall sounds ' + binding('wallToggle') +
@@ -558,6 +559,12 @@ function createSettingsMenu(root, host) {
         return accepted ? (pad.enabled ? 'Controller support on' : 'Controller support off') : '';
     }
 
+    function toggleFieldFilter(failure) {
+        const reachableOnly = !navigation.reachableOnly;
+        if (!change(null, { ...navigation, reachableOnly }, 'reachableOnly', 'navigation', failure)) return '';
+        return reachableOnly ? 'Destination filter. Reachable only.' : 'Destination filter. All destinations.';
+    }
+
     function toggleFieldAudio(action, failure) {
         const key = action === 'beaconToggle' ? 'beacon' : 'wall';
         if (!change(null, { ...audio, [key]: !audio[key] }, key, 'audio', failure)) return '';
@@ -844,7 +851,7 @@ function createSettingsMenu(root, host) {
         bookmarkEntries: bookmarks.entries,
         controllerBindings: () => pad,
         toggleController,
-        toggleFieldAudio,
+        toggleFieldAudio, toggleFieldFilter,
         controllerInput(owner, action, family, mask) {
             if (session !== owner) return;
             if (action === 'capture') return captureController(owner, family, mask);

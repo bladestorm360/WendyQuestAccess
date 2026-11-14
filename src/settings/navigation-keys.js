@@ -6,7 +6,7 @@ const ROUTE_ACTIONS = { previousDestination: 'Previous destination', nextDestina
 const FIELD_KEYS = { mapName: 'M', mapDescription: 'Shift+M', questObjective: 'Q', beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
 const ACTIONS = Object.freeze({ ...ROUTE_ACTIONS, mapName: 'Read current map name', mapDescription: 'Describe current map',
     questObjective: 'Read quest objective', beaconToggle: 'Toggle navigation beacon',
-    wallToggle: 'Toggle wall sounds', beaconStop: 'Stop current navigation' });
+    wallToggle: 'Toggle wall sounds', filterToggle: 'Toggle destination filter', beaconStop: 'Stop current navigation' });
 const LAYOUT_NAMES = Object.freeze({ letters: 'Letters', brackets: 'Brackets and backslash' });
 const DEFAULTS = Object.freeze({
     letters: Object.freeze({ previousDestination: 'J', nextDestination: 'L', currentDestination: 'K', directions: 'P',
@@ -14,6 +14,7 @@ const DEFAULTS = Object.freeze({
     brackets: Object.freeze({ previousDestination: '[', nextDestination: ']', currentDestination: 'P', directions: '\\',
         previousCategory: 'Shift+[', nextCategory: 'Shift+]' })
 });
+const FILTER_GESTURES = Object.freeze({ letters: 'Shift+P', brackets: 'Shift+\\' });
 const GESTURE = /^(?:Shift\+)?(?:[A-Z]|\[|\]|\\)$/;
 const SHIFTED = Object.freeze({ '{': '[', '}': ']', '|': '\\' });
 const NATIVE_CODES = Object.freeze({ '[': 219, ']': 221, '\\': 220 });
@@ -50,11 +51,12 @@ function normalizeNavigation(saved, reserved = []) {
             proposed[action] = key && !used.has(key) ? key : null;
             if (proposed[action]) used.add(key);
         };
-        for (const action of Object.keys(FIELD_KEYS)) {
+        const defaults = { ...FIELD_KEYS, filterToggle: FILTER_GESTURES[layout] };
+        for (const action of Object.keys(defaults)) {
             const key = saved?.bindings?.[layout]?.[action];
             if (key === null || (typeof key === 'string' && GESTURE.test(key))) put(action, key);
         }
-        for (const [action, fallback] of Object.entries(FIELD_KEYS)) {
+        for (const [action, fallback] of Object.entries(defaults)) {
             if (proposed[action] === undefined) put(action, fallback);
         }
         bindings[layout] = proposed;

@@ -106,6 +106,7 @@ function boot(root, nodeRequire, nodeProcess) {
             actor: id => root.$dataActors?.[id],
             variable: id => root.$gameVariables?.value(id),
             gameMessage: () => root.$gameMessage,
+            mapId: () => root.$gameMap?._mapId,
             mapEvent: id => Number.isInteger(id) && id > 0 ? root.$gameMap?._events?.[id] : null,
             makeWord() { return new Int32Array(new SharedArrayBuffer(4)); },
             schedule(task) { root.setTimeout(task, 0); },
@@ -250,6 +251,14 @@ function boot(root, nodeRequire, nodeProcess) {
             const questAction = QUEST_ACTIONS[action];
             if (questAction) return quests.command(host.manager._scene, questAction);
             const scene = host.manager._scene;
+            if (action === 'filterToggle') {
+                if (!field.ready(scene)) return false;
+                const text = settings.toggleFieldFilter(() => {
+                    if (host.manager._scene === scene) field.report('Could not save the destination filter. Previous setting restored.');
+                });
+                if (text) field.report(text);
+                return !!text;
+            }
             if (action !== 'beaconToggle' && action !== 'wallToggle') {
                 if (!field.command(action)) return false;
                 if (scene._wqaInteractionActive && !field.interactionReady(scene)) interaction.leave(scene);

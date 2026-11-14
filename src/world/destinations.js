@@ -24,7 +24,7 @@ function treasureName(entry, page) {
 function bookName(entry) {
     const name = entry.name || '';
     if (/book\s*case|book\s*shelf|^books$/i.test(name)) return 'Bookcase';
-    return /book|\bdiary\b|guide to combat|combat\s*volume|^woa\s+easter egg\b/i.test(name) ? 'Book' : '';
+    return /book|\bdiary\b|guide to combat|combat\s*volume|^woa\s+easter egg\b|^the lost island$/i.test(name) ? 'Book' : '';
 }
 
 function excludedDestination(entry, page) {
@@ -36,6 +36,15 @@ function excludedDestination(entry, page) {
     return !page.image?.characterName && !page.image?.tileId &&
         page.list.some(command => command.code === 236) &&
         page.list.every(command => WEATHER_SETUP_COMMANDS.has(command.code));
+}
+
+const interactionPages = new WeakMap();
+
+function pageHasInteraction(page) {
+    if (!page || page.list.length < 2) return false;
+    if (!interactionPages.has(page))
+        interactionPages.set(page, page.list.some(command => !NON_INTERACTION_COMMANDS.has(command.code)));
+    return interactionPages.get(page);
 }
 
 function destination(entry, page, trigger, map) {
@@ -50,9 +59,7 @@ function destination(entry, page, trigger, map) {
     let reward = false;
     let speaker = '';
     let conversation = false;
-    let activeCommand = false;
     for (const command of page.list) {
-        if (!NON_INTERACTION_COMMANDS.has(command.code)) activeCommand = true;
         if (npc && command.code === 101) {
             conversation = true;
             const label = command.parameters?.[4];
@@ -73,7 +80,7 @@ function destination(entry, page, trigger, map) {
     }
     // A completed encounter can leave an invisible action page whose only
     // effect is to erase itself. Keep native collision, but omit the entry.
-    if (trigger === 0 && !activeCommand) return null;
+    if (trigger === 0 && !pageHasInteraction(page)) return null;
     const treasure = treasureName(entry, page);
     if (treasure && trigger === 0) return { category: ['Barrel', 'Pantry'].includes(treasure) ? 'objects' : 'treasure', name: treasure };
     const book = trigger === 0 && bookName(entry);
@@ -103,9 +110,8 @@ function destination(entry, page, trigger, map) {
 
 // Classify only otherwise unlisted native touch events. Authored names
 // and dialogue never enter this generic description.
-function eventDescription(entry, page, event, keepCleanup) {
-    if (![1, 2].includes(event._trigger)) return null;
-    if (!keepCleanup && !page.list.some(command => !NON_INTERACTION_COMMANDS.has(command.code))) return null;
+function eventDescription(page, event) {
+    if (![1, 2].includes(event._trigger) || !pageHasInteraction(page)) return null;
     if (event._priorityType !== 1) return { category: 'events', name: 'Scene trigger', eventAction: 'step' };
     if (page.list.some(command => command.code === 101 || command.code === 301))
         return { category: 'events', name: 'Scene trigger', eventAction: 'bump' };
@@ -198,4 +204,4 @@ function activeMovingEnemy(root, event) {
         movingEnemy(root.$dataMap?.events?.[event._eventId]?.pages?.[event._pageIndex]));
 }
 
-module.exports = { destination, excludedDestination, eventDescription, eventName, treasureName, createDestinationBrowser, browse, movingEnemy, activeMovingEnemy };
+module.exports = { destination, excludedDestination, pageHasInteraction, eventDescription, eventName, treasureName, createDestinationBrowser, browse, movingEnemy, activeMovingEnemy };

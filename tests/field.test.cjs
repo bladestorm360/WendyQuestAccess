@@ -705,7 +705,7 @@ async function verifyBeachHandoffs(tilesets) {
     const { c, routePackets } = f;
     const map = c.$gameMap;
     const player = c.$gamePlayer;
-    const pages = { 5: 1, 8: 1, 12: 1, 14: 1, 20: 1, 30: 1 };
+    const pages = { 5: 1, 8: 1, 14: 1, 20: 1 };
     c.$dataTilesets = tilesets;
     Object.assign(map, { _mapId: 13, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
         _vehicles: [], _nameDisplay: false });

@@ -35,6 +35,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     let checked = 0;
     let fallbackCount = 0;
     let icePages = 0;
+    const cleanupPages = [0, 0];
     let weatherSetupPages = 0;
     let playtestPages = 0;
     let storyChomps = 0;
@@ -85,6 +86,10 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 const event = { _eventId: entry.id, _pageIndex: index, _trigger: page.trigger,
                     _priorityType: page.priorityType, _characterName: page.image.characterName };
                 const ordinary = eventTarget(root, 'walk', event, entry, page);
+                if (page.trigger <= 1 && page.list.length === 2 && page.list[0].code === 214) {
+                    assert.equal(ordinary, null, `erase-only page at map ${id} event ${entry.id}`);
+                    cleanupPages[page.trigger]++;
+                }
                 if (weatherSetup || playtest) {
                     assert.equal(ordinary, null, `excluded event at map ${id} event ${entry.id}`);
                     if (weatherSetup) weatherSetupPages++;
@@ -99,6 +104,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 }
                 if (id === 120 && [11, 12].includes(entry.id)) assert.deepEqual(ordinary, { name: 'Cupboard', category: 'objects' });
                 if (id === 124 && entry.id === 15) assert.deepEqual(ordinary, { name: 'Drawer', category: 'objects' });
+                if ((id === 128 || id === 195) && entry.id === 9)
+                    assert.deepEqual(ordinary, { name: 'Book', category: 'objects' });
                 const lease = { page, map: root.$gameMap, trigger: page.trigger, waypoint: false };
                 const names = [ordinary?.name, questDestinationLabel(entry, lease, ordinary)];
                 for (const name of names) assert(!unsafe.test(name || ''), `unsafe label at map ${id} event ${entry.id} page ${index}`);
@@ -109,6 +116,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         }
     }
     assert.equal(icePages, 46);
+    assert.deepEqual(cleanupPages, [66, 80]);
+    console.log('Verified 146 erase-only action and floor pages are omitted across all maps.');
     assert(weatherSetupPages > 1 && playtestPages === 1 && storyChomps > 0);
     console.log(`Excluded ${weatherSetupPages} No Rain setup pages and ${playtestPages} playtest page. Retained ${storyChomps} story Chomps NPC pages.`);
     assert.deepEqual(discoveredCovers, new Map([...coveredChests].filter(([id]) => id !== 29)));
@@ -154,7 +163,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         assert.deepEqual([player._newX, player._newY], landing);
     }
 
-    const beach = load(13, { switches: [31, 321], self: ['13,5,C', '13,8,A', '13,14,A', '13,20,A'] });
+    const beachSwitches = [31];
+    const beach = load(13, { switches: beachSwitches, self: ['13,5,C', '13,8,A', '13,14,A', '13,20,A'] });
     const beachMap = beach.gameMap;
     const elder = beachMap.event(5);
     elder.setPosition(beachMap.event(21).x + 2, elder.y);
@@ -210,14 +220,17 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     });
     assert(!beachView.objects.some(item => item.category === 'events' && [5, 7].includes(item.id)),
         'the parallel elder page and named transfer are excluded from Events');
-    const pathEvent = beachMap.event(30);
-    pathEvent.setupPage = () => {}; // Only the erased flag affects the next route.
-    const interpreter = Object.assign(new c.Game_Interpreter(), { _mapId: 13, _eventId: 30, _list: pathEvent.list(), _index: 0 });
-    assert(interpreter.executeCommand());
-    assert.equal(pathEvent._erased, true);
+    beachSwitches.push(321);
+    for (const id of [12, 30]) {
+        const pathEvent = beachMap.event(id);
+        pathEvent._pageIndex = pathEvent.findProperPageIndex();
+        assert.equal(pathEvent._pageIndex, 1);
+        assert.equal(pathEvent.list()[0].code, 214);
+    }
     const nextView = captureWorld(c);
-    assert(!nextView.objects.some(item => item.id === 30 && item.category === 'events'));
-    const next = solveRoute(beach.geometry, nextView.live, { ...elderRequest, x: nextView.x, y: nextView.y });
+    assert(!nextView.objects.some(item => [12, 30].includes(item.id)));
+    assert(nextView.live.events.filter(event => [12, 30].includes(event.id)).every(event => !event.action));
+    const next = solveRoute(beach.geometry, nextView.live, elderRequest);
     assert.equal(next.status, 'interrupted');
     assert.equal(next.boundaryEvent, 35);
     assert(nextView.objects.some(item => item.id === 35 && item.name === 'Scene trigger'));
@@ -231,6 +244,41 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     assert(captureWorld(c).objects.some(item => item.id === roadEvent.eventId() && item.name === 'Road to Russetwood'));
     console.log('Verified native Crispy Beach gate activation, next checkpoint, and direct access on the far side.');
 
+    function eventAvailability(id, switches, events, visible) {
+        const fixture = load(id, { switches });
+        fixture.player.setPosition(5, 10);
+        const view = captureWorld(c);
+        for (const eventId of events) {
+            assert.equal(view.objects.some(item => item.id === eventId && item.category === 'events'), visible);
+            assert.equal(view.live.events.find(item => item.id === eventId)?.action ?? false, visible);
+        }
+        return { fixture, view };
+    }
+    const houseScenes = [9, 10, 11, 12, 13];
+    eventAvailability(119, [], houseScenes, true);
+    for (const switches of [[448], [33], [462]]) {
+        const { fixture, view } = eventAvailability(119, switches, houseScenes, false);
+        assert(view.objects.some(item => item.id === 3 && item.category === 'exits'));
+        const goal = { x: 5, y: 10, targetX: 5, targetY: 11, field: true };
+        const route = solveRoute(fixture.geometry, view.live, goal);
+        assert.equal(route.status, 'ready');
+        verifyRoute(fixture, goal, route);
+    }
+    eventAvailability(25, [475], [45, 46], true);
+    eventAvailability(25, [475, 511], [45, 46], false);
+    eventAvailability(25, [475, 33], [45, 46], false);
+    const nativeHasItem = c.$gameParty.hasItem;
+    try {
+        c.$gameParty.hasItem = () => false;
+        eventAvailability(25, [], [40, 41], false);
+        c.$gameParty.hasItem = item => item === c.$dataItems[2];
+        eventAvailability(25, [], [40, 41], true);
+        eventAvailability(25, [307], [40, 41], false);
+    } finally {
+        c.$gameParty.hasItem = nativeHasItem;
+    }
+    console.log('Verified active, consumed, and cleanup pages in Chillcrest and Frostyna’s house.');
+
     transfer(load(127), 2, [6, 2], 'Third floor', 128, [6, 11]);
     transfer(load(127, { switches: [503] }), 2, [6, 2], 'Secret room stairs', 195, [6, 11]);
     transfer(load(195), 1, [6, 11], 'Second floor', 127, [6, 2]);
@@ -241,7 +289,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     transfer(load(87, { self: ['87,91,A'] }), 91, [12, 64], 'Hidden cave entrance', 205, [14, 4]);
     transfer(load(205), 12, [14, 4], 'Return to Caffeine Caverns', 87, [12, 64]);
     for (const [id, event, x, y, gate, index] of [[128, 11, 1, 6, 503, 13], [133, 4, 6, 5, 525, 11]]) {
-        const source = select(load(id), event, [x, y], 'Hidden passage button', 'objects');
+        const source = select(load(id), event, [x, y], 'Interaction', 'objects');
         let set;
         c.$gameSwitches.setValue = (...values) => { set = values; };
         source._index = index;

@@ -1062,7 +1062,7 @@ async function verifySpeakerDetails() {
     assert.equal(formatSpeech(f.packets().at(-1)), 'Frygor. A line of dialogue.');
     details();
     assert.equal(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')),
-        'Frygor. A young man with tan skin, brown eyes and a friendly, rounded face. A red headband holds his high golden crest, and a pale cape drapes over his quiver strap. A bundle of fry-shaped arrows sticks up behind his shoulder.');
+        'Frygor. A young man with tan skin, brown eyes and a friendly, rounded face. A red headband holds his high golden crest, and a pale cape drapes over his quiver strap. A bundle of fry-shaped arrows sticks up behind his shoulder. Part of his short bow shows beneath his hands.');
     assert(window.pause);
     f.advance();
     const length = f.records.filter(record => record.kind === 'menuDetails').length;
@@ -1075,6 +1075,7 @@ async function verifySpeakerDetails() {
     const tilemap = {};
     scene._spriteset = { _tilemap: tilemap, _characterSprites: [{ parent: tilemap, _character: nativeEvent,
         _characterName: nativeEvent._characterName, _characterIndex: 1, worldVisible: true, worldAlpha: 1,
+        _frame: { x: 96, y: 0, width: 32, height: 32 },
         texture: { valid: true }, worldTransform: { tx: 20, ty: 20 } }] };
     c.$gameMessage._wqaSpeakerEvent = 1;
     c.$gameMessage.faceName = () => '';
@@ -1084,7 +1085,43 @@ async function verifySpeakerDetails() {
     f.tick();
     details();
     assert.equal(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')), 'Townsperson. A round-faced man with short brown hair and dark eyes. He wears a green shirt with light sleeves and brown trousers.');
-    console.log('Verified active-dialogue details, portrait and world sprite identity, and native handback.');
+    f.advance();
+    function showRenderedSpeakers(mapId, ids) {
+        const data = mapData(mapId);
+        c.$gameMap._mapId = mapId;
+        c.$gameMap._events = [];
+        scene._spriteset._characterSprites = ids.map(id => {
+            const { characterName, characterIndex, pattern, direction } = data.events[id].pages[0].image;
+            const actor = { _characterName: characterName, _characterIndex: characterIndex };
+            c.$gameMap._events[id] = actor;
+            return { parent: tilemap, _character: actor, _characterName: characterName, _characterIndex: characterIndex,
+                _frame: { x: (characterIndex % 4 * 3 + pattern) * 32,
+                    y: (Math.floor(characterIndex / 4) * 4 + (direction - 2) / 2) * 32, width: 32, height: 32 },
+                worldVisible: true, worldAlpha: 1, texture: { valid: true }, worldTransform: { tx: 20, ty: 20 } };
+        });
+    }
+    function readSpeaker(name, owner, expected) {
+        c.$gameMessage._wqaSpeakerEvent = owner;
+        Object.assign(settings, { text: 'A portraitless line.', speaker: name });
+        f.until(() => window.pause);
+        speaker._animationRunning = false;
+        f.tick();
+        details();
+        assert.match(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')), expected);
+        f.advance();
+    }
+    showRenderedSpeakers(130, [8, 9]);
+    for (const owner of [8, 9]) {
+        readSpeaker('Kennick', owner, /^Kennick\. A balding older man.*white beard.*walking stick/);
+        readSpeaker('Joanne', owner, /^Joanne\. An older woman.*red headscarf/);
+    }
+    scene._spriteset._characterSprites[0].worldVisible = false;
+    readSpeaker('Kennick', 9, /^No visual description for this speaker/);
+    showRenderedSpeakers(129, [7]);
+    readSpeaker('Gemma', 7, /^Gemma\. An older woman.*red headscarf/);
+    showRenderedSpeakers(25, [21]);
+    readSpeaker('Fisherman', 21, /^Fisherman\. A round-faced man with short brown hair/);
+    console.log('Verified active-dialogue details, frame and speaker identity, portrait readiness, and native handback.');
 }
 
 async function verifyRepeat() {

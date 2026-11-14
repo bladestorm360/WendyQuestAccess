@@ -264,40 +264,46 @@ function partyBattleArt(name, frame) {
     if (name === 'Frygor' ? x >= 3 && x <= 5 : name === 'SirChicken' ? x <= 4 : x === 2) return art.attack;
 }
 
+// Each town sheet has several characters inside a single MZ character
+// block. Their authored patterns are held on separate 32-pixel columns.
 const TOWNSPEOPLE = new Map([
-    ['NPCs - 32x32', [
-        ['A round-faced woman with brown hair, dark eyes and a white bonnet.',
+    ['NPCs - 32x32', {
+        1: ['A round-faced woman with brown hair, dark eyes and a white bonnet.',
             'Her blue dress has white sleeves and a pale apron.'],
-        ['A round-faced man with short brown hair and dark eyes.',
+        3: ['A round-faced man with short brown hair and dark eyes.',
             'He wears a green shirt with light sleeves and brown trousers.'],
-        ['An older woman with gray hair under a brown kerchief and a lined face.',
+        5: ['A balding older man with white hair at his temples and a long white beard.',
+            'He stoops forward in brown and olive clothes, leaning on a walking stick.'],
+        7: ['An older woman with gray hair under a brown kerchief and a lined face.',
             'A pale apron shows against her brown dress.'],
-        ['A small, round-faced figure with brown hair under a white cap.',
+        9: ['A small, round-faced figure with brown hair under a white cap.',
             'Blue and green clothing and small reddish shoes stand out.'],
-        ['A man with a round face and dark hair under a blue-gray cap.',
+        13: ['A man with a round face and dark hair under a blue-gray cap.',
             'He wears a yellow shirt and dark trousers.']
-    ]],
-    ['NPCs - 32x32 - palette2', [
-        ['A woman with brown skin, dark hair and a white bonnet.',
+    }],
+    ['NPCs - 32x32 - palette2', {
+        1: ['A woman with brown skin, dark hair and a white bonnet.',
             'Her olive-green dress has white sleeves and a pale apron.'],
-        ['A brown-skinned man with a rounded face and dark, wavy hair.',
+        3: ['A brown-skinned man with a rounded face and dark, wavy hair.',
             'He wears a blue shirt and reddish trousers.'],
-        ['An older woman with brown skin and gray hair showing beneath a red headscarf.',
+        5: ['A balding older man with brown skin, white hair at his temples and a long white beard.',
+            'He stoops forward in brown and olive clothes, leaning on a walking stick.'],
+        7: ['An older woman with brown skin and gray hair showing beneath a red headscarf.',
             'She wears a red dress and a pale apron.'],
-        ['A small, brown-skinned figure with dark hair under a white cap.',
+        9: ['A small, brown-skinned figure with dark hair under a white cap.',
             'The outfit has orange and yellow stripes.']
-    ]],
-    ['NPC - Wendys Staff', [
-        ['A round-faced worker with tan skin and short brown hair under a red Wendy’s cap.',
-            'A red collar and trim stand out against a dark blue uniform.'],
-        ['A round-faced worker with pale skin and a red ponytail under a Wendy’s visor.',
-            'A red collar and trim stand out against a dark blue uniform.'],
-        null, null,
-        ['A round-faced worker with tan skin and short brown hair under a red Wendy’s cap.',
-            'They hold a red-and-yellow takeout box in front of a dark blue uniform.'],
-        ['A worker with pale skin and a red ponytail under a Wendy’s visor.',
-            'They hold a red-and-yellow takeout box.']
-    ]]
+    }],
+    ['NPC - Wendys Staff', {
+        0: ['A worker with brown skin and tufts of dark hair under a red Wendy’s visor.', 'He wears a dark blue uniform with red trim.'],
+        1: ['A worker with brown skin and dark hair under a red Wendy’s cap.', 'She wears a dark blue uniform and white shoes.'],
+        2: ['A worker with tan skin and dark hair under a blue cap with a red brim.', 'He wears a dark blue uniform with red trim.'],
+        3: ['A round-faced worker with fair skin and a red Wendy’s visor.', 'He wears a dark blue uniform with red trim.'],
+        4: ['A worker with fair skin and an orange ponytail under a red Wendy’s visor.', 'She wears a dark blue uniform with red trim.'],
+        12: ['A worker with brown skin and tufts of dark hair under a red Wendy’s visor.', 'He holds a takeout box.'],
+        13: ['A worker with brown skin and dark hair under a red Wendy’s cap.', 'She holds a red-and-yellow takeout box.'],
+        15: ['A round-faced worker with fair skin and a red Wendy’s visor.', 'He holds a takeout box.'],
+        16: ['A worker with fair skin and an orange ponytail under a red Wendy’s visor.', 'She holds a red-and-yellow takeout box.']
+    }]
 ]);
 
 const FIELD_ART = new Map([
@@ -317,11 +323,19 @@ function portraitArt(name) {
     return PORTRAITS.get(still) || enemyArt(still);
 }
 
-function fieldArt(name, index) {
+function fieldArt(name, index, frame) {
     if (typeof name !== 'string' || !Number.isInteger(index) || index < 0 || index > 7) return;
     const affected = name.startsWith('NPCs - MECHTOSIS - ');
     const colors = affected ? name.replace('MECHTOSIS - ', '') : name;
-    const description = TOWNSPEOPLE.get(colors)?.[index] || FIELD_ART.get(name);
+    const sheet = TOWNSPEOPLE.get(colors);
+    if (!sheet) return FIELD_ART.get(name);
+    if (!frame || frame.width !== 32 || frame.height !== 32) return;
+    const column = frame.x / 32;
+    const row = frame.y / 32;
+    const block = Math.floor(index / 4);
+    if (!Number.isInteger(column) || !Number.isInteger(row) ||
+        Math.floor(column / 3) !== index % 4 || Math.floor(row / 4) !== block) return;
+    const description = sheet[block * 12 + column];
     if (!affected || !description) return description;
     return ['A gray-faced figure with red eyes.', ...description.slice(1)];
 }

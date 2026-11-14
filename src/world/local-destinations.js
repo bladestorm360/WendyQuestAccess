@@ -75,6 +75,31 @@ function localHandoffName(map, event) {
     return undefined;
 }
 
+// Duplicate trigger tiles can retain their original page after another tile
+// has consumed the shared dialogue. Read the native guards, without running
+// commands or predicting changes to collision.
+function inactiveFloorScene(root, event, page) {
+    if (event._trigger !== 1 || event._pageIndex !== 0) return false;
+    const map = root.$gameMap._mapId;
+    const id = event._eventId;
+    const condition = page.list[0];
+    if (condition?.code !== 111 || condition.indent !== 0) return false;
+    const [type, key, value] = condition.parameters;
+    const active = id => root.$gameSwitches?.value?.(id) === true;
+    if (map === 119 && id >= 9 && id <= 13 && type === 0 && key === 33 && value === 0) {
+        const inner = page.list[1];
+        return active(33) || (inner?.code === 111 && inner.indent === 1 &&
+            inner.parameters[0] === 0 && inner.parameters[1] === 448 && inner.parameters[2] === 1 && active(448));
+    }
+    if (map !== 25) return false;
+    if ((id === 45 || id === 46) && type === 0 && key === 511 && value === 1) return active(511);
+    if ((id === 40 || id === 41) && type === 8 && key === 2) {
+        const idol = root.$dataItems?.[2];
+        return !!idol && root.$gameParty?.hasItem?.(idol) === false;
+    }
+    return false;
+}
+
 const icePages = new WeakMap();
 
 function iceOpensPassage(entry, page) {
@@ -183,9 +208,10 @@ function localDestination(root, event, page) {
         return { name: 'Gate switch', category: 'objects', showBlocked: event._pageIndex === 1 };
     if (map === 87 && id >= 121 && id <= 130 && page.list[35]?.parameters?.[3]?.pictureName === 'system/Caffeine Caverns Map')
         return { name: 'Map board', category: 'objects' };
+    // The base game shows a generic prompt and identifies these only after OK.
     if ((map === 128 && id === 11) || (map === 133 && id === 4))
-        return { name: 'Hidden passage button', category: 'objects' };
+        return { name: 'Interaction', category: 'objects' };
     return undefined;
 }
 
-module.exports = { localDestination, localHandoffName, iceOpensPassage };
+module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene };

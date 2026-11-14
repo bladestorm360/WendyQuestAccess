@@ -4,7 +4,8 @@ const { DIRECTIONS, MAX_CELLS, MAX_EVENTS } = require('./geometry.cjs');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { questDestinationCurrent } = require('./quest-destinations');
 
-const { activeMovingEnemy } = require('./destinations');
+const { activeMovingEnemy, pageHasInteraction } = require('./destinations');
+const { inactiveFloorScene } = require('./local-destinations');
 
 const TOUCH_TRIGGERS = [1, 2];
 
@@ -95,6 +96,13 @@ function createAutowalk(root, ready, preferences, report) {
             const floor = player.findEventsAt(x, y).find(event =>
                 player.canTriggerEvent(event, TOUCH_TRIGGERS, false) && event.list()?.length > 1);
             if (floor) {
+                const page = root.$dataMap?.events?.[floor._eventId]?.pages?.[floor._pageIndex];
+                // Even an invisible cleanup page starts the native interpreter.
+                // Hand the step back to the player before the native event gate.
+                if (page && (!pageHasInteraction(page) || inactiveFloorScene(root, floor, page))) {
+                    return end(state, { kind: 'routeDirections', name: 'Autowalk paused', legs: [],
+                        boundary: step, boundaryName: 'Map cleanup', manualHandoff: true }, true);
+                }
                 if (floor === state.target && index === course.length - 1) {
                     return end(state, { kind: 'routeDirections', name: 'At ' + record.name, legs: [], activate: step });
                 }

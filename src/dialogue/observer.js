@@ -5,6 +5,19 @@ const { renderedSprite } = require('../runtime/rendered-sprite');
 const { readNumberFocus } = require('./number-entry');
 const { moveReview } = require('../menus/review');
 
+// In these shared conversations the interpreter's event owns the message,
+// while the rendered name identifies a different character on the same map.
+const SHARED_SPEAKERS = new Map([
+    [49, new Map([[14, new Map([['Mech Grunts', 0]])]])],
+    [130, new Map([8, 9].map(id => [id, new Map([['Kennick', 8], ['Joanne', 9]])]))],
+    [181, new Map([
+        [11, new Map([['Mari & Shari', 0]])],
+        [20, new Map([['Lusya', 14]])]
+    ])],
+    [184, new Map([[11, new Map([['Kathryn', 4]])]])],
+    [186, new Map([15, 16].map(id => [id, new Map([['Jay', 15], ['Kitty', 16]])]))]
+]);
+
 function visible(scene, window) {
     return window?.parent && window.parent === scene._windowLayer && window.worldVisible &&
         window.worldAlpha > 0 && window.openness === 255;
@@ -125,7 +138,9 @@ function createDialogueObserver(host, notifications) {
         const message = host.gameMessage?.();
         if (message?.faceName?.()) return speakerPortrait(context);
         if (!speaker || !scene._wqaMapRestored) return '';
-        const event = host.mapEvent?.(message?._wqaSpeakerEvent);
+        const owner = message?._wqaSpeakerEvent;
+        const eventId = SHARED_SPEAKERS.get(host.mapId?.())?.get(owner)?.get(speaker) ?? owner;
+        const event = host.mapEvent?.(eventId);
         const spriteset = scene._spriteset;
         const sprites = spriteset?._characterSprites;
         if (!event || event._erased || event._transparent || !Array.isArray(sprites) || sprites.length > 512) return '';
@@ -134,7 +149,7 @@ function createDialogueObserver(host, notifications) {
         if (!renderedSprite(sprite, spriteset._tilemap) || sprite._characterName !== event._characterName ||
             sprite._characterIndex !== event._characterIndex || !pose ||
             !(pose.tx >= 0 && pose.tx <= host.graphics.width && pose.ty >= 0 && pose.ty <= host.graphics.height + 16)) return '';
-        return fieldArt(sprite._characterName, sprite._characterIndex);
+        return fieldArt(sprite._characterName, sprite._characterIndex, sprite._frame);
     }
 
     function pageIsCurrent(context) {

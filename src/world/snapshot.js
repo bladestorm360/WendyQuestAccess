@@ -1,8 +1,8 @@
 'use strict';
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
-const { destination, excludedDestination, eventDescription, activeMovingEnemy } = require('./destinations');
-const { localDestination, localHandoffName, iceOpensPassage } = require('./local-destinations');
+const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
+const { localDestination, iceOpensPassage, inactiveFloorScene } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
@@ -10,7 +10,7 @@ const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
 function eventTarget(root, mode, event, entry, page) {
-    if (excludedDestination(entry, page)) return null;
+    if (!pageHasInteraction(page) || inactiveFloorScene(root, event, page) || excludedDestination(entry, page)) return null;
     const map = root.$gameMap._mapId;
     let target = worldDestination(root, mode, event, entry, page);
     if (target === undefined) target = localDestination(root, event, page);
@@ -18,7 +18,7 @@ function eventTarget(root, mode, event, entry, page) {
         ? { name: 'Checkpoint', category: 'objects' }
         : caveDestination(map, event, entry, page) || destination(entry, page, event._trigger, map) || undefined;
     if (!target) target = worldEventDescription(root, mode, event, page) ||
-        (mode === 'walk' && !timedCave(map) && eventDescription(entry, page, event, localHandoffName(map, event._eventId))) ||
+        (mode === 'walk' && !timedCave(map) && eventDescription(page, event)) ||
         target;
     return target && mode === 'airship' && target.category !== 'exits' ? null : target;
 }
@@ -93,7 +93,8 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         const entry = data.events[eventId];
         if (!entry || !Number.isFinite(x) || !Number.isFinite(y)) return null;
         const page = entry.pages[pageIndex];
-        const action = page?.list.length > 1 && !(seenTorchReminder && REMINDERS.includes(eventId));
+        const action = pageHasInteraction(page) && !inactiveFloorScene(root, event, page) &&
+            !(seenTorchReminder && REMINDERS.includes(eventId));
         if (routing) {
             const box = event.blockerProperties;
             const rectangle = box ? [x + box.x1, y + box.y1, x + box.x2, y + box.y2] : undefined;
@@ -106,9 +107,10 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
                 discoveryFor: mode === 'airship' ? discoveryEntrance(id, event) : undefined });
         }
-        if (routesOnly || event._erased || !action) continue;
-        const target = eventTarget(root, mode, event, entry, page);
+        if (routesOnly || event._erased) continue;
         const quest = quests?.get(eventId);
+        if (!action && !quest?.waypoint) continue;
+        const target = action ? eventTarget(root, mode, event, entry, page) : undefined;
         if (target && (!quest || target.category !== 'events')) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
