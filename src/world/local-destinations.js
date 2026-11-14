@@ -130,9 +130,9 @@ function localDestination(root, event, page) {
     if (map === 116 && [7, 9, 10].includes(id)) return { name: 'Pantry', category: 'objects' };
     if (PULLS[map]?.includes(id)) return event._pageIndex === 0 ? { name: 'Pull handle', category: 'objects' } : null;
     // All three physical forest buttons use the native action button.
-    // Keep them browsable even while a floor scene or obstacle blocks access.
+    // The quest-enabled page stays browsable while an obstacle blocks access.
     if (map === 15 && id >= 31 && id <= 33 && page.image?.characterName === '!Button')
-        return { name: 'Gate switch', category: 'objects', showBlocked: true };
+        return { name: 'Gate switch', category: 'objects', showBlocked: event._pageIndex === 1 };
     if (map === 87 && id >= 121 && id <= 130 && page.list[35]?.parameters?.[3]?.pictureName === 'system/Caffeine Caverns Map')
         return { name: 'Map board', category: 'objects' };
     if ((map === 128 && id === 11) || (map === 133 && id === 4))

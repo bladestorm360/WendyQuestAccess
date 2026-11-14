@@ -157,6 +157,7 @@ async function verifyQuestDestinations(c, game, read, load, verifyRoute, verifyW
     assert(markers.some(marker => marker._active && marker._generated && marker._eventIds.includes(31)));
     assert(!quests(lockedScene).some(row => [31, 32, 33].includes(row.id)),
         'a generated icon can know a future switch page, which is still unavailable');
+    assert(!targets(lockedScene).objects.some(row => [31, 32, 33].includes(row.id) && row.showBlocked));
     const open = load(15, { switches: [18] });
     open.player.setPosition(24, 17);
     const openScene = stage(open, 'quest10');
