@@ -12,6 +12,7 @@ const { tileKey } = require('./geometry.cjs');
 const { browse, createDestinationBrowser, activeMovingEnemy } = require('./destinations');
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
+const { saltControlName } = require('./puzzles/salt-state.cjs');
 const { mapPlace } = require('./map-banner');
 const { mapDescription } = require('./map-descriptions');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
@@ -150,7 +151,7 @@ function createField(root, host, notifications) {
         if (!ready(job.scene, moving)) return;
         // Arrival and stop reports have their own command owner. Only
         // the requested route omits its heading in speech.
-        if (job.action === 'directions' && record.kind === 'routeDirections')
+        if ((job.action === 'directions' || job.action === 'puzzleGuide') && record.kind === 'routeDirections')
             record = { ...record, directionsOnly: true };
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
@@ -163,7 +164,8 @@ function createField(root, host, notifications) {
     function status(job, name) { present(job, { kind: 'fieldStatus', name }); }
 
     function navigationRequest(job) {
-        return job && (job.action === 'directions' || job.action === 'currentDestination' || BROWSE.has(job.action));
+        return job && (job.action === 'directions' || job.action === 'currentDestination' ||
+            job.action === 'puzzleGuide' && salt.available(job.scene) || BROWSE.has(job.action));
     }
 
     function follow(job, result, record) {
@@ -241,8 +243,7 @@ function createField(root, host, notifications) {
                 snapshot.objects = snapshot.objects.filter((target, index) => {
                     const available = result.available[index];
                     if (available === 2) target.handoff = true;
-                    if (!available && target.showBlocked) target.outOfReach = true;
-                    return (available === 1 || available === 2 || target.outOfReach) &&
+                    return (available === 1 || available === 2) &&
                         (!target.quest || questDestinationCurrent(root, job.scene, target.quest));
                 });
                 job.performed = true;
@@ -316,14 +317,26 @@ function createField(root, host, notifications) {
                         { quest: job.quest, point: job.point, request: { ...request, limit: 8, refreshFacing: fixed ? facing : undefined },
                             destinationReady, enemyCurrent: obstacle => currentEnemy(root, obstacle) });
                 }
-                follow(job, result, { kind: 'routeDirections', name: job.label,
+                follow(job, result, { kind: 'routeDirections', name: job.label, guide: job.guide,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
                     reenter: result.reenter === true, enter: job.entrance?.action,
                     sailing: job.mode === 'ship' || job.mode === 'boat',
                     bump: job.eventAction === 'bump',
                     conversation: job.eventAction === 'talk',
                     board: !!job.vehicle, land: result.land === true,
+                    guideAction: job.action === 'puzzleGuide' && !!result.arrival.facing && !!saltControlName(job.target),
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
+            }
+            else if (result?.status === 'saltRoute') {
+                const event = result.actions?.[0];
+                const kind = result.prerequisiteKind;
+                const prerequisite = saltControlName(event) || (kind === 'encounter' ? 'an encounter' :
+                    event === 105 ? 'the torch reminder' : event === 18 ? 'the cave conversation' : '');
+                if (!prerequisite) return status(job, 'Crystal directions unavailable');
+                present(job, { kind: 'routeDirections', name: job.label, guide: job.guide,
+                    legs: result.legs, facing: result.arrival.facing, more: result.more === true,
+                    prerequisite, prerequisiteMove: kind !== 'action' ? result.boundary : undefined,
+                    remainingActions: result.actions.length - 1 });
             }
             else if (result?.status === 'enemyBlocked') {
                 if (!currentEnemy(root, result)) {
@@ -346,13 +359,14 @@ function createField(root, host, notifications) {
                 const handoff = !job.eventAction && localHandoffName(job.map, result.boundaryEvent);
                 const activate = job.eventAction === 'step' && job.target === result.boundaryEvent ? result.boundary : undefined;
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
-                    activate, boundaryName: handoff || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
+                    guide: job.guide, activate, boundaryName: handoff || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
                     manualHandoff: !!handoff, more: result.more === true });
             }
-            else if (result?.status === 'approachBlocked') status(job, 'A floor event blocks the approach');
+            else if (result?.status === 'approachBlocked') status(job, (job.guide ? job.guide + ' ' : '') + 'A floor event blocks the approach');
             else if (job.remote && ['unreachable', 'unavailable'].includes(result?.status))
                 status(job, 'No verified reachable entrance');
             else if (result?.status === 'unreachable') {
+                if (job.guide) return status(job, job.guide + ' No verified route from here.');
                 const reason = job.mode === 'walk' ? 'No walkable route' : job.mode === 'airship' ?
                     'No connected landing' : 'No sailing route';
                 status(job, job.nearestLanding ? 'No landing site is available' : reason);
@@ -431,7 +445,7 @@ function createField(root, host, notifications) {
         job.point = target.point === true;
         job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
         job.nearestLanding = target.nearestLanding === true;
-        job.autowalk = !timedCave(snapshot.map) && preferences().autowalk;
+        job.autowalk = job.action !== 'puzzleGuide' && !timedCave(snapshot.map) && preferences().autowalk;
         job.motionFrame = motion?.frame;
         if (motion) {
             host.caveTiming?.warm(job.scene);
@@ -597,10 +611,12 @@ function createField(root, host, notifications) {
         }
         const routing = job.action === 'directions';
         const timed = timedCave(root.$gameMap._mapId);
-        const filtering = !timed && navigationRequest(job) && (!routing || job.changes.length > 0);
+        const filtering = preferences().reachableOnly === true && !timed && navigationRequest(job) &&
+            job.action !== 'puzzleGuide' && (!routing || job.changes.length > 0);
         const label = salt.available(job.scene) ? (id, fallback) => salt.label(job.scene, id, fallback) : undefined;
         const bookmarks = host.bookmarks?.();
-        const snapshot = captureWorld(root, filtering || (routing && !timed), label, job.scene, bookmarks);
+        const saltGuide = job.action === 'puzzleGuide' && salt.available(job.scene);
+        const snapshot = captureWorld(root, filtering || routing && !timed || saltGuide, label, job.scene, bookmarks);
         if (!snapshot) return status(job, 'Map information unavailable');
         if (navigationRequest(job)) snapshot.bookmarks = bookmarks;
         if (filtering && snapshot.objects.length) {
@@ -614,6 +630,10 @@ function createField(root, host, notifications) {
             if (result.target) {
                 owner.browser.category = result.target.category;
                 owner.browser.selections[result.target.category] = result.target.id;
+                if (saltGuide) {
+                    job.guide = result.text;
+                    return route(job, snapshot, result.target);
+                }
             }
             return status(job, result.text);
         }
@@ -679,7 +699,7 @@ function createField(root, host, notifications) {
             return true;
         }
         const reporting = action === 'navigationReport';
-        const navigation = navigationRequest({ action });
+        const navigation = navigationRequest({ action, scene });
         const canWaitForStep = action === 'mapName' || action === 'mapDescription' || navigation && !timedCave(root.$gameMap?._mapId);
         const idle = canWaitForStep && root.$gameMap?.inactiveTime >= 30;
         if (!ready(scene, reporting || canWaitForStep, idle) || sequence >= 0x7ffffffe) return false;

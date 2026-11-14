@@ -109,6 +109,8 @@ def bundle():
         './world-destinations': 'world/world-destinations.js',
         './vehicle-navigation': 'world/vehicle-navigation.js',
         './puzzles/salt-caverns': 'world/puzzles/salt-caverns.js',
+        './puzzles/salt-state.cjs': 'world/puzzles/salt-state.cjs',
+        './salt-state.cjs': 'world/puzzles/salt-state.cjs',
         './puzzles/cave': 'world/puzzles/cave.js',
         './cave-progression': 'world/puzzles/cave-progression.js',
         './patrol-motion.cjs': 'world/puzzles/patrol-motion.cjs',
@@ -269,7 +271,7 @@ def main():
         shutil.copyfile(ROOT / 'src' / 'world' / name, OUT / 'wendyquest-access' / name)
     puzzles = OUT / 'wendyquest-access' / 'puzzles'
     puzzles.mkdir(exist_ok=True)
-    for name in ('crossing.cjs', 'motion-world.cjs', 'patrol-motion.cjs'):
+    for name in ('crossing.cjs', 'motion-world.cjs', 'patrol-motion.cjs', 'salt-route.cjs', 'salt-state.cjs'):
         shutil.copyfile(ROOT / 'src' / 'world' / 'puzzles' / name, puzzles / name)
     print('Development payload staged at', OUT)
 

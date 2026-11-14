@@ -7,7 +7,7 @@ const path = require('node:path');
 const { fixture, mapData } = require('./map-lifecycle.test.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { bakeMap } = require('../src/world/geometry.cjs');
-const { findReachable } = require('../src/world/routes.cjs');
+const { findReachable, solveRoute } = require('../src/world/routes.cjs');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
     path.join(__dirname, 'dialogue-producers.py'), process.argv[2]], { encoding: 'utf8', timeout: 6000, maxBuffer: 72000 }));
@@ -535,24 +535,32 @@ async function verifySaltGuide() {
     const player = c.$gamePlayer;
     Object.assign(map, { _mapId: 19, _tilesetId: data.tilesetId, _events: [], _tileEvents: [], _vehicles: [] });
     c.$dataTilesets = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', 'Tilesets.json'), 'utf8'));
-    for (const id of [19, 20, 21, 22, 35, 36, 49, 68, 97, 114, 115, 120]) {
+    for (const id of [2, 3, 4, 5, 6, 19, 20, 21, 22, 35, 36, 49, 68, 97, 114, 115, 120]) {
         const entry = data.events[id];
         const page = entry.pages[0];
         map._events[id] = Object.assign(f.event(id, 0), { _x: entry.x, _y: entry.y, _pageIndex: 0,
             _trigger: page.trigger, _priorityType: page.priorityType, _through: page.through });
     }
+    c.$gameSwitches = { value: () => false };
     player._vehicleType = 'walk';
     player.setPosition(26, 12);
     enableNativeMessage(f);
     interpreter._list = null;
     const key = (key, modifiers) => tapPuzzleKey(f, key, modifiers);
     const status = () => f.records.filter(packet => packet.kind === 'fieldStatus').map(formatSpeech);
+    const geometry = bakeMap(data, c.$dataTilesets[data.tilesetId].flags);
     const review = () => {
         f.tick();
         assert(scene._wqaFieldReady);
         assert(key('g', { shiftKey: true }));
         f.frame();
-        return status().at(-1);
+        const packet = f.routePackets.at(-1);
+        assert(packet, JSON.stringify(f.records.at(-1)));
+        const result = solveRoute(geometry, packet.live, packet.request);
+        f.routeReply({ sequence: packet.sequence, epoch: packet.epoch, map: packet.map, result });
+        f.frame();
+        return formatSpeech(f.records.findLast(record => record.kind === 'fieldStatus' ||
+            record.kind === 'routeDirections'));
     };
     function play(id, page, index, source = interpreter) {
         const count = f.packets().length;
@@ -576,32 +584,27 @@ async function verifySaltGuide() {
     c.Input.keyMapper[71] = 'fixtureNative';
     assert.equal(key('g', { shiftKey: true }), false);
     delete c.Input.keyMapper[71];
-    assert.match(review(), /Wall clue selected/);
-    key('k');
-    f.frame();
-    const request = f.routePackets.at(-1);
-    const geometry = bakeMap(data, c.$dataTilesets[data.tilesetId].flags);
-    f.routeReply({ sequence: request.sequence, epoch: request.epoch, map: request.map,
-        result: findReachable(geometry, request.live, request.request) });
-    f.frame();
-    assert.equal(formatSpeech(f.records.filter(packet => packet.kind === 'fieldTarget').at(-1)), 'Wall clue, 1 south');
-
-    window.worldAlpha = 0;
-    play(114, 0, 4);
-    advance();
-    window.worldAlpha = 1;
-    assert.match(review(), /Wall clue selected/, 'a clue with no rendered page cannot reveal its order');
+    assert.match(review(), /Next, hit the yellow crystal.*yellow, blue, green, then red/);
+    const packetsBeforeBrowse = f.routePackets.length;
+    for (let index = 0; index < 7 && !f.records.some(record => record.kind === 'fieldTarget' && record.category === 'Treasure'); index++) {
+        key('l', { shiftKey: true });
+        f.frame();
+    }
+    assert.equal(f.routePackets.length, packetsBeforeBrowse, 'default browsing has no reachability query');
+    const chests = new Set();
+    for (let index = 0; index < 4; index++) {
+        key('l');
+        f.frame();
+        const packet = f.records.findLast(record => record.kind === 'fieldTarget');
+        assert.equal(packet.name, 'Chest');
+        chests.add([packet.dx, packet.dy].join(','));
+    }
+    assert.equal(chests.size, 4, 'all four active chests remain browseable');
     play(115, 0, 4);
     assert(key('g', { ctrlKey: true }), 'stop works while the game dialogue owns the screen');
     assert.equal(key('g', { ctrlKey: true }), false);
     advance();
-    const order = /Wall clue order: ([^.]+)\./.exec(review())[1].split(', ');
-    assert.equal(order.length, 4);
-    assert.equal(new Set(order).size, 4);
 
-    play(19, 0, 22);
-    advance();
-    assert.match(review(), new RegExp('Lights observed this visit: ' + order[0]));
     play(97, 0, 49);
     assert.equal(interpreter._index, 51);
     assert(window._wqaDialoguePaint, 'reset line remains visibly waiting');
@@ -626,10 +629,7 @@ async function verifySaltGuide() {
 
     play(35, 1, 19);
     advance();
-    assert.match(review(), /The ordered crystals opened a passage/);
-    play(68, 0, 81);
-    advance();
-    assert.match(review(), /A crystal changed the passage to the exit/);
+    f.tick();
     assert(key('g', { ctrlKey: true }));
     f.frame();
     assert.equal(status().at(-1), 'Puzzle guidance stopped');
@@ -646,6 +646,7 @@ async function verifySaltGuide() {
     c.$gameVariables.value = id => variables.get(id) || 0;
     c.$gameVariables.setValue = (id, value) => variables.set(id, value);
     c.$gameSwitches = { value: id => switches.get(id) === true, setValue: (id, value) => switches.set(id, value) };
+    c.$gameSelfSwitches = { value: key => key.join(',') === '19,71,A' };
     delete interpreter.setupChild;
     installInterpreterConstructor(c);
     c.Game_Interpreter.prototype.command357 = ([plugin, , , args]) => {
@@ -685,8 +686,9 @@ async function verifySaltGuide() {
     for (const [stage, id] of crystals.entries()) {
         runAction(id);
         assert.equal(c.$gameVariables.value(variable), stage + 1);
+        if (stage < 3) assert.match(review(), new RegExp((stage + 1) + ' of 4 colors complete'));
     }
-    assert.match(review(), /Lights observed this visit: [^.]+, [^.]+, [^.]+, [^.]+\./);
+    assert.match(review(), /The color sequence is complete/);
     runAction(97);
     assert.equal(c.$gameVariables.value(variable), 0);
     assert.match(review(), /The crystals were reset/);

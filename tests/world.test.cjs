@@ -1048,6 +1048,51 @@ async function main() {
     assert.match(mapDescription({ $gameMap: { _mapId: 19 } }), /Lighting the torches gradually/);
     const salt = load(19);
     compare(salt);
+    const saltPlan = require('../src/world/puzzles/salt-route.cjs').solveSaltRoute;
+    const atEntrance = { x: 24, y: 68 };
+    const liveSalt = { ...snapshot(salt), salt: { mask: 0, order: 0, hits: 0, eastOpen: false, finalOpen: false } };
+    const saltModel = manifest.maps[19].salt;
+    // Use the same packed surface format as captureWorld and the worker.
+    liveSalt.terrain = new Uint32Array();
+    for (const event of [3, 4, 5, 6, 2]) {
+        const request = { ...atEntrance, event, field: true, limit: 8 };
+        assert.equal(solveRoute(salt.geometry, liveSalt, request).status, 'unreachable');
+        const plan = saltPlan(salt.geometry, liveSalt, request, saltModel, () => false);
+        assert.equal(plan.status, 'saltRoute');
+        assert.equal(plan.prerequisiteKind, 'floor');
+        assert.equal(plan.actions[0], 105);
+        assert(plan.actions.includes(36), 'the southern crossing requires its terrain crystal');
+        if (event === 2) assert.deepEqual(plan.actions.slice(-4), [19, 20, 21, 22]);
+        if (event === 5) assert(plan.actions.includes(120), 'the second flood opens the chest approach');
+        const nativeFirst = solveRoute(salt.geometry, liveSalt, { ...atEntrance,
+            event: plan.boundaryEvent, field: true, stopBeforeEvent: true });
+        assert.deepEqual(plan.arrival, nativeFirst.arrival);
+        assert.equal(plan.boundary, nativeFirst.boundary);
+        await verifyWorker(salt, request, liveSalt, result => {
+            assert.equal(result.status, 'saltRoute');
+            assert.deepEqual(result.actions, plan.actions);
+        });
+    }
+    // Resume in the northern chamber after the cave conversation and
+    // battles have already retired, with the authored east flood applied.
+    const northern = { ...liveSalt, salt: { ...liveSalt.salt, mask: 236, eastOpen: true, order: 2, hits: 3 },
+        terrain: Uint32Array.from(saltModel.floods.filter(([bit]) => bit === 8 || bit < 8 && (236 & (1 << bit)))
+            .flatMap(([, open]) => open)),
+        events: liveSalt.events.map(event => {
+            if ([18, 48, 101, 105, 113, 116, 117, 118, 119, 127, 133, 134, 135, 136, 137].includes(event.id))
+                return { ...event, erased: true };
+            const bit = saltModel.blockers[event.id];
+            return bit !== undefined && (236 & (1 << bit)) || event.id === 71
+                ? { ...event, normal: false } : event;
+        }) };
+    const green = northern.events.find(event => event.id === 21);
+    const approach = solveRoute(salt.geometry, northern, { x: green.x, y: green.y + 1, event: 21, field: true });
+    assert.equal(approach.status, 'ready');
+    const continuation = saltPlan(salt.geometry, northern, { x: approach.arrival.x, y: approach.arrival.y,
+        event: 2, field: true }, saltModel, () => false);
+    assert.equal(continuation?.actions[0], 21);
+    assert(!continuation.actions.includes(19) && !continuation.actions.includes(20));
+    console.log('Verified four Salt Caverns chest plans, the exit order, and resuming after two colors.');
     const request = { x: 26, y: 12, event: 114 };
     const current = snapshot(salt);
     await verifyWorker(salt, request, current);

@@ -14,7 +14,7 @@ const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 async function main() {
     const data = mapData(19);
-    const f = fixture(data);
+    const f = fixture(data, false, { reachableOnly: true });
     const { c, routePackets } = f;
     const tileData = path.join(process.argv[2], 'package.nw', 'data', 'Tilesets.json');
     const flags = JSON.parse(fs.readFileSync(tileData, 'utf8'));
@@ -74,6 +74,7 @@ async function main() {
     c.SceneManager.updateScene();
     assert(scene._wqaFieldReady);
     f.frame();
+    await new Promise(setImmediate);
 
     key('m', { shiftKey: true });
     f.frame();
@@ -276,7 +277,7 @@ async function verifyRuinsHandback() {
 
 async function verifyOpeningField(tilesets) {
     const data = mapData(13);
-    const f = fixture(data);
+    const f = fixture(data, false, { reachableOnly: true });
     const { c, routePackets } = f;
     const map = c.$gameMap;
     const player = c.$gamePlayer;
@@ -332,6 +333,7 @@ async function verifyOpeningField(tilesets) {
     f.idleCallbacks.shift()();
     c.SceneManager.updateScene();
     f.frame();
+    await new Promise(setImmediate);
     assert(map._needsRefresh, 'the actual parallel lightning timer asks for a native refresh every frame');
     assert(c.$gameVariables.value(2) < 60);
     assert(scene._wqaFieldReady, 'Crispy Beach admits field controls after the intro despite the lightning timer');
@@ -604,7 +606,7 @@ async function verifyOpeningField(tilesets) {
 
 async function verifyBeachHandoffs(tilesets) {
     const data = mapData(13);
-    const f = fixture(data);
+    const f = fixture(data, false, { reachableOnly: true });
     const { c, routePackets } = f;
     const map = c.$gameMap;
     const player = c.$gamePlayer;
@@ -639,6 +641,7 @@ async function verifyBeachHandoffs(tilesets) {
     f.idleCallbacks.shift()();
     c.SceneManager.updateScene();
     f.frame();
+    await new Promise(setImmediate);
     const geometry = bakeMap(data, tilesets[data.tilesetId].flags);
     const key = (letter, code, shiftKey) => {
         f.dispatchWindowEvent('keydown', { key: letter, keyCode: code, shiftKey });
@@ -667,7 +670,7 @@ async function verifyBeachHandoffs(tilesets) {
 
 async function verifySurfaceField(tilesets) {
     const data = mapData(113);
-    const f = fixture(data);
+    const f = fixture(data, false, { reachableOnly: true });
     const { c, routePackets } = f;
     const map = c.$gameMap;
     const player = c.$gamePlayer;
@@ -699,6 +702,7 @@ async function verifySurfaceField(tilesets) {
     f.idleCallbacks.shift()?.();
     c.SceneManager.updateScene();
     f.frame();
+    await new Promise(setImmediate);
     function request() {
         f.dispatchWindowEvent('keydown', { key: 'p', keyCode: 80 });
         f.dispatchWindowEvent('keyup', { key: 'p', keyCode: 80 });

@@ -8,6 +8,7 @@ const { createHash } = require('crypto');
 const { bakeMap, encodeMap, CELL_BITS } = require('../src/world/geometry.cjs');
 const { MAX_CATALOG_BYTES } = require('../src/world/walking-catalog.cjs');
 const { transferMap, bakeCatalog } = require('./transfer-catalog.cjs');
+const { bakeSalt } = require('./bake-salt.cjs');
 
 const BUILD = '26578620';
 const ROOT = path.resolve(__dirname, '..');
@@ -68,6 +69,7 @@ function bake(installed, destination) {
                 }
             }
         }
+        if (id === 19) entry.salt = bakeSalt(map, flags);
         if (variants.size) {
             entry.variants = {};
             for (const variant of variants) {

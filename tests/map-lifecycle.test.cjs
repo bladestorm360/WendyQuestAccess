@@ -37,7 +37,7 @@ const stock = {
     windows: { 'Window_MapName.prototype': ['open', 'close', 'update', 'updateFadeIn', 'updateFadeOut'] }
 };
 
-function fixture(data, failSave = false) {
+function fixture(data, failSave = false, navigation) {
     const trace = [];
     const bitmapCallbacks = [];
     const idleCallbacks = [];
@@ -187,6 +187,19 @@ function fixture(data, failSave = false) {
             unref() {}
         } };
     }
+    if (navigation) c.indexedDB = {
+        open() {
+            const entry = { result: { transaction: () => ({ objectStore: () => ({
+                get(key) {
+                    const read = { result: key === 'navigation' ? navigation : undefined };
+                    queueMicrotask(() => read.onsuccess());
+                    return read;
+                }
+            }) }) } };
+            queueMicrotask(() => entry.onsuccess());
+            return entry;
+        }
+    };
     boot(c, workerRequire, { mainModule: { filename: path.join(game, 'index.html') } });
     function frame() {
         renderer.emit('postrender');

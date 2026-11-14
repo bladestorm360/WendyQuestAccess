@@ -8,6 +8,7 @@ const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, CELL_BITS } = require('./geome
 const { solveRoute, findReachable } = require('./routes.cjs');
 const { MAX_CATALOG_BYTES, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
+const { solveSaltRoute } = require('./puzzles/salt-route.cjs');
 
 const BUILD = '26578620';
 const admission = new Int32Array(workerData.admission);
@@ -110,6 +111,10 @@ parentPort.on('message', message => {
                 result = solveRoute(base, live, { ...request, entrances, groundEntrances, discoveries }, cancelled);
             }
             else result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
+            if (map === 19 && live.salt && !request.refresh &&
+                ['unreachable', 'approachBlocked'].includes(result.status)) {
+                result = solveSaltRoute(base, live, request, manifest.maps[map].salt, cancelled) || result;
+            }
             const follows = (result.status === 'ready' || result.status === 'enemyBlocked') &&
                 !result.reenter && (request.beacon === true || request.autowalk === true);
             if (follows || (result.status === 'interrupted' && request.autowalk === true)) {
@@ -136,7 +141,7 @@ parentPort.on('message', message => {
                     result.autowalkMore = result.legs.length - (last.tiles === 1 ? 1 : 0) > request.limit;
                 }
             }
-            if ((result.status === 'ready' || result.status === 'interrupted' || result.status === 'enemyBlocked') &&
+            if ((result.status === 'ready' || result.status === 'interrupted' || result.status === 'enemyBlocked' || result.status === 'saltRoute') &&
                 Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
                 result.legs.length > request.limit) {
                 result.more = true;

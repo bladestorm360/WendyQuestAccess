@@ -7,6 +7,7 @@ const { worldDestination, worldEventDescription, discoveryEntrance } = require('
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
+const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
 function eventTarget(root, mode, event, entry, page) {
     const map = root.$gameMap._mapId;
@@ -80,6 +81,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
     const terrain = routing ? terrainDelta(root.$gameTileChanges?.[id], data.data, flags, count) : null;
     if (routing && !terrain) return null;
 
+    const seenTorchReminder = id === 19 && root.$gameSwitches?.value?.(200);
     const events = [];
     const objects = [];
     const quests = !routesOnly && scene ? collectQuestDestinations(root, scene, mode) : null;
@@ -90,7 +92,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         const entry = data.events[eventId];
         if (!entry || !Number.isFinite(x) || !Number.isFinite(y)) return null;
         const page = entry.pages[pageIndex];
-        const action = page?.list.length > 1;
+        const action = page?.list.length > 1 && !(seenTorchReminder && REMINDERS.includes(eventId));
         if (routing) {
             const box = event.blockerProperties;
             const rectangle = box ? [x + box.x1, y + box.y1, x + box.x2, y + box.y2] : undefined;
@@ -141,7 +143,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             type: vehicle._type, through: vehicle._through === true });
     }
     return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles,
-        tileset: map._tilesetId, aircraft: aircraftAt(map) } };
+        tileset: map._tilesetId, aircraft: aircraftAt(map), ...(id === 19 && !routesOnly ? { salt: saltState(root) } : {}) } };
 }
 
 module.exports = { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks };

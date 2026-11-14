@@ -246,9 +246,9 @@ function verifySettings() {
         tap('ArrowDown');
         if (!document.activeElement.textContent.includes('map name M')) throw Error('Help did not show the map key');
         tap('ArrowDown');
-        if (!document.activeElement.textContent.includes('NPC lists reachable characters') ||
-            !document.activeElement.textContent.includes('Events lists reachable scene triggers'))
-            throw Error('Help did not use the NPC category label');
+        if (!document.activeElement.textContent.includes('Active destinations are listed by default') ||
+            !document.activeElement.textContent.includes('Reachable destinations only'))
+            throw Error('Help did not explain the optional reachable filter');
         tap('Escape');
         if (document.activeElement.textContent !== 'Pathfinder') throw Error('Help section did not restore focus');
         choose('Battle');
@@ -466,7 +466,7 @@ const interval = setInterval(() => {
             const controller = [...buttons.slice(0, 2), buttons.find(item => item.startsWith('Next category, '))];
             tap('Escape');
             choose('Navigation');
-            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 5).map(item => item.textContent);
+            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 6).map(item => item.textContent);
             choose('Bookmarks');
             const bookmarks = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
             if (bookmarks.join('|') !== 'Return marker, Map 1, saved on foot|Back')
@@ -2222,7 +2222,7 @@ def main():
         if title['speech'] != 'WendyQuest. Legend of the Four Corner Stones. Start. Synthetic title command' or \
                 receipt.with_suffix('.json.interaction-prompt').read_text(encoding='utf8') != 'Interact':
             raise RuntimeError('NW did not speak the presented title artwork and interaction prompt')
-        if [item.get('name') for item in (first, second, third)] != ['Synthetic wall', 'Synthetic switch', 'Synthetic wall'] or \
+        if [item.get('name') for item in (first, second, third)] != ['Synthetic wall', 'Synthetic covered event', 'Synthetic wall'] or \
                 any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
             raise RuntimeError(f'NW field selection or layout priority failed: {data}')
         if any(item['kind'] != 'routeDirections' or item['speech'] != '1 east. face east.'
@@ -2342,7 +2342,7 @@ def main():
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, RT', 'Next category, Unassigned'] or \
                 reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on',
-                                               'Navigation keymap, Brackets and backslash', 'Previous destination, Left bracket',
+                                               'Navigation keymap, Brackets and backslash', 'Reachable destinations only, off', 'Previous destination, Left bracket',
                                                'Next destination, N'] or reloaded.get('audio') != [
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
                     'Increase wall volume, 55 percent', 'Footstep sounds, on', 'Decrease footstep volume, 50 percent',

@@ -165,7 +165,19 @@ function formatSpeech(message) {
             const facing = HEADINGS[message.facing];
             const boundary = HEADINGS[message.boundary];
             const activate = HEADINGS[message.activate];
-            if (message.more) parts.push(message.enemyBlocked === true ? 'Route ends at an enemy. More directions available' :
+            const prerequisite = label({ name: message.prerequisite });
+            if (prerequisite) {
+                parts.push('Route to ' + prerequisite);
+                if (message.more) parts.push('More directions available');
+                else {
+                    const move = HEADINGS[message.prerequisiteMove];
+                    parts.push(move ? 'Move ' + move + ' to continue' :
+                        (facing ? 'Face ' + facing + ' and press' : 'Press') + ' the action button');
+                    if (message.remainingActions > 0) parts.push('More steps follow');
+                    parts.push('Request directions again after the passage changes');
+                }
+            }
+            else if (message.more) parts.push(message.enemyBlocked === true ? 'Route ends at an enemy. More directions available' :
                 'More directions available');
             else if (message.enemyBlocked === true && boundary) parts.push('Blocked by an enemy one tile ' + boundary);
             else if (activate) parts.push(`Move ${activate} to activate`);
@@ -187,9 +199,11 @@ function formatSpeech(message) {
                 const discovery = label({ name: message.discovery });
                 if (discovery) parts.push(`Then request walking directions to ${discovery}`);
             }
+            else if (message.guideAction && facing) parts.push(`Face ${facing} and press the action button`);
             else if (facing) parts.push(`face ${facing}`);
             if (!parts.length) parts.push('you are here');
-            const instructions = parts.join('. ') + '.';
+            const guide = label({ name: message.guide });
+            const instructions = (guide ? guide + ' ' : '') + parts.join('. ') + '.';
             text = message.directionsOnly === true ? instructions[0].toUpperCase() + instructions.slice(1) :
                 name + '. ' + instructions;
             limit = 512;

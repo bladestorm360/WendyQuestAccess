@@ -237,7 +237,7 @@ function createSettingsMenu(root, host) {
                 'Read the current map name ' + binding('mapName') + '. Describe the map ' + binding('mapDescription') +
                     '. Read the visible quest objective ' +
                     binding('questObjective') + '.',
-                'All combines destinations and saved bookmarks. NPC lists reachable characters. Events lists reachable scene triggers. Active quest markers have their own Quests category.',
+                'All combines destinations and bookmarks. Active destinations are listed by default. Turn on Reachable destinations only under Navigation to filter by the current path.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
                 'Toggle the beacon ' + binding('beaconToggle') + '. Toggle wall sounds ' + binding('wallToggle') +
@@ -435,7 +435,9 @@ function createSettingsMenu(root, host) {
             { ...navigation, speakAutowalkPath: !navigation.speakAutowalkPath }, 'speakAutowalkPath', 'navigation'));
         const keymap = button(owner, `Navigation keymap, ${LAYOUT_NAMES[layout]}`, () => change(owner,
             { ...navigation, layout: layout === 'letters' ? 'brackets' : 'letters' }, 'layout', 'navigation'));
-        let focused = { autowalk, speakAutowalkPath: narration }[selection] || keymap;
+        const reachable = button(owner, 'Reachable destinations only, ' + (navigation.reachableOnly ? 'on' : 'off'), () =>
+            change(owner, { ...navigation, reachableOnly: !navigation.reachableOnly }, 'reachableOnly', 'navigation'));
+        let focused = { autowalk, speakAutowalkPath: narration, reachableOnly: reachable }[selection] || keymap;
         for (const [action, name] of Object.entries(ACTIONS)) {
             const gesture = bindings[layout][action];
             const occupied = nativeNavigationConflict(root, gesture, undefined, action) ? ', used by the game' : '';
