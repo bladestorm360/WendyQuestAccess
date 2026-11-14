@@ -8,6 +8,12 @@ const EXITS = {
     13: { 1: ['Crispy Ruins', 16], 2: ['Crispy Ruins', 16],
         7: ["Elder Tater's house", 116], 16: ['Road to Russetwood', 113] },
     16: { 20: ['Road to Russetwood', 113, 114], 21: ['Road to Russetwood', 113, 114] },
+    34: { 2: ['Chillcrest', 25] },
+    36: { 5: ['Exit toward Frosty Peak', 113], 24: ['Exit toward Frosty Peak', 113],
+        25: ['Exit toward Frosty Peak', 113], 26: ['Exit toward Frosty Peak', 113] },
+    37: { 3: ['Return to Frosty Peak', 27] },
+    96: { 2: ['Burgenburg', 94] },
+    204: { 3: ['Return to Frosty Peak', 27] },
     93: { 1: ['Elevator entrance', 98], 8: ['Elevator entrance', 98], 24: ['Elevator entrance', 98],
         25: ['Elevator entrance', 98], 26: ['Elevator entrance', 98] },
     23: { 1: ['Return to Russetwood', 12], 2: ['Second floor', 24] },
@@ -45,8 +51,11 @@ const EXITS = {
 // into the event. Keep their destinations tied to the active native page.
 const TOUCH_TRANSFERS = {
     12: { 27: ["Frygor's house", 117] },
-    25: { 13: ["Frostyna's house", 119] },
+    25: { 8: ['Chillcrest cave', 33], 13: ["Frostyna's house", 119],
+        17: ["Elder Frosty's tower", 126], 29: ['Chillcrest house 1', 129],
+        30: ['Chillcrest house 2', 130], 31: ['Chillcrest house 3', 131] },
     27: { 17: ['Frosty Peak cave', 37], 44: ['Cold Brew Trail cave', 204] },
+    58: { 37: ['Cauldron entrance', 57], 38: ['Cauldron entrance', 57], 39: ['Cauldron entrance', 57] },
     48: { 3: ['Return to Nuggedor', 45, 59], 4: ['Return to Nuggedor', 45, 59],
         10: ['Return to Nuggedor', 45, 59], 16: ['Return to Nuggedor', 45, 59] },
     83: { 27: ["Frygor's house", 23] },
@@ -88,7 +97,7 @@ function chillcrestExit(root, event, page) {
 }
 
 function chillcrestQuestExit(root) {
-    return root.$gameMap._mapId === 25 && root.$gameParty?.getNav?.() === 'quest15' &&
+    return root.$gameParty?.getNav?.() === 'quest15' &&
         root.$gameSwitches?.value?.(33) === true && root.$gameSwitches.value(38) === false;
 }
 // These events exist before their ice block's movement route assigns the
@@ -117,6 +126,10 @@ function inactiveFloorScene(root, event, page) {
     if (event._trigger !== 1 || event._pageIndex !== 0) return false;
     const map = root.$gameMap._mapId;
     const id = event._eventId;
+    // The Cold Brew Trail boundary updates the atlas pin and leaves
+    // native walking in control. Crossing it needs no player intervention.
+    if (map === 36 && id === 35 && page.list.length === 7 && page.list[4]?.code === 117 &&
+        page.list[4].parameters[0] === 159) return true;
     const condition = page.list[0];
     if (condition?.code !== 111 || condition.indent !== 0) return false;
     const [type, key, value] = condition.parameters;
@@ -186,9 +199,6 @@ function localDestination(root, event, page) {
         return { name: open ? 'Secret room stairs' : stairs.floor, category: 'exits' };
     }
     if (event._pageIndex === 0 && trigger === 1 && event._priorityType === 1) {
-        if (map === 58 && id >= 37 && id <= 39 && list.some(command =>
-            command.code === 201 && command.indent === 0 && command.parameters[0] === 0 && command.parameters[1] === 57))
-            return { name: 'Scene trigger', category: 'events', eventAction: 'bump' };
         if (map === 76 && id === 64 && list.some(command =>
             command.code === 201 && command.indent === 0 && command.parameters[0] === 0 && command.parameters[1] === 112)) {
             // The first native branch turns Wendy away until switch 267 is on.
@@ -201,12 +211,31 @@ function localDestination(root, event, page) {
             transfer.includes(command.parameters[1], 1)))
             return { name: transfer[0], category: 'exits', eventAction: 'bump' };
     }
+    const floorAction = trigger === 1 && event._priorityType !== 1;
+    const to = (mapId, indent = 0) => list.some(command => command.code === 201 &&
+        command.indent === indent && command.parameters[0] === 0 && command.parameters[1] === mapId);
+    if (floorAction) {
+        if (map === 14 && id === 25 && to(117)) return { name: "Return to Frygor's house", category: 'exits', eventAction: 'step' };
+        if (map === 64 && id === 1 && to(59, 1) && to(45, 1)) return { name: 'Return to Nuggedor', category: 'exits', eventAction: 'step' };
+        if (map === 192 && id === 1 && to(98, 1))
+            return root.$gameSwitches?.value?.(404) === true
+                ? { name: 'Elevator to the lower landing', category: 'exits', eventAction: 'step' }
+                : { name: 'Ride elevator', category: 'events', eventAction: 'step' };
+        if (map === 192 && id === 12 && event._pageIndex === 1)
+            return { name: 'Ride elevator', category: 'events', eventAction: 'step' };
+        if ((map === 57 || map === 58) && /^(?:Halt|ToMap)$/.test(root.$dataMap?.events?.[id]?.name || '')) {
+            const guardedReturn = to(113);
+            if (guardedReturn || (to(113, 1) && root.$gameSwitches?.value?.(477) === false))
+                return { name: 'Return to world map', category: 'exits', eventAction: 'step' };
+        }
+    }
     const exit = EXITS[map]?.[id];
     if (exit) {
         if ((trigger !== 0 && trigger !== 1) ||
             !list.some(command => command.code === 201 && command.parameters[0] === 0 &&
                 exit.includes(command.parameters[1], 1))) return null;
         const target = { name: exit[0], category: 'exits' };
+        if (trigger === 1 && event._priorityType === 1) target.eventAction = 'bump';
         if (map === 13 && id === 7) target.handoffs = BEACH_HANDOFFS;
         return target;
     }

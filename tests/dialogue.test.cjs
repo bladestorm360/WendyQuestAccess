@@ -1121,6 +1121,18 @@ async function verifySpeakerDetails() {
     readSpeaker('Gemma', 7, /^Gemma\. An older woman.*red headscarf/);
     showRenderedSpeakers(25, [21]);
     readSpeaker('Fisherman', 21, /^Fisherman\. A round-faced man with short brown hair/);
+    Object.assign(tilemap, { worldVisible: true, worldAlpha: 1 });
+    for (const [map, id] of [[12, 46], [25, 33], [45, 36], [59, 42], [76, 87], [94, 36]]) {
+        showRenderedSpeakers(map, [id]);
+        scene._spriteset._characterSprites[0].texture.valid = false;
+        readSpeaker('Dave', id, /^Dave\. A golden stone bust.*green W/);
+    }
+    scene._spriteset._characterSprites[0].worldTransform.tx = -100;
+    readSpeaker('Dave', 36, /^No visual description for this speaker/);
+    assert.equal(formatSpeech({ kind: 'dialoguePage', text: '\x01177\x02 Jr. Bacon Cheeseburger acquired!' }),
+        'Jr. Bacon Cheeseburger acquired!');
+    assert.equal(formatSpeech({ kind: 'dialoguePage', text: 'Try a \x01177\x02 today.' }),
+        'Try a Junior Bacon Cheeseburger today.');
     console.log('Verified active-dialogue details, frame and speaker identity, portrait readiness, and native handback.');
 }
 

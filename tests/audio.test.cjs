@@ -59,12 +59,18 @@ assert.deepEqual(messages[1], { epoch: latestEpoch, lane: 0, hrtf: false, cue: C
 worker.emit('message', { epoch: latestEpoch, status: 1 });
 assert.deepEqual(reports, ['Preview uses stereo and rear pitch.']);
 assert.equal(audio.isPrepared(true), true);
-audio.prepare(scene, true, () => ready, status => assert.equal(status, 2));
+assert(audio.prepare(scene, true, () => ready, status => assert.equal(status, 2), 'wall'));
 run();
 const prepare = messages.at(-1);
 assert.equal(prepare.cue, CUE.prepare);
 assert.equal(prepare.gain, 0);
 worker.emit('message', { epoch: prepare.epoch, status: 2 });
+assert.equal(Atomics.load(word, 0), 0, 'wall initialization leaves the beacon channel free');
+assert(audio.play(scene, true, CUE.beaconPulse, 0.5, [1, 0, 0], () => ready, null, 'beacon'));
+run();
+assert.equal(messages.at(-1).cue, CUE.beaconPulse);
+worker.emit('message', { epoch: messages.at(-1).epoch, status: 2 });
+audio.retire(scene, 'beacon');
 
 audio.play(scene, true, CUE.wallBump, 0.5, [0, 0, 1], () => ready, null, 'wall');
 run();

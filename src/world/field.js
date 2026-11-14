@@ -5,7 +5,7 @@ const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
-const { localHandoffName, iceOpensPassage, chillcrestExit, chillcrestQuestExit, concealedDestination } = require('./local-destinations');
+const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination } = require('./local-destinations');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { tileKey } = require('./geometry.cjs');
@@ -20,15 +20,18 @@ const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE }
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
 
-function routeExitName(root, eventId) {
+function routeBoundary(root, eventId, spoilers) {
     const map = root.$gameMap;
     const event = map._events?.[eventId];
     const entry = root.$dataMap?.events?.[eventId];
     const page = entry?.pages?.[event?._pageIndex];
-    if (!page || event._erased) return '';
-    if (map._mapId === 113 && eventId === 19)
-        return eventTarget(root, 'walk', event, entry, page)?.category === 'exits' ? 'Chillcrest entrance' : '';
-    return chillcrestExit(root, event, page)?.name || '';
+    if (!page || event._erased) return {};
+    const target = eventTarget(root, 'walk', event, entry, page, spoilers);
+    if (target?.category === 'events') return { boundaryName: target.name };
+    if (target?.category !== 'exits') return {};
+    const name = map._mapId === 113 && eventId === 19 ? 'Chillcrest entrance' : target.name;
+    if (/^return to /i.test(name)) return { exit: 'exit to ' + name.slice(10) };
+    return { exit: /\b(?:exit|entrance|stairs|landing)\b/i.test(name) ? name : name + ' exit' };
 }
 
 function currentEnemy(root, result) {
@@ -170,8 +173,11 @@ function createField(root, host, notifications) {
         if (!ready(job.scene, moving)) return;
         // Arrival and stop reports have their own command owner. Only
         // the requested route omits its heading in speech.
-        if ((job.action === 'directions' || job.action === 'puzzleGuide') && record.kind === 'routeDirections')
-            record = { ...record, directionsOnly: true };
+        if ((job.action === 'directions' || job.action === 'puzzleGuide') && record.kind === 'routeDirections') {
+            const speakDestination = job.beaconStarted && job.controller && job.action === 'directions' &&
+                preferences().speakBeaconDestination;
+            record = { ...record, name: speakDestination ? job.label : record.name, directionsOnly: !speakDestination };
+        }
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
             (!job.questExit || chillcrestQuestExit(root)) &&
@@ -193,7 +199,7 @@ function createField(root, host, notifications) {
             // The movement owner now watches native outcomes. Ordinary
             // position notifications must leave its path narration admitted.
             job.scene._wqaRouteActive = false;
-            if (preferences().speakAutowalkPath) {
+            if (preferences().speakAutowalkPath || job.beaconStarted && preferences().speakBeaconPath) {
                 if (result.autowalkStop) {
                     const legs = record.legs.slice();
                     if (!record.more) {
@@ -202,6 +208,8 @@ function createField(root, host, notifications) {
                     }
                     present(job, { ...record, legs, more: result.autowalkMore, activate: result.autowalkStop }, true);
                 } else present(job, record, true);
+            } else if (job.beaconStarted) {
+                present(job, { ...record, beaconOnly: true }, true);
             } else if (record.enemyBlocked) {
                 present(job, { kind: 'fieldStatus', name: 'Route blocked by an enemy.' }, true);
             }
@@ -213,7 +221,20 @@ function createField(root, host, notifications) {
         if (job.mode === 'walk' && root.$dataMap?.scrollType === 0 && !job.area && !job.remote && !job.vehicle &&
             !job.autowalk && !host.beacon?.enabled() && !timedCave(job.map) && !result.reenter)
             job.spokenBounds = spokenRouteBounds(job.x, job.y, record.legs);
-        present(job, record);
+        presentRoute(job, record);
+    }
+
+    function presentRoute(job, record) {
+        present(job, job.beaconStarted && !preferences().speakBeaconPath ? { ...record, beaconOnly: true } : record);
+    }
+
+    function startBeaconApproach(job, result, event) {
+        if (!result.distance || !host.beacon?.enabled()) return;
+        // For a forced boundary, stop on the clear tile before activation.
+        // For a switch, retain the verified action position and facing.
+        const { x, y, facing } = result.arrival;
+        job.beaconStarted = host.beacon.start(job.scene, event, job.x, job.y, result, null, undefined,
+            { point: true, request: { targetX: x, targetY: y, field: true, beacon: true, refreshFacing: facing, limit: 8 } });
     }
 
     function cancelBeaconRefresh(state) {
@@ -333,7 +354,7 @@ function createField(root, host, notifications) {
                         (!job.entrance || transfers.current(job.entrance)) &&
                         (!job.groundEntrance || transfers.current(job.groundEntrance, 'walk')) &&
                         (!result.land || canLand(root.$gameMap, x, y)) : null;
-                    host.beacon.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
+                    job.beaconStarted = host.beacon.start(job.scene, job.target, job.x, job.y, result, job.area ? () =>
                         warningApproach(root.$gameMap, player._x, player._y, job.target) : null, job.vehicle?.type,
                         { quest: job.quest, point: job.point, request: { ...request, limit: 8, refreshFacing: fixed ? facing : undefined },
                             destinationReady, enemyCurrent: obstacle => currentEnemy(root, obstacle) });
@@ -360,7 +381,7 @@ function createField(root, host, notifications) {
                 // native entry and resume from a fresh settled snapshot.
                 iceRoute = { scene: job.scene, map, block, browser: owner.browser, started: false };
                 job.scene._wqaIceRoute = true;
-                if (host.beacon?.enabled()) host.beacon.start(job.scene, result.event, job.x, job.y, result,
+                if (host.beacon?.enabled()) job.beaconStarted = host.beacon.start(job.scene, result.event, job.x, job.y, result,
                     null, undefined, { request: { event: result.event, field: true, beacon: true, limit: 8 } });
                 follow(job, result, { kind: 'routeDirections', name: 'Ice block', legs: result.legs,
                     facing: result.arrival.facing, more: result.more === true, prerequisite: 'the ice block',
@@ -369,7 +390,8 @@ function createField(root, host, notifications) {
             else if (result?.status === 'controlRoute') {
                 const prerequisite = CONTROLS[job.map]?.[result.event];
                 if (!prerequisite) return status(job, 'Control directions unavailable');
-                present(job, { kind: 'routeDirections', name: job.label, legs: result.legs, facing: result.arrival.facing,
+                startBeaconApproach(job, result, result.event);
+                presentRoute(job, { kind: 'routeDirections', name: job.label, legs: result.legs, facing: result.arrival.facing,
                     more: result.more === true, prerequisite });
             }
             else if (result?.status === 'saltRoute') {
@@ -378,7 +400,8 @@ function createField(root, host, notifications) {
                 const prerequisite = saltControlName(event) || (kind === 'encounter' ? 'an encounter' :
                     event === 105 ? 'the torch reminder' : event === 18 ? 'the cave conversation' : '');
                 if (!prerequisite) return status(job, 'Crystal directions unavailable');
-                present(job, { kind: 'routeDirections', name: job.label, guide: job.guide,
+                startBeaconApproach(job, result, event);
+                presentRoute(job, { kind: 'routeDirections', name: job.label, guide: job.guide,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
                     prerequisite, prerequisiteMove: kind !== 'action' ? result.boundary : undefined,
                     remainingActions: result.actions.length - 1 });
@@ -392,7 +415,7 @@ function createField(root, host, notifications) {
                     }
                     return status(job, 'The enemy moved. Request directions again.');
                 }
-                if (host.beacon?.enabled()) host.beacon.start(job.scene, job.target, job.x, job.y, result,
+                if (host.beacon?.enabled()) job.beaconStarted = host.beacon.start(job.scene, job.target, job.x, job.y, result,
                     null, undefined, { quest: job.quest, point: job.point, request: { ...job.request, autowalk: false, beacon: true },
                         enemyCurrent: obstacle => currentEnemy(root, obstacle), alreadyReported: true });
                 job.enemyCurrent = () => currentEnemy(root, result);
@@ -402,12 +425,14 @@ function createField(root, host, notifications) {
             }
             else if (result?.status === 'interrupted') {
                 const handoff = !job.eventAction && localHandoffName(job.map, result.boundaryEvent);
-                const exit = routeExitName(root, result.boundaryEvent);
+                const { exit, boundaryName } = job.mode === 'walk' ?
+                    routeBoundary(root, result.boundaryEvent, preferences().spoilers === true) : {};
+                startBeaconApproach(job, result, result.boundaryEvent);
                 const useExit = !!exit && (job.target === result.boundaryEvent || job.request.handoffs?.includes(result.boundaryEvent));
                 const activate = job.eventAction === 'step' && job.target === result.boundaryEvent ? result.boundary : undefined;
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
                     guide: job.guide, activate, exit, useExit,
-                    boundaryName: handoff || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
+                    boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
                     manualHandoff: !!handoff, more: result.more === true });
             }
             else if (result?.status === 'approachBlocked') status(job, (job.guide ? job.guide + ' ' : '') + 'A floor event blocks the approach');
@@ -725,7 +750,7 @@ function createField(root, host, notifications) {
         return active?.scene === scene && active.action === 'directions' && preferences().autowalk &&
             !timedCave(root.$gameMap._mapId);
     }
-    function command(action, text) {
+    function command(action, text, controller = false) {
         const scene = host.manager._scene;
         if (action === 'beaconStop') {
             if (!ready(scene, true)) return false;
@@ -776,7 +801,7 @@ function createField(root, host, notifications) {
             owner.remoteBookmark = null;
             transfers.clear();
         }
-        queue({ scene, action, changes, text, step, idle, retries: 0 });
+        queue({ scene, action, changes, text, step, idle, controller, retries: 0 });
         // An accepted pathfinder key is activity in the native idle detector.
         // It never supplies a game action or changes the timer directly.
         if (canWaitForStep) scene._wqaNavigationWake = true;
@@ -840,7 +865,7 @@ function createField(root, host, notifications) {
         },
         controlOwner(scene) {
             const settled = ready(scene);
-            if (!settled && (!autowalk.active(scene) || !ready(scene, true))) return null;
+            if (!settled && !ready(scene, true)) return null;
             if (control?.scene !== scene) control = { kind: 'field', scene };
             control.navigationOnly = !settled;
             control.vitals = settled && fieldVitalsVisible(scene);

@@ -135,4 +135,6 @@ The [battle appearance, Chillcrest terrain and ice prerequisite update](docs/dep
 The [Chillcrest follow-up](docs/deployment.md#chillcrest-speakers-consumed-events-and-filter-shortcut) verifies frame-based speaker details, consumed event pruning, spoiler-free book and interaction labels, and the active keymap’s destination filter shortcut. Private main commit \`3b66a197a0ec733fa61c842e5664b22fe984d65a\` contains the verified implementation. The candidate is installed and verified on C:, with gameplay confirmation pending.
 
 
-The [Chillcrest west exit and Spoiler mode update](docs/deployment.md#chillcrest-west-exit-and-spoiler-mode) passed native, matching NW, installer and exact Defender checks. The staged update awaits closed-game installation.
+The [Chillcrest west exit and Spoiler mode update](docs/deployment.md#chillcrest-west-exit-and-spoiler-mode) passed native, matching NW, installer and exact Defender checks. Installed and verified on C: with plan SHA-256 `071b8eaf826c4e9401c951a388509fff5ce49a714301a710a17406379cbf9bbb`. Private main checkpoint `547c75a6daa214d12fdc6e814aee32512545cd54`.
+
+The [route audio, battle and occupied save slot update](docs/deployment.md#route-audio-battle-and-occupied-save-slot) includes the beacon lane fix and separate speech options, button timing and concise controller mode, the 239-map event audit, native HUD details, named basic attack results, statues, and acquisition icon review. See the deployment record for the exact candidate and verification progress.

@@ -349,7 +349,8 @@ field.navigationOnly = field.autowalkActive = true;
 poll(6);
 poll();
 flush();
-assert.deepEqual(commands, [], 'a moving field reserves the mod mode for stopping navigation');
+assert.deepEqual(commands.splice(0).map(record => record.action), ['directions'],
+    'a moving player can request directions without entering mod mode');
 poll(12);
 assert.equal(Input._currentState.up, true, 'ordinary physical movement keeps native priority');
 poll();

@@ -449,7 +449,14 @@ function createSettingsMenu(root, host) {
             change(owner, { ...navigation, reachableOnly: !navigation.reachableOnly }, 'reachableOnly', 'navigation'));
         const spoilers = button(owner, 'Spoiler mode, ' + (navigation.spoilers ? 'on' : 'off'), () =>
             change(owner, { ...navigation, spoilers: !navigation.spoilers }, 'spoilers', 'navigation'));
-        let focused = { autowalk, speakAutowalkPath: narration, reachableOnly: reachable, spoilers }[selection] || keymap;
+        const beaconSpeech = {};
+        for (const [key, label] of [['speakBeaconDestination', 'Speak beacon destination on controller directions'],
+            ['speakBeaconPath', 'Speak full path with beacon']]) {
+            beaconSpeech[key] = button(owner, label + ', ' + (navigation[key] ? 'on' : 'off'), () =>
+                change(owner, { ...navigation, [key]: !navigation[key] }, key, 'navigation'));
+        }
+        let focused = { autowalk, speakAutowalkPath: narration, reachableOnly: reachable, spoilers,
+            ...beaconSpeech }[selection] || keymap;
         for (const [action, name] of Object.entries(ACTIONS)) {
             const gesture = bindings[layout][action];
             const occupied = nativeNavigationConflict(root, gesture, undefined, action) ? ', used by the game' : '';

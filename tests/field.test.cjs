@@ -98,6 +98,12 @@ async function main() {
     reply(first);
     f.frame();
     assert.equal(formatSpeech(fieldSpeech()[2]), 'Face south.');
+    const beaconOnly = { kind: 'routeDirections', beaconOnly: true, name: 'Stone', directionsOnly: true, more: true,
+        legs: [{ direction: 8, tiles: 3 }], facing: 8 };
+    assert.equal(formatSpeech(beaconOnly), '');
+    assert.equal(formatSpeech({ ...beaconOnly, directionsOnly: false }), 'Stone');
+    assert.match(formatSpeech({ ...beaconOnly, beaconOnly: false }), /^3 north/);
+    assert.match(formatSpeech({ ...beaconOnly, prerequisite: 'an ice block' }), /Route to an ice block.*press the action button/i);
     assert.deepEqual([player._x, player._y], [26, 12]);
     assert.equal(formatSpeech({ kind: 'routeDirections', name: 'Example', directionsOnly: true,
         legs: [{ direction: 8, tiles: 1 }, { direction: 6, tiles: 3 }, { direction: 8, tiles: 4 }], facing: 2 }),

@@ -210,11 +210,11 @@ def files_ready(scene):
     ready = f'''{scene}&&{scene}._wqaFileKind&&{scene}===SceneManager._scene&&
 !SceneManager._nextScene&&!SceneManager._exiting&&!SceneManager._wqaNativeAutosaves&&{scene}._started&&{scene}._active&&
 Graphics.app?.stage==={scene}&&!Graphics._wqaResize&&
-(({scene}._wqaFileKind===1&&!{scene}._wqaPresentation&&
-({scene}._fadeSign===1||({scene}._fadeDuration===0&&{scene}._fadeOpacity===0)))||
-({scene}._wqaFileKind!==1&&{scene}._fadeDuration===0&&{scene}._fadeOpacity===0&&
-(({scene}._wqaFileKind===2&&{scene}._wqaDetailText===true&&{scene}._wqaDetailArt===true&&!{scene}._destroySave)||
-({scene}._wqaFileKind===3&&({scene}._deleteCount===0||{scene}._wqaDeleteStatus))||
+(!{scene}._wqaPresentation&&
+({scene}._wqaFileKind===1||({scene}._wqaFileKind===2&&{scene}._wqaDetailText===true&&!{scene}._destroySave))&&
+({scene}._fadeSign===1||({scene}._fadeDuration===0&&{scene}._fadeOpacity===0))||
+({scene}._fadeDuration===0&&{scene}._fadeOpacity===0&&
+(({scene}._wqaFileKind===3&&({scene}._deleteCount===0||{scene}._wqaDeleteStatus))||
 ({scene}._wqaFileKind===4&&{scene}._optionsWindow?._wqaOptionsPainted===true)||
 ({scene}._wqaFileKind===5&&{scene}._commandWindow&&( {scene}._commandWindow._wqaRetryRows&
 (1<<{scene}._commandWindow._index))))))'''.replace('\n', '')
@@ -305,7 +305,7 @@ def menu_notifications(original):
         190907: FILES_LEAVING,
         207711: b'(' + FILES_LEAVING,
         207743: b')',
-        208402: b'this._wqaDetailArt=true;' + files_ready('this'),
+        208402: b'this._wqaDetailArt=true;',
         215620: b'this._wqaDetailText=true;this._wqaFileKind=2;' + files_ready('this'),
         215817: FILES_LEAVING,
         215860: b'if(SceneManager._nextScene)SceneManager._nextScene._wqaReadFailed=true;',
@@ -918,8 +918,14 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
     }:null;
 '''
     attack_source = (b'wqaAction===this._action&&globalThis.WendyQuestAccessAttackSource?.('
-                     b'_0x5a64fd,wqaPerformer,_0x15034e,!!_0x3b66aa?.SubBattlerID),')
+                     b'_0x5a64fd,wqaPerformer,_0x15034e,wqaAction),')
     return insert(original, BATTLE_SHA, {
+        # The same effect also plays on actual counters. Mark only the native
+        # skill animation dispatch, then pass its own newly attached particle.
+        27379: b',true',
+        55336: b',wqaPreparation',
+        55364: b'const wqaEffect=',
+        55477: b'if(wqaPreparation)globalThis.WendyQuestAccessClapbackReady?.(_0x36a3b7,wqaEffect);',
         # Native Crispy cleanup schedules the visible particles and sound.
         42051: b'if(BattleManager._phase==="battleEnd"&&this._battler?._actorId===1)'
                b'globalThis.WendyQuestAccessVictoryCondition?.(this);',

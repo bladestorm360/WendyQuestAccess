@@ -439,14 +439,22 @@ for (const imagesFirst of [false, true]) {
     c.SceneManager.onSceneStart();
     scene.loadImages();
     const art = f.images.shift();
-    (imagesFirst ? art : () => scene.onLoadSuccess())();
+    scene.startFadeIn(60);
+    if (imagesFirst) art();
+    flushSpeech(f);
+    assert.equal(f.messages.length, 0, 'no output during the native save read');
+    const start = performance.now();
+    scene.onLoadSuccess();
+    flushSpeech(f);
+    assert.equal(f.messages.length, 1, 'initial action is immediate during fade-in');
+    assert.equal(f.renderer.listenerCount('postrender'), 0);
+    assert.match(formatSpeech(f.messages[0]), imagesFirst ?
+        /Save slot 1, Level 8, Playtime 01:27:19, Critical hits 3, Longest critical streak 5, 2 cornerstones, Party: Actor one, Actor three/ :
+        /Save slot 1, Level 8, Playtime 01:27:19, Critical hits 3, Longest critical streak 5$/);
+    if (!imagesFirst) art();
     readyFrame(f);
-    assert.equal(f.messages.length, 0, 'one completion is not enough');
-    (imagesFirst ? () => scene.onLoadSuccess() : art)();
-    assert.equal(f.messages.length, 0, 'the final completion must be presented');
-    readyFrame(f);
-    assert.equal(f.messages.length, 1);
-    assert.match(formatSpeech(f.messages[0]), /Save slot 1, Level 8, Playtime 01:27:19, Critical hits 3, Longest critical streak 5, 2 cornerstones, Party: Actor one, Actor three/);
+    assert.equal(f.messages.length, 1, 'late artwork does not repeat the focus');
+    console.log('Occupied slot ready to packet', (performance.now() - start).toFixed(2), 'ms. Art first', imagesFirst);
     if (imagesFirst) {
         c.TouchInput.isCancelled = () => true;
         scene.update();

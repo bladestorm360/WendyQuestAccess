@@ -20,7 +20,7 @@ function eventTarget(root, mode, event, entry, page, spoilers = false) {
         ? { name: 'Checkpoint', category: 'objects' }
         : caveDestination(map, event, entry, page) || destination(entry, page, event._trigger, map) || undefined;
     if (!target) target = worldEventDescription(root, mode, event, page) ||
-        (mode === 'walk' && !timedCave(map) && eventDescription(page, event)) ||
+        (mode === 'walk' && !timedCave(map) && eventDescription(root, entry, page, event)) ||
         target;
     return target && mode === 'airship' && target.category !== 'exits' ? null : target;
 }
@@ -123,14 +123,18 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 entryDirection, eventAction, bumpDirections, handoffs, quest });
         }
     }
-    // The authored marker exists on the earlier conversation page. Once
-    // Frostyna joins, the published quest still leads out of town via this exit.
+    // Follow the published rescue objective through the native region
+    // exits when the current map has no painted objective marker.
     if (!routesOnly && scene && mode === 'walk' && chillcrestQuestExit(root) &&
-        !objects.some(item => item.category === 'quests' && WEST_CHILLCREST.includes(item.id))) {
-        const west = objects.filter(item => item.category === 'exits' && WEST_CHILLCREST.includes(item.id))
+        !objects.some(item => item.category === 'quests')) {
+        const transitions = id === 25 ? WEST_CHILLCREST : id === 36 ? [5, 24, 25, 26] :
+            id === 113 ? [root.$gameVariables?.value?.(119) === 7 &&
+                root.$gameVariables?.value?.(120) === 11 ? 23 : 22] : [];
+        const next = objects.filter(item => item.category === 'exits' && transitions.includes(item.id))
             .sort((a, b) => Math.abs(a.x - player._x) + Math.abs(a.y - player._y) -
                 Math.abs(b.x - player._x) - Math.abs(b.y - player._y))[0];
-        if (west) objects.push({ ...west, category: 'quests', questExit: true });
+        if (next) objects.push({ ...next, category: 'quests', questExit: true, eventAction: 'step',
+            handoffs: transitions });
     }
     if (!routesOnly && mode === 'walk') objects.push(...boardingTargets(map));
     if (!routesOnly && mode === 'airship') objects.push({ id: 517, x: player._x, y: player._y, name: 'Nearest landing site',

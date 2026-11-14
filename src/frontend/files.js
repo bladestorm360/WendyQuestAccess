@@ -28,11 +28,12 @@ function isReady(host, scene, window) {
         !scene._started || !scene._active || host.graphics.app?.stage !== scene ||
         !window.visible || !window.active || window.openness !== 255) return false;
     const clear = scene._fadeDuration === 0 && scene._fadeOpacity === 0;
-    // Native cursor and Confirm are live during the entire entry fade.
-    if (scene._wqaFileKind === SLOTS) return clear || scene._fadeSign === 1;
+    // The controls are live during the entry fade. For occupied-slot actions,
+    // wait for the native save read to finish before opening speech.
+    const entering = clear || scene._fadeSign === 1;
+    if (scene._wqaFileKind === SLOTS) return entering;
+    if (scene._wqaFileKind === DETAILS) return entering && scene._wqaDetailText === true && !scene._destroySave;
     if (!clear) return false;
-    if (scene._wqaFileKind === DETAILS) return scene._wqaDetailArt === true &&
-        scene._wqaDetailText === true && !scene._destroySave;
     if (scene._wqaFileKind === OPTIONS) return window._wqaOptionsPainted === true;
     if (scene._wqaFileKind === RETRY) return window._index >= 0 && window._index < 3 &&
         !!(window._wqaRetryRows & (1 << window._index));
@@ -119,7 +120,12 @@ function readFocus(host, scene, window, summary) {
     if (scene._wqaFileKind === DETAILS) {
         const name = shortText(window.options?.[index], 128);
         if (!name) return null;
-        const info = summary && scene._info ? metadata(host, scene._info, true) : {};
+        let info = {};
+        if (summary && scene._info) {
+            if (scene._wqaDetailArt) info = metadata(host, scene._info, true);
+            else info = { level: scene._info.level, playtime: shortText(scene._info.playtime, 32),
+                critHits: host.variable(43), critStreak: host.variable(44) };
+        }
         return { kind: 'saveAction', name, key: index, slot: scene._saveIndex + 1, summary, ...info };
     }
     if (scene._wqaFileKind === OPTIONS) return optionFocus(scene, window);
@@ -205,10 +211,11 @@ function createFilesObserver(host, notifications) {
         if (typeof select !== 'function' || typeof callHandler !== 'function' ||
             typeof window.isHandled !== 'function') return false;
         const slots = scene._wqaFileKind === SLOTS;
+        const immediate = slots || scene._wqaFileKind === DETAILS;
         window.select = function () {
             const index = this._index;
             const result = select.apply(this, arguments);
-            if (slots) {
+            if (immediate) {
                 if (index !== this._index && this._index >= 0) publishSafely(context);
             } else if (index !== this._index || scene._wqaFileKind === OPTIONS) afterRender(context);
             return result;

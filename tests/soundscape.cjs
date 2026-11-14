@@ -106,9 +106,23 @@ function verifySoundscape(root, load) {
     assert.equal(cue.ready(), false, 'a moved source revokes the old pose');
     assert.equal(sample(f.scene).cue, CUE.entityTreasure, 'eligible categories take turns');
     f.player._direction = 2;
+    assert.equal(sample(f.scene), null, 'preserve the ordinary interval before a source repeats');
     cue = sample(f.scene);
     assert.equal(cue.cue, CUE.entityPerson);
-    assert.deepEqual(cue.bearing, [0.25, 0, 1], 'the next sample follows interpolation and player facing');
+    assert.deepEqual(cue.bearing, [-0.25, 0, -1], 'turning keeps absolute bearing while the cue follows interpolation');
+
+    f = setup(25, [7, 15, 16], 47, 27, []);
+    const beforeExit = root.Graphics.frameCount;
+    cue = sample(f.scene);
+    assert.equal(cue.cue, CUE.entityExit);
+    assert.deepEqual(cue.bearing, [2, 0, 0], 'use the actual nearest tile of the east exit');
+    f.player._direction = 4;
+    assert(cue.ready(), 'turning in place keeps the admitted exit voice');
+    assert.equal(sample(f.scene), null, 'grouped exit tiles do not emit another copy');
+    cue = sample(f.scene);
+    assert.deepEqual(cue.bearing, [2, 0, 0]);
+    assert(root.Graphics.frameCount >= beforeExit + 26);
+    assert.equal(played.length, 2, 'only one voice per nearby exit group per repeat');
 
     f = setup(127, [2], 3, 3, []);
     const stairs = f.actors[2];

@@ -89,7 +89,7 @@ function destination(entry, page, trigger, map) {
         ...(trigger !== 0 ? { eventAction: page.priorityType === 1 ? 'bump' : 'step' } : {}) };
     const safeName = !SENSITIVE_NAME.test(name) && name;
     if (shop && trigger === 0) return { category: 'merchants', name: !reward && safeName || 'Merchant' };
-    if (transfer && /^(?:(?:go\s+)?to\s|exit\b)|\b(?:exit|door|stairs)\b/i.test(name))
+    if (transfer && /^(?:(?:go\s+)?to\s|enter\b|exit\b)|\b(?:exit|door|stairs)\b/i.test(name))
         return { category: 'exits', name: safeName || 'Exit',
             ...(trigger !== 0 && page.priorityType === 1 ? { eventAction: 'bump' } : {}) };
     if (battle && (!sprite || /ambush/i.test(name))) return { category: 'events', name: 'Scene trigger',
@@ -108,13 +108,31 @@ function destination(entry, page, trigger, map) {
     return name ? { category: 'objects', name } : null;
 }
 
-// Classify only otherwise unlisted native touch events. Authored names
-// and dialogue never enter this generic description.
-function eventDescription(page, event) {
-    if (![1, 2].includes(event._trigger) || !pageHasInteraction(page)) return null;
-    if (event._priorityType !== 1) return { category: 'events', name: 'Scene trigger', eventAction: 'step' };
-    if (page.list.some(command => command.code === 101 || command.code === 301))
-        return { category: 'events', name: 'Scene trigger', eventAction: 'bump' };
+// Inspect only the active page and a bounded list of referenced common
+// events. Only native text and actual encounters qualify as scenes.
+function eventDescription(root, entry, page, event) {
+    if (![1, 2].includes(event._trigger) || !pageHasInteraction(page) || page.list.length > 1024) return null;
+    const map = root.$gameMap._mapId;
+    const id = event._eventId;
+    const commands = page.list;
+    if (commands.some(command => command.code === 357 &&
+        ['ForceAutoSave', 'RequestAutoSave'].includes(command.parameters?.[1])))
+        return { name: 'Autosave checkpoint', category: 'events', eventAction: 'step' };
+    if (map === 13 && id >= 21 && id <= 27 || map === 113 && /^EnemyAmbushTrigger/.test(entry.name))
+        return { name: 'Encounter trigger', category: 'events', eventAction: 'step' };
+    const action = event._priorityType === 1 ? 'bump' : 'step';
+    let commonCommands = 0;
+    const scene = commands.some(command => {
+        if (command.code === 101 || command.code === 301) return true;
+        if (command.code !== 117) return false;
+        const nested = root.$dataCommonEvents?.[command.parameters[0]]?.list;
+        if (!nested || (commonCommands += nested.length) > 1024) return false;
+        return nested.some(row => row.code === 101 || row.code === 301);
+    });
+    if (scene) return { name: 'Scene trigger', category: 'events', eventAction: action };
+    if (commands.some(command => command.code === 205 && command.parameters[0] === -1 &&
+        command.parameters[1]?.list?.some(move => move.code >= 1 && move.code <= 14)))
+        return { name: 'Scripted movement', category: 'events', eventAction: action };
     return null;
 }
 

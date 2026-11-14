@@ -44,14 +44,34 @@ function enemyLabel(scene, enemy) {
     return presented.length > 1 ? (name ? name + ', enemy ' : 'Enemy ') + (position + 1) : name || 'Enemy';
 }
 
-function recordAttackSource(scene, target, performer, subject, companionAction) {
-    // Add attribution only for the companion that the native visual
-    // dispatcher actually used. It can fall back to Wendy.
-    if (!companionAction || !performer || performer !== scene._spriteset?._subActorSprite ||
-        !scene._spriteset?._actorSprites?.some(sprite => sprite._actor === subject)) return;
+// The game uses separate lightweight skills for regular companion turns and
+// enemy melee or arrows. Native action text still owns named special moves.
+const COMPANION_ATTACKS = new Set([9, 12, 14, 17]);
+const ENEMY_ATTACKS = new Set([1, 48, 49, 51, 56, 81, 82, 83, 84, 85, 87, 88, 90, 91, 92, 95, 96, 97, 98, 106]);
+
+function recordAttackSource(scene, target, performer, subject, action) {
+    if (!action?.isSkill?.()) return;
+    const skill = action.item();
+    if (!skill || skill.message1 || skill.message2) return;
+    const sprites = scene._spriteset;
+    const allies = sprites?._actorSprites;
+    const enemies = sprites?._enemySprites;
+    const actor = allies?.length <= MAX_BATTLERS && allies.find(sprite => sprite._actor === subject);
+    let name;
+    if (actor && COMPANION_ATTACKS.has(skill.id)) {
+        // The native dispatcher may fall back to Wendy when a companion
+        // sprite is unavailable. Attribute to the renderer's actual actor.
+        if (performer === sprites._subActorSprite && performer) name = portraitActor(scene, performer)?.name;
+        else if (performer === actor) name = portraitActor(scene, actor)?.name;
+    } else if (actor && (skill.id === 5 || skill.id === 1)) {
+        name = portraitActor(scene, actor)?.name;
+    } else if (!actor && ENEMY_ATTACKS.has(skill.id) && enemies?.length <= MAX_BATTLERS) {
+        const enemy = enemies.find(sprite => sprite._battler === subject || sprite._enemy === subject);
+        if (attached(enemy, sprites._battleField)) name = drawnText(enemy, enemy._nameSprite, 48) || enemyName(enemy);
+    }
+    if (!name) return;
     const result = target.result();
-    const companion = result?.used && portraitActor(scene, performer);
-    if (companion) result._wqaAttackSource = companion.name;
+    if (result?.used) result._wqaAttackSource = name;
 }
 
 function abilitySource(scene, item, format) {
@@ -70,19 +90,18 @@ function damageCaption(scene, graphics, popup) {
     if (!text) return '';
     const who = popupOwner(scene, popup, paint.target);
     if (!who) return '';
-    const source = paint.source ? paint.source + ' to ' + who : who;
-    if (text === 'MISS') return paint.source ? paint.source + ' misses ' + who : who + ', miss';
+    if (text === 'MISS') return paint.source ? paint.source + ' misses' : who + ', miss';
 
     const number = NUMBER.exec(text);
     if (!number) return '';
     const [, amount, element, status, fp] = number;
     // The two FP directions share a color and the displayed number is unsigned.
+    const basic = paint.source && !fp && popup._colorType !== 1;
     const result = amount === 'BLOCKED' ? 'blocked' : amount + (fp ? ' FP' :
-        popup._colorType === 1 ? ' HP recovered' : ' HP damage');
+        popup._colorType === 1 ? ' HP recovered' : basic ? ' damage' : ' HP damage');
     const effectiveness = element === '(' ? 'elemental weakness' : element === ')' ? 'elemental resistance' : '';
     const adjustment = status === '[' ? 'boosted' : status === ';' ? 'reduced' : status === ';;' ? 'strongly reduced' : '';
-    return [amount === 'BLOCKED' && paint.source ? paint.source + ' blocked by ' + who :
-        source, amount === 'BLOCKED' && paint.source ? '' : result, effectiveness, adjustment].filter(Boolean).join(', ');
+    return [basic ? paint.source + ' attacks' : who, result, effectiveness, adjustment].filter(Boolean).join(', ');
 }
 
 module.exports = { damageCaption, enemyLabel, recordAttackSource, abilitySource };

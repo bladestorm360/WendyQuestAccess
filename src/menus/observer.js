@@ -2,6 +2,7 @@
 
 const { reviewLines, moveReview } = require('./review');
 const { battlePresented, drawnText } = require('../battle/presentation');
+const { fieldVitalsVisible } = require('../battle/party-vitals');
 const { goldPaint, goldLabel, shopRow, shopQuantity, shopDetails, sameShopPaint, shopPaint } = require('./shop');
 const { couponListItem, couponListFocus, couponResponseItem, couponResponseFocus } = require('./coupons');
 
@@ -253,7 +254,7 @@ function createMenuObserver(root, host, notifications, preferences) {
         const text = label(row.description);
         const lines = text ? reviewLines(text.split(/\r?\n/)) : [];
         const page = { kind: 'menu', scene, screen: 3, window, index: window._index, item: row.item, bagRow: row, lines,
-            position: 0, epoch: 0, hasReview: lines.length > 0 };
+            position: 0, epoch: 0, hasReview: lines.length > 0, vitals: fieldVitalsVisible(scene) };
         present(page, { name: text || (row.item ? 'Item' : 'Empty'), enabled: row.enabled, quantity: row.quantity,
             position: window._index + 1, total: window.maxItems() });
     }

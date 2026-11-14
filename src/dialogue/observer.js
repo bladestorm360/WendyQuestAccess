@@ -1,6 +1,15 @@
 'use strict';
 
 const { fieldArt, portraitArt } = require('./character-art');
+const { rewardIconArt } = require('../services/dialogue-icons.cjs');
+// The six native Ability Obelisk callers use a blank event over a
+// painted statue. Their speaking character has no bitmap of its own.
+const DAVE_STATUES = new Map([[12, 46], [25, 33], [45, 36], [59, 42], [76, 87], [94, 36]]);
+const DAVE_STATUE_ART = [
+    'A golden stone bust of a smiling man with swept hair, square glasses and a tie.',
+    'Thin green lines run down its sides to a green W at the base, above a round stone platform.'
+];
+
 const { renderedSprite } = require('../runtime/rendered-sprite');
 const { readNumberFocus } = require('./number-entry');
 const { moveReview } = require('../menus/review');
@@ -146,9 +155,14 @@ function createDialogueObserver(host, notifications) {
         if (!event || event._erased || event._transparent || !Array.isArray(sprites) || sprites.length > 512) return '';
         const sprite = sprites.find(item => item._character === event);
         const pose = sprite?.worldTransform;
-        if (!renderedSprite(sprite, spriteset._tilemap) || sprite._characterName !== event._characterName ||
-            sprite._characterIndex !== event._characterIndex || !pose ||
-            !(pose.tx >= 0 && pose.tx <= host.graphics.width && pose.ty >= 0 && pose.ty <= host.graphics.height + 16)) return '';
+        if (!pose || !(pose.tx >= 0 && pose.tx <= host.graphics.width &&
+            pose.ty >= 0 && pose.ty <= host.graphics.height + 16)) return '';
+        const tilemap = spriteset._tilemap;
+        if (speaker === 'Dave' && DAVE_STATUES.get(host.mapId?.()) === eventId &&
+            event._characterName === '' && sprite.parent === tilemap && tilemap.worldVisible && tilemap.worldAlpha > 0)
+            return DAVE_STATUE_ART;
+        if (!renderedSprite(sprite, tilemap) || sprite._characterName !== event._characterName ||
+            sprite._characterIndex !== event._characterIndex) return '';
         return fieldArt(sprite._characterName, sprite._characterIndex, sprite._frame);
     }
 
@@ -231,8 +245,14 @@ function createDialogueObserver(host, notifications) {
             if (action !== 'speakerDetails' && diagramCommand(context, action)) return true;
             if (action !== 'details' && action !== 'speakerDetails' || !pageIsCurrent(context) ||
                 context.page.automatic) return false;
-            const speaker = context.page.paint.speaker;
-            const description = context.page.paint.portrait || speakerAppearance(context, speaker);
+            const { paint, end } = context.page;
+            const icon = rewardIconArt(paint.text.slice(0, end));
+            if (icon) {
+                submit(context, { kind: 'menuDetails', lines: icon });
+                return true;
+            }
+            const speaker = paint.speaker;
+            const description = paint.portrait || speakerAppearance(context, speaker);
             if (!description && !speaker) return false;
             const lines = description ? [speaker, ...description].filter(Boolean) : ['No visual description for this speaker.'];
             submit(context, { kind: 'menuDetails', lines });
@@ -242,7 +262,8 @@ function createDialogueObserver(host, notifications) {
             if (!current || current.scene !== scene || current.page?.automatic) return null;
             current.diagramAvailable = current.hasReview = !!diagramIsCurrent(current);
             const pageVisible = pageIsCurrent(current);
-            current.speakerAvailable = !!(pageVisible && (current.page.paint.speaker || current.page.paint.portrait));
+            current.speakerAvailable = !!(pageVisible && (current.page.paint.speaker || current.page.paint.portrait ||
+                rewardIconArt(current.page.paint.text.slice(0, current.page.end))));
             return current.diagramAvailable || pageVisible ? current : null;
         },
         announce(context, record) {

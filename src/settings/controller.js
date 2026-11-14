@@ -1,7 +1,7 @@
 'use strict';
 
 const { MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, REVIEW_ACTIONS, BATTLE_REVIEW_ACTIONS,
-    BINDABLE_MASK, buttonBit, controllerFamily, buttonName,
+    BINDABLE_MASK, buttonBit, controllerFamily,
     recoveryMask } = require('./controller-bindings');
 const QUEUE_LIMIT = 4;
 const FIELD_MODE = ['settings', ...FIELD_MODE_ACTIONS];
@@ -13,49 +13,6 @@ const MENU_MODE = ['settings', ...REVIEW_ACTIONS];
 const MENU_VITALS_MODE = [...MENU_MODE, 'battleVitals'];
 const BATTLE_MODE = ['settings', ...BATTLE_REVIEW_ACTIONS];
 const TARGET_MODE = [...REVIEW_ACTIONS, 'battleVitals'];
-
-function modeAnnouncement(family, context, bindings) {
-    if (context.kind === 'menu' || context.kind === 'battle' || context.kind === 'battleTarget') {
-        const settings = context.kind === 'battleTarget' ? '' :
-            buttonName(family, bindings.settings) + ' opens settings. ';
-        const vitals = (context.kind !== 'menu' || context.vitals) && bindings.battleVitals != null ?
-            buttonName(family, bindings.battleVitals) + ' reads vitals. ' : '';
-        const log = context.kind === 'battle' && bindings.battleLog != null ?
-            buttonName(family, bindings.battleLog) + ' reads recent results. ' : '';
-        const details = bindings.details === null ? '' : `${buttonName(family, bindings.details)} reads details. `;
-        const review = context.hasReview && bindings.reviewPrevious != null && bindings.reviewNext != null ?
-            `${buttonName(family, bindings.reviewPrevious)} and ${buttonName(family, bindings.reviewNext)} review lines. ` : '';
-        return `Mod mode. ${settings}${vitals}${log}${details}${review}${buttonName(family, bindings.mode)} cancels.`;
-    }
-    if (context.kind === 'field') {
-        if (context.navigationOnly) {
-            const stop = bindings.beaconStop === null ? '' : `${buttonName(family, bindings.beaconStop)} stops autowalk. `;
-            return `Mod mode. ${stop}${buttonName(family, bindings.mode)} cancels.`;
-        }
-        const current = bindings.currentDestination === null ? '' : `${buttonName(family, bindings.currentDestination)} reads the destination. `;
-        const quest = context.quest && bindings.questDetails != null ? `${buttonName(family, bindings.questDetails)} reads the quest. ` : '';
-        const start = context.puzzle && bindings.puzzleGuide != null ? `${buttonName(family, bindings.puzzleGuide)} reviews the puzzle. ` : '';
-        const stop = context.puzzleActive && bindings.puzzleStop != null ? `${buttonName(family, bindings.puzzleStop)} stops the guide. ` : '';
-        const vitals = context.vitals && bindings.fieldVitals != null ? `${buttonName(family, bindings.fieldVitals)} reads vitals. ` : '';
-        const beacon = context.beaconActive && bindings.beaconStop != null ?
-            `${buttonName(family, bindings.beaconStop)} stops ${context.autowalkActive ? 'autowalk' : 'the beacon'}. ` : '';
-        return `Mod mode. ${buttonName(family, bindings.settings)} opens settings. ${current}${quest}${vitals}${start}${stop}${beacon}${buttonName(family, bindings.mode)} cancels.`;
-    }
-    if (context.kind === 'credits' || (context.kind === 'dialogue' && context.diagramAvailable)) {
-        const subject = context.kind === 'credits' ? 'the credits' : 'the map';
-        const details = bindings.details === null ? '' : buttonName(family, bindings.details) + ' reads ' + subject + '. ';
-        const review = bindings.reviewPrevious === null || bindings.reviewNext === null ? '' :
-            buttonName(family, bindings.reviewPrevious) + ' and ' + buttonName(family, bindings.reviewNext) + ' review lines. ';
-        return `Mod mode. ${details}${review}${buttonName(family, bindings.mode)} cancels.`;
-    }
-    const next = context.kind === 'front' ? 'opens settings' : 'repeats dialogue';
-    const input = context.kind === 'front' ? bindings.settings : bindings.repeat;
-    const hint = input === null ? '' : `${buttonName(family, input)} ${next}. `;
-    const stop = context.puzzleActive && bindings.puzzleStop != null ? `${buttonName(family, bindings.puzzleStop)} stops the guide. ` : '';
-    const speaker = context.speakerAvailable && bindings.details != null && bindings.details !== bindings.repeat &&
-        bindings.details !== bindings.puzzleStop ? `${buttonName(family, bindings.details)} describes the speaker. ` : '';
-    return `Mod mode. ${hint}${speaker}${stop}${buttonName(family, bindings.mode)} cancels.`;
-}
 
 function rightStick(x, y, previous) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return 0;
@@ -152,14 +109,15 @@ function createController(host) {
         if (!bindings.enabled || (mode && mode !== device) || (context.kind === 'dialogue' && bindings.repeat === null &&
             (!context.puzzleActive || bindings.puzzleStop == null))) return 0;
         const modeBit = buttonBit(bindings.mode);
-        if (rising & modeBit && !host.nativeButton(bindings.mode)) {
+        if (rising & modeBit && (!context.navigationOnly || context.beaconActive || mode === device) && !host.nativeButton(bindings.mode)) {
             const entering = mode !== device;
             mode = entering ? device : null;
             queue(index, device, entering ? 'modeEntered' : 'modeLeft');
             return physical;
         }
         if (mode !== device) {
-            if (context.kind === 'field' && !context.navigationOnly) for (const action of FIELD_ACTIONS) {
+            if (context.kind === 'field') for (const action of FIELD_ACTIONS) {
+                if (context.navigationOnly && action !== 'directions') continue;
                 const button = bindings[action];
                 const bit = buttonBit(button);
                 if ((rising & bit) && !host.nativeButton(button)) {
@@ -206,4 +164,4 @@ function createController(host) {
     };
 }
 
-module.exports = { createController, modeAnnouncement };
+module.exports = { createController };

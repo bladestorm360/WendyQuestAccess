@@ -40,8 +40,12 @@ function createAudio(host) {
             if (request.hrtf) hrtfResolved = true;
         }
         if (active[request.lane] !== request) return;
-        if (!request.ready()) return retire(request.scene, request.source, request.cue);
-        request.complete?.(status);
+        const ready = request.ready();
+        // Preparation opens the device but never owns a playing voice.
+        // Release the channel before notifying callers so a fresh request
+        // can use the initialized output immediately.
+        if (!ready || request.cue === CUE.prepare) retire(request.scene, request.source, request.cue);
+        if (ready) request.complete?.(status);
     }
 
     function failedWorker() {

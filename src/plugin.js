@@ -11,6 +11,7 @@ const { createBattleTargets } = require('./battle/targets');
 const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createBattleLog } = require('./battle/action-log');
+const { createSkillEffects } = require('./battle/skill-effects');
 const { recordAttackSource, abilitySource } = require('./battle/damage-popup');
 const { recordCollapse, recordCondition, recordResistance, recordMomentum } = require('./battle/outcomes');
 const { createRadialResult } = require('./battle/radial-result');
@@ -32,7 +33,7 @@ const { createDialogueObserver } = require('./dialogue/observer');
 const { captureDiagram } = require('./dialogue/map-diagram');
 const { createCredits, creditSlots } = require('./dialogue/credits');
 const { createSettingsMenu } = require('./settings/menu');
-const { createController, modeAnnouncement } = require('./settings/controller');
+const { createController } = require('./settings/controller');
 
 const QUEST_ACTIONS = Object.freeze({ questDetails: 'details', questPrevious: 'reviewPrevious',
     questNext: 'reviewNext', questFirst: 'reviewFirst', questLast: 'reviewLast' });
@@ -48,6 +49,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let battleTiming = null;
     let battleCues = null;
     let battleLog = null;
+    let skillEffects = null;
     let radialResult = null;
     let quests = null;
     let mapBanner = null;
@@ -158,6 +160,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleTargets = createBattleTargets(root, host, notifications, () => speechPreferences);
         battleTiming = createBattleTiming(root, host, warmBattleAudio);
         battleLog = createBattleLog(root, host, notifications, battleFocus.appendFeedback);
+        skillEffects = createSkillEffects(root, host, notifications);
         radialResult = createRadialResult(root, host);
         host.speechPreferences = () => speechPreferences;
         host.dialogueDiagram = (scene, window) =>
@@ -235,8 +238,10 @@ function boot(root, nodeRequire, nodeProcess) {
             if (!owner) return field.command('fieldVitals');
             if (owner.scene !== scene) return false;
             if (owner.kind === 'menu') {
-                if (!owner.vitals) return false;
-                const record = menuVitals(scene, host.graphics);
+                // The Bag owns item focus while the battle keeps Wendy's
+                // attached status HUD. Use the same rendered read as Special.
+                const record = owner.screen === 3 ? battleVitals(scene, host.graphics) :
+                    owner.vitals && menuVitals(scene, host.graphics);
                 if (!record) return false;
                 menus.announce(owner, record);
                 return true;
@@ -246,7 +251,7 @@ function boot(root, nodeRequire, nodeProcess) {
             (owner.kind === 'battle' ? battleFocus : battleTargets).announce(owner, record);
             return true;
         }
-        function fieldAction(action) {
+        function fieldAction(action, controller = false) {
             if (action === 'questObjective') return quests.command(host.manager._scene, action);
             const questAction = QUEST_ACTIONS[action];
             if (questAction) return quests.command(host.manager._scene, questAction);
@@ -260,7 +265,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 return !!text;
             }
             if (action !== 'beaconToggle' && action !== 'wallToggle') {
-                if (!field.command(action)) return false;
+                if (!field.command(action, undefined, controller)) return false;
                 if (scene._wqaInteractionActive && !field.interactionReady(scene)) interaction.leave(scene);
                 return true;
             }
@@ -340,6 +345,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 battleTiming.retire(scene);
                 battleCues.retire(scene);
                 battleLog.retire(scene);
+                skillEffects.leave(scene);
                 radialResult.retire(scene);
                 quests.suspend(scene);
                 field.autowalk.stop(scene);
@@ -388,12 +394,11 @@ function boot(root, nodeRequire, nodeProcess) {
                 else if (action === 'battleLog') battleLogAction(context);
                 else if (action === 'puzzleStop') field.command(action);
                 else if (action === 'modeLeft') announce(context, 'Mod mode off');
-                else if (action === 'modeEntered') announce(context,
-                    modeAnnouncement(family, context, settings.controllerBindings()));
+                else if (action === 'modeEntered') announce(context, 'Mod mode.');
                 else if (context.kind === 'menu') menus.command(context, action);
                 else if (context.kind === 'battle') battleFocus.command(context, action);
                 else if (context.kind === 'battleTarget') battleTargets.command(context, action);
-                else if (context.kind === 'field') fieldAction(action);
+                else if (context.kind === 'field') fieldAction(action, true);
                 else if (context.kind === 'dialogue') dialogue.command(context.scene, action);
                 else if (context.kind === 'credits') credits.command(context.scene, action);
             }
@@ -424,6 +429,7 @@ function boot(root, nodeRequire, nodeProcess) {
             battleCues.retire(host.manager._scene);
             if (host.manager._scene) host.manager._scene._wqaMomentumPending = null;
             battleLog.retire(host.manager._scene);
+            skillEffects.leave(host.manager._scene);
             radialResult.retire(host.manager._scene);
             quests.leave(host.manager._scene);
             autosaveNotice.leave(host.manager._scene);
@@ -494,9 +500,9 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessFilesReady = function (scene) {
         try {
             if (!supported() || !scene || scene === filesWaiting || !isReady(view(), scene, fileWindow(scene))) return;
-            // The save list binds before its first native input update.
-            // Actual speech still uses the nonblocking frontend worker.
-            if (scene._wqaFileKind === 1) {
+            // The focused slot and its action buttons are usable during fade-in.
+            // A successful native save read is required for the action screen.
+            if (scene._wqaFileKind === 1 || scene._wqaFileKind === 2) {
                 if (!files) initialize();
                 if (files.observe(scene)) {
                     scene._wqaPresentation = true;
@@ -569,10 +575,10 @@ function boot(root, nodeRequire, nodeProcess) {
     };
     root.WendyQuestAccessBattleRadialLeaving = function (scene) { radialResult?.retire(scene); };
 
-    root.WendyQuestAccessAttackSource = function (target, performer, subject, companionAction) {
+    root.WendyQuestAccessAttackSource = function (target, performer, subject, action) {
         try {
             const scene = outcomeScene();
-            if (scene) recordAttackSource(scene, target, performer, subject, companionAction);
+            if (scene) recordAttackSource(scene, target, performer, subject, action);
         } catch { /* Native results stay in charge. */ }
     };
     root.WendyQuestAccessAbilitySource = function (item, format) {
@@ -600,6 +606,9 @@ function boot(root, nodeRequire, nodeProcess) {
         try { battleLog?.observe(scene, window); } catch { battleLog?.retire(scene); }
     };
     root.WendyQuestAccessBattleLogLeaving = function (scene) { battleLog?.retire(scene); };
+    root.WendyQuestAccessClapbackReady = function (actor, sprite) {
+        try { skillEffects?.clapback(actor, sprite); } catch { skillEffects?.leave(root.SceneManager._scene); }
+    };
 
     root.WendyQuestAccessQuestPaint = function (window) {
         try { return quests?.paint(window); } catch { return null; }
@@ -876,6 +885,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleTiming?.retire(scene);
         battleCues?.retire(scene);
         battleLog?.leave(scene);
+        skillEffects?.leave(scene);
         radialResult?.retire(scene);
         mapBanner?.leave(scene);
         interaction?.leave(scene);

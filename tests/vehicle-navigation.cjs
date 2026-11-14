@@ -153,7 +153,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     assert.equal(ruins.length, 21);
     assert.equal(new Set(ruins.map(item => item.name)).size, 21);
     assert.equal(discovery.result.boundaryEvent, 90);
-    assert.equal(worldBoundaryName(c, 90), 'Scene trigger');
+    assert.equal(worldBoundaryName(c, 90), 'Discovery marker');
     follow(coast, discovery.result, undefined);
     player.moveStraight(discovery.result.boundary);
     settle(player);
@@ -247,7 +247,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         sailing.player._vehicleType = 'ship';
         sailing.player.setPosition(18, 6);
         const view = captureWorld(c);
-        assert.equal(view.objects.find(item => item.id === event && item.category === 'events')?.name, 'Scene trigger');
+        assert.equal(view.objects.find(item => item.id === event && item.category === 'events')?.name, 'Discovery marker');
         const request = { x: 18, y: 6, event, field: true, surface: true, stopBeforeEvent: true, autowalk: true };
         assert.equal(findReachable(sailing.geometry, view.live, { ...request, candidates: [request] }).available[0], 1);
         await verifyWorker(sailing, request, view.live, route => {
@@ -506,7 +506,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             assert.equal(walking.live.mode, 'walk');
             if (reveal) {
                 await followEntrance(reveal, entrance);
-                assert.match(records.at(-1).name, /Scene trigger toward Walking marker/);
+                assert.match(records.at(-1).name, /Discovery marker toward Walking marker/);
                 assert.match(formatSpeech(records.at(-1)), /^\d+ (?:north|south|east|west)/);
                 assert.doesNotMatch(formatSpeech(records.at(-1)), /Walking marker/);
                 source.command357 = ([plugin, name, , args]) => {
@@ -698,7 +698,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         follow(flight, ground.result, 124);
         const discovery = gameMap._events[124];
         const discovered = worldBoundaryName(c, 124);
-        assert.equal(discovered, 'Scene trigger');
+        assert.equal(discovered, 'Discovery marker');
         assert.equal(ground.target.category, 'events');
         flight.source.command357 = ([plugin, name, , args]) => {
             assert.equal(plugin, 'Tyruswoo_TileControl');
@@ -716,7 +716,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         const afterDiscovery = directions(flight, 122);
         follow(flight, afterDiscovery.result, 122);
         assert.match(formatSpeech({ kind: 'routeDirections', name: linked.target.name, legs: [], land: true, discovery: discovered }),
-            /Press the action button to land. Then request walking directions to Scene trigger/);
+            /Press the action button to land. Then request walking directions to Discovery marker/);
         console.log('Verified native airship boarding, 48-update ascent and descent, 9,504 landing comparisons, and an actual walking approach after flight.');
     }
 }

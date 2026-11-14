@@ -43,10 +43,26 @@ const labels = Object.freeze({
     203: 'Biggie Bag'
 });
 
-function dialogueText(text) {
+function rewardIcon(text) {
+    // The native item-reward message already spells out the name after
+    // its leading atlas cell. Keep inline icons in other dialogue.
+    if (typeof text !== 'string' || text.length > 384) return null;
+    return /^\s*\x01(\d+)\x02\s+([^\x01]{1,140}?\s+acquired!)\s*$/i.exec(text.replace(/\u202B/g, ''));
+}
+
+function rewardIconArt(text) {
+    const match = rewardIcon(text);
+    if (!match) return null;
+    const index = Number(match[1]);
+    if (index === 177) return ['Item icon. A small cheeseburger with a golden bun and layers of bacon, cheese and lettuce.'];
+    return labels[index] ? ['Item icon. ' + labels[index] + '.'] : null;
+}
+
+function dialogueText(text, reward = false) {
     if (typeof text !== 'string' || text.length > 384) return '';
+    if (reward) text = rewardIcon(text)?.[2] ?? text;
     return text.replace(/\x01(\d+)\x02/g, (_, index) => ` ${labels[index] ?? 'icon'} `)
         .replace(/\u202B/g, '').replace(/\s+/g, ' ').trim();
 }
 
-module.exports = { dialogueText };
+module.exports = { dialogueText, rewardIconArt };

@@ -111,7 +111,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 for (const name of names) assert(!unsafe.test(name || ''), `unsafe label at map ${id} event ${entry.id} page ${index}`);
                 if (ordinary?.category === 'treasure') assert.match(ordinary.name, /^(Chest|Treasure)$/);
                 if (ordinary?.category === 'events')
-                    assert.equal(ordinary.name, id === 98 && entry.id === 16 ? 'Ride elevator' : 'Scene trigger');
+                    assert.match(ordinary.name, /^(Scene trigger|Encounter trigger|Discovery marker|Scripted movement|Ride elevator|Autosave checkpoint)$/);
             }
         }
     }
@@ -233,7 +233,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const next = solveRoute(beach.geometry, nextView.live, elderRequest);
     assert.equal(next.status, 'interrupted');
     assert.equal(next.boundaryEvent, 35);
-    assert(nextView.objects.some(item => item.id === 35 && item.name === 'Scene trigger'));
+    assert(nextView.objects.some(item => item.id === 35 && item.name === 'Autosave checkpoint'));
     beach.player.setPosition(beachMap.event(21).x + 1, beachMap.event(21).y);
     const eastern = captureWorld(c);
     const reached = findReachable(beach.geometry, eastern.live, { x: eastern.x, y: eastern.y, candidates });
@@ -288,6 +288,20 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const before = captureWorld(c, false, undefined, {});
         assert(before.objects.some(item => item.id === 14 && item.category === 'events'));
         assert(!before.objects.some(item => item.questExit));
+        const trail = load(36, { switches: [33] });
+        trail.player.setPosition(32, 6);
+        const trailView = captureWorld(c, true, undefined, {});
+        assert.equal(trailView.live.events.find(event => event.id === 35).action, false);
+        assert(trailView.objects.some(item => item.questExit && /Frosty Peak/.test(item.name)));
+        const savedCommon = c.$dataCommonEvents;
+        c.$dataCommonEvents = commonEvents;
+        for (const [variables, id] of [[{}, 22], [{ 119: 7, 120: 11 }, 23]]) {
+            const world = load(113, { switches: [33], variables });
+            world.player.setPosition(12, 17);
+            const marker = captureWorld(c, true, undefined, {}).objects.find(item => item.questExit);
+            assert.equal(marker?.id, id, 'use the authored atlas pin to choose the next exit');
+        }
+        c.$dataCommonEvents = savedCommon;
     } finally {
         c.$gameParty.getNav = oldQuest;
     }
@@ -353,7 +367,10 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const target = stoppedView.objects.find(item => item.id === 16);
     assert.match(formatSpeech({ kind: 'routeDirections', name: target.name, legs: beforeGuard.legs,
         boundary: beforeGuard.boundary }), /Floor event one tile/);
-    await verifyWorker(stopped, request, stoppedView.live, result => assert.deepEqual(result, beforeGuard));
+    await verifyWorker(stopped, request, stoppedView.live, ({ course, ...result }) => {
+        assert.deepEqual(result, beforeGuard);
+        assert.equal(course.length, beforeGuard.distance, 'encode the verified prefix before the floor event');
+    });
     const { x, y } = beforeGuard.arrival;
     verifyRoute(stopped, { x: request.x, y: request.y, targetX: x, targetY: y }, { ...beforeGuard, status: 'ready' });
     const nextX = stopped.gameMap.roundXWithDirection(x, beforeGuard.boundary);
@@ -449,7 +466,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     for (const id of [78, 90, 124, 159, 185]) {
         const entries = view.objects.filter(item => item.id === id);
         assert.deepEqual(entries.map(({ name, category, eventAction }) => [name, category, eventAction]),
-            [['Scene trigger', 'events', 'step']]);
+            [[id <= 124 ? 'Discovery marker' : id === 159 ? 'Encounter trigger' : 'Scene trigger', 'events', 'step']]);
     }
     const ruinsAmbush = load(172);
     ruinsAmbush.player.setPosition(5, 5);
@@ -516,7 +533,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         [83, 27, 12, 19, 'exits'], [113, 59, 39, 26, 'exits'], [113, 60, 39, 26, 'exits'],
         [113, 63, 41, 39, 'exits'], [113, 64, 39, 39, 'exits'], [116, 8, 5, 6, 'exits'],
         [117, 11, 8, 12, 'exits'], [119, 3, 9, 11, 'exits'],
-        [58, 37, 6, 4, 'events', [462]], [58, 38, 6, 4, 'events', [462]], [58, 39, 6, 4, 'events', [462]],
+        [58, 37, 6, 4, 'exits', [462]], [58, 38, 6, 4, 'exits', [462]], [58, 39, 6, 4, 'exits', [462]],
         [76, 64, 15, 1, 'events', [97]]
     ]) {
         const f = load(map, { switches });

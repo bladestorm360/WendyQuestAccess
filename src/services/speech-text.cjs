@@ -161,14 +161,16 @@ function formatSpeech(message) {
                 if (!heading || !Number.isInteger(leg.tiles) || leg.tiles < 1 || leg.tiles > 16384) return '';
                 directions.push(`${leg.tiles} ${heading}`);
             }
-            const parts = directions.length ? [directions.join(', ')] : [];
+            const beaconOnly = message.beaconOnly === true;
+            const more = !beaconOnly && message.more;
+            const parts = !beaconOnly && directions.length ? [directions.join(', ')] : [];
             const facing = HEADINGS[message.facing];
             const boundary = HEADINGS[message.boundary];
             const activate = HEADINGS[message.activate];
             const prerequisite = label({ name: message.prerequisite });
             if (prerequisite) {
                 parts.push('Route to ' + prerequisite);
-                if (message.more) parts.push('More directions available');
+                if (more) parts.push('More directions available');
                 else {
                     const move = HEADINGS[message.prerequisiteMove];
                     parts.push(move ? 'Move ' + move + ' to continue' :
@@ -178,7 +180,7 @@ function formatSpeech(message) {
                         'Request directions again after the passage changes');
                 }
             }
-            else if (message.more) parts.push(message.enemyBlocked === true ? 'Route ends at an enemy. More directions available' :
+            else if (more) parts.push(message.enemyBlocked === true ? 'Route ends at an enemy. More directions available' :
                 'More directions available');
             else if (message.enemyBlocked === true && boundary) parts.push('Blocked by an enemy one tile ' + boundary);
             else if (boundary && label({ name: message.exit })) {
@@ -206,10 +208,14 @@ function formatSpeech(message) {
                 if (discovery) parts.push(`Then request walking directions to ${discovery}`);
             }
             else if (message.guideAction && facing) parts.push(`Face ${facing} and press the action button`);
-            else if (facing) parts.push(`face ${facing}`);
-            if (!parts.length) parts.push('you are here');
+            else if (facing && !beaconOnly) parts.push(`face ${facing}`);
             const guide = label({ name: message.guide });
-            const instructions = (guide ? guide + ' ' : '') + parts.join('. ') + '.';
+            if (beaconOnly && !parts.length && !guide) {
+                text = message.directionsOnly === true ? '' : name;
+                break;
+            }
+            if (!parts.length && !beaconOnly) parts.push('you are here');
+            const instructions = [guide, parts.length ? parts.join('. ') + '.' : ''].filter(Boolean).join(' ');
             text = message.directionsOnly === true ? instructions[0].toUpperCase() + instructions.slice(1) :
                 name + '. ' + instructions;
             limit = 512;
@@ -236,7 +242,7 @@ function formatSpeech(message) {
             break;
         }
         case 'dialoguePage': {
-            const body = dialogueText(message.text);
+            const body = dialogueText(message.text, true);
             const speaker = typeof message.speaker === 'string' && message.speaker.length <= 96 ? message.speaker.trim() : '';
             text = body && (speaker ? `${speaker}. ${body}` : body);
             limit = 512;

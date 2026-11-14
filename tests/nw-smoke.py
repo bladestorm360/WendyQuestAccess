@@ -144,6 +144,7 @@ let autowalkStep = 0;
 let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
+let beaconSpeechConfigured = 0;
 let battleAudioStep = 0;
 let footstepSettingsStep = 0;
 let audioStarted = 0;
@@ -153,6 +154,7 @@ let caveCueStarted = 0;
 let battleCueStarted = 0;
 let soundscapeStarted = 0;
 let crossMapStarted = 0;
+let crossMapCategoryReady = false;
 let crossMapLeg = 0;
 let bookmarkDirectionsRequested = false;
 let controllerStep = 0;
@@ -207,8 +209,9 @@ function choose(label) {
     button.click();
 }
 function menuStatus() { return document.querySelector('dialog [role=status]')?.textContent; }
-function installTransferPage(map, destination) {
-    const list = [{ code: 201, indent: 0, parameters: [0, destination, 0, 0, 6, 0] }, { code: 0 }];
+function installTransferPage(map, destination, conversation = false) {
+    const list = conversation ? [{ code: 101, indent: 0, parameters: [] }, { code: 0 }] :
+        [{ code: 201, indent: 0, parameters: [0, destination, 0, 0, 6, 0] }, { code: 0 }];
     const event = { _eventId: 1, _x: 1, _y: 0, _pageIndex: 0, _trigger: 1, _priorityType: 0,
         isStarting() { return this._starting; }, clearStartingFlag() { this._starting = false; },
         eventId: () => 1, list: () => list };
@@ -303,8 +306,18 @@ function verifySettings() {
         tap('n', 'KeyN');
         settingsStep++;
     } else if (settingsStep === 7 && menuStatus() === 'Navigation settings saved') {
-        if (document.activeElement.textContent !== 'Spoiler mode, on') {
+        if (beaconSpeechConfigured === 0 && document.activeElement.textContent !== 'Spoiler mode, on') {
             choose('Spoiler mode, off');
+            return;
+        }
+        if (beaconSpeechConfigured === 0) {
+            choose('Speak beacon destination on controller directions, off');
+            beaconSpeechConfigured++;
+            return;
+        }
+        if (beaconSpeechConfigured === 1) {
+            choose('Speak full path with beacon, off');
+            beaconSpeechConfigured++;
             return;
         }
         tap('Escape');
@@ -470,7 +483,7 @@ const interval = setInterval(() => {
             const controller = [...buttons.slice(0, 2), buttons.find(item => item.startsWith('Next category, '))];
             tap('Escape');
             choose('Navigation');
-            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 7).map(item => item.textContent);
+            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 9).map(item => item.textContent);
             choose('Bookmarks');
             const bookmarks = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
             if (bookmarks.join('|') !== 'Return marker, Map 1, saved on foot|Back')
@@ -817,9 +830,17 @@ const interval = setInterval(() => {
         }
         if (beaconDetourStep !== 2 || !fs.existsSync(receipt + '.beacon')) return;
         fieldStep++;
-        padTap(6);
+        $gamePlayer._realX = -0.25;
+        if (padTap(6) !== 1 << 6) throw Error('Directions was not accepted during a native step');
     }
-    if (fieldStep === 5) Graphics.app.renderer.emit('postrender');
+    if (fieldStep === 5) {
+        const scene = SceneManager._scene;
+        if (scene._wqaStepNavigation) {
+            $gamePlayer._realX = $gamePlayer._x;
+            WendyQuestAccessStepNavigationReady(scene);
+        }
+        Graphics.app.renderer.emit('postrender');
+    }
     if (fieldStep === 4 && beaconDetourStep) {
         const scene = SceneManager._scene;
         if (!scene._wqaBeaconActive) throw Error('The beacon lost its destination after a manual detour');
@@ -1271,7 +1292,7 @@ const interval = setInterval(() => {
             fs.writeFileSync(receipt + '.cross-map-stage', '');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             SceneManager._scene = Graphics.app.stage = { _wqaFieldReady: true, _active: true, _fadeOpacity: 0, _fadeDuration: 0 };
-            installTransferPage(3, 2);
+            installTransferPage(3, 2, true);
             tap('[', 'BracketLeft', { shiftKey: true });
             Graphics.app.renderer.emit('postrender');
             endingStep = 68;
@@ -1283,9 +1304,15 @@ const interval = setInterval(() => {
             $gamePlayer.moveByInput();
             if ($gamePlayer._x !== 0 || $gameMap._events[1]._starting)
                 throw Error('Generic event directions crossed the native boundary');
+            installTransferPage(3, 2);
             tap(']', 'BracketRight', { shiftKey: true });
             Graphics.app.renderer.emit('postrender');
             endingStep = 25;
+        } else if (endingStep === 25 && !crossMapCategoryReady && fs.existsSync(receipt + '.cross-map-last') &&
+            fs.readFileSync(receipt + '.cross-map-last', 'utf8').startsWith('All, Return marker.')) {
+            crossMapCategoryReady = true;
+            tap(']', 'BracketRight', { shiftKey: true });
+            Graphics.app.renderer.emit('postrender');
         } else if (endingStep === 25 && crossMapStarted === 0 && fs.existsSync(receipt + '.cross-map-browse')) {
             crossMapStarted = performance.now();
             tap(String.fromCharCode(92), 'Backslash');
@@ -1526,6 +1553,27 @@ const interval = setInterval(() => {
             endingStep = 47;
         } else if (endingStep === 47 && fs.existsSync(receipt + '.battle-damage')) {
             const scene = SceneManager._scene;
+            const actor = scene._spriteset._actorSprites[0];
+            const saved = { id: actor._actor._actorId, parent: actor.parent, width: Graphics.width, height: Graphics.height };
+            Object.assign(Graphics, { width: 640, height: 360 });
+            actor.parent = scene._spriteset._battleField;
+            actor._actor._actorId = 1;
+            const sprite = { parent: actor, bitmap: { isReady: () => true }, texture: { valid: true },
+                worldVisible: true, worldAlpha: 0, worldTransform: { tx: 200, ty: 140 },
+                animator: { _animationData: { fileName: 'ParticleEffects/Clapback' } } };
+            WendyQuestAccessClapbackReady(actor, sprite);
+            Graphics.app.renderer.emit('postrender');
+            if (fs.existsSync(receipt + '.battle-clapback')) throw Error('Clapback spoke before the particle rendered');
+            sprite.worldAlpha = 1;
+            Graphics.app.renderer.emit('postrender');
+            scene._testClapback = { actor, saved };
+            endingStep = 86;
+        } else if (endingStep === 86 && fs.existsSync(receipt + '.battle-clapback')) {
+            const scene = SceneManager._scene;
+            const { actor, saved } = scene._testClapback;
+            actor._actor._actorId = saved.id;
+            actor.parent = saved.parent;
+            Object.assign(Graphics, { width: saved.width, height: saved.height });
             fs.writeFileSync(receipt + '.battle-bag-stage', '');
             Object.assign(BattleManager, { _phase: 'input', _targets: [] });
             const item = { name: 'Unpainted item name' };
@@ -1542,6 +1590,9 @@ const interval = setInterval(() => {
             tap('i', 'KeyI');
             endingStep = 41;
         } else if (endingStep === 41 && fs.existsSync(receipt + '.battle-bag-details')) {
+            tap('h', 'KeyH');
+            endingStep = 87;
+        } else if (endingStep === 87 && fs.existsSync(receipt + '.battle-bag-wendy-status')) {
             fs.unlinkSync(receipt + '.battle-bag-stage');
             const scene = SceneManager._scene;
             scene._itemWindow.active = false;
@@ -1884,6 +1935,12 @@ const records = [];
 parentPort.on('message', message => {
     const receipt = require('path').join(__dirname, '..', 'receipt.json');
     if (message.kind === 'cancel') return;
+    if (message.kind === 'battleLog' && message.lines?.[0] === 'Wendy prepares to counterattack.') {
+        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
+            fs.writeFileSync(receipt + '.battle-clapback', formatSpeech(message));
+        parentPort.postMessage('ack');
+        return;
+    }
     if (message.kind === 'fieldStatus') {
         const state = { 'Destination filter. Reachable only.': 'on', 'Destination filter. All destinations.': 'off' }[message.name];
         if (state) {
@@ -1933,7 +1990,7 @@ parentPort.on('message', message => {
         const speech = formatSpeech(message);
         if (message.kind === 'menuDetails')
             fs.writeFileSync(receipt + (fs.existsSync(receipt + '.field-vitals-keyboard') ? '.field-vitals-h' : '.field-vitals-full'), speech);
-        if (message.kind === 'fieldStatus' && speech.includes('X reads vitals'))
+        if (message.kind === 'fieldStatus' && speech === 'Mod mode.')
             fs.writeFileSync(receipt + '.field-vitals-mode', speech);
         parentPort.postMessage('ack');
         return;
@@ -1959,7 +2016,7 @@ parentPort.on('message', message => {
             if (message.kind === 'menuReview') fs.writeFileSync(receipt + '.menu-gold', speech);
             if (message.kind === 'menuDetails')
                 fs.writeFileSync(receipt + (fs.existsSync(receipt + '.menu-vitals-keyboard') ? '.menu-vitals-h' : '.menu-vitals-full'), speech);
-            if (message.kind === 'controllerStatus' && speech.includes('X reads vitals'))
+            if (message.kind === 'controllerStatus' && speech === 'Mod mode.')
                 fs.writeFileSync(receipt + '.menu-vitals-mode', speech);
             parentPort.postMessage('ack');
             return;
@@ -2055,7 +2112,7 @@ parentPort.on('message', message => {
                 fs.writeFileSync(receipt + (message.name ? '.quest-focus' : '.quest-objective'), speech);
             if (message.kind === 'menuDetails')
                 fs.writeFileSync(receipt + (message.append ? '.quest-detail-auto' : '.quest-detail'), speech);
-            if (message.kind === 'fieldStatus' && message.name.includes('reads the quest'))
+            if (message.kind === 'fieldStatus' && speech === 'Mod mode.')
                 fs.writeFileSync(receipt + '.quest-mode', speech);
             parentPort.postMessage('ack');
             return;
@@ -2065,7 +2122,7 @@ parentPort.on('message', message => {
         }
         if (message.kind === 'menuReview') fs.writeFileSync(receipt +
             (message.position === 1 ? '.menu-review-first' : '.menu-review-second'), speech);
-        if (message.kind === 'controllerStatus' && message.name.includes('reads details'))
+        if (message.kind === 'controllerStatus' && speech === 'Mod mode.')
             fs.writeFileSync(receipt + '.menu-mode', speech);
         parentPort.postMessage('ack');
         return;
@@ -2106,7 +2163,7 @@ parentPort.on('message', message => {
         fs.writeFileSync(receipt + ['.title', '.returned-title', '.controller-returned-title'][titleCount - 1], '');
     }
     if (message.kind === 'controllerStatus') {
-        const kind = message.name.includes('opens settings') ? '.title-mode' : '.dialogue-mode';
+        const kind = records.filter(record => record.kind === 'controllerStatus').length === 1 ? '.title-mode' : '.dialogue-mode';
         fs.writeFileSync(receipt + kind, '');
     }
     if (message.kind === 'saveSlot') fs.writeFileSync(receipt + '.slot', '');
@@ -2162,7 +2219,7 @@ parentPort.postMessage = packet => {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.battle-cue'),
             JSON.stringify({ status: packet.status, pitch: active.pitch, at: Date.now() }));
     }
-    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 12 && active.forward === 2) {
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 12 && active.right === 2 && active.forward === 0) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.soundscape'), String(packet.status));
     }
     return post(packet);
@@ -2259,8 +2316,8 @@ def main():
         if [item.get('name') for item in (first, second, third)] != ['Synthetic wall', 'Synthetic covered event', 'Synthetic wall'] or \
                 any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
             raise RuntimeError(f'NW field selection or layout priority failed: {data}')
-        if any(item['kind'] != 'routeDirections' or item['speech'] != '1 east. face east.'
-               for item in (route, pad_route)):
+        if route['kind'] != 'routeDirections' or route['speech'] != '1 east. face east.' or \
+                pad_route['kind'] != 'routeDirections' or pad_route['speech'] != 'Synthetic wall. 1 east. face east.':
             raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
         browse_submit_ms = float(receipt.with_suffix('.json.browse-submit-ms').read_text(encoding='utf8'))
@@ -2354,6 +2411,8 @@ def main():
             'battle-bag-focus': 'Battle Bag, Synthetic item effect, 4, 1 of 1',
             'battle-bag-autodetail': 'Synthetic item effect',
             'battle-bag-details': 'Synthetic item effect',
+            'battle-bag-wendy-status': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
+            'battle-clapback': 'Wendy prepares to counterattack.',
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:
@@ -2362,8 +2421,8 @@ def main():
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:
             raise RuntimeError(f'NW fixture did not deliver the page and appended choice in one epoch: {data}')
-        if repeat != page or pad_repeat != page or title_mode['speech'] != 'Mod mode. Menu opens settings. View cancels.' or \
-                dialogue_mode['speech'] != 'Mod mode. A repeats dialogue. RT cancels.':
+        if repeat != page or pad_repeat != page or title_mode['speech'] != 'Mod mode.' or \
+                dialogue_mode['speech'] != 'Mod mode.':
             raise RuntimeError(f'NW fixture did not deliver the controller mode prompt and current page repeat: {data}')
         if number['kind'] != 'numberEntry' or number.get('speech') != 'Number entry. 0, 7. Digit 2 of 2, 7' or \
                 number['epoch'] in {record['epoch'] for record in records[:-1]}:
@@ -2377,7 +2436,9 @@ def main():
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, RT', 'Next category, Unassigned'] or \
                 reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on',
-                                               'Navigation keymap, Brackets and backslash', 'Reachable destinations only, off', 'Spoiler mode, on', 'Previous destination, Left bracket',
+                                               'Navigation keymap, Brackets and backslash', 'Reachable destinations only, off', 'Spoiler mode, on',
+                                               'Speak beacon destination on controller directions, on', 'Speak full path with beacon, on',
+                                               'Previous destination, Left bracket',
                                                'Next destination, N'] or reloaded.get('audio') != [
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
                     'Increase wall volume, 55 percent', 'Footstep sounds, on', 'Decrease footstep volume, 50 percent',
@@ -2414,12 +2475,12 @@ def main():
                    for name in ('title', 'details', 'mode', 'review')}
         if diagram['title'] != 'Caffeine Caverns map, 1 pathway shown' or \
                 'Pathway 1' not in diagram['details'] or 'Pathway 3' in diagram['details'] or \
-                'A reads the map' not in diagram['mode'] or not diagram['review'].startswith('Pathway 1'):
+                diagram['mode'] != 'Mod mode.' or not diagram['review'].startswith('Pathway 1'):
             raise AssertionError('Unexpected map diagram review')
         credits = {name: receipt.with_suffix('.json.credits-' + name).read_text(encoding='utf8')
                    for name in ('page', 'mode', 'review')}
         if 'Synthetic heading' not in credits['page'] or 'Synthetic description.' not in credits['page'] or \
-                'A reads the credits' not in credits['mode'] or not credits['review'].startswith('Synthetic description.'):
+                credits['mode'] != 'Mod mode.' or not credits['review'].startswith('Synthetic description.'):
             raise AssertionError('Unexpected credits review')
         print('Verified map HUD, map save, diagrams, credits review, battle commands, targets, vitals and rendered Bag items.')
         print('Verified the Battle timing setting, preview and action retirement. '
