@@ -143,6 +143,8 @@ if sys.argv[2:] == ['log']:
     baseline_draw = sprite_method(untouched, 'Window_BattleActionLog', 'drawItem')
     methods.append(baseline_draw.replace("['drawItem']", "['fixtureNativeDraw']", 1))
     methods.append(sprite_method(battle, 'Scene_Battle', 'logAction'))
+    start = battle.index("BattleAnimations['StatusTextAtPosition']=function(")
+    methods.append(battle[start:battle.index('},Sprite_Actor', start) + 1] + ';')
     start = battle.index("BattleHelper['logAction']=function(")
     end = battle.index('},BattleHelper', start)
     methods.append(battle[start:end + 1] + ';')

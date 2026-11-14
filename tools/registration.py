@@ -816,7 +816,7 @@ def battle_notification(original):
             !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
             !Graphics._wqaResize && Graphics.app?.stage === this) {
             if (wqaLog._wqaBattleLogRows?.length || this._wqaRadialReport || this._wqaDamageRows?.length ||
-                this._wqaEnemyCollapses?.length ||
+                this._wqaEnemyCollapses?.length || this._wqaResistedRows?.length ||
                 (this._wqaBattleConditions?.length && Graphics.frameCount >= this._wqaNextConditionFrame))
                 globalThis.WendyQuestAccessBattleLogReady?.(this,wqaLog);
         } else if (this._wqaBattleLogActive || wqaLog?._wqaBattleLogRows?.length || this._wqaDamageRows?.length) {
@@ -881,6 +881,8 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         # Native Crispy cleanup schedules the visible particles and sound.
         42051: b'if(BattleManager._phase==="battleEnd"&&this._battler?._actorId===1)'
                b'globalThis.WendyQuestAccessVictoryCondition?.(this);',
+        # The native floating status effect creates and attaches this exact text before starting its animation.
+        132413: b'if(_0x1651da==="Resisted!")globalThis.WendyQuestAccessResisted?.(_0x356095,_0x483734);',
         155370: command_leaving,  # Accepted activation, before native effects
         155394: b')',
         156577: command_leaving,  # Native loss of this exact sprite's focus

@@ -59,6 +59,10 @@ function formatSpeech(message) {
         case 'fileLabel':
         case 'controllerStatus':
         case 'fieldStatus': text = label(message); break;
+        case 'mapDescription':
+            limit = 512;
+            text = typeof message.description === 'string' && message.description.length <= limit ? message.description : '';
+            break;
         case 'mapBanner': {
             const name = label(message);
             text = name && (message.entering ? 'Entering ' + name + '.' : name);

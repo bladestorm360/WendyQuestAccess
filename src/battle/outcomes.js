@@ -1,6 +1,6 @@
 'use strict';
 
-const { visibleSprite } = require('./presentation');
+const { drawnText, visibleSprite } = require('./presentation');
 const { enemyIconIndex, enemyState } = require('./enemy-state');
 const { enemyLabel } = require('./damage-popup');
 const { portraitActor, visibleCondition } = require('./party-vitals');
@@ -16,6 +16,29 @@ function recordCollapse(scene, sprite) {
     const name = enemyLabel(scene, sprite);
     if (name && (scene._wqaEnemyCollapses?.length || 0) < MAX_RESULTS)
         (scene._wqaEnemyCollapses ||= []).push(name + ' defeated.');
+}
+
+function recordResistance(scene, effect, text, frame) {
+    const field = scene._spriteset?._battleField;
+    if (!field || effect.parent !== field || text.parent !== effect) return;
+    const queue = scene._wqaResistedRows ||= [];
+    if (queue.length < MAX_RESULTS) queue.push({ effect, text, expires: frame + 90 });
+}
+
+function readResistance(scene, graphics) {
+    const field = scene._spriteset?._battleField;
+    const lines = [];
+    if (!scene._wqaResistedRows?.length) return lines;
+    scene._wqaResistedRows = scene._wqaResistedRows.filter(({ effect, text, expires }) => {
+        if (!field || effect.parent !== field || text.parent !== effect || graphics.frameCount > expires) return false;
+        const pose = text.worldTransform;
+        if (!(pose?.tx >= 0 && pose.tx < graphics.width && pose.ty >= 0 && pose.ty < graphics.height) ||
+            !effect.worldVisible || effect.worldAlpha <= 0 || !effect.scale?.x || !effect.scale?.y ||
+            drawnText(effect, text, 12) !== 'RESISTED!') return true;
+        lines.push('Wendy resisted a status effect.');
+        return false;
+    });
+    return lines;
 }
 
 function recordCondition(root, scene, target, state, added, speak) {
@@ -82,4 +105,4 @@ function readConditions(root, graphics, scene) {
     return lines;
 }
 
-module.exports = { recordCollapse, recordCondition, readConditions };
+module.exports = { recordCollapse, recordCondition, readConditions, recordResistance, readResistance };

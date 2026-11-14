@@ -29,6 +29,7 @@ const { createWallAudio } = require('../src/world/wall-audio');
 const { createFootsteps } = require('../src/world/footsteps');
 const { captureWorld } = require('../src/world/snapshot');
 const { createBeacon } = require('../src/world/beacon');
+const { mapDescription } = require('../src/world/map-descriptions');
 const { bearing } = require('../src/world/spatial-direction');
 const { createCaveTiming } = require('../src/world/cave-timing');
 
@@ -988,6 +989,16 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 async function main() {
     const catalog = bake(game, derived);
     assert.deepEqual(catalog, { maps: 239, cells: 191235 });
+    const worldMap = read('Map113.json');
+    const describe = (x, y) => mapDescription({ $gameMap: { _mapId: 113 }, $gamePlayer: { _x: x, _y: y }, $dataMap: worldMap });
+    for (const [x, y, region] of [[16, 30, 'Fryshire'], [13, 17, 'The Chilly North'], [35, 16, 'Nugget Sands'],
+        [34, 35, 'The Breakfast Isles'], [26, 21, 'The Beef Bluffs'], [0, 0, 'Turquoise water']]) {
+        assert(describe(x, y).startsWith(region));
+    }
+    for (let map = 1; map <= 239; map++) {
+        const description = mapDescription({ $gameMap: { _mapId: map } });
+        assert(description.length <= 512 && description.split(/[.!?]+/).filter(Boolean).length <= 6);
+    }
     const salt = load(19);
     compare(salt);
     const request = { x: 26, y: 12, event: 114 };

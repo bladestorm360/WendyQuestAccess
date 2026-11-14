@@ -75,6 +75,10 @@ async function main() {
     assert(scene._wqaFieldReady);
     f.frame();
 
+    key('m', { shiftKey: true });
+    f.frame();
+    assert.match(formatSpeech(f.packets.find(record => record.kind === 'mapDescription')), /violet cavern/);
+    assert.equal(routePackets.length, 0, 'reading a description does not post a route request');
     key('k');
     publishBrowse();
     assert.equal(formatSpeech(fieldSpeech()[0]), 'Wall clue, 1 south');

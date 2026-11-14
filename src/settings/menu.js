@@ -225,7 +225,8 @@ function createSettingsMenu(root, host) {
                 'Previous destination ' + binding('previousDestination') + '. Next destination ' +
                     binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
                     binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
-                'Read the current map name ' + binding('mapName') + '. Read the visible quest objective ' +
+                'Read the current map name ' + binding('mapName') + '. Describe the map ' + binding('mapDescription') +
+                    '. Read the visible quest objective ' +
                     binding('questObjective') + '.',
                 'All combines destinations and saved bookmarks. NPC lists reachable characters. Events lists reachable scene triggers. Active quest markers have their own Quests category.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',

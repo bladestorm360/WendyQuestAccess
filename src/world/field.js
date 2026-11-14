@@ -13,6 +13,7 @@ const { browse, createDestinationBrowser, activeMovingEnemy } = require('./desti
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
 const { mapPlace } = require('./map-banner');
+const { mapDescription } = require('./map-descriptions');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
@@ -584,6 +585,8 @@ function createField(root, host, notifications) {
         if (movingReport) return present(job, job.text, true);
         if (job.action === 'status') return status(job, job.text);
         if (job.action === 'mapName') return status(job, mapPlace(root) || 'Map name unavailable');
+        if (job.action === 'mapDescription') return present(job, { kind: 'mapDescription',
+            description: mapDescription(root) || 'No description is available for this map.' });
         if (job.action === 'fieldVitals') {
             // The map scene owns its attached RadialStatus. Read the glyphs
             // after this frame only while the same HUD is still presented.
@@ -677,7 +680,7 @@ function createField(root, host, notifications) {
         }
         const reporting = action === 'navigationReport';
         const navigation = navigationRequest({ action });
-        const canWaitForStep = action === 'mapName' || navigation && !timedCave(root.$gameMap?._mapId);
+        const canWaitForStep = action === 'mapName' || action === 'mapDescription' || navigation && !timedCave(root.$gameMap?._mapId);
         const idle = canWaitForStep && root.$gameMap?.inactiveTime >= 30;
         if (!ready(scene, reporting || canWaitForStep, idle) || sequence >= 0x7ffffffe) return false;
         const player = root.$gamePlayer;
@@ -686,7 +689,7 @@ function createField(root, host, notifications) {
         const puzzle = action === 'puzzleGuide' && guideFor(scene);
         const vitals = action === 'fieldVitals' && fieldVitalsVisible(scene);
         if (!BROWSE.has(action) && action !== 'currentDestination' && action !== 'directions' &&
-            action !== 'status' && action !== 'mapName' && !reporting && !puzzle && !vitals) return false;
+            action !== 'status' && action !== 'mapName' && action !== 'mapDescription' && !reporting && !puzzle && !vitals) return false;
         if (BROWSE.has(action) || action === 'directions' || puzzle) {
             autowalk.stop(scene);
             host.beacon?.stop(scene);

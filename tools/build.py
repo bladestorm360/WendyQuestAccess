@@ -63,6 +63,7 @@ def bundle():
         './options': 'frontend/options.js',
         './world/map-banner': 'world/map-banner.js',
         './map-banner': 'world/map-banner.js',
+        './map-descriptions': 'world/map-descriptions.js',
         './world/interaction-prompt': 'world/interaction-prompt.js',
         './world/treasure-reward': 'world/treasure-reward.js',
         './world/autosave-notice': 'world/autosave-notice.js',

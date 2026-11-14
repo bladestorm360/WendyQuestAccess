@@ -7,7 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const { createBattleLog } = require('../src/battle/action-log');
-const { recordCollapse, recordCondition } = require('../src/battle/outcomes');
+const { recordCollapse, recordCondition, recordResistance } = require('../src/battle/outcomes');
 const { abilitySource } = require('../src/battle/damage-popup');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
@@ -29,7 +29,7 @@ const battle = { _phase: 'action', _spriteset: { isBusy: () => spritesBusy }, _l
 const c = vm.createContext({
     Scene_Battle: function () {}, Scene_Message: function () {}, Window_BattleActionLog: function () {},
     Window_Base: function () {}, Window_BattleLog: function () {}, Sprite_Enemy: function () {},
-    BattleHelper: { IsBattleScene: () => true },
+    BattleHelper: { IsBattleScene: () => true }, BattleAnimations: {},
     a2_0x990531() { throw Error('Unresolved battle property'); },
     SceneManager: { _scene: scene }, Graphics: { app: { stage: scene, renderer }, frameCount: 0, height: 540 }, BattleManager: battle,
     $dataStates: JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/States.json'), 'utf8')),
@@ -203,6 +203,46 @@ log.cooldown = 0;
 frame();
 assert(painted.includes(ability.message1), 'the native text remains intact');
 assert.match(lines.at(-1), /Baconator uses Rise and Shine/);
+
+// Run the installed floating-text producer, then release its visible glyphs.
+const chain = { chainBegin() { return this; }, addTween() { return this; }, addDelay() { return this; },
+    chainEnd() { return this; }, start() {}, addChild(child) { child.parent = this; } };
+c.VFXBody = function () {
+    Object.assign(this, chain, { worldVisible: true, worldAlpha: 1, scale: { x: 0, y: 0 } });
+};
+c.Sprite_Text = function () {
+    Object.assign(this, { worldVisible: true, worldAlpha: 1, _dirty: false, worldTransform: { tx: 60, ty: 80 } });
+};
+c.Sprite_Text.prototype.setText = function (text) {
+    this._currentString = text;
+    this.children = [...text].map(() => ({ parent: this, worldVisible: true, worldAlpha: 1,
+        bitmap, scale: { x: 1, y: 1 } }));
+    return this;
+};
+for (const method of ['setBitmapFont', 'setDrawColour', 'setShadow', 'setShadowDraw']) {
+    c.Sprite_Text.prototype[method] = function () { return this; };
+}
+c.EaseFunction = { EaseOut() {}, EaseOutOver() {} };
+field.addChild = effect => { effect.parent = field; };
+let popup;
+c.WendyQuestAccessResisted = (effect, text) => {
+    popup = effect;
+    recordResistance(scene, effect, text, c.Graphics.frameCount);
+};
+c.Graphics.width = 640;
+const beforeResistance = lines.length;
+c.BattleAnimations.StatusTextAtPosition(field, 'Resisted!', { x: 60, y: 80 });
+frame();
+assert.equal(lines.length, beforeResistance, 'an unpainted status popup is silent');
+popup.scale.x = popup.scale.y = 1;
+frame();
+assert.equal(lines.at(-1), 'Wendy resisted a status effect.');
+frame();
+assert.equal(lines.length, beforeResistance + 1);
+c.BattleAnimations.StatusTextAtPosition(field, 'Resisted!', { x: 60, y: 80 });
+popup.scale.x = popup.scale.y = 1;
+frame();
+assert.equal(lines.length, beforeResistance + 2, 'a second native resistance remains audible');
 
 console.log('Verified native log paint, repeated events, animation cancellation, written and icon-only conditions, enemy KO, and review.');
 console.log('Throttled battle log paint through synthetic postrender and formatted receipt', first.toFixed(2), 'ms.');

@@ -115,6 +115,12 @@ The installed stock `Game_Player.moveByInput` starts at original byte 222354 in 
 
 The [installed-method fixture](../tests/autowalk.cjs) followed native routes on foot, on the boat and in flight. It checked default-off, native manual direction priority, a valid zero-movement pointer destination, changed collision, an intervening floor event, transfer retirement, manual door activation, dock stop and landing handback. The matched NW fixture verified the ordinary directions key, both narration settings, spoken arrival, cancellation during an unsettled step and preference persistence on restart. With interpolation and output stand-ins, the serial bounded run measured **48 matched steps** at 1.95 ms manual and 3.20 ms autowalk in total. The Map 197 worker returned the course in 44.3 ms cold and 0.9 ms warm in that run. In-game frame delay, input feel and audible latency remain gameplay checks. [Fixture commands](implementation.md#reproduction)
 
+## Map descriptions
+
+Press **Shift+M** while exploring. The mod reads a short, prewritten paragraph about the current area’s terrain and visible landmarks. Change the shortcut under **F8 → Navigation → Describe current map**. Requests use the same field readiness as the map name and do not start a route. The description is read through the established screen-reader output.
+
+The catalog covers visually inspected playable maps and rooms, including houses, caves and entered ruins. The world map selects one of five land regions using the surrounding native terrain or reads the open-water overview. Descriptions omit hidden entrances, contents of treasure, puzzle answers and future progression. The text is bundled with the plugin and requires no map images or speech audio at runtime. [Map descriptions](../src/world/map-descriptions.js)
+
 ## Displayed maps and ruins markers
 
 Use the native **Cavern Map**, **World Map** or a **Ruins Map** in Inventory. A Caffeine Caverns map board can also open a diagram. Speech announces the current diagram and the number of drawn cavern pathways when applicable. **I** reads the current picture details. **Shift+Up** and **Shift+Down** read adjacent lines, and **Shift+Left** and **Shift+Right** jump to the first or last line. On the default Xbox-style controller, press and release **View**, then press **A** for details or use the D-pad to review. The controller returns to native controls after each action. **Autodetail** can read the complete current picture on presentation. Close the view with the native action.

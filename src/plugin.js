@@ -12,7 +12,7 @@ const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createBattleLog } = require('./battle/action-log');
 const { recordAttackSource, abilitySource } = require('./battle/damage-popup');
-const { recordCollapse, recordCondition } = require('./battle/outcomes');
+const { recordCollapse, recordCondition, recordResistance } = require('./battle/outcomes');
 const { createRadialResult } = require('./battle/radial-result');
 const { battleVitals, menuVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
@@ -611,6 +611,13 @@ function boot(root, nodeRequire, nodeProcess) {
             const scene = outcomeScene();
             if (scene) recordCollapse(scene, sprite);
         } catch { /* Continue the native collapse. */ }
+    };
+
+    root.WendyQuestAccessResisted = function (effect, text) {
+        try {
+            const scene = outcomeScene();
+            if (scene) recordResistance(scene, effect, text, root.Graphics.frameCount);
+        } catch { /* Keep the native status effect in charge. */ }
     };
 
     root.WendyQuestAccessBattleCondition = function (window, target, state, added, speak) {

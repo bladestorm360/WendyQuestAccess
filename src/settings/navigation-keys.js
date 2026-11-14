@@ -3,8 +3,8 @@
 const ROUTE_ACTIONS = { previousDestination: 'Previous destination', nextDestination: 'Next destination',
     currentDestination: 'Read selected destination', directions: 'Directions', previousCategory: 'Previous category',
     nextCategory: 'Next category' };
-const FIELD_KEYS = { mapName: 'M', questObjective: 'Q', beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
-const ACTIONS = Object.freeze({ ...ROUTE_ACTIONS, mapName: 'Read current map name',
+const FIELD_KEYS = { mapName: 'M', mapDescription: 'Shift+M', questObjective: 'Q', beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
+const ACTIONS = Object.freeze({ ...ROUTE_ACTIONS, mapName: 'Read current map name', mapDescription: 'Describe current map',
     questObjective: 'Read quest objective', beaconToggle: 'Toggle navigation beacon',
     wallToggle: 'Toggle wall sounds', beaconStop: 'Stop current navigation' });
 const LAYOUT_NAMES = Object.freeze({ letters: 'Letters', brackets: 'Brackets and backslash' });

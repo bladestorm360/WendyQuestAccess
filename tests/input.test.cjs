@@ -403,6 +403,7 @@ assert.equal(navigationAction(brackets, 'P'), 'currentDestination');
 assert.equal(navigationAction(brackets, navigationGesture({ key: '{', shiftKey: true })), 'previousCategory');
 assert.equal(navigationAction(brackets, navigationGesture({ key: '}', shiftKey: true })), 'nextCategory');
 assert.equal(navigationAction(brackets, navigationGesture({ key: 'p', ctrlKey: true })), '');
+assert.equal(navigationAction(brackets, navigationGesture({ key: 'M', shiftKey: true })), 'mapDescription');
 assert.equal(nativeNavigationConflict(c, 'Shift+W', 87), true, 'Shift does not make a native movement key free');
 assert.equal(nativeNavigationConflict(c, '\\'), false);
 for (const [gesture, action] of [['Shift+B', 'beaconToggle'], ['Shift+H', 'wallToggle'], ['Shift+V', 'beaconStop']]) {

@@ -706,6 +706,18 @@ const interval = setInterval(() => {
             mapVitalsStep++;
         }
         if (mapVitalsStep < 12) return;
+        if (mapVitalsStep === 12) {
+            $gameMap._mapId = 15;
+            tap('M', 'KeyM', { shiftKey: true });
+            Graphics.app.renderer.emit('postrender');
+            mapVitalsStep++;
+            return;
+        }
+        if (mapVitalsStep === 13) {
+            if (!fs.existsSync(receipt + '.field-description')) return;
+            $gameMap._mapId = 1;
+            mapVitalsStep++;
+        }
         if (!soundscapeStarted) {
             Object.assign($gameMap, { tileWidth: () => 32, deltaX: (x, y) => x - y, deltaY: (x, y) => x - y });
             const actor = $gameMap._events[1];
@@ -1953,6 +1965,13 @@ parentPort.on('message', message => {
     if (message.kind === 'interactionPrompt') {
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
             fs.writeFileSync(receipt + '.interaction-prompt', formatSpeech(message));
+        parentPort.postMessage('ack');
+        return;
+    }
+    if (message.kind === 'mapDescription') {
+        const description = formatSpeech(message);
+        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch && description.includes('French Fry Forest'))
+            fs.writeFileSync(receipt + '.field-description', description);
         parentPort.postMessage('ack');
         return;
     }
