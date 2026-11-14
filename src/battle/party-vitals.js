@@ -47,7 +47,7 @@ function visibleCondition(hud, graphics, id) {
     const row = hud.stateIcons?.[id];
     const icon = row?.children?.[1];
     const top = hud.y + row?.y;
-    if (row?.parent !== hud || !row.worldVisible || !(row.worldAlpha > 0) ||
+    if (row?.parent !== hud || !row.worldVisible || !(row.worldAlpha > 0) || row.renderable === false ||
         !(top >= 0 && top + 16 <= graphics.height) || !visibleSprite(row, icon)) return '';
     return drawnText(icon, icon.children?.[0], 32);
 }
@@ -126,7 +126,13 @@ function hudVitals(hud, graphics, name, includeExperience = false, mapMeters = f
             meter('FP', radialPercent(hud, hud.fillFPSprite, hud.fillFPMask, 57, Math.PI)));
     const level = number(hud, hud.levelNumberSprite);
     const progress = level && includeExperience && experience(hud);
-    const lines = reviewLines([name, hp, fp, level && 'Level ' + level + (progress ? ', ' + progress : ''),
+    // On the field the native heartbeat and warning portrait share this
+    // flag. The gauge may still be animating toward the low HP value.
+    const frame = hud._frame;
+    const critical = mapMeters && hp && hud.isLowHealth === true &&
+        frame?.x === 128 && frame.y === 0 && frame.width === 128 && frame.height === 128;
+    const lines = reviewLines([name, critical ? hp + ', critical' : hp, fp,
+        level && 'Level ' + level + (progress ? ', ' + progress : ''),
         momentum(hud), ...statusLines(hud, graphics)]);
     return lines.length > 1 ? { kind: 'menuDetails', lines } : null;
 }

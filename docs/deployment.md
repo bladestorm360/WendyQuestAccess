@@ -239,3 +239,11 @@ November 14, 2026. Plan SHA-256 `4e324a0dc61a32e58211eaa85b4c1efb91371d6dbefc342
 Defender scanned the exact payload, geometry, plan, scripts and four build and installer files at 06:04:06 PST and found no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.295.0. The five reused native components are unsigned and the tool hashes match the preceding update. The closed-game install and subsequent status check verified 16 script patches, 38 payload files, 240 geometry entries and original recovery. Four save-directory file hashes were preserved.
 
 Press H in the field and pause menu, then press H while a companion command is selected. In each case the report should describe Wendy's visible status. Actual speech timing remains a gameplay check. [Battle and companion evidence](battle.md#wendys-battle-status)
+
+## Critical field health update
+
+November 14, 2026. Plan SHA-256 `d7f71f011c1e6b970b2efad8892582b5fa862d0986ebe4c7de529e158aec98da`. Plugin SHA-256 `2fb22db3c47c4c6adf7182ea85e4a34f3745523dcb76be8678ab925400fa689f`. The focused build replaced the plugin and verified the 37 reused payload files, 240 geometry entries and all 16 native script candidates. The native HUD, input, battle focus and menu tests passed. The matching NW 0.48.4 fixture verified the critical field cue, exact menu health, the same visible condition in each, and the keyboard and controller actions. The capped native HUD fixture measured 1.37 ms for the battle read and 0.41 ms total for three map and menu reads through formatting. These are stand-in measurements.
+
+Microsoft Defender scanned the exact candidate, geometry, native script candidates and four installer and build files at 06:17:39 PST and found no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.295.0. The five reused native components are unsigned. The four tool hashes match the preceding update.
+
+Deployment is pending. The installer mirror reached the launcher lease and stopped because the Steam game was running. The candidate stays in the C: analysis workspace until the final installer check and closed-game installation. With the update deployed, press H while the low-health heartbeat is active, then press H again after healing. The field percentage should include “critical” only while the native warning is shown. [HUD evidence](menus.md#map-hud-vitals)

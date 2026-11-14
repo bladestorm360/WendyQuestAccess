@@ -573,13 +573,19 @@ const interval = setInterval(() => {
             WendyQuestAccessInteractionUpdate(scene, null);
             fs.writeFileSync(receipt + '.field-vitals-stage', '');
             const visible = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
-            const hud = scene._statusWindow = { ...visible(scene), offsetY: 0, states: [],
+            const hud = scene._statusWindow = { ...visible(scene), offsetY: 0, y: 0, states: [4],
+                isLowHealth: true, _frame: { x: 128, y: 0, width: 128, height: 128 },
                 battler: { actor: () => ({ name: 'Synthetic map hero' }) } };
+            const row = { ...visible(hud), y: 120 };
+            const icon = visible(row);
+            hud.stateIcons = { 4: row };
+            row.children = [null, icon];
+            icon.children = [battleText(icon, 'Synthetic condition')];
             for (const [key, value] of Object.entries({ _numberSprite: '8', _totalSprite: '14', _dividerSprite: '/',
                 _FPSprite: '3', _totalSpriteFP: '5', _dividerSpriteFP: '/', levelNumberSprite: '7' }))
                 hud[key] = battleText(hud, value);
             for (const [fillName, maskName, radius, end, ratio] of [
-                ['fillSprite', 'fillMask', 43, 1.21 * Math.PI, 8 / 14],
+                ['fillSprite', 'fillMask', 43, 1.21 * Math.PI, 0.25],
                 ['fillFPSprite', 'fillFPMask', 57, Math.PI, 3 / 5],
             ]) {
                 const mask = hud[maskName] = new PIXI.Graphics();
@@ -1582,8 +1588,13 @@ const interval = setInterval(() => {
             const visible = parent => ({ parent, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
             const gold = scene._goldWindow = { ...scene._commandWindow, active: false };
             gold._wqaShopGold = { contents: gold.contents, value: 17, currency: 'Gold' };
-            const hud = scene._wqaMenuStatus = scene._statusWindow = { ...visible(scene), offsetY: 0, states: [],
+            const hud = scene._wqaMenuStatus = scene._statusWindow = { ...visible(scene), offsetY: 0, y: 0, states: [4],
                 battler: { actor: () => ({ name: 'Synthetic menu hero' }) } };
+            const row = { ...visible(hud), y: 120 };
+            const icon = visible(row);
+            hud.stateIcons = { 4: row };
+            row.children = [null, icon];
+            icon.children = [battleText(icon, 'Synthetic condition')];
             for (const [key, value] of Object.entries({ _numberSprite: '8', _totalSprite: '14', _dividerSprite: '/',
                 _FPSprite: '3', _totalSpriteFP: '5', _dividerSpriteFP: '/', levelNumberSprite: '7' }))
                 hud[key] = battleText(hud, value);
@@ -2180,8 +2191,8 @@ def main():
             'shop-quantity': 'Purchase quantity, Synthetic shop item, quantity 3, Total 57 Gold',
             'shop-quantity-details': 'Quantity 3, total 57 Gold. Shown effect. Owned 2. Balance 12 Gold',
             'menu-gold': '17 Gold',
-            'menu-vitals-h': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent',
-            'menu-vitals-full': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent',
+            'menu-vitals-h': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent. Status, Synthetic condition',
+            'menu-vitals-full': 'Synthetic menu hero. HP 8 of 14. FP 3 of 5. Level 7, experience bar 50 percent. Status, Synthetic condition',
             'coupon-list-stone': 'Available rewards, Fry Stone, 1 of 5',
             'coupon-list-locked': 'Locked reward, unavailable, 2 of 5',
             'coupon-response-focus': 'Coupon response, SYNTHETIC COUPON. Copy coupon code, 2 of 3',
@@ -2240,8 +2251,8 @@ def main():
         print('Verified Auto language detection and fallback, manual persistence, saved mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')
         for suffix, expected in {
-            'field-vitals-h': 'Synthetic map hero. HP bar 57 percent. FP bar 60 percent. Level 7',
-            'field-vitals-full': 'Synthetic map hero. HP bar 57 percent. FP bar 60 percent. Level 7',
+            'field-vitals-h': 'Synthetic map hero. HP bar 25 percent, critical. FP bar 60 percent. Level 7. Status, Synthetic condition',
+            'field-vitals-full': 'Synthetic map hero. HP bar 25 percent, critical. FP bar 60 percent. Level 7. Status, Synthetic condition',
         }.items():
             if receipt.with_suffix('.json.' + suffix).read_text(encoding='utf8') != expected:
                 raise AssertionError(f'Unexpected {suffix} receipt')

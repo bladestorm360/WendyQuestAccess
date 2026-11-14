@@ -17,9 +17,10 @@ const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning'
 { encoding: 'utf8', timeout: 7000, maxBuffer: 64 * 1024 }));
 const actors = JSON.parse(fs.readFileSync(path.join(installed, 'package.nw/data/Actors.json'), 'utf8'));
 const states = JSON.parse(fs.readFileSync(path.join(installed, 'package.nw/data/States.json'), 'utf8'));
-const actualState = states.find(state => state?.iconIndex > 0 && state.name);
+const actualState = states.find(state => state?.iconIndex > 0 && state.name && !state.removeAtBattleEnd);
 const scene = {};
 const ready = { isReady: () => true };
+const heartbeats = [];
 
 const host = nativeTextHost();
 const { Sprite, Sprite_Text: SpriteText } = host;
@@ -30,6 +31,7 @@ function RadialStatus() { Sprite.call(this, ready); }
 RadialStatus.prototype = Object.create(Sprite.prototype);
 Object.assign(RadialStatus.prototype, {
     RequestUIUpdate() {}, UpdateFill() {}, UpdateMask() {},
+    setColorTone() {},
     InitMomentum(max) {
         this.momentumPips = Array.from({ length: max }, (_, index) => {
             const baseSprite = new Sprite(ready);
@@ -42,6 +44,12 @@ Object.assign(RadialStatus.prototype, {
 host.Bitmap.load = () => ready;
 const c = vm.createContext({ ...host, RadialStatus, ImageManager: { iconWidth: 32, iconHeight: 32 },
     Scene_Map: function () {}, Scene_Menu: function () {}, Scene_Item: function () {}, SceneManager: {},
+    BattleHelper: { IsBattleScene: () => false },
+    AudioManager: { playSe: cue => heartbeats.push(cue.name) },
+    Coroutine: function (run) { this.generator = run(); },
+    CoroutineManager: { StartCoroutine: routine => routine.generator.next(), RemoveCoroutine() {} },
+    Time: { GetDeltaTime: () => 0 }, EaseFunction: { EaseOut: value => value },
+    LerpColorArray: () => [],
     Graphics: { boxWidth: 640, boxXOffset: 0, boxYOffset: 0 }, $gameParty: { battleMembers: () => [actor] },
     PIXI: { LINE_CAP: { ROUND: 'round' }, LINE_JOIN: { BEVEL: 'bevel' } },
     Lerp: (from, to, fraction) => from + (to - from) * fraction,
@@ -61,7 +69,9 @@ for (const icon of ['_HPIcon', '_FPIcon']) {
     hud[icon] = new Sprite(ready);
     hud.addChild(hud[icon]);
 }
-const actor = { hp: 19, mhp: 24, mp: 3, mmp: 7, actor: () => actors[1], getMomentum: () => 1, getMomentumMax: () => 2 };
+let conditions = [];
+const actor = { hp: 19, mhp: 24, mp: 3, mmp: 7, actor: () => actors[1], states: () => conditions,
+    getMomentum: () => 1, getMomentumMax: () => 2 };
 const main = { _actor: actor, _battlerName: actors[1].battlerName, _mainSprite: new Sprite(ready) };
 main._mainSprite.parent = main;
 const companion = new Sprite(ready);
@@ -99,14 +109,12 @@ hud.offsetY = 0;
 hud.battler = companion._actor;
 assert.equal(read(), '', 'the battle read requires the main actor to own the HUD');
 
-Sprite.prototype.show = function () { this.worldVisible = true; };
-Sprite.prototype.hide = function () { this.worldVisible = false; };
+Sprite.prototype.show = function () { this.visible = this.worldVisible = true; };
+Sprite.prototype.hide = function () { this.visible = this.worldVisible = false; };
 c.RadialStatus = function () {
     const next = new RadialStatus();
-    Object.assign(next, { offsetY: 0, states: [], stateIcons: {}, iconBitmap: ready, iconBaseX: -128,
-        iconBaseY: 120, iconYStep: 2, currentXPFill: 0.61, currentHPFill: 19 / 24, currentFPFill: 3 / 7,
-        fillMaskX: -47, fillMaskY: 47, fillHPAngleStart: 0.43 * Math.PI, fillHPAngleEnd: 1.21 * Math.PI,
-        fillFPAngleStart: 0.43 * Math.PI, fillFPAngleEnd: Math.PI });
+    next.InitMembers();
+    Object.assign(next, { iconBitmap: ready, currentXPFill: 0.61, currentHPFill: 19 / 24, currentFPFill: 3 / 7 });
     for (const [fillName, maskName] of [['fillSprite', 'fillMask'], ['fillFPSprite', 'fillFPMask']]) {
         const mask = next[maskName] = next.addChild(new Sprite());
         Object.assign(mask, { geometry: { graphicsData: [] }, lineStyle() {},
@@ -136,6 +144,7 @@ c.RadialStatus = function () {
         drawRect(x, y, width, height) { this.geometry.graphicsData.push({ shape: { x, y, width, height } }); }
     });
     next.levelMetreFillSprite.mask = mask;
+    next.backSprite.hide();
     next.UpdateMask = next.fixtureUpdateMask;
     next.InitScene();
     return next;
@@ -181,6 +190,39 @@ for (const kind of [c.Scene_Menu, c.Scene_Item, c.Scene_Map]) {
         status.backingFP.worldVisible = false;
         assert.doesNotMatch(formatSpeech(read(menu, graphics)), /FP/);
     }
+    // Both creators use the same native condition update and icon presenter.
+    conditions = [actualState];
+    status.UpdateStates();
+    assert(formatSpeech(read(menu, graphics)).endsWith('Status, ' + actualState.name));
+    const row = status.stateIcons[actualState.id];
+    row.renderable = false;
+    assert.doesNotMatch(formatSpeech(read(menu, graphics)), /Status,/);
+    row.renderable = true;
+    conditions = [];
+    status.UpdateStates();
+    assert.doesNotMatch(formatSpeech(read(menu, graphics)), /Status,/);
+
+    status.currentHPFill = 0.25;
+    status.UpdateMask();
+    status.targetHPFill = 0.2501;
+    status.UpdateLowHealth();
+    assert.doesNotMatch(formatSpeech(read(menu, graphics)), /critical/, 'do not use the rounded meter percentage');
+    status.targetHPFill = 0.25;
+    status.UpdateLowHealth();
+    if (inMap) {
+        assert.equal(heartbeats.length, 1);
+        assert.match(heartbeats[0], /LowHealthWarning/);
+        assert.match(formatSpeech(read(menu, graphics)), /HP bar 25 percent, critical/);
+        status.UpdateLowHealth();
+        assert.equal(heartbeats.length, 1);
+        status.targetHPFill = 0.26;
+        status.UpdateLowHealth();
+        assert.doesNotMatch(formatSpeech(read(menu, graphics)), /critical/, 'the warning clears on healing');
+    } else {
+        assert.match(formatSpeech(read(menu, graphics)), /HP 19 of 24/);
+        assert.doesNotMatch(formatSpeech(read(menu, graphics)), /critical/);
+        assert.equal(heartbeats.length, 0);
+    }
     status.offsetY = -4;
     assert.equal(read(menu, graphics), null);
 }
@@ -197,5 +239,5 @@ assert.equal(normalizeController({ details: 2 }).battleVitals, null);
 assert.equal(normalizeController({ battleVitals: 4 }).battleVitals, 4);
 console.log('Verified installed radial HUD paint, party identity, states, momentum and hidden values.');
 console.log('Throttled rendered vitals read and formatted receipt', measured.toFixed(2), 'ms.');
-console.log('Verified installed map, pause and Inventory HUD ownership and painted experience geometry.');
+console.log('Verified map and menu condition rows, hidden/removed statuses, and the native 25 percent field heartbeat.');
 console.log('Throttled three map and menu vitals reads through formatted receipt', menuRead.toFixed(2), 'ms.');

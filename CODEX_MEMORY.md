@@ -112,3 +112,5 @@ The [title focus and directional audio update](docs/deployment.md#title-focus-an
 The [simultaneous walls and treasure popup update](docs/deployment.md#simultaneous-walls-and-treasure-popup-update) mixed all nearby cardinal wall tones and covered all 25 uses of the visual reward popup across the map audit. Offline checks and exact C: installation passed. The player confirmed the heel-to-toe footsteps in the preceding build and that cue definition was retained. The new wall mix and chest speech await gameplay confirmation.
 
 The [Wendy status shortcut](docs/deployment.md#wendy-status-shortcut-update) is verified offline and installed. Wendy is the only full battle actor. H reads her full visible status across the field, battle and pause/Inventory HUDs. Custom H-action remaps migrate and the numbered party actions are retired. [Native role and HUD evidence](docs/battle.md#wendys-battle-status)
+
+The [critical field health update](docs/deployment.md#critical-field-health-update) verified matching field and menu condition rows, the native 25% heartbeat and the H cue. HUD and packaged checks passed. Installation awaits the Steam game closing.

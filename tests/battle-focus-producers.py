@@ -211,7 +211,8 @@ if sys.argv[2:] == ['vitals']:
     hud, _ = decode((installed / STATS_REL).read_text(encoding='utf-8-sig'))
     methods = [sprite_method(hud, 'RadialStatus', name) for name in
                ('SetBattler', 'SetFPText', 'AddState', 'SetStateFrame', 'RemoveState', 'UpdateStateIconPositions',
-                'InitScene', 'SetHomePosition')]
+                'InitMembers', 'InitScene', 'SetHomePosition', 'HasState', 'UpdateStates',
+                'UpdateLowHealth', 'LowHealthWarningSound')]
     methods.append(sprite_method(hud, 'RadialStatus', 'UpdateMask').replace(
         "['UpdateMask']", "['fixtureUpdateMask']", 1))
     menu, _ = decode(menu_notifications((installed / MENU_REL).read_bytes()).decode('utf8'))
