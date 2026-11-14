@@ -36,6 +36,16 @@ c.Sprite_UIButton.prototype.update = function () {
 };
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 
+const battlefield = {};
+function enemy(name, overrides = {}) {
+    return { parent: battlefield, worldVisible: true, worldAlpha: 1, texture: { valid: true },
+        _enemy: { originalName: () => name, isAlive: () => true }, ...overrides };
+}
+scene._spriteset = { _battleField: battlefield, _enemySprites: [
+    enemy('Golden Archer'), enemy('Lil Pink Salty'), enemy('Golden Archer'),
+    enemy('Hidden battler', { worldVisible: false })
+] };
+
 const group = [];
 const actor = { _battleOptionsActive: 0, battleOptions: [group] };
 function text(parent, value) {
@@ -62,7 +72,15 @@ let epoch = 0;
 const observer = createBattleFocus(c, { manager: c.SceneManager, graphics: c.Graphics, hasFocus: () => true,
     screenFading: () => false }, {
     open(record, live) { active.set(++epoch, live); messages.push(formatSpeech(record)); return epoch; },
-    focus(id, record) { assert(active.get(id)()); messages.push(formatSpeech(record)); },
+    focus(id, record) {
+        assert(active.get(id)());
+        if (messages.length === 1) {
+            assert.equal(record.append, true);
+            assert.equal(record.kind, 'menuFocus');
+            assert.equal(active.size, 1);
+        }
+        messages.push(formatSpeech(record));
+    },
     close(id) { active.delete(id); }
 }, () => ({ indexing: true, autodetail: true }));
 c.WendyQuestAccessBattleFocusReady = observer.observe;
@@ -87,7 +105,10 @@ skill.update();
 assert.equal(messages.length, 0, 'no output before the rendered frame');
 renderer.emit('postrender');
 const firstFocus = performance.now() - start;
-assert.equal(messages[0], 'Battle commands, Attack from paint, 1 of 2');
+assert.deepEqual(messages.slice(0, 2), [
+    'Enemy formation. 2 Golden Archer. 1 Lil Pink Salty.',
+    'Battle commands, Attack from paint, 1 of 2'
+]);
 assert(observer.controlOwner(scene));
 assert.equal(attack._nameSprite.bitmap, undefined);
 assert.equal(attack._nameSprite.children.map(glyph => glyph.bitmap.paint).join(''), 'Attack from paint');
@@ -98,7 +119,7 @@ finalGlyph.scale.x = 1;
 
 attack.update();
 renderer.emit('postrender');
-assert.equal(messages.length, 1, 'the same native focus does not publish a new event');
+assert.equal(messages.length, 2, 'the same native focus does not publish a new event');
 const patchedUpdate = c.Sprite_BattleOption.prototype.update;
 vm.runInContext(baselineUpdate, c, { timeout: 100 });
 const nativeUpdate = c.Sprite_BattleOption.prototype.update;
@@ -116,7 +137,7 @@ measureFrames(nativeUpdate);
 measureFrames(patchedUpdate);
 const nativeFrames = measureFrames(nativeUpdate);
 const modFrames = measureFrames(patchedUpdate);
-assert.equal(messages.length, 1, 'stable focus does not queue work on subsequent frames');
+assert.equal(messages.length, 2, 'stable focus does not queue work on subsequent frames');
 skill.focusGained();
 skill.update();
 attack.focusGained();
@@ -125,8 +146,8 @@ skill.focusGained();
 skill.update();
 assert.equal(renderer.listenerCount('postrender'), 1);
 renderer.emit('postrender');
-assert.equal(messages[1], 'Guard, unavailable, 2 of 2');
-assert.match(messages[2], /Reduce incoming damage.*Cost x2/);
+assert.equal(messages[2], 'Guard, unavailable, 2 of 2');
+assert.match(messages[3], /Reduce incoming damage.*Cost x2/);
 const page = observer.controlOwner(scene);
 assert(observer.command(page, 'details'));
 assert.match(messages.at(-1), /Reduce incoming damage.*Cost x2/);
@@ -161,6 +182,7 @@ c.BattleManager.updateEvent = () => { assert.equal(active.size, 0); return true;
 c.BattleManager.update(true);
 assert.equal(observer.controlOwner(scene), null);
 assert.equal(active.size, 0);
+assert.equal(messages.filter(text => text.startsWith('Enemy formation')).length, 1);
 console.log('Verified native battle command focus, paint, review, unavailable and accepted input, and phase retirement.');
 console.log('Throttled first command update through synthetic render and focus receipt', firstFocus.toFixed(2), 'ms.');
 console.log('Throttled 600 stable frames', nativeFrames.toFixed(2), 'ms native,', modFrames.toFixed(2), 'ms enabled.');

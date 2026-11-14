@@ -146,9 +146,13 @@ function fixture() {
         deleted: () => deleted, nativeClose: () => nativeClose, epoch: () => word && Atomics.load(word, 0) };
 }
 
+function flushSpeech(f) {
+    while (f.timers.length) f.timers.shift()();
+}
+
 function readyFrame(f) {
     f.renderer.emit('postrender');
-    while (f.timers.length) f.timers.shift()();
+    flushSpeech(f);
 }
 
 function displayed(f) {
@@ -465,35 +469,29 @@ for (const imagesBeforeStage of [false, true]) {
     const scene = f.show(new c.Scene_Load(), window);
     scene.slowFadeSpeed = () => 60;
     window.refresh = () => {};
+    // Use a different selected slot on each native entry. The late artwork
+    // case must read an occupied slot before the native cursor can move.
+    window.select(imagesBeforeStage ? 2 : 0);
     window.loadImages();
     scene.start();
     if (imagesBeforeStage) f.images.shift()();
+    assert.equal(f.saveReads(), 0, 'stage loading does not admit speech');
     c.SceneManager.onSceneStart();
-    readyFrame(f);
-    assert.equal(f.saveReads(), 0);
-    c.Scene_Base.prototype.updateFade.call(scene);
-    assert.equal(scene._fadeDuration, 59);
-    assert(scene._fadeOpacity > 0 && scene._fadeOpacity < 255);
-    if (!imagesBeforeStage) {
-        readyFrame(f);
-        assert.equal(f.saveReads(), 0, 'visible fade alone is insufficient while cards are loading');
-        f.images.shift()();
-    }
-    assert.equal(f.saveReads(), 0, 'first visible cards still wait for postrender');
-    readyFrame(f);
-    assert.equal(f.messages.length, 1);
-    assert.match(formatSpeech(f.messages[0]), /^Save slot 1/);
-    assert.equal(scene._fadeDuration, 59, 'first focus is read on the first visible render');
-    for (let step = 0; step < 3; step++) {
-        c.Scene_Base.prototype.updateFade.call(scene);
-        assert.equal(f.renderer.listenerCount('postrender'), 0, 'no recurring admission during fade-in');
-    }
+    assert.equal(scene._fadeOpacity, 255);
+    assert.equal(f.saveReads(), 1, 'capture native initial focus at input readiness');
+    assert.equal(f.renderer.listenerCount('postrender'), 0);
     window.select(1);
-    readyFrame(f);
+    flushSpeech(f);
+    assert.equal(f.messages.length, 2);
+    assert.match(formatSpeech(f.messages[0]), imagesBeforeStage ? /^Save slot 3/ : /^Save slot 1, Level 8, Playtime 01:27:19$/);
     assert.equal(formatSpeech(f.messages[1]), 'Save slot 2, Start new game');
+    if (!imagesBeforeStage) f.images.shift()();
+    for (let step = 0; step < 3; step++) c.Scene_Base.prototype.updateFade.call(scene);
+    readyFrame(f);
+    assert.equal(f.messages.length, 2, 'artwork and fade do not repeat focus');
     scene.optionsSprite = { worldVisible: true, alpha: 1, select() { this._selected = true; } };
     window.cursorUp();
-    readyFrame(f);
+    flushSpeech(f);
     assert.equal(formatSpeech(f.messages[2]), 'Options');
     if (imagesBeforeStage) {
         c.Input.GetLastInputDeviceIsGamePad = () => true;

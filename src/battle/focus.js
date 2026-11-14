@@ -1,18 +1,35 @@
 'use strict';
 
-const { battlePresented, drawnText } = require('./presentation');
+const { battlePresented, drawnText, enemyName } = require('./presentation');
+const { renderedSprite } = require('../runtime/rendered-sprite');
 const { portraitActor } = require('./party-vitals');
 const { reviewLines, moveReview } = require('../menus/review');
 
 const REVIEW = new Set(['reviewPrevious', 'reviewNext', 'reviewFirst', 'reviewLast']);
 const MAX_OPTIONS = 16;
+const MAX_ENEMIES = 8;
 
+function formation(scene) {
+    const spriteset = scene._spriteset;
+    const sprites = spriteset?._enemySprites;
+    if (!spriteset?._battleField || !Array.isArray(sprites) || sprites.length > MAX_ENEMIES) return null;
+    const groups = new Map();
+    for (const sprite of sprites) {
+        if (!renderedSprite(sprite, spriteset._battleField) || !sprite._enemy?.isAlive?.() ||
+            sprite._enemy.isHidden?.()) continue;
+        const name = enemyName(sprite);
+        if (name) groups.set(name, (groups.get(name) || 0) + 1);
+    }
+    return groups.size ? { kind: 'battleLog',
+        lines: ['Enemy formation', ...Array.from(groups, ([name, count]) => count + ' ' + name)] } : null;
+}
 
 function createBattleFocus(root, host, notifications, preferences, onReady) {
     let current = null;
     let pending = null;
     let renderOwner = null;
     let spokenGroup = null;
+    const spokenFormations = new WeakSet();
 
     function ready(scene) {
         const battle = root.BattleManager;
@@ -78,8 +95,14 @@ function createBattleFocus(root, host, notifications, preferences, onReady) {
         const screen = spokenGroup?.group === group ? '' : 'Battle commands';
         spokenGroup = { scene, group };
         const actor = screen && portraitActor(scene, option._followTarget)?.name;
-        show(page, { kind: 'menuFocus', name, screen, actor, enabled: page.enabled,
-            position: choices.indexOf(option) + 1, total: choices.length, indexed: settings.indexing });
+        const focus = { kind: 'menuFocus', name, screen, actor, enabled: page.enabled,
+            position: choices.indexOf(option) + 1, total: choices.length, indexed: settings.indexing };
+        const opening = spokenFormations.has(scene) ? null : formation(scene);
+        if (opening) {
+            spokenFormations.add(scene);
+            show(page, opening);
+            notifications.focus(page.epoch, { ...focus, append: true });
+        } else show(page, focus);
         if (lines.length && settings.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
         onReady?.(scene);
         return true;

@@ -482,6 +482,16 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessFilesReady = function (scene) {
         try {
             if (!supported() || !scene || scene === filesWaiting || !isReady(view(), scene, fileWindow(scene))) return;
+            // The save list binds before its first native input update.
+            // Actual speech still uses the nonblocking frontend worker.
+            if (scene._wqaFileKind === 1) {
+                if (!files) initialize();
+                if (files.observe(scene)) {
+                    scene._wqaPresentation = true;
+                    setSettingsScene(scene);
+                }
+                return;
+            }
             const renderer = root.Graphics.app.renderer;
             if (typeof renderer?.once !== 'function') return;
             filesWaiting = scene;

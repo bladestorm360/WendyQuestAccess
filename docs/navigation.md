@@ -119,7 +119,7 @@ The [installed-method fixture](../tests/autowalk.cjs) followed native routes on 
 
 Press **Shift+M** while exploring. The mod reads a short, prewritten paragraph about the current area’s terrain and visible landmarks. Change the shortcut under **F8 → Navigation → Describe current map**. Requests use the same field readiness as the map name and do not start a route. The description is read through the established screen-reader output.
 
-The catalog covers visually inspected playable maps and rooms, including houses, caves and entered ruins. The world map selects one of five land regions using the surrounding native terrain or reads the open-water overview. Descriptions omit hidden entrances, contents of treasure, puzzle answers and future progression. The text is bundled with the plugin and requires no map images or speech audio at runtime. [Map descriptions](../src/world/map-descriptions.js)
+The catalog covers visually inspected playable maps and rooms, including houses, caves and entered ruins. On the 13 Fryshire maps using the wet or dry variant, the text follows the live tileset and rain state. The Salt Caverns description ends with how lighting its torches gradually illuminates the passages. The world map selects one of five land regions using the surrounding native terrain or reads the open-water overview. Descriptions omit hidden entrances, contents of treasure, puzzle answers and future progression. The text is bundled with the plugin and requires no map images or speech audio at runtime. [Map descriptions](../src/world/map-descriptions.js)
 
 ## Displayed maps and ruins markers
 

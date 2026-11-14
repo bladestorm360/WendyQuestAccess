@@ -1060,7 +1060,7 @@ async function verifySpeakerDetails() {
     assert.equal(formatSpeech(f.packets().at(-1)), 'Frygor. A line of dialogue.');
     details();
     assert.equal(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')),
-        'Frygor. A golden fry-shaped crest, a red headband and a quiver of fries.');
+        'Frygor. A young man with tan skin, brown eyes and a friendly, rounded face. A red headband holds his high golden crest, and a pale cape drapes over his quiver strap. A bundle of fry-shaped arrows sticks up behind his shoulder.');
     assert(window.pause);
     f.advance();
     const length = f.records.filter(record => record.kind === 'menuDetails').length;
@@ -1081,7 +1081,7 @@ async function verifySpeakerDetails() {
     speaker._animationRunning = false;
     f.tick();
     details();
-    assert.equal(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')), 'Townsperson. Short brown hair, a green shirt and dark trousers.');
+    assert.equal(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')), 'Townsperson. A round-faced man with short brown hair and dark eyes. He wears a green shirt with light sleeves and brown trousers.');
     console.log('Verified active-dialogue details, portrait and world sprite identity, and native handback.');
 }
 

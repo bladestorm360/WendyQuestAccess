@@ -27,12 +27,10 @@ function isReady(host, scene, window) {
         host.manager._nextScene || host.manager._exiting || host.manager._wqaNativeAutosaves ||
         !scene._started || !scene._active || host.graphics.app?.stage !== scene ||
         !window.visible || !window.active || window.openness !== 255) return false;
-    // After the native cards are drawn, admit their first visible render.
     const clear = scene._fadeDuration === 0 && scene._fadeOpacity === 0;
-    const cardsAppearing = scene._wqaFileKind === SLOTS && scene._fadeSign === 1 &&
-        scene._fadeDuration > 0 && scene._fadeOpacity < 255;
-    if (!clear && !cardsAppearing) return false;
-    if (scene._wqaFileKind === SLOTS) return window._wqaCards === true;
+    // Native cursor and Confirm are live during the entire entry fade.
+    if (scene._wqaFileKind === SLOTS) return clear || scene._fadeSign === 1;
+    if (!clear) return false;
     if (scene._wqaFileKind === DETAILS) return scene._wqaDetailArt === true &&
         scene._wqaDetailText === true && !scene._destroySave;
     if (scene._wqaFileKind === OPTIONS) return window._wqaOptionsPainted === true;
@@ -109,8 +107,14 @@ function readFocus(host, scene, window, summary) {
         }
         if (!Number.isInteger(index) || index < 0 || index > 2) return null;
         const info = host.saveInfo(index);
-        return { kind: 'saveSlot', slot: index + 1, key: index, empty: !info,
-            ...(info ? metadata(host, info) : {}) };
+        const focus = { kind: 'saveSlot', slot: index + 1, key: index, empty: !info };
+        if (!info) return focus;
+        // Slot state and text use the already loaded header. The portraits
+        // and stones need the game's card atlases to have been drawn.
+        if (window._wqaCards) return { ...focus, ...metadata(host, info) };
+        focus.level = Number.isInteger(info.level) && info.level > 0 ? info.level : 0;
+        focus.playtime = shortText(info.playtime, 32);
+        return focus;
     }
     if (scene._wqaFileKind === DETAILS) {
         const name = shortText(window.options?.[index], 128);
@@ -175,14 +179,18 @@ function createFilesObserver(host, notifications) {
         else context.epoch = notifications.open(focus, () => ready(context));
     }
 
+    function publishSafely(context) {
+        try { publish(context); }
+        catch { leave(context.scene); }
+    }
+
     function afterRender(context) {
         if (context.pending || !ready(context)) return;
         context.pending = true;
         try {
             host.graphics.app.renderer.once('postrender', () => {
                 context.pending = false;
-                try { publish(context); }
-                catch { leave(context.scene); }
+                publishSafely(context);
             });
         } catch {
             context.pending = false;
@@ -196,10 +204,13 @@ function createFilesObserver(host, notifications) {
         const callHandler = window.callHandler;
         if (typeof select !== 'function' || typeof callHandler !== 'function' ||
             typeof window.isHandled !== 'function') return false;
+        const slots = scene._wqaFileKind === SLOTS;
         window.select = function () {
             const index = this._index;
             const result = select.apply(this, arguments);
-            if (index !== this._index || scene._wqaFileKind === OPTIONS) afterRender(context);
+            if (slots) {
+                if (index !== this._index && this._index >= 0) publishSafely(context);
+            } else if (index !== this._index || scene._wqaFileKind === OPTIONS) afterRender(context);
             return result;
         };
         window.callHandler = function (symbol) {
@@ -213,7 +224,7 @@ function createFilesObserver(host, notifications) {
             }
             return callHandler.apply(this, arguments);
         };
-        if (scene._wqaFileKind === SLOTS) {
+        if (slots) {
             for (const name of ['cursorUp', 'cursorDown', 'cursorLeft', 'cursorRight']) {
                 const cursor = window[name];
                 if (typeof cursor !== 'function') continue;
@@ -221,7 +232,7 @@ function createFilesObserver(host, notifications) {
                     const result = cursor.apply(this, arguments);
                     // The cursor routine may set index -1 before selecting a
                     // sibling sprite, so observe after the full routine.
-                    afterRender(context);
+                    if (this._index === -1) publishSafely(context);
                     return result;
                 };
             }
@@ -238,7 +249,11 @@ function createFilesObserver(host, notifications) {
 
     if (host.window) {
         host.window.addEventListener('blur', () => { if (current) close(current); });
-        host.window.addEventListener('focus', () => { if (current) afterRender(current); });
+        host.window.addEventListener('focus', () => {
+            if (!current) return;
+            if (current.scene._wqaFileKind === SLOTS) publishSafely(current);
+            else afterRender(current);
+        });
         host.window.addEventListener('pagehide', () => { if (current) leave(current.scene); });
     }
 

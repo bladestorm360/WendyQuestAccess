@@ -10,7 +10,7 @@ The scope centers on visible plot actions beside dialogue. Repeated battle movem
 
 ## On-demand descriptions
 
-**Shift+M** describes the current map. **I** describes the selected enemy or the active dialogue speaker. Both requests use the normal screen-reader output. A battle target must still own its rendered selector and art. The speaker description uses the current displayed portrait. A portraitless map line uses the accepting event's visible character sprite when its art is cataloged. Unpictured or unmatched speakers get a short unavailable message. A displayed atlas or puzzle diagram retains its existing Details action. [Speaker observer](../src/dialogue/observer.js) · [Battle target details](battle.md#visual-descriptions-while-targeting)
+**Shift+M** describes the current map. **I** describes the selected enemy or the active dialogue speaker. Both requests use the normal screen-reader output. A battle target must still own its rendered selector and art. The speaker description uses the current displayed portrait. A portraitless map line uses the accepting event's visible character sprite when its art is cataloged. The appearance readout covers visible face and body features as well as clothing and gear. It plays only when requested. Unpictured or unmatched speakers get a short unavailable message. A displayed atlas or puzzle diagram retains its existing Details action. [Speaker observer](../src/dialogue/observer.js) · [Battle target details](battle.md#visual-descriptions-while-targeting)
 
 ## Playback and verification
 

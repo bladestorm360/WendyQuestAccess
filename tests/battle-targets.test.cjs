@@ -25,7 +25,7 @@ const battle = { _phase: 'input', _inputting: true, _targets: [], _spriteset: { 
 const action = { _targetIndex: 0, makeTargets() { return nativeTargets(enemies[this._targetIndex]); } };
 battle._subject = { currentAction: () => action };
 const enemies = [makeEnemy(), makeEnemy(), makeEnemy()];
-function makeEnemy() { return { alive: true, isAlive() { return this.alive; } }; }
+function makeEnemy() { return { alive: true, isAlive() { return this.alive; }, originalName: () => 'Same name' }; }
 function nativeTargets(...targets) {
     Object.defineProperty(targets, 'contains', { value: targets.includes });
     return targets;
@@ -114,8 +114,8 @@ scene.update();
 assert.equal(messages.length, 0, 'native selection awaits postrender');
 draw();
 const first = performance.now() - start;
-assert.equal(messages[0], 'Target, Enemy 2, 2 of 3');
-assert.match(messages[1], /Enemy 2, HP full/);
+assert.equal(messages[0], 'Target, Same name, enemy 2: 100%, 2 of 3');
+assert.equal(messages.length, 1, 'Autodetail does not repeat HP from the focus label');
 assert.equal(observations, 1);
 for (let frame = 0; frame < 300; frame++) { nativeSceneUpdate.call(scene); draw(); }
 assert.equal(observations, 1, 'unchanged targets do not run the observer per frame');
@@ -125,29 +125,35 @@ battle._currentActionCommand = Object.assign(new c.ActionCommand(), { _cancelabl
     _coroutineContainer: { coroutine: { Cancel() { assert.equal(liveContexts.size, 0); cancellations++; } } } });
 scene.update();
 draw();
-assert.equal(messages.at(-2), 'Target, Same name, enemy 2, 2 of 3');
+assert.equal(messages.at(-1), 'Target, Same name, enemy 2: 100%, 2 of 3');
 input.add('left');
 scene.update();
 draw();
 scene.update();
 draw();
-assert.equal(messages.at(-2), 'Target, Same name, enemy 1, 1 of 3');
+assert.equal(messages.at(-1), 'Target, Same name, enemy 1: 35%, 1 of 3');
 const page = observer.controlOwner(scene);
 assert(observer.command(page, 'details'));
 sprites[1]._gaugeSprite.drawGaugeRect(0, 0, 64, 5);
 assert.equal(displayedFill, 22);
-assert.match(messages.at(-1), /HP about 35 percent/);
+assert.match(messages.at(-1), /HP 35%/);
 sprites[1]._battlerName = 'GoldenArcher';
 sprites[1].texture = { valid: true };
 enemies[1].battlerName = () => 'GoldenArcher';
 assert(observer.command(page, 'details'));
-assert.match(messages.at(-1), /gold armored figure with a narrow visor and a drawn bow/);
+assert.match(messages.at(-1), /gold plate.*pointed helmet.*curved gold bow.*lowered arrow/);
 enemies[1].battlerName = () => 'GoldenArcherVAR1';
 assert(observer.command(page, 'details'));
-assert.doesNotMatch(messages.at(-1), /armored figure|orange visor/, 'do not describe a changed enemy using stale art');
+assert.doesNotMatch(messages.at(-1), /gold plate|orange visor/, 'do not describe a changed enemy using stale art');
 sprites[1]._battlerName = 'GoldenArcherVAR1';
 assert(observer.command(page, 'details'));
 assert.match(messages.at(-1), /bright orange visor/);
+enemies[1].battlerName = () => 'LilSaltyVar1';
+sprites[1]._battlerName = 'LilSaltyVar1';
+assert(observer.command(page, 'details'));
+assert.match(messages.at(-1), /pale pink.*jagged mouth.*clawed feet/);
+assert(observer.command(page, 'reviewLast'));
+assert.doesNotMatch(messages.at(-1), /clawed feet/, 'ordinary review does not request appearance');
 
 const selectedSprite = sprites[1];
 const selectedEnemy = selectedSprite._enemy;
@@ -181,9 +187,12 @@ assert.doesNotMatch(messages.at(-1), /Attack/);
 battle._targets = nativeTargets(enemies[0], enemies[1], enemies[0]);
 scene.update();
 draw();
-assert.equal(messages.at(-2), 'Targets, Same name, enemy 1, Same name, enemy 2');
+assert.equal(messages.at(-1), 'Targets, Same name, enemy 1: 35%, Same name, enemy 2: 100%');
+assert.doesNotMatch(messages.at(-1), /clawed feet/, 'group highlight with Autodetail does not request appearance');
+assert(observer.command(observer.controlOwner(scene), 'details'));
+assert.match(messages.at(-2), /clawed feet/);
 assert(observer.command(observer.controlOwner(scene), 'reviewLast'));
-assert.match(messages.at(-1), /enemy 2, HP full, 2 of 2/);
+assert.match(messages.at(-1), /enemy 2, HP 100%, 2 of 2/);
 enemies[0].alive = false;
 assert.equal(observer.controlOwner(scene), null);
 battle._currentActionCommand.Cancel();

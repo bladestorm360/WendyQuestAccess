@@ -35,4 +35,11 @@ function drawnText(parent, sprite, maximum) {
     return index ? value : '';
 }
 
-module.exports = { battleScenePresented, battlePresented, visibleSprite, drawnText };
+// This is the same name the native enemy sprite assigns to its nameplate.
+function enemyName(sprite) {
+    const battler = sprite?._enemy || sprite?._battler;
+    const name = battler?.originalName?.();
+    return typeof name === 'string' && name.length <= 48 ? name.trim() : '';
+}
+
+module.exports = { battleScenePresented, battlePresented, visibleSprite, drawnText, enemyName };

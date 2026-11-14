@@ -200,19 +200,19 @@ def insert(original, sha, sites):
 
 
 def files_ready(scene):
-    # The save selector can take input once its drawn cards start to appear.
-    # Other file screens still wait for the fade to finish.
+    # SceneManager publishes the save selector after native start and stage
+    # attachment, before its first input update. Card art loads independently.
     ready = f'''{scene}&&{scene}._wqaFileKind&&{scene}===SceneManager._scene&&
 !SceneManager._nextScene&&!SceneManager._exiting&&!SceneManager._wqaNativeAutosaves&&{scene}._started&&{scene}._active&&
-(({scene}._fadeDuration===0&&{scene}._fadeOpacity===0)||({scene}._wqaFileKind===1&&
-!{scene}._wqaPresentation&&{scene}._fadeSign===1&&{scene}._fadeDuration>0&&{scene}._fadeOpacity<255))&&
 Graphics.app?.stage==={scene}&&!Graphics._wqaResize&&
-(({scene}._wqaFileKind===1&&{scene}._listWindow?._wqaCards===true)||
-({scene}._wqaFileKind===2&&{scene}._wqaDetailText===true&&{scene}._wqaDetailArt===true&&!{scene}._destroySave)||
+(({scene}._wqaFileKind===1&&!{scene}._wqaPresentation&&
+({scene}._fadeSign===1||({scene}._fadeDuration===0&&{scene}._fadeOpacity===0)))||
+({scene}._wqaFileKind!==1&&{scene}._fadeDuration===0&&{scene}._fadeOpacity===0&&
+(({scene}._wqaFileKind===2&&{scene}._wqaDetailText===true&&{scene}._wqaDetailArt===true&&!{scene}._destroySave)||
 ({scene}._wqaFileKind===3&&({scene}._deleteCount===0||{scene}._wqaDeleteStatus))||
 ({scene}._wqaFileKind===4&&{scene}._optionsWindow?._wqaOptionsPainted===true)||
 ({scene}._wqaFileKind===5&&{scene}._commandWindow&&( {scene}._commandWindow._wqaRetryRows&
-(1<<{scene}._commandWindow._index))))'''.replace('\n', '')
+(1<<{scene}._commandWindow._index))))))'''.replace('\n', '')
     return f'if({ready})globalThis.WendyQuestAccessFilesReady?.({scene});'.encode('ascii')
 
 
@@ -304,8 +304,7 @@ def menu_notifications(original):
         215620: b'this._wqaDetailText=true;this._wqaFileKind=2;' + files_ready('this'),
         215817: FILES_LEAVING,
         215860: b'if(SceneManager._nextScene)SceneManager._nextScene._wqaReadFailed=true;',
-        219539: b'this._wqaCards=true;if(SceneManager._scene?._listWindow===this){' +
-                files_ready('SceneManager._scene') + b'}',
+        219539: b'this._wqaCards=true;',
         230489: b'if(_0x6b578e>=0&&_0x6b578e<3&&!(this._commandWindow._wqaRetryRows&(1<<_0x6b578e)))'
                 b'{this._commandWindow._wqaRetryRows|=1<<_0x6b578e;' + files_ready('this') + b'}',
         231238: b'this._wqaFileKind=5;',

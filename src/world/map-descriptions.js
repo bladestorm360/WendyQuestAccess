@@ -21,7 +21,7 @@ const maps = Object.freeze({
     15: 'Dense yellow-green trees and scattered pink blossoms crowd the French Fry Forest. Narrow golden paths wind around thickets, cliffs and pools. A bridge crosses the stream toward the west side of the forest.',
     16: 'The Crispy Ruins lie along a green headland above a pale beach. Trees shade a winding path across stepped cliffs. Weathered stonework stands in open clearings along the upper paths.',
     17: 'A cave mouth opens at the foot of a brown cliff, above a pale strip of beach. Broken columns, palms and fallen stone line the approach beside turquoise water.',
-    19: 'Pale stone paths wind through a violet cavern with tall crystal clusters. Dark gaps split the floor into loops and narrow passages. The tunnels open into larger chambers at several points.',
+    19: 'Pale stone paths wind through a violet cavern with tall crystal clusters. Dark gaps split the floor into loops and narrow passages. The tunnels open into larger chambers at several points. Lighting the torches gradually brings pools of warm light to the dark passages.',
     20: 'Blue ice cliffs rise behind a snowy shoreline. Thick firs border the open ground, where fallen stone and palms stand near the water.',
     25: 'Snowy Chillcrest is built among blue ice cliffs, fir trees and dark channels. Stairways and crossings join clusters of houses at different heights. A red-roofed building stands out on the lower side of town.',
     26: 'Float Fort lies on a snowy coast backed by stepped ice cliffs and thick firs. A round tower stands in a clearing. A large ship with bright sails moors off the eastern shore.',
@@ -143,7 +143,16 @@ function worldDescription(map, x, y) {
 
 function mapDescription(root) {
     const id = root.$gameMap?._mapId;
-    if (id !== 113) return maps[id] || '';
+    if (id !== 113) {
+        const description = maps[id] || '';
+        if (!description || root.$dataMap?.tilesetId !== 7) return description;
+        // The Fryshire outdoor maps swap their wet tile art for a dry variant.
+        if (root.$gameMap._tilesetId === 11)
+            return description + ' Sunlight brightens the dry paths and grass.';
+        if (root.$gameMap._tilesetId === 7 && root.$gameScreen?.weatherType?.() === 'rain')
+            return description + ' Rain darkens the ground, and puddles catch the light along the paths.';
+        return description;
+    }
     const player = root.$gamePlayer;
     return worldDescription(root.$dataMap, player?._x, player?._y);
 }

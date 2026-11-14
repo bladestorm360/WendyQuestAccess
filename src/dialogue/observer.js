@@ -219,7 +219,7 @@ function createDialogueObserver(host, notifications) {
             const speaker = context.page.paint.speaker;
             const description = context.page.paint.portrait || speakerAppearance(context, speaker);
             if (!description && !speaker) return false;
-            const lines = description ? [speaker, description].filter(Boolean) : ['No visual description for this speaker.'];
+            const lines = description ? [speaker, ...description].filter(Boolean) : ['No visual description for this speaker.'];
             submit(context, { kind: 'menuDetails', lines });
             return true;
         },

@@ -1011,6 +1011,14 @@ async function main() {
         assert(weather.command282(native.parameters));
         assert(weather.command282(native.parameters));
         assert.equal(invalidations, 1, 'reapplying the active weather tileset leaves route admission alone');
+        const describeWeather = (tileset, weather) => mapDescription({
+            $dataMap: map,
+            $gameMap: { _mapId: id, _tilesetId: tileset },
+            $gameScreen: { weatherType: () => weather }
+        });
+        assert.match(describeWeather(7, 'rain'), /Rain darkens the ground/);
+        assert.match(describeWeather(11, 'none'), /Sunlight brightens/);
+        assert.doesNotMatch(describeWeather(7, 'none'), /Rain darkens|Sunlight brightens/);
         c.SceneManager._scene._wqaRouteActive = false;
         const expected = bakeMap(map, tilesets[11].flags);
         const derived = fixture.geometry.cells.slice();
@@ -1037,6 +1045,7 @@ async function main() {
         const description = mapDescription({ $gameMap: { _mapId: map } });
         assert(description.length <= 512 && description.split(/[.!?]+/).filter(Boolean).length <= 6);
     }
+    assert.match(mapDescription({ $gameMap: { _mapId: 19 } }), /Lighting the torches gradually/);
     const salt = load(19);
     compare(salt);
     const request = { x: 26, y: 12, event: 114 };

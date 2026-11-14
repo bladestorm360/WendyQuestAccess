@@ -526,12 +526,12 @@ const interval = setInterval(() => {
             throw Error('Native scene entry retained the settings modal');
         }
         SceneManager._scene._commandWindow.callHandler('continue');
-        const scene = { _wqaFileKind: 1, _started: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0,
-            _listWindow: { active: true, visible: true, openness: 255, _index: 1, _wqaCards: true,
+        const scene = { _wqaFileKind: 1, _started: true, _active: true, _fadeDuration: 60, _fadeOpacity: 255, _fadeSign: 1,
+            _listWindow: { active: true, visible: true, openness: 255, _index: 1,
                 select() {}, callHandler() {}, isHandled() {} } };
         SceneManager._scene = Graphics.app.stage = scene;
         WendyQuestAccessFilesReady(scene);
-        Graphics.app.renderer.emit('postrender');
+        // The first slot should reach the worker without a graphics frame.
     }
     if (!mapShown && require('fs').existsSync(receipt + '.slot')) {
         mapShown = true;
@@ -1347,7 +1347,11 @@ const interval = setInterval(() => {
             const companion = { ...visible(layer), _actor: { name: 'Synthetic companion', battlerName: 'Companion animation' },
                 _battlerName: 'Companion animation' };
             companion._mainSprite = companion;
-            scene._spriteset = { _actorSprites: [main], _subActorSprite: companion };
+            const battlefield = {};
+            const paintedEnemy = { parent: battlefield, texture: { valid: true }, worldVisible: true, worldAlpha: 1,
+                _enemy: { originalName: () => 'Synthetic archer', isAlive: () => true } };
+            scene._spriteset = { _actorSprites: [main], _subActorSprite: companion,
+                _battleField: battlefield, _enemySprites: [paintedEnemy] };
             const hud = scene._statusWindow = { ...visible(scene), battler: actor, offsetY: 0, states: [] };
             for (const [key, value] of Object.entries({ _numberSprite: '8', _totalSprite: '14', _dividerSprite: '/',
                 _FPSprite: '3', _totalSpriteFP: '5', _dividerSpriteFP: '/', levelNumberSprite: '7' }))
@@ -1946,6 +1950,16 @@ parentPort.on('message', message => {
         if (fs.existsSync(receipt + '.battle-stage')) {
             const target = fs.existsSync(receipt + '.battle-target-stage');
             const vitals = message.lines?.[0];
+            if (vitals === 'Enemy formation') {
+                if (fs.existsSync(receipt + '.battle-formation')) throw Error('Formation was spoken again');
+                fs.writeFileSync(receipt + '.battle-formation', speech);
+                fs.writeFileSync(receipt + '.battle-opening-epoch', String(message.epoch));
+                parentPort.postMessage('ack');
+                return;
+            }
+            if (message.kind === 'menuFocus' && !target && !fs.existsSync(receipt + '.battle-focus') &&
+                (!message.append || String(message.epoch) !== fs.readFileSync(receipt + '.battle-opening-epoch', 'utf8')))
+                throw Error('First battle menu speech did not queue behind the formation');
             const suffix = message.kind === 'menuFocus' ? (speech.startsWith('Synthetic companion') ? 'companion-focus' : 'focus') :
                 message.kind === 'battleLog' ? (vitals?.startsWith('Power ') ? 'radial' :
                     vitals?.startsWith('Synthetic target, 17 HP damage') ? 'damage' : message.append ? 'log-auto' : 'log-repeat') :
@@ -2270,6 +2284,7 @@ def main():
             'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
             'cross-map-next': 'Move east to activate.',
             'cross-map-arrived': 'You are here.',
+            'battle-formation': 'Enemy formation. 1 Synthetic archer.',
             'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',
             'battle-companion-focus': 'Synthetic companion, Battle commands, Synthetic guard, 1 of 1',
             'battle-wendy-status': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
@@ -2298,9 +2313,9 @@ def main():
             'battle-autodetail': 'Shield raised. Cost 2 MP',
             'battle-details': 'Shield raised. Cost 2 MP',
             'battle-review': 'Cost 2 MP, 2 of 2',
-            'battle-target-focus': 'Target, Synthetic target, 1 of 1',
-            'battle-target-autodetail': 'Synthetic target, HP about 50 percent, Frozen or frosted',
-            'battle-target-details': 'Synthetic target, HP about 50 percent, Frozen or frosted',
+            'battle-target-focus': 'Target, Synthetic target: 50%, 1 of 1',
+            'battle-target-autodetail': 'Synthetic target, Frozen or frosted',
+            'battle-target-details': 'Synthetic target, HP 50%, Frozen or frosted',
             'battle-bag-focus': 'Battle Bag, Synthetic item effect, 4, 1 of 1',
             'battle-bag-autodetail': 'Synthetic item effect',
             'battle-bag-details': 'Synthetic item effect',

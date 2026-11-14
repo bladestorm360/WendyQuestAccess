@@ -1,6 +1,6 @@
 'use strict';
 
-const { drawnText } = require('./presentation');
+const { drawnText, enemyName } = require('./presentation');
 const { portraitActor } = require('./party-vitals');
 
 const MAX_BATTLERS = 8;
@@ -26,40 +26,32 @@ function popupOwner(scene, popup, target) {
     if (!Array.isArray(enemies) || enemies.length > MAX_BATTLERS) return '';
     const enemy = enemies.find(matches);
     if (enemy?.parent !== field) return '';
-    return enemyLabel(scene, enemy, false);
+    return drawnText(enemy, enemy._nameSprite, 48) || enemyName(enemy) || 'Enemy';
 }
 
-function enemyLabel(scene, enemy, includeCollapsed = true) {
+function enemyLabel(scene, enemy) {
     const set = scene._spriteset;
     const field = set?._battleField;
     const enemies = set?._enemySprites;
     if (!Array.isArray(enemies) || enemies.length > MAX_BATTLERS || !enemies.includes(enemy) || enemy?.parent !== field) return '';
-    if (includeCollapsed && !attached(enemy, field)) return '';
+    if (!attached(enemy, field)) return '';
     // Keep the left-to-right index stable as earlier enemies collapse.
-    const presented = enemies.filter(sprite => Number.isFinite(sprite.x) &&
-        (includeCollapsed ? sprite?.parent === field : attached(sprite, field)))
+    const presented = enemies.filter(sprite => Number.isFinite(sprite.x) && sprite?.parent === field)
         .sort((left, right) => left.x - right.x);
     const position = presented.indexOf(enemy);
     if (position < 0) return 'Enemy';
-    const name = drawnText(enemy, enemy._nameSprite, 48);
+    const name = drawnText(enemy, enemy._nameSprite, 48) || enemyName(enemy);
     return presented.length > 1 ? (name ? name + ', enemy ' : 'Enemy ') + (position + 1) : name || 'Enemy';
 }
 
 function recordAttackSource(scene, target, performer, subject, companionAction) {
+    // Add attribution only for the companion that the native visual
+    // dispatcher actually used. It can fall back to Wendy.
+    if (!companionAction || !performer || performer !== scene._spriteset?._subActorSprite ||
+        !scene._spriteset?._actorSprites?.some(sprite => sprite._actor === subject)) return;
     const result = target.result();
-    if (!result?.used) return;
-    const spriteset = scene._spriteset;
-    const actors = spriteset?._actorSprites;
-    const enemies = spriteset?._enemySprites;
-    const main = Array.isArray(actors) && actors.length <= MAX_BATTLERS && actors.find(sprite => sprite._actor === subject);
-    const enemy = Array.isArray(enemies) && enemies.length <= MAX_BATTLERS &&
-        enemies.find(sprite => sprite._enemy === subject);
-    // Companion metadata is also used by the native visual dispatcher.
-    // When its sprite is unavailable, the engine can fall back to Wendy.
-    if (companionAction && main && performer !== spriteset._subActorSprite) return;
-    const visibleActor = portraitActor(scene, performer || main);
-    const name = visibleActor?.name || (enemy && enemyLabel(scene, enemy));
-    if (name) result._wqaAttackSource = name;
+    const companion = result?.used && portraitActor(scene, performer);
+    if (companion) result._wqaAttackSource = companion.name;
 }
 
 function abilitySource(scene, item, format) {

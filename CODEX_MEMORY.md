@@ -121,3 +121,5 @@ The [Wendy status shortcut](docs/deployment.md#wendy-status-shortcut-update) is 
 The [critical field health update](docs/deployment.md#critical-field-health-update) verified matching field and menu condition rows, the native 25% heartbeat and the H cue. HUD and packaged checks passed. Installation awaits the Steam game closing.
 
 Private main was verified at `9deeba3871cfa95af72d8df7f8a27154e09e2e50` for the [centered battle cues, cutscene descriptions and sunny-map routing update](docs/deployment.md#cutscene-narration-appearance-and-sunny-map-routing). The exact payload passed offline verification and was installed in the C: Steam library with saves and recovery intact. Gameplay confirmation is pending.
+
+The [save-list and battle speech update](docs/deployment.md#immediate-save-focus-and-battle-opening) passed installed-method, matching NW, full world, isolated installer, and exact Defender checks. The title regression now asserts first focus before artwork and the next native input update. Visual details are on request, and formation counts precede the first battle command. Steam deployment waits for the active game to close.

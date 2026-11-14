@@ -1,6 +1,6 @@
 'use strict';
 
-const { battlePresented, drawnText, visibleSprite } = require('./presentation');
+const { battlePresented, drawnText, enemyName, visibleSprite } = require('./presentation');
 const { enemyState } = require('./enemy-state');
 const { enemyArt } = require('../dialogue/character-art');
 const { reviewLines, moveReview } = require('../menus/review');
@@ -14,17 +14,14 @@ function sameTargets(left, right) {
     return left === right || (left.length === right.length && left.every((member, index) => member === right[index]));
 }
 
-function gaugeLine(sprite, name) {
+function gaugePercent(sprite) {
     const gauge = sprite._gaugeSprite;
     if (!visibleSprite(sprite, gauge) || gauge._statusType !== 'hp' || gauge._battler !== sprite._enemy ||
-        gauge.bitmap.width !== 64) return '';
+        gauge.bitmap.width !== 64) return null;
     // Sprite_EnemyGauge paints the same smoothed rate over 62 inner pixels.
     // Describe the displayed fill without announcing the battler's raw HP.
     const fill = Math.floor(62 * gauge.gaugeRate());
-    if (!Number.isFinite(fill) || fill < 0 || fill > 62) return '';
-    const amount = fill === 62 ? 'full' : fill === 0 ? 'empty' :
-        'about ' + Math.max(5, Math.min(95, Math.round(fill * 20 / 62) * 5)) + ' percent';
-    return name + ', HP ' + amount;
+    return Number.isFinite(fill) && fill >= 0 && fill <= 62 ? Math.round(fill * 100 / 62) : null;
 }
 
 function createBattleTargets(root, host, notifications, preferences) {
@@ -76,30 +73,24 @@ function createBattleTargets(root, host, notifications, preferences) {
         page.epoch = notifications.open(record, () => current === page && live(page));
     }
 
+    function statusLine(row, health = gaugePercent(row.sprite)) {
+        const state = enemyState(root, row.sprite);
+        if (health === null && !state) return '';
+        const label = health === null ? row.name : row.name + ', HP ' + health + '%';
+        return state ? label + ', ' + state : label;
+    }
+
     function setDetails(page) {
-        page.lines = reviewLines(page.rows.flatMap(row => {
-            const hp = gaugeLine(row.sprite, row.name);
-            const state = enemyState(root, row.sprite);
-            const lines = [state ? (hp || row.name) + ', ' + state : hp];
-            const { sprite, enemy } = row;
-            if (page.includeArt && sprite._battlerName === enemy.battlerName?.() &&
-                sprite.worldVisible && sprite.worldAlpha > 0 && sprite.texture?.valid) {
-                const description = enemyArt(sprite._battlerName);
-                if (description) {
-                    if (!lines[0]) lines[0] = row.name;
-                    lines.push(description);
-                }
-            }
-            return lines;
-        }));
+        page.lines = reviewLines(page.rows.map(row => statusLine(row)));
         page.position = Math.min(page.position, Math.max(0, page.lines.length - 1));
         page.hasReview = page.lines.length > 0;
     }
 
-    function details(page) {
-        setDetails(page);
-        return page.hasReview ? { kind: 'menuDetails', lines: page.lines } :
-            { kind: 'menuReview', name: 'No details here.' };
+    function describe(row) {
+        const { sprite, enemy } = row;
+        const art = sprite._battlerName === enemy.battlerName?.() &&
+            sprite.worldVisible && sprite.worldAlpha > 0 && sprite.texture?.valid && enemyArt(sprite._battlerName);
+        return reviewLines([statusLine(row) || row.name, ...(art || [])]);
     }
 
     function publish(job) {
@@ -112,14 +103,13 @@ function createBattleTargets(root, host, notifications, preferences) {
         const choices = sprites.filter(sprite => sprite?.worldVisible && sprite.worldAlpha > 0 &&
             sprite._enemy?.isAlive?.() && Number.isFinite(sprite.x)).sort((left, right) => left.x - right.x);
         const members = new Set(job.targets);
-        const labels = choices.map(sprite => drawnText(sprite, sprite._nameSprite, 48));
+        const labels = choices.map(sprite => drawnText(sprite, sprite._nameSprite, 48) || enemyName(sprite));
         const rows = [];
         for (let position = 0; position < choices.length; position++) {
             const sprite = choices[position];
             if (!members.has(sprite._enemy) || !sprite._isSelected ||
                 !visibleSprite(sprite._selectorIconPivot, sprite._selectorIcon)) continue;
             const drawn = labels[position];
-            if (!drawn && job.phase === 'ActionCommand') continue;
             const duplicate = drawn && labels.indexOf(drawn) !== labels.lastIndexOf(drawn);
             const name = drawn ? drawn + (duplicate ? ', enemy ' + (position + 1) : '') : 'Enemy ' + (position + 1);
             rows.push({ sprite, enemy: sprite._enemy, name, position: position + 1 });
@@ -133,12 +123,21 @@ function createBattleTargets(root, host, notifications, preferences) {
         if (current) notifications.close(current.epoch);
         const page = current = { ...job, kind: 'battleTarget', rows, position: 0, lines: [], epoch: 0, hasReview: false };
         job.scene._wqaBattleTargetControl = true;
-        setDetails(page);
         const settings = preferences();
         const one = rows.length === 1;
-        show(page, { kind: 'menuFocus', name: (one ? 'Target, ' : 'Targets, ') + rows.map(row => row.name).join(', '),
+        const labelsWithHealth = rows.map(row => {
+            const health = gaugePercent(row.sprite);
+            return health === null ? row.name : row.name + ': ' + health + '%';
+        });
+        show(page, { kind: 'menuFocus', name: (one ? 'Target, ' : 'Targets, ') + labelsWithHealth.join(', '),
             indexed: one && settings.indexing, position: rows[0].position, total: choices.length });
-        if (page.hasReview && settings.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
+        if (settings.autodetail) {
+            // HP is already in the focus label. Autodetail can add visible
+            // conditions, while appearance is explicitly requested with I.
+            const lines = reviewLines(rows.map(row => statusLine(row, null)));
+            if (lines.length) notifications.focus(page.epoch, { kind: 'menuDetails', lines, append: true });
+        }
+        setDetails(page);
         return true;
     }
 
@@ -186,8 +185,11 @@ function createBattleTargets(root, host, notifications, preferences) {
         command(page, action) {
             if (!page || page !== current || !live(page)) return false;
             if (action === 'details') {
-                page.includeArt = true;
-                show(page, details(page));
+                for (const [index, row] of page.rows.entries()) {
+                    const record = { kind: 'menuDetails', lines: describe(row) };
+                    if (index === 0) show(page, record);
+                    else notifications.focus(page.epoch, { ...record, append: true });
+                }
             }
             else if (REVIEW.has(action)) {
                 setDetails(page);
