@@ -141,7 +141,7 @@ int wmain(int argc, wchar_t** argv) {
 
     // The build runner sets SDL_AUDIO_DRIVER=dummy for this process only.
     // The real SDL driver callback consumes the pre-rendered PCM.
-    volatile LONG generation[4] = {1, 0, 0, 0};
+    volatile LONG generation[output_lanes + 1] = {1};
     Device device(generation);
     assert(device.open(root + L"\\SDL3.dll", 1));
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
@@ -233,15 +233,25 @@ int wmain(int argc, wchar_t** argv) {
     for (int i = 0; i < 256; ++i) level = wall_level(level, rate * 3 - i);
     assert(level == wall_fade_frames);
 
-    InterlockedExchange(generation + 3, static_cast<LONG>(unix_ms() + 650));
-    InterlockedExchange(generation + wall_lane, 3);
-    assert(device.publish(3, wall, wall_lane));
+    InterlockedExchange(generation + output_lanes, static_cast<LONG>(unix_ms() + 650));
+    for (const int lane : {wall_north, wall_east, wall_south, wall_west}) {
+        const LONG epoch = lane + 10;
+        InterlockedExchange(generation + lane, epoch);
+        assert(device.publish(epoch, wall, lane));
+    }
     const int beforeLoop = device.submitted();
     std::this_thread::sleep_for(std::chrono::milliseconds(160));
     assert(device.submitted() - beforeLoop > cue_frames);
-    InterlockedExchange(generation + 2, 4);
-    assert(device.publish(4, foot, 2));
-    std::this_thread::sleep_for(std::chrono::milliseconds(550));
+    for (const int lane : {wall_north, wall_east, wall_south, wall_west}) assert(device.position(lane) > 0);
+    InterlockedExchange(generation + wall_east, 0);
+    InterlockedExchange(generation + footstep, 4);
+    assert(device.publish(4, foot, footstep));
+    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+    const int eastStopped = device.position(wall_east);
+    const int southContinuing = device.position(wall_south);
+    std::this_thread::sleep_for(std::chrono::milliseconds(35));
+    assert(device.position(wall_east) == eastStopped && device.position(wall_south) != southContinuing);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
     const auto expired = device.callbacks();
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     assert(device.callbacks() == expired);

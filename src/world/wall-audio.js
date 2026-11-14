@@ -4,10 +4,12 @@ const { CARDINAL } = require('./spatial-direction');
 const { travelMode } = require('./vehicle-navigation');
 
 // Screen directions stay fixed as Wendy turns. The final 500 ms are the audio fade.
-const WALL_CUES = {
-    2: { cue: 'wallSouth', bearing: [0, 0, -1] }, 4: { cue: 'wallWest', bearing: [-1, 0, 0] },
-    6: { cue: 'wallEast', bearing: [1, 0, 0] }, 8: { cue: 'wallNorth', bearing: [0, 0, 1] }
-};
+const WALL_CUES = [
+    { direction: 8, cue: 'wallNorth', bearing: [0, 0, 1] },
+    { direction: 6, cue: 'wallEast', bearing: [1, 0, 0] },
+    { direction: 2, cue: 'wallSouth', bearing: [0, 0, -1] },
+    { direction: 4, cue: 'wallWest', bearing: [-1, 0, 0] }
+];
 const IDLE_MS = 3500;
 const CHECK_FRAMES = 6;
 
@@ -21,8 +23,8 @@ function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
     }
 
     function silence(state) {
-        if (state.direction) audio.retire(state.scene, 'wall');
-        state.direction = 0;
+        if (state.blocked) audio.retire(state.scene, 'wall');
+        state.blocked = 0;
     }
 
     function leave(scene) {
@@ -37,7 +39,7 @@ function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
     function own(scene) {
         if (owner?.scene === scene && owner.player === root.$gamePlayer && owner.map === root.$gameMap) return owner;
         leave();
-        owner = { scene, player: root.$gamePlayer, map: root.$gameMap, tried: false, direction: 0, until: 0 };
+        owner = { scene, player: root.$gamePlayer, map: root.$gameMap, tried: false, blocked: 0, until: 0 };
         scene._wqaWallAudio = scene._wqaPresentation = true;
         return owner;
     }
@@ -53,30 +55,37 @@ function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
         }, 'wall');
     }
 
-    function sample(state, forced = 0) {
+    function sample(state) {
         const { scene, player, map } = state;
-        const facing = player._direction;
-        const view = CARDINAL[facing];
-        if (!view || !Array.isArray(map._tileEvents) || map._tileEvents.length > 32 ||
+        if (!Array.isArray(map._tileEvents) || map._tileEvents.length > 32 ||
             !Array.isArray(map._events) || map._events.length > 513) return silence(state);
-        const x = player._x;
-        const y = player._y;
-        const blocked = direction => !player.canPass(x, y, direction);
-        const prior = state.direction;
-        // Keep the same source along an edge. A failed step can prioritize
-        // the obstacle the player is pressing against.
-        const direction = forced || (prior && blocked(prior) ? prior :
-            [facing, view.left, view.right, 10 - facing].find(blocked));
-        if (!direction) return silence(state);
         const { hrtf, wallVolume } = preferences();
         if (!audio.isPrepared(hrtf)) return arm(scene);
-        if (direction === prior && audio.extendWall(scene, state.until)) return;
-        const valid = () => owner === state && ready(scene) && now() < state.until &&
-            state.player === root.$gamePlayer && state.map === root.$gameMap && state.direction === direction;
-        state.direction = direction;
-        const { cue, bearing } = WALL_CUES[direction];
-        if (!audio.play(scene, hrtf, audio.cues[cue], wallVolume / 100, bearing,
-            valid, status => { if (status < 0 && owner === state) leave(scene); }, 'wall', 1, state.until)) silence(state);
+        let blocked = 0;
+        for (const { direction } of WALL_CUES) {
+            if (!player.canPass(player._x, player._y, direction)) blocked |= 1 << direction;
+        }
+        if (!blocked) return silence(state);
+        // Retire only obstacles we lost. Surviving loops keep their phase and
+        // share one renewed deadline even when all four edges are blocked.
+        const previous = state.blocked;
+        const retained = previous & blocked;
+        const continuing = retained && audio.extendWall(scene, state.until) ? retained : 0;
+        state.blocked = blocked;
+        for (const { direction, cue, bearing } of WALL_CUES) {
+            const bit = 1 << direction;
+            const sound = audio.cues[cue];
+            if (!(blocked & bit)) {
+                if (previous & bit) audio.retire(scene, 'wall', sound);
+            } else if (!(continuing & bit)) {
+                const valid = () => owner === state && ready(scene) && now() < state.until &&
+                    state.player === root.$gamePlayer && state.map === root.$gameMap && !!(state.blocked & bit);
+                if (!audio.play(scene, hrtf, sound, wallVolume / 100, bearing,
+                    valid, status => { if (status < 0 && owner === state) leave(scene); }, 'wall', 1, state.until)) {
+                    state.blocked &= ~bit;
+                }
+            }
+        }
     }
 
     function move(scene, direction, succeeded) {
@@ -93,7 +102,7 @@ function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
         state.x = state.player._x;
         state.y = state.player._y;
         state.attempt = direction;
-        sample(state, succeeded ? 0 : direction);
+        sample(state);
     }
 
     return {

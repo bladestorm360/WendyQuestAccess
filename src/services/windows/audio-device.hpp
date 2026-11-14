@@ -10,8 +10,20 @@
 #include <string>
 
 namespace wqa::audio {
-constexpr int output_lanes = 3;
-constexpr int wall_lane = 1;
+enum OutputLane { ordinary, wall_north, footstep, wall_east, wall_south, wall_west, output_lanes };
+
+constexpr bool is_wall_lane(int lane) {
+    return lane == wall_north || (lane >= wall_east && lane <= wall_west);
+}
+
+constexpr Cue wall_lane_cue(int lane) {
+    switch (lane) {
+    case wall_north: return Cue::wall_north;
+    case wall_east: return Cue::wall_east;
+    case wall_south: return Cue::wall_south;
+    default: return Cue::wall_west;
+    }
+}
 constexpr int wall_lease_ms = 3500;
 constexpr int wall_fade_frames = rate / 2;
 constexpr int wall_attack_step = (wall_fade_frames + 255) / 256;
@@ -68,7 +80,15 @@ class Device {
 #endif
         int frames = std::min(amount / bytes_per_frame, 1024);
         const int requested = frames;
-        const auto block_start = admitted(self.word_, self.voices_[wall_lane].epoch, wall_lane) ? unix_ms() : 0;
+        // All wall voices share the movement deadline. Read the clock once
+        // per callback, only when at least one wall can still be mixed.
+        uint32_t block_start = 0;
+        for (int lane = wall_north; lane < output_lanes; ++lane) {
+            if (is_wall_lane(lane) && admitted(self.word_, self.voices_[lane].epoch, lane)) {
+                block_start = unix_ms();
+                break;
+            }
+        }
         while (frames > 0) {
             std::array<int32_t, 512> mix{};
             const int capacity = std::min(frames, 256);
@@ -78,7 +98,8 @@ class Device {
                 if (!admitted(self.word_, voice.epoch, lane)) continue;
                 int count = std::min(capacity, render_frames - voice.next);
                 int remaining = 0;
-                if (lane == wall_lane) {
+                const bool wall = is_wall_lane(lane);
+                if (wall) {
                     const auto deadline = static_cast<uint32_t>(InterlockedCompareExchange(self.word_ + output_lanes, 0, 0));
                     const auto ms = static_cast<int32_t>(deadline - block_start);
                     if (ms <= 0 || ms > wall_lease_ms) continue;
@@ -88,7 +109,7 @@ class Device {
                     count = std::clamp(remaining, 0, capacity);
                 }
                 for (int i = 0; i < count; ++i) {
-                    if (lane == wall_lane) {
+                    if (wall) {
                         voice.level = wall_level(voice.level, remaining - i - 1);
                         for (int channel = 0; channel < 2; ++channel)
                             mix[i * 2 + channel] += voice.samples[voice.next * 2 + channel] * voice.level / wall_fade_frames;
@@ -97,7 +118,7 @@ class Device {
                             mix[i * 2 + channel] += voice.samples[voice.next * 2 + channel];
                     }
                     ++voice.next;
-                    if (lane == wall_lane && voice.next == cue_frames) voice.next = 0;
+                    if (wall && voice.next == cue_frames) voice.next = 0;
                 }
                 mixed = std::max(mixed, count);
             }
@@ -121,7 +142,7 @@ class Device {
         for (int lane = 0; lane < output_lanes; ++lane) {
             const auto& voice = self.voices_[lane];
             if (!admitted(self.word_, voice.epoch, lane) || voice.next == render_frames) continue;
-            if (lane == wall_lane) {
+            if (is_wall_lane(lane)) {
                 const auto deadline = static_cast<uint32_t>(InterlockedCompareExchange(self.word_ + output_lanes, 0, 0));
                 const auto ms = static_cast<int32_t>(deadline - unix_ms());
                 if (ms <= 0 || ms > wall_lease_ms) continue;
@@ -183,6 +204,12 @@ public:
         const int count = submitted_;
         SDL_UnlockAudioStream_(stream_);
         return count;
+    }
+    int position(int lane) {
+        if (!SDL_LockAudioStream_(stream_)) return -1;
+        const int next = voices_[lane].next;
+        SDL_UnlockAudioStream_(stream_);
+        return next;
     }
     int callbacks() {
         if (!SDL_LockAudioStream_(stream_)) return -1;

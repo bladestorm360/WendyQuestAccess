@@ -6,16 +6,17 @@ const CUE = Object.freeze({ prepare: -1, preview: 0, wallBump: 1, wallBrush: 2,
     entityDoor: 9, entityStairs: 10, entityTreasure: 11, entityObject: 12, entityCheckpoint: 13,
     battleLead: 14, battlePower: 15, battleAccuracy: 16, battleIce: 17, wallNorth: 18, footstep: 19,
     wallEast: 20, wallSouth: 21, wallWest: 22 });
-const WALL = 1;
+// Match the native mixer's fixed wall lanes and shared deadline word.
+const WALL_LANES = { [CUE.wallNorth]: 1, [CUE.wallEast]: 3, [CUE.wallSouth]: 4, [CUE.wallWest]: 5 };
 const FOOTSTEP = 2;
-const WALL_DEADLINE = 3;
+const WALL_DEADLINE = 6;
 
 function createAudio(host) {
     let generation = null;
     let worker = null;
     // One replaceable request per output lane and one operation in flight.
-    const active = [null, null, null];
-    const pending = [null, null, null];
+    const active = Array(WALL_DEADLINE).fill(null);
+    const pending = Array(WALL_DEADLINE).fill(null);
     let inFlight = null;
     let scheduled = false;
     let failed = false;
@@ -23,10 +24,11 @@ function createAudio(host) {
     let hrtfResolved = false;
     let nextEpoch = 0;
 
-    function retire(scene, source) {
+    function retire(scene, source, cue) {
         for (let lane = 0; lane < active.length; lane++) {
             const request = active[lane];
-            if (!request || (scene && request.scene !== scene) || (source && request.source !== source)) continue;
+            if (!request || (scene && request.scene !== scene) || (source && request.source !== source) ||
+                (cue !== undefined && request.cue !== cue)) continue;
             Atomics.store(generation, lane, 0);
             active[lane] = pending[lane] = null;
         }
@@ -38,7 +40,7 @@ function createAudio(host) {
             if (request.hrtf) hrtfResolved = true;
         }
         if (active[request.lane] !== request) return;
-        if (!request.ready()) return retire(request.scene, request.source);
+        if (!request.ready()) return retire(request.scene, request.source, request.cue);
         request.complete?.(status);
     }
 
@@ -55,8 +57,8 @@ function createAudio(host) {
         const request = pending.find(Boolean);
         if (!request || inFlight || failed) return;
         pending[request.lane] = null;
-        if (active[request.lane] !== request || !request.ready()) {
-            retire(request.scene, request.source);
+        if (!request.ready()) {
+            retire(request.scene, request.source, request.cue);
             schedule();
             return;
         }
@@ -98,13 +100,14 @@ function createAudio(host) {
             complete?.(-1);
             return false;
         }
-        if (!generation) generation = new Int32Array(new SharedArrayBuffer(16));
-        const lane = wallUntil ? WALL : source === 'footstep' && cue === CUE.footstep ? FOOTSTEP : 0;
+        const lane = wallUntil ? WALL_LANES[cue] : source === 'footstep' && cue === CUE.footstep ? FOOTSTEP : 0;
+        if (lane === undefined) return false;
+        if (!generation) generation = new Int32Array(new SharedArrayBuffer((WALL_DEADLINE + 1) * Int32Array.BYTES_PER_ELEMENT));
         const [right, up, forward] = bearing;
         active[lane] = pending[lane] = {
             epoch: ++nextEpoch, lane, scene, source, hrtf, cue, right, up, forward, gain, pitch, ready, complete
         };
-        if (lane === WALL) Atomics.store(generation, WALL_DEADLINE, wallUntil);
+        if (wallUntil) Atomics.store(generation, WALL_DEADLINE, wallUntil);
         Atomics.store(generation, lane, nextEpoch);
         schedule();
         return true;
@@ -113,7 +116,8 @@ function createAudio(host) {
     return {
         cues: CUE, play, retire,
         extendWall(scene, until) {
-            if (active[WALL]?.scene !== scene || ((Atomics.load(generation, WALL_DEADLINE) - Date.now()) | 0) <= 0)
+            if (!generation || ((Atomics.load(generation, WALL_DEADLINE) - Date.now()) | 0) <= 0 ||
+                !active.some((request, lane) => lane !== 0 && lane !== FOOTSTEP && request?.scene === scene))
                 return false;
             Atomics.store(generation, WALL_DEADLINE, until);
             return true;

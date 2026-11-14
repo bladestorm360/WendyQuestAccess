@@ -9,7 +9,7 @@ let failed = false;
 parentPort.on('message', request => {
     const { epoch, lane, hrtf, cue, right, up, forward, gain, pitch } = request;
     let status = 0;
-    if (epoch > 0 && Number.isInteger(lane) && lane >= 0 && lane < 3 && Atomics.load(generation, lane) === epoch) {
+    if (epoch > 0 && Number.isInteger(lane) && lane >= 0 && lane < generation.length - 1 && Atomics.load(generation, lane) === epoch) {
         try {
             if (failed) status = -1;
             else {

@@ -17,6 +17,7 @@ const { partyVitals, menuVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
 const { createMapBannerObserver } = require('./world/map-banner');
 const { createInteractionPrompt } = require('./world/interaction-prompt');
+const { createTreasureReward } = require('./world/treasure-reward');
 const { createAutosaveNotice } = require('./world/autosave-notice');
 const { createField } = require('./world/field');
 const { createFieldDiagnostics } = require('./world/field-diagnostics');
@@ -49,6 +50,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let quests = null;
     let mapBanner = null;
     let interaction = null;
+    let treasure = null;
     let autosaveNotice = null;
     let dialogue = null;
     let credits = null;
@@ -159,6 +161,7 @@ function boot(root, nodeRequire, nodeProcess) {
         mapBanner = createMapBannerObserver(root, host, notifications, field.ready);
         const fieldKeyDenied = createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
         interaction = createInteractionPrompt(root, host, field.interactionReady, notifications, field.appendInteraction);
+        treasure = createTreasureReward(root, host, notifications);
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
         quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
@@ -387,6 +390,7 @@ function boot(root, nodeRequire, nodeProcess) {
         for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
             splash.leave(host.manager._scene);
             interaction.leave(host.manager._scene);
+            treasure.leave(host.manager._scene);
             wall.leave();
             footsteps.leave();
             beacon.stop();
@@ -681,6 +685,12 @@ function boot(root, nodeRequire, nodeProcess) {
         else beacon?.invalidate(scene);
         field?.changed(scene, steppedActor);
     };
+    root.WendyQuestAccessTreasureStarted = function (scene, animation) {
+        try { treasure?.started(scene, animation); } catch { treasure?.leave(scene); }
+    };
+    root.WendyQuestAccessTreasureUpdate = function (scene) {
+        try { treasure?.update(scene); } catch { treasure?.leave(scene); }
+    };
     root.WendyQuestAccessInteractionUpdate = function (scene, icon) {
         try { interaction?.update(scene, icon); } catch { interaction?.leave(scene); }
     };
@@ -705,6 +715,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
     root.WendyQuestAccessFieldEvent = function (scene) {
         interaction?.leave(scene);
+        treasure?.leave(scene);
         autosaveNotice?.leave(scene);
         quests?.suspend(scene);
         soundscape?.leave(scene);
@@ -775,6 +786,7 @@ function boot(root, nodeRequire, nodeProcess) {
         autosaveNotice?.leave(scene);
         credits?.leave(scene);
         dialogue?.leave(scene);
+        treasure?.leave(scene);
         field?.leave(scene);
     };
 
@@ -801,6 +813,7 @@ function boot(root, nodeRequire, nodeProcess) {
         autosaveNotice?.leave(scene);
         credits?.leave(scene);
         dialogue?.leave(scene);
+        treasure?.leave(scene);
         field?.leave(scene);
         title?.suspend();
         files?.suspend();

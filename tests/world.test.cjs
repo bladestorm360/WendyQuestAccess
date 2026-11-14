@@ -218,19 +218,26 @@ function verifyWallFeedback() {
     const scene = c.SceneManager._scene;
     const options = { enabled: true, wall: true, hrtf: true, wallVolume: 45, footsteps: true, footstepVolume: 50 };
     let now = 1000;
-    let output = null;
+    const output = new Map();
     const calls = [];
     const audio = {
         cues: CUE, isPrepared: () => true,
-        extendWall(_scene, until) { if (!output) return false; output.until = until; return true; },
+        extendWall(_scene, until) {
+            for (const record of output.values()) record.until = until;
+            return output.size > 0;
+        },
         play(_scene, _hrtf, cue, gain, bearing, ready, _complete, source, _pitch, until) {
             assert(ready());
             const record = { cue, gain, bearing, source, until };
             calls.push(record);
-            if (source === 'wall') output = record;
+            if (source === 'wall') output.set(cue, record);
             return true;
         },
-        retire(_scene, source) { if (source === 'wall') output = null; }
+        retire(_scene, source, cue) {
+            if (source !== 'wall') return;
+            if (cue === undefined) output.clear();
+            else output.delete(cue);
+        }
     };
     const fieldReady = owner => owner === scene && scene._wqaFieldReady && !scene._wqaSettingsActive;
     const wall = createWallAudio(c, fieldReady, audio, () => options, () => now);
@@ -271,35 +278,34 @@ function verifyWallFeedback() {
     assert(edge);
     place(...edge, 6);
     press(6);
-    assert.equal(output.cue, CUE.wallNorth);
-    assert.deepEqual(output.bearing, [0, 0, 1]);
-    assert.equal(output.until, 4500);
+    const north = output.get(CUE.wallNorth);
+    assert.deepEqual(north.bearing, [0, 0, 1]);
+    assert.equal(north.until, 4500);
     now = 1850;
     press(6);
-    assert.equal(calls.filter(call => call.source === 'wall').length, 1, 'same wall extends without restarting');
-    assert.equal(output.until, 5350);
+    assert.equal(output.get(CUE.wallNorth), north, 'same wall extends without restarting');
+    assert.equal(north.until, 5350);
     assert.deepEqual(calls.filter(call => call.source === 'footstep').map(call => call.bearing[0]), [-0.25, 0.25]);
     now = 3500;
     press(8);
-    assert.equal(output.until, 5350, 'blocked movement does not extend wall playback');
-    assert.equal(calls.filter(call => call.source === 'wall').length, 1, 'facing the same wall does not restart its loop');
-    assert.deepEqual(output.bearing, [0, 0, 1]);
+    assert.equal(north.until, 5350, 'blocked movement does not extend wall playback');
+    assert.equal(output.get(CUE.wallNorth), north, 'facing the same wall does not restart its loop');
     assert.equal(calls.filter(call => call.source === 'footstep').length, 2);
     now = 5349;
     wall.expire(scene);
-    assert(output);
+    assert(output.size > 0);
     now = 5350;
     wall.expire(scene);
-    assert.equal(output, null);
+    assert.equal(output.size, 0);
     press(8);
-    assert.equal(output, null, 'held blocked movement cannot restart an expired tone');
+    assert.equal(output.size, 0, 'held blocked movement cannot restart an expired tone');
     wall.leave(scene);
     place(...edge, 6);
     press(6);
-    assert(output);
+    assert(output.size > 0);
     scene._wqaSettingsActive = true;
     wall.expire(scene);
-    assert.equal(output, null);
+    assert.equal(output.size, 0);
     scene._wqaSettingsActive = false;
     options.footsteps = false;
     const count = calls.filter(call => call.source === 'footstep').length;
@@ -317,10 +323,31 @@ function verifyWallFeedback() {
         assert(blocked);
         place(...blocked);
         press(direction);
-        assert.equal(output.cue, cue);
-        assert.deepEqual(output.bearing, bearing);
+        assert.deepEqual(output.get(cue).bearing, bearing);
     }
     wall.leave(scene);
+    const corner = Array.from({ length: gameMap.width() * gameMap.height() }, (_, index) =>
+        [index % gameMap.width(), Math.floor(index / gameMap.width())]).find(([x, y]) => {
+        const south = next(x, y, 2);
+        return !gameMap.eventsXyNt(x, y).length && !gameMap.eventsXyNt(...south).length &&
+            !gameMap.eventsXyNt(...next(x, y, 8)).length && !gameMap.eventsXyNt(...next(x, y, 6)).length &&
+            !player.canPass(x, y, 8) && !player.canPass(x, y, 6) && player.canPass(x, y, 2) &&
+            player.canPass(...south, 6);
+    });
+    assert(corner);
+    place(...corner, 4);
+    press(8);
+    const northAtCorner = output.get(CUE.wallNorth);
+    const eastAtCorner = output.get(CUE.wallEast);
+    assert(northAtCorner && eastAtCorner, 'north and east sound together on a native corner');
+    player.setDirection(2);
+    wall.expire(scene);
+    assert.equal(output.get(CUE.wallNorth), northAtCorner);
+    assert.equal(output.get(CUE.wallEast), eastAtCorner);
+    press(2);
+    assert(!output.has(CUE.wallEast), 'walking away from the east wall retires its voice');
+    wall.interrupt(scene);
+    assert.equal(output.size, 0);
     footsteps.leave(scene);
     scene._wqaFieldReady = false;
     c.Graphics._wqaWallEnabled = false;

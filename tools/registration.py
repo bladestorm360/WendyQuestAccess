@@ -82,6 +82,8 @@ DEPENDENCIES = {
     BITMAP_FONT_REL: BITMAP_FONT_SHA,
     Path('package.nw/js/plugins/FilterControllerMZ.js'): '44eaddf9fd7253024a0c4dc0c14a7a0ecb8890105dc878c2807b4ed904c6ba77',
     STATS_REL: STATS_SHA,
+    Path('package.nw/data/Items.json'): 'd7f959eca0afa6058ee5e341a5614cc37de7643dd4acd6bd694677386b2b252a',
+    Path('package.nw/img/UI/WENDY_COLLECTIBLE_STATUE.json'): 'ae0086a3c216d265c3650d627fab64c287e9e355eb18ed95f6c7736bf07e42ff',
     MESSAGE_OWNER_REL: '26e0230f7bcf8a425ad4c128c728cb0d74d8589d1a07d9d3026edbc2b09c7ce0',
     Path('package.nw/js/rmmz_sprites.js'): '33440ac9584344c4a9675d0b464f82eb49f5dcde0c23c485edbd385360475ba1',
     SALT_REL: '4d14b04a8980f4a4eb50dfa01d0ab61dd5507c62b65a1cd23b5df1621662e296',
@@ -138,7 +140,7 @@ SCENE_LEAVING = (b'if(this._scene?._wqaPresentation){this._scene._wqaPresentatio
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
                  b'SceneManager._scene?._wqaAutosaveNotice||SceneManager._scene?._wqaCreditsActive||'
-                 b'SceneManager._scene?._wqaInteractionActive||'
+                 b'SceneManager._scene?._wqaInteractionActive||SceneManager._scene?._wqaTreasureDue||'
                  b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady||'
@@ -469,6 +471,13 @@ def objects_notification(original):
         255744: restore_preload,
         257529: b'\n            if(!waiting&&SceneManager._scene?._wqaBattleInterpreter===this){'
                 + MAP_LEAVING + b'SceneManager._scene._wqaBattleInterpreter=null;}',
+        # ShowRewardTokens synchronously appends exactly one reward sprite.
+        # Record it after the native call, before any later event command.
+        305132: b'const wqaRewardScene=pluginName==="WendyQuest"&&params[1]==="ShowRewardTokens"?SceneManager._scene:null;'
+                b'const wqaRewardChildren=wqaRewardScene?._spriteset?.children;'
+                b'const wqaRewardBefore=wqaRewardChildren?.length;\n    ',
+        305198: b'\n    if(wqaRewardBefore!==undefined&&wqaRewardChildren.length===wqaRewardBefore+1)'
+                b'globalThis.WendyQuestAccessTreasureStarted?.(wqaRewardScene,wqaRewardChildren[wqaRewardBefore]);',
         258782: b'\n    if(waitMode==="message"&&SceneManager._scene?._wqaBattleStarted)'
                 b'SceneManager._scene._wqaBattleInterpreter=this;',
     })
@@ -592,6 +601,8 @@ def map_notification(original):
     }
 '''
     field_update = b'''
+    if (this._wqaTreasureDue && Graphics.frameCount >= this._wqaTreasureDue)
+        globalThis.WendyQuestAccessTreasureUpdate?.(this);
     if (this._wqaWallUntil && Graphics.frameCount >= this._wqaWallUntil)
         globalThis.WendyQuestAccessWallExpire?.(this);
     if (this._wqaBeaconUntil && Graphics.frameCount >= this._wqaBeaconUntil)

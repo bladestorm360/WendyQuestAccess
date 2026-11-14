@@ -141,6 +141,13 @@ function formatSpeech(message) {
             text = `${message.alternate ? 'Alternate opening. ' : ''}One tile ${heading}${message.terminal ? ' to an event' : ''} on the tone.`;
             break;
         }
+        case 'treasureReward': {
+            const name = label(message);
+            const amount = message.amount;
+            if (!name || !Number.isInteger(amount) || amount < 1 || amount > 999) return '';
+            text = `You got ${amount} ${name}${amount === 1 ? '' : 's'}.`;
+            break;
+        }
         case 'routeDirections': {
             const name = label(message);
             if (!name || !Array.isArray(message.legs) || message.legs.length > 8) return '';
