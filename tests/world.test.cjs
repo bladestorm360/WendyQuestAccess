@@ -1118,6 +1118,28 @@ async function main() {
     const crystal = load(19, { self: ['19,19,D'] });
     assert.equal(crystal.gameMap._events[19]._pageIndex, 1);
     compare(crystal);
+    const routeThroughControl = require('../src/world/terrain-controls.cjs').routeThroughControl;
+    for (const [mapId, event, x, y, target] of [
+        [12, 56, 43, 15, 7], [27, 43, 7, 41, 4], [36, 37, 29, 19, 6],
+        [62, 18, 13, 29, 10], [93, 58, 3, 40, 2], [103, 5, 7, 2, 3], [104, 6, 21, 5, 68]
+    ]) {
+        const fixture = load(mapId);
+        const live = { ...snapshot(fixture), terrain: new Uint32Array(0) };
+        const controls = manifest.maps[mapId].controls;
+        const request = { x, y, event: target, field: true, limit: 8 };
+        assert.equal(solveRoute(fixture.geometry, live, request).status, 'unreachable');
+        const route = routeThroughControl(fixture.geometry, live, request, controls, () => false);
+        assert.equal(route?.status, 'controlRoute', 'native control on map ' + mapId);
+        assert.equal(route.event, event);
+        assert.deepEqual(route.arrival, solveRoute(fixture.geometry, live, { ...request, event }).arrival);
+        const opened = { ...live, events: live.events.map(row => row.id === event ? { ...row, action: false } : row) };
+        assert.equal(routeThroughControl(fixture.geometry, opened, request, controls, () => false), null);
+        await verifyWorker(fixture, request, live, output => {
+            assert.equal(output.status, 'controlRoute');
+            assert.equal(output.event, event);
+        });
+    }
+    console.log('Verified seven ordinary terrain-control prerequisite routes through the packaged worker.');
     const lava = load(62);
     const block = lava.map.events[22].pages.flatMap(page => page.list).find(command =>
         command.code === 357 && command.parameters[1] === 'SetBlocker').parameters[3];

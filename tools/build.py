@@ -88,6 +88,7 @@ def bundle():
         './world/interaction-prompt': 'world/interaction-prompt.js',
         './world/treasure-reward': 'world/treasure-reward.js',
         './world/autosave-notice': 'world/autosave-notice.js',
+        './terrain-control-labels.cjs': 'world/terrain-control-labels.cjs',
         './world/field': 'world/field.js',
         './world/wall-audio': 'world/wall-audio.js',
         './world/footsteps': 'world/footsteps.js',
@@ -267,7 +268,7 @@ def main():
     subprocess.run(['node', '--check', str(target)], check=True, timeout=20)
     compile_native(args.prism_archive.resolve(strict=True), args.audio_sdk.resolve(strict=True),
                    args.vcvars.resolve(strict=True), args.verify_speech_pipe, args.verify_audio)
-    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'walking-catalog.cjs', 'transfer-gates.cjs'):
+    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'walking-catalog.cjs', 'transfer-gates.cjs', 'terrain-controls.cjs'):
         shutil.copyfile(ROOT / 'src' / 'world' / name, OUT / 'wendyquest-access' / name)
     puzzles = OUT / 'wendyquest-access' / 'puzzles'
     puzzles.mkdir(exist_ok=True)

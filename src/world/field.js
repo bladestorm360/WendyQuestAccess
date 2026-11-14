@@ -12,6 +12,7 @@ const { tileKey } = require('./geometry.cjs');
 const { browse, createDestinationBrowser, activeMovingEnemy } = require('./destinations');
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
+const { CONTROLS } = require('./terrain-control-labels.cjs');
 const { saltControlName } = require('./puzzles/salt-state.cjs');
 const { mapPlace } = require('./map-banner');
 const { mapDescription } = require('./map-descriptions');
@@ -326,6 +327,12 @@ function createField(root, host, notifications) {
                     board: !!job.vehicle, land: result.land === true,
                     guideAction: job.action === 'puzzleGuide' && !!result.arrival.facing && !!saltControlName(job.target),
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
+            }
+            else if (result?.status === 'controlRoute') {
+                const prerequisite = CONTROLS[job.map]?.[result.event];
+                if (!prerequisite) return status(job, 'Control directions unavailable');
+                present(job, { kind: 'routeDirections', name: job.label, legs: result.legs, facing: result.arrival.facing,
+                    more: result.more === true, prerequisite });
             }
             else if (result?.status === 'saltRoute') {
                 const event = result.actions?.[0];
