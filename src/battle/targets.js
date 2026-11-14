@@ -103,12 +103,15 @@ function createBattleTargets(root, host, notifications, preferences) {
         const choices = sprites.filter(sprite => sprite?.worldVisible && sprite.worldAlpha > 0 &&
             sprite._enemy?.isAlive?.() && Number.isFinite(sprite.x)).sort((left, right) => left.x - right.x);
         const members = new Set(job.targets);
+        const labels = choices.map(sprite => drawnText(sprite, sprite._nameSprite, 48) || enemyName(sprite));
         const rows = [];
         for (let position = 0; position < choices.length; position++) {
             const sprite = choices[position];
             if (!members.has(sprite._enemy) || !sprite._isSelected ||
                 !visibleSprite(sprite._selectorIconPivot, sprite._selectorIcon)) continue;
-            const name = drawnText(sprite, sprite._nameSprite, 48) || enemyName(sprite) || 'Enemy';
+            const drawn = labels[position];
+            const duplicate = drawn && labels.indexOf(drawn) !== labels.lastIndexOf(drawn);
+            const name = drawn ? drawn + (duplicate ? ', enemy ' + (position + 1) : '') : 'Enemy ' + (position + 1);
             rows.push({ sprite, enemy: sprite._enemy, name, position: position + 1 });
         }
         if (!rows.length || rows.length !== members.size) return false;

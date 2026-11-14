@@ -72,6 +72,14 @@ assert.equal(messages.at(-1).cue, CUE.beaconPulse);
 worker.emit('message', { epoch: messages.at(-1).epoch, status: 2 });
 audio.retire(scene, 'beacon');
 
+assert(audio.play(scene, true, CUE.wallBump, 0.5, [0, 0, 1], () => ready, null, 'bump'));
+run();
+const impact = messages.at(-1);
+assert.equal(impact.lane, 2);
+assert.equal(impact.cue, CUE.wallBump);
+worker.emit('message', { epoch: impact.epoch, status: 2 });
+audio.retire(scene, 'bump');
+
 audio.play(scene, true, CUE.wallBump, 0.5, [0, 0, 1], () => ready, null, 'wall');
 run();
 const wall = messages.at(-1);

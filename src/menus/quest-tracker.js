@@ -188,8 +188,6 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
             const page = current;
             if (page?.scene !== scene || !ready(page)) return false;
             if (action === 'details') speak(page, detail(page));
-            else if (action === 'questObjective' && page.objective)
-                speak(page, { kind: 'questFocus', objective: page.objective });
             else if (REVIEW.has(action)) speak(page, { ...moveReview(page, action), indexed: preferences().indexing });
             else return false;
             return true;

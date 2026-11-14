@@ -110,8 +110,11 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 const names = [ordinary?.name, questDestinationLabel(entry, lease, ordinary)];
                 for (const name of names) assert(!unsafe.test(name || ''), `unsafe label at map ${id} event ${entry.id} page ${index}`);
                 if (ordinary?.category === 'treasure') assert.match(ordinary.name, /^(Chest|Treasure)$/);
-                if (ordinary?.category === 'events')
-                    assert.match(ordinary.name, /^(Scene trigger|Encounter trigger|Discovery marker|Scripted movement|Ride elevator|Autosave checkpoint)$/);
+                if (ordinary?.category === 'events') {
+                    if (id === 27 && [27, 32].includes(entry.id) && index === 0)
+                        assert.equal(ordinary.name, 'Peak approach');
+                    else assert.match(ordinary.name, /^(Scene trigger|Encounter trigger|Discovery marker|Scripted movement|Ride elevator|Autosave checkpoint)$/);
+                }
             }
         }
     }

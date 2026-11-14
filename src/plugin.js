@@ -12,7 +12,7 @@ const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createBattleLog } = require('./battle/action-log');
 const { createSkillEffects } = require('./battle/skill-effects');
-const { recordAttackSource, abilitySource } = require('./battle/damage-popup');
+const { attackSource, abilitySource, expectLethalDamage } = require('./battle/damage-popup');
 const { recordCollapse, recordCondition, recordResistance, recordMomentum } = require('./battle/outcomes');
 const { createRadialResult } = require('./battle/radial-result');
 const { battleVitals, menuVitals } = require('./battle/party-vitals');
@@ -252,7 +252,6 @@ function boot(root, nodeRequire, nodeProcess) {
             return true;
         }
         function fieldAction(action, controller = false) {
-            if (action === 'questObjective') return quests.command(host.manager._scene, action);
             const questAction = QUEST_ACTIONS[action];
             if (questAction) return quests.command(host.manager._scene, questAction);
             const scene = host.manager._scene;
@@ -300,7 +299,8 @@ function boot(root, nodeRequire, nodeProcess) {
             audioStop: audio.retire,
             audioChanged(value) {
                 const master = value.enabled !== audioPreferences.enabled || value.hrtf !== audioPreferences.hrtf;
-                if (master || value.wall !== audioPreferences.wall || value.wallVolume !== audioPreferences.wallVolume) wall.leave();
+                if (master || value.wall !== audioPreferences.wall || value.wallVolume !== audioPreferences.wallVolume ||
+                    value.wallBump !== audioPreferences.wallBump || value.wallBumpVolume !== audioPreferences.wallBumpVolume) wall.leave();
                 if (master || value.footsteps !== audioPreferences.footsteps ||
                     value.footstepVolume !== audioPreferences.footstepVolume) footsteps.leave();
                 if (master || value.beacon !== audioPreferences.beacon || value.beaconVolume !== audioPreferences.beaconVolume) beacon.stop();
@@ -313,7 +313,8 @@ function boot(root, nodeRequire, nodeProcess) {
                     narration.leave();
                 audioPreferences = value;
                 root.Graphics._wqaNarrationEnabled = value.enabled && value.narration.enabled && value.narration.volume > 0;
-                root.Graphics._wqaWallEnabled = value.enabled && value.wall && value.wallVolume > 0;
+                root.Graphics._wqaWallEnabled = value.enabled &&
+                    (value.wall && value.wallVolume > 0 || value.wallBump && value.wallBumpVolume > 0);
                 root.Graphics._wqaFootstepsEnabled = value.enabled && value.footsteps && value.footstepVolume > 0;
                 root.Graphics._wqaCaveTimingEnabled = value.enabled && value.caveTiming && value.caveVolume > 0;
                 root.Graphics._wqaBattleCueEnabled = value.enabled && value.battleTiming && value.battleTimingVolume > 0;
@@ -575,11 +576,27 @@ function boot(root, nodeRequire, nodeProcess) {
     };
     root.WendyQuestAccessBattleRadialLeaving = function (scene) { radialResult?.retire(scene); };
 
+    root.WendyQuestAccessAttackAnimation = function (action, performer, subject) {
+        try {
+            const scene = outcomeScene();
+            if (scene) battleLog?.startAttack(scene, action, attackSource(scene, performer, subject, action));
+        } catch { /* Keep native animation in charge. */ }
+    };
     root.WendyQuestAccessAttackSource = function (target, performer, subject, action) {
         try {
             const scene = outcomeScene();
-            if (scene) recordAttackSource(scene, target, performer, subject, action);
+            if (!scene || !battleLog) return;
+            const result = target.result();
+            const name = result?.used && attackSource(scene, performer, subject, action);
+            if (name) result._wqaAttackSource = battleLog.attackResult(scene, action, name);
         } catch { /* Native results stay in charge. */ }
+    };
+    root.WendyQuestAccessLethalDamage = function (target) {
+        try {
+            const scene = outcomeScene();
+            if (scene) return expectLethalDamage(scene, target);
+        } catch { /* Keep native damage and collapse in charge. */ }
+        return null;
     };
     root.WendyQuestAccessAbilitySource = function (item, format) {
         try {
@@ -605,6 +622,7 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessBattleLogReady = function (scene, window) {
         try { battleLog?.observe(scene, window); } catch { battleLog?.retire(scene); }
     };
+    root.WendyQuestAccessBattleLogBlocked = function (scene) { battleLog?.suspend(scene); };
     root.WendyQuestAccessBattleLogLeaving = function (scene) { battleLog?.retire(scene); };
     root.WendyQuestAccessClapbackReady = function (actor, sprite) {
         try { skillEffects?.clapback(actor, sprite); } catch { skillEffects?.leave(root.SceneManager._scene); }

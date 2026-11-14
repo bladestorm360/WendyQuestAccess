@@ -352,10 +352,38 @@ function verifyWallFeedback() {
     assert(!output.has(CUE.wallEast), 'walking away from the east wall retires its voice');
     wall.interrupt(scene);
     assert.equal(output.size, 0);
+    options.wall = false;
+    options.wallBump = true;
+    options.wallBumpVolume = 50;
+    const impact = () => calls.filter(call => call.source === 'bump');
+    place(...next(...edge, 6));
+    for (now of [6000, 6040]) press(8);
+    assert.equal(impact().length, 0, 'a single or briefly blocked attempt is silent');
+    now = 6080;
+    press(8);
+    assert.equal(impact().length, 1);
+    assert.deepEqual(impact()[0].bearing, [0, 0, 1]);
+    assert.equal(impact()[0].cue, CUE.wallBump);
+    for (now of [6160, 6280, 6379]) press(8);
+    assert.equal(impact().length, 1, 'held input respects the impact cooldown');
+    now = 6380;
+    press(8);
+    assert.equal(impact().length, 2);
+    now = 6410;
+    press(4);
+    assert.deepEqual([player._x, player._y], edge, 'walking clear ends the obstruction');
+    assert.equal(output.size, 0, 'wall bump works with wall tones off');
+    place(...next(...edge, 6));
+    const eventStarting = gameMap.isAnyEventStarting;
+    gameMap.isAnyEventStarting = () => true;
+    for (now of [7000, 7040, 7080]) press(8);
+    assert.equal(impact().length, 2, 'a pending native event cannot produce a bump');
+    gameMap.isAnyEventStarting = eventStarting;
+    wall.leave(scene);
     footsteps.leave(scene);
     scene._wqaFieldReady = false;
     c.Graphics._wqaWallEnabled = false;
-    console.log('Verified native walking, persistent directional wall tone, exact inactivity expiry and separate footsteps.');
+    console.log('Verified native walking, persistent directional wall tone, exact inactivity expiry, separate footsteps and confirmed wall bumps.');
 }
 
 async function verifyEnemyBlockedBeacon() {
@@ -1052,6 +1080,9 @@ async function main() {
     assert.match(chillcrestDescription, /Frostyna’s large blue house/);
     assert.match(chillcrestDescription, /red-roofed Wendy’s/);
     assert.equal(formatSpeech({ kind: 'mapDescription', description: chillcrestDescription }), chillcrestDescription);
+    const trailDescription = mapDescription({ $gameMap: { _mapId: 36 } });
+    assert.match(trailDescription, /snow-white ground.*Oversized fries.*soft serve/);
+    assert.match(mapDescription({ $gameMap: { _mapId: 26 } }), /lavender beach/);
 
     const salt = load(19);
     compare(salt);
@@ -1189,6 +1220,50 @@ async function main() {
     assert.equal(solveRoute(geometry, view.live, onward).status, 'ready');
     await verifyWorker(chillcrest, onward, view.live, output => assert.equal(output.status, 'ready'));
     console.log(`Audited ${verifiedIce} ordinary melting pages and verified the route from Chillcrest to Frostyna's house.`);
+
+    const peak = load(27, { self: ['27,41,A'] });
+    const icicle = peak.gameMap.event(41);
+    const rectangle = peak.map.events[41].pages[0].list.find(command =>
+        command.code === 357 && command.parameters[1] === 'SetBlocker').parameters[3];
+    icicle.SetBlocker(+rectangle.minX, +rectangle.minY, +rectangle.maxX, +rectangle.maxY);
+    // Mirror the stock empty-page state after an erase. The renderer
+    // normally runs the remaining setup methods outside this fixture.
+    const consumed = event => Object.assign(event, { _erased: true, _through: true, _trigger: null, _pageIndex: -1 });
+    const enemy = peak.gameMap.event(13);
+    for (const placed of peak.gameMap.events()) {
+        if (placed === enemy) placed.setPosition(41, 40);
+        else if ([39, 40].includes(placed._eventId) || placed._trigger === 2) consumed(placed);
+    }
+    peak.player.setPosition(43, 32);
+    const marker = { x: 43, y: 32, event: 33, waypoint: true, field: true };
+    const blockedPeak = captureWorld(c);
+    assert.equal(solveRoute(peak.geometry, blockedPeak.live, marker).status, 'unreachable');
+    assert.equal(blockedPeak.objects.find(item => item.id === 22)?.name, 'Exit toward Mountain Pass');
+    assert.equal(blockedPeak.objects.find(item => item.id === 27)?.name, 'Peak approach');
+    let nextIce;
+    await verifyWorker(peak, marker, blockedPeak.live, result => {
+        assert.equal(result.status, 'enemyBlocked');
+        assert.equal(result.enemy, 13);
+        assert.deepEqual(result.terrain, { status: 'iceRoute', event: 41 });
+        assert.equal(formatSpeech({ kind: 'routeDirections', name: 'Quest marker', directionsOnly: true,
+            legs: result.legs, enemyBlocked: true, boundary: result.boundary, afterEnemy: 'the ice block' }).includes(
+            'Once clear, approach the ice block and press the action button'), true);
+        verifyRoute(peak, { x: marker.x, y: marker.y, targetX: result.arrival.x, targetY: result.arrival.y },
+            { ...result, status: 'ready' });
+    });
+    consumed(enemy);
+    await verifyWorker(peak, marker, captureWorld(c).live, result => {
+        assert.equal(result.status, 'iceRoute');
+        assert.equal(result.event, 41);
+        nextIce = result.arrival;
+        verifyRoute(peak, { x: marker.x, y: marker.y, event: 41 }, { ...result, status: 'ready' });
+    });
+    consumed(icicle);
+    await verifyWorker(peak, { ...marker, x: nextIce.x, y: nextIce.y }, captureWorld(c).live, result => {
+        assert.equal(result.status, 'interrupted');
+        assert([27, 32].includes(result.boundaryEvent));
+    });
+    console.log('Verified the Frosty Peak enemy, ice and story approach as three safe route prefixes.');
 
     const lava = load(62);
     const block = lava.map.events[22].pages.flatMap(page => page.list).find(command =>

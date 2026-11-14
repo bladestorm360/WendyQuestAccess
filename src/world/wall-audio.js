@@ -12,13 +12,19 @@ const WALL_CUES = [
 ];
 const IDLE_MS = 3500;
 const CHECK_FRAMES = 6;
+// Follow FFPR's short confirmation and repeated-impact cooldown. Use the
+// game's actual failed steps, including its event and rectangle colliders.
+const BUMP_CONFIRM_MS = 80;
+const BUMP_COOLDOWN_MS = 300;
+const BUMP_ATTEMPT_GAP_MS = 180;
+const BUMP_LIFETIME_MS = 140;
 
 function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
     let owner = null;
 
     function ready(scene) {
-        const { enabled, wall, wallVolume } = preferences();
-        return enabled && wall && wallVolume > 0 && travelMode(root.$gameMap, root.$gamePlayer) === 'walk' &&
+        const { enabled, wall, wallVolume, wallBump, wallBumpVolume } = preferences();
+        return enabled && (wall && wallVolume > 0 || wallBump && wallBumpVolume > 0) && travelMode(root.$gameMap, root.$gamePlayer) === 'walk' &&
             scene._wqaWallBlockFrame !== root.Graphics.frameCount && fieldReady(scene, true);
     }
 
@@ -34,12 +40,14 @@ function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
         state.scene._wqaWallAudio = false;
         state.scene._wqaWallUntil = 0;
         audio.retire(state.scene, 'wall');
+        audio.retire(state.scene, 'bump');
     }
 
     function own(scene) {
         if (owner?.scene === scene && owner.player === root.$gamePlayer && owner.map === root.$gameMap) return owner;
         leave();
-        owner = { scene, player: root.$gamePlayer, map: root.$gameMap, tried: false, blocked: 0, until: 0 };
+        owner = { scene, player: root.$gamePlayer, map: root.$gameMap, tried: false, blocked: 0, until: 0,
+            lastBump: -Infinity, bump: null };
         scene._wqaWallAudio = scene._wqaPresentation = true;
         return owner;
     }
@@ -88,10 +96,46 @@ function createWallAudio(root, fieldReady, audio, preferences, now = Date.now) {
         }
     }
 
+    function bump(state, direction, succeeded, time) {
+        const { scene, player, map } = state;
+        const { wallBump, wallBumpVolume, hrtf } = preferences();
+        if (!wallBump || !(wallBumpVolume > 0)) return;
+        if (succeeded || root.Input?.dir4 !== direction) {
+            state.bump = null;
+            audio.retire(scene, 'bump');
+            return;
+        }
+        const x = player._x;
+        const y = player._y;
+        const hit = state.bump;
+        if (!hit || hit.direction !== direction || hit.x !== x || hit.y !== y || time - hit.last > BUMP_ATTEMPT_GAP_MS) {
+            state.bump = { direction, x, y, first: time, last: time };
+            return;
+        }
+        hit.last = time;
+        if (time - hit.first < BUMP_CONFIRM_MS || time - state.lastBump < BUMP_COOLDOWN_MS ||
+            !Array.isArray(map._events) || map._events.length > 513 ||
+            !Array.isArray(map._tileEvents) || map._tileEvents.length > 32) return;
+        if (!audio.isPrepared(hrtf)) return arm(scene);
+        if (map.isAnyEventStarting?.() || player.canPass(x, y, direction)) {
+            state.bump = null;
+            return;
+        }
+        const voice = WALL_CUES.find(cue => cue.direction === direction);
+        const valid = () => owner === state && ready(scene) && now() < time + BUMP_LIFETIME_MS &&
+            state.bump === hit && player === root.$gamePlayer && map === root.$gameMap && player._x === x && player._y === y &&
+            root.Input?.dir4 === direction && !map.isAnyEventStarting?.();
+        if (audio.play(scene, hrtf, audio.cues.wallBump, wallBumpVolume / 100, voice.bearing, valid, null, 'bump'))
+            state.lastBump = time;
+    }
+
     function move(scene, direction, succeeded) {
         if (!CARDINAL[direction] || !ready(scene)) return;
         const state = own(scene);
         const time = now();
+        bump(state, direction, succeeded, time);
+        const { wall, wallVolume } = preferences();
+        if (!wall || !(wallVolume > 0)) return;
         if (succeeded || !state.until) state.until = time + IDLE_MS;
         if (time >= state.until) return;
         const frame = root.Graphics.frameCount;

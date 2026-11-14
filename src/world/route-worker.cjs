@@ -8,7 +8,7 @@ const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, CELL_BITS } = require('./geome
 const { solveRoute, findReachable } = require('./routes.cjs');
 const { MAX_CATALOG_BYTES, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
-const { routeThroughControl, routeThroughIce } = require('./terrain-controls.cjs');
+const { routeThroughTerrain } = require('./terrain-controls.cjs');
 const { solveSaltRoute } = require('./puzzles/salt-route.cjs');
 
 const BUILD = '26578620';
@@ -117,9 +117,7 @@ parentPort.on('message', message => {
                 result = solveSaltRoute(base, live, request, manifest.maps[map].salt, cancelled) || result;
             }
             if (['unreachable', 'approachBlocked'].includes(result.status))
-                result = routeThroughControl(base, live, request, manifest.maps[map].controls, cancelled) || result;
-            if (!request.refresh && ['unreachable', 'approachBlocked'].includes(result.status))
-                result = routeThroughIce(base, live, request, cancelled) || result;
+                result = routeThroughTerrain(base, live, request, manifest.maps[map].controls, cancelled) || result;
             const follows = (result.status === 'ready' || result.status === 'enemyBlocked' || result.status === 'iceRoute') &&
                 !result.reenter && (request.beacon === true || request.autowalk === true);
             const prefix = ['interrupted', 'saltRoute', 'controlRoute'].includes(result.status);

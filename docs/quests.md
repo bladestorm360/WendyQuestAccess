@@ -2,9 +2,9 @@
 
 When the tracker shows a quest, the mod speaks the displayed title, when available, and the next unfinished objective with its displayed count. In **Speech**, enable **Autodetail** to hear the visible objective list after that announcement. **Menu indexing** adds the line position and count when reviewing. Both settings default off.
 
-Stand still on the map and press **Q** to read the visible objective and its displayed count. Press **I** to read the full current tracker. **Shift+Up** and **Shift+Down** move through the lines. **Shift+Left** and **Shift+Right** jump to the first and last line. On an Xbox layout, press and release **View**, then **Y** to read details or use the D-pad in mod mode to review. The controller returns to ordinary input after the action. The controls can be remapped. An existing custom binding can move or leave a new quest binding unassigned.
+On the map, press **I** to read the visible tracker, including the objectives and their displayed counts. **Shift+Up** and **Shift+Down** move through the lines. **Shift+Left** and **Shift+Right** jump to the first and last line. On an Xbox layout, press and release **View**, then **Y** to read details or use the D-pad in mod mode to review. The controller returns to ordinary input after the action. The controls can be remapped. An existing custom binding can move or leave a new quest binding unassigned.
 
-The tracker can be hidden or absent. Q reads a settled, visible objective when one is drawn. You can remap it under **F8 → Navigation → Read quest objective**. The stock Q mapping still delivers native Page Up. The installed field scripts and 239 maps plus common events have no field Page Up action. J already browses pathfinder destinations.
+The shortcut is listed under **F8 → Keyboard bindings → Read details**. The tracker must be visible for on-demand review.
 
 The small tracker shows objectives. An expanded tracker shows the title too. Once the title has been shown for a quest, it stays in review when that quest collapses in the same tracker window. A new quest starts review at its first line. During native dialogue, use the dialogue's own repeat command. Quest controls become available when the field resumes.
 
@@ -20,7 +20,7 @@ The field and tracker retain native references on the renderer. The speech servi
 
 ## French Fry Forest and Russetwood
 
-Denied-key diagnostics showed Q reaching both maps with field movement ready, the tracker visible and only the native lightning refresh pending. The tracker now accepts the same qualified weather refresh as the field controls on every map marked by the native lightning hook. An unrelated refresh still retires the active review. The native fixture checks Q before and after clearing that qualification on maps 12 and 15. Press Q for the current goal or I for both visible objective rows.
+Denied-key diagnostics showed Q reaching both maps with field movement ready, the tracker visible and only the native lightning refresh pending. The tracker now accepts the same qualified weather refresh as the field controls on every map marked by the native lightning hook. An unrelated refresh still retires the active review. The native fixture checks I before and after clearing that qualification on maps 12 and 15. Press I for the visible objective rows.
 
 ## Restoring the visible tracker
 
@@ -36,7 +36,7 @@ The installed-method fixture loads tracker update, destruction, navigation selec
 
 In the bounded fixture, 400 stable frames took 0.87–0.93 ms bypassed and 2.23–2.29 ms connected. One save restore took 0.74–0.98 ms through synchronous postrender, and one collapsed transfer restore took 0.16–0.17 ms. The matching NW.js fixture verifies packaged quest speech, Autodetail, keyboard and controller review, handback when hidden and restoration after the field gate opens. Actual game render cost, audible timing and screen reader behavior remain gameplay checks. [Matching NW.js fixture](../tests/nw-smoke.py)
 
-For the final player pass, accept the first quest and wait for the field to return. Expect a current objective and a count where shown. Press **Q** to repeat the objective or **I** to review the full tracker. Advance the objective using ordinary game actions, then repeat. Expect the next objective only after native reveal. Repeat after a transfer and after continuing a save with an active quest. Record a silent tracker, an old count, an early clue or a control that stays captured. [Puzzle and secret audit](puzzles-and-secrets.md) · [Feature register and estimates](feature-checkpoint.md)
+For the final player pass, accept the first quest and wait for the field to return. Expect a current objective and a count where shown. Press **I** to review the full tracker. Advance the objective using ordinary game actions, then repeat. Expect the next objective only after native reveal. Repeat after a transfer and after continuing a save with an active quest. Record a silent tracker, an old count, an early clue or a control that stays captured. [Puzzle and secret audit](puzzles-and-secrets.md) · [Feature register and estimates](feature-checkpoint.md)
 
 ## Following quest markers
 

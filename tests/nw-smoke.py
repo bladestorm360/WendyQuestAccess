@@ -147,6 +147,7 @@ let settingsStep = 0;
 let beaconSpeechConfigured = 0;
 let battleAudioStep = 0;
 let footstepSettingsStep = 0;
+let wallBumpStarted = false;
 let audioStarted = 0;
 let wallPreviewStarted = 0;
 let beaconStarted = 0;
@@ -355,6 +356,10 @@ function verifySettings() {
         choose('Preview footstep');
         footstepSettingsStep = 2;
     } else if (settingsStep === 13 && footstepSettingsStep === 2 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        choose('Wall bump, off');
+        footstepSettingsStep = 3;
+    } else if (settingsStep === 13 && footstepSettingsStep === 3 && menuStatus() === 'Audio settings saved') {
+        if (document.activeElement.textContent !== 'Wall bump, on') throw Error('Wall bump setting failed');
         choose('Navigation beacon');
         settingsStep = 14;
     } else if (settingsStep === 14 && menuStatus() === 'Audio settings saved') {
@@ -582,6 +587,14 @@ const interval = setInterval(() => {
         const fs = require('fs');
         const scene = SceneManager._scene;
         if (mapVitalsStep === 0) {
+            if (!wallBumpStarted || !fs.existsSync(receipt + '.wall-bump')) {
+                Input.dir4 = 4;
+                Graphics.frameCount++;
+                WendyQuestAccessFieldMove(scene, 4, false);
+                wallBumpStarted = true;
+                return;
+            }
+            Input.dir4 = 0;
             if (!$gamePlayer._interactIcon) {
                 const icon = $gamePlayer._interactIcon = { parent: scene, visible: true, worldVisible: true,
                     worldAlpha: 1, scale: { x: 1, y: 1 }, x: 32, y: 32 };
@@ -1096,12 +1109,11 @@ const interval = setInterval(() => {
             document.addEventListener('keydown', event => { nativeQ = event.code === 'KeyQ' && !event.defaultPrevented; },
                 { once: true });
             tap('q', 'KeyQ');
-            if (!nativeQ) throw Error('Quest review swallowed native Page Up input');
-            endingStep = 90;
-        } else if (endingStep === 90 && fs.existsSync(receipt + '.quest-objective')) {
+            if (!nativeQ) throw Error('Q failed to reach native input');
             tap('i', 'KeyI');
             endingStep = 10;
         } else if (endingStep === 10 && fs.existsSync(receipt + '.quest-detail')) {
+            if (fs.existsSync(receipt + '.quest-objective')) throw Error('Q still produced a quest announcement');
             fs.renameSync(receipt + '.quest-detail', receipt + '.quest-detail-key');
             pad();
             if (padTap(7) !== 1 << 7) throw Error('Field mod mode did not claim its binding');
@@ -2212,6 +2224,9 @@ parentPort.postMessage = packet => {
         fs.existsSync(path.join(__dirname, '..', 'receipt.json.beacon-detour'))) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.beacon-refresh'), String(packet.status));
     }
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 1 && active.lane === 2 && active.right === -1) {
+        fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.wall-bump'), String(packet.status));
+    }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 6 && active.forward === -1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.cave-cue'), String(packet.status));
     }
@@ -2340,6 +2355,8 @@ def main():
                 receipt.with_suffix('.json.beacon-refresh').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW route beacon did not publish stereo PCM to SDL')
         beacon_ms = float(receipt.with_suffix('.json.beacon-ms').read_text(encoding='utf8'))
+        if receipt.with_suffix('.json.wall-bump').read_text(encoding='utf8') != '1':
+            raise RuntimeError('NW held collision did not submit a left wall bump to silent stereo')
         battle_cue_ms = float(receipt.with_suffix('.json.battle-cue-ms').read_text(encoding='utf8'))
         battle_cue = json.loads(receipt.with_suffix('.json.battle-cue').read_text(encoding='utf8'))
         if battle_cue['status'] != 1 or abs(battle_cue['pitch'] - 1) > 0.00001:
@@ -2358,7 +2375,6 @@ def main():
             'menuFocus-auto': 'Inventory, Synthetic supply, 3, 1 of 1',
             'menuDetails-auto': 'Visible first line. Visible second line',
             'quest-focus': 'Synthetic quest. A shown clue. 1 of 2',
-            'quest-objective': 'Quest objective. A shown clue. 1 of 2',
             'quest-detail-auto': 'A shown clue. 1 of 2',
             'quest-detail-key': 'Synthetic quest. A shown clue. 1 of 2',
             'quest-detail': 'Synthetic quest. A shown clue. 1 of 2',

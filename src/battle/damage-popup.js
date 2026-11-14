@@ -43,7 +43,7 @@ function enemyLabel(scene, enemy) {
 const COMPANION_ATTACKS = new Set([9, 12, 14, 17]);
 const ENEMY_ATTACKS = new Set([1, 48, 49, 51, 56, 81, 82, 83, 84, 85, 87, 88, 90, 91, 92, 95, 96, 97, 98, 106]);
 
-function recordAttackSource(scene, target, performer, subject, action) {
+function attackSource(scene, performer, subject, action) {
     if (!action?.isSkill?.()) return;
     const skill = action.item();
     if (!skill || skill.message1 || skill.message2) return;
@@ -63,9 +63,20 @@ function recordAttackSource(scene, target, performer, subject, action) {
         const enemy = enemies.find(sprite => sprite._battler === subject || sprite._enemy === subject);
         if (attached(enemy, sprites._battleField)) name = drawnText(enemy, enemy._nameSprite, 48) || enemyName(enemy);
     }
-    if (!name) return;
-    const result = target.result();
-    if (result?.used) result._wqaAttackSource = name;
+    return name;
+}
+
+// The native action-result queue runs before both sprite producers.
+// Keep the same ticket when Sprite_Damage later constructs the number.
+function expectLethalDamage(scene, target) {
+    const result = target?.result?.();
+    if (target?.isEnemy?.() !== true || target.isDead?.() !== true || !result?.hpAffected ||
+        !(result.hpDamage > 0) || result.missed || result.evaded) return null;
+    if (result._wqaLethalDamage) return result._wqaLethalDamage;
+    const ticket = { queued: false };
+    result._wqaLethalDamage = ticket;
+    (scene._wqaLethalDamage ||= new WeakMap()).set(target, ticket);
+    return ticket;
 }
 
 function abilitySource(scene, item, format) {
@@ -84,7 +95,7 @@ function damageCaption(scene, graphics, popup) {
     if (!text) return '';
     const who = popupOwner(scene, popup, paint.target);
     if (!who) return '';
-    if (text === 'MISS') return paint.source ? paint.source + ' misses' : who + ', miss';
+    if (text === 'MISS') return paint.source ? paint.source.name + ' misses' : who + ', miss';
 
     const number = NUMBER.exec(text);
     if (!number) return '';
@@ -95,7 +106,8 @@ function damageCaption(scene, graphics, popup) {
         popup._colorType === 1 ? ' HP recovered' : basic ? ' damage' : ' HP damage');
     const effectiveness = element === '(' ? 'elemental weakness' : element === ')' ? 'elemental resistance' : '';
     const adjustment = status === '[' ? 'boosted' : status === ';' ? 'reduced' : status === ';;' ? 'strongly reduced' : '';
-    return [basic ? paint.source + ' attacks' : who, result, effectiveness, adjustment].filter(Boolean).join(', ');
+    const heading = basic ? (paint.source.start?.name === paint.source.name ? '' : paint.source.name + ' attacks') : who;
+    return [heading, result, effectiveness, adjustment].filter(Boolean).join(', ');
 }
 
-module.exports = { damageCaption, enemyLabel, recordAttackSource, abilitySource };
+module.exports = { damageCaption, enemyLabel, attackSource, abilitySource, expectLethalDamage };

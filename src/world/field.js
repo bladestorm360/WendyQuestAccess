@@ -146,6 +146,19 @@ function createField(root, host, notifications) {
         return owner;
     }
 
+    function retainIceRoute(scene, eventId) {
+        const map = root.$gameMap;
+        const block = map._events[eventId];
+        const entry = root.$dataMap.events[eventId];
+        const page = entry?.pages[block?._pageIndex];
+        if (!block || block._erased || block._trigger !== 0 || !iceOpensPassage(entry, page)) return false;
+        // Preserve the original selection across the native melt. Route work
+        // retires at entry and resumes from a fresh settled observation.
+        iceRoute = { scene, map, block, browser: owner.browser, started: false };
+        scene._wqaIceRoute = true;
+        return true;
+    }
+
     function clearIceRoute(scene) {
         if (iceRoute?.scene !== scene) return;
         scene._wqaIceRoute = false;
@@ -370,17 +383,8 @@ function createField(root, host, notifications) {
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
             }
             else if (result?.status === 'iceRoute') {
-                const map = root.$gameMap;
-                const block = map._events[result.event];
-                const entry = root.$dataMap.events[result.event];
-                const page = entry?.pages[block?._pageIndex];
-                if (!block || block._erased || block._trigger !== 0 || !iceOpensPassage(entry, page))
+                if (!retainIceRoute(job.scene, result.event))
                     return status(job, 'The ice changed. Request directions again.');
-                // Keep only the selected destination and the identity of the
-                // native ice event. Speech, routes and movement retire at
-                // native entry and resume from a fresh settled snapshot.
-                iceRoute = { scene: job.scene, map, block, browser: owner.browser, started: false };
-                job.scene._wqaIceRoute = true;
                 if (host.beacon?.enabled()) job.beaconStarted = host.beacon.start(job.scene, result.event, job.x, job.y, result,
                     null, undefined, { request: { event: result.event, field: true, beacon: true, limit: 8 } });
                 follow(job, result, { kind: 'routeDirections', name: 'Ice block', legs: result.legs,
@@ -415,12 +419,20 @@ function createField(root, host, notifications) {
                     }
                     return status(job, 'The enemy moved. Request directions again.');
                 }
-                if (host.beacon?.enabled()) job.beaconStarted = host.beacon.start(job.scene, job.target, job.x, job.y, result,
-                    null, undefined, { quest: job.quest, point: job.point, request: { ...job.request, autowalk: false, beacon: true },
-                        enemyCurrent: obstacle => currentEnemy(root, obstacle), alreadyReported: true });
+                const terrain = result.terrain;
+                const next = terrain?.status === 'iceRoute' ? 'the ice block' : CONTROLS[job.map]?.[terrain?.event];
+                if (terrain?.status === 'iceRoute' && !retainIceRoute(job.scene, terrain.event))
+                    return status(job, 'The ice changed. Request directions again.');
+                if (host.beacon?.enabled()) {
+                    const request = next ? { event: terrain.event, field: true, beacon: true, limit: 8 } :
+                        { ...job.request, autowalk: false, beacon: true };
+                    job.beaconStarted = host.beacon.start(job.scene, next ? terrain.event : job.target, job.x, job.y, result,
+                        null, undefined, { quest: job.quest, point: job.point, request,
+                            enemyCurrent: obstacle => currentEnemy(root, obstacle), alreadyReported: true });
+                }
                 job.enemyCurrent = () => currentEnemy(root, result);
                 const record = { kind: 'routeDirections', name: job.label, legs: result.legs,
-                    enemyBlocked: true, boundary: result.boundary, more: result.more === true };
+                    enemyBlocked: true, boundary: result.boundary, more: result.more === true, afterEnemy: next };
                 follow(job, result, record);
             }
             else if (result?.status === 'interrupted') {

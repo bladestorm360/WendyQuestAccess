@@ -2,7 +2,7 @@
 
 const { battleScenePresented } = require('./presentation');
 const { damageCaption } = require('./damage-popup');
-const { readConditions, readResistance, readMomentum } = require('./outcomes');
+const { readCollapses, readConditions, readResistance, readMomentum } = require('./outcomes');
 
 const MAX_PAINTED_ROWS = 8;
 const MAX_HISTORY = 6;
@@ -17,12 +17,16 @@ function createBattleLog(root, host, notifications, appendToFocus) {
     let pending = null;
     let rendererOwner = null;
     let history = null;
+    const attackStarts = new WeakMap();
+
+    function actionReady(scene) {
+        return battleScenePresented(root, host, scene) && root.BattleManager._phase !== 'ActionCommand' &&
+            !scene._itemWindow?.active && !scene._skillWindow?.active;
+    }
 
     function ready(scene, window) {
-        const battle = root.BattleManager;
-        return battleScenePresented(root, host, scene) && battle._phase !== 'ActionCommand' &&
-            battle._wqaBattleSpritesBusy === false && !root.$gameTemp?._animationQueue?.length &&
-            !scene._spriteset?._animationSprites?.length && !scene._itemWindow?.active &&
+        return actionReady(scene) && root.BattleManager._wqaBattleSpritesBusy === false &&
+            !root.$gameTemp?._animationQueue?.length && !scene._spriteset?._animationSprites?.length &&
             window && scene._actionLogWindow === window && window.parent === scene._windowLayer &&
             window.worldVisible && window.worldAlpha > 0 && window.openness === 255 &&
             window.contentsOpacity > 0 && window.contents?.isReady?.();
@@ -49,8 +53,7 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         for (const sprite of sprites) sprite._wqaDamageQueued = false;
     }
 
-    function retire(scene) {
-        if (!scene) return;
+    function clearPending(scene) {
         release(take(scene._actionLogWindow));
         releaseDamage(takeDamage(scene));
         if (pending?.scene === scene) {
@@ -58,6 +61,11 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             releaseDamage(pending.damage);
             pending = null;
         }
+    }
+
+    function retire(scene) {
+        if (!scene) return;
+        clearPending(scene);
         if (current?.scene === scene) {
             notifications.close(current.epoch);
             current = null;
@@ -65,9 +73,9 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         scene._wqaBattleLogActive = false;
     }
 
-    function speak(scene, window, lines, append) {
+    function speak(scene, window, lines, append, attacking = false) {
         const record = { kind: 'battleLog', lines };
-        if (append && appendToFocus(scene, record)) {
+        if (append && !attacking && !current?.attacking && appendToFocus(scene, record)) {
             if (current?.scene === scene) {
                 notifications.close(current.epoch);
                 current = null;
@@ -75,13 +83,15 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             return;
         }
         if (append && current?.scene === scene && current.window === window) {
+            current.attacking ||= attacking;
             notifications.focus(current.epoch, { ...record, append: true });
             return;
         }
         if (current) notifications.close(current.epoch);
-        const page = current = { scene, window, epoch: 0 };
+        const page = current = { scene, window, epoch: 0, attacking };
         scene._wqaBattleLogActive = scene._wqaPresentation = true;
-        page.epoch = notifications.open(record, () => current === page && ready(scene, window));
+        page.epoch = notifications.open(record, () => current === page &&
+            (page.attacking ? actionReady(scene) : ready(scene, window)));
     }
 
     function publish(job) {
@@ -105,10 +115,12 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         for (const sprite of damage) {
             const caption = damageCaption(scene, host.graphics, sprite);
             if (!caption) continue;
+            const ticket = sprite._wqaDamageCaption.lethal;
             sprite._wqaDamageCaption = null;
             lines.push(caption);
+            if (ticket) ticket.queued = true;
         }
-        if (scene._wqaEnemyCollapses?.length) lines.push(...scene._wqaEnemyCollapses.splice(0));
+        lines.push(...readCollapses(scene));
         lines.push(...readConditions(root, host.graphics, scene), ...readResistance(scene, host.graphics));
         const momentum = readMomentum(scene, host.graphics);
         if (momentum) lines.push(momentum);
@@ -127,10 +139,35 @@ function createBattleLog(root, host, notifications, appendToFocus) {
     }
 
     return {
+        startAttack(scene, action, name) {
+            if (root.BattleManager._action !== action || !name || !actionReady(scene) || attackStarts.has(action)) return;
+            const renderer = host.graphics.app?.renderer;
+            if (typeof renderer?.once !== 'function') return;
+            const start = { scene, name: '' };
+            attackStarts.set(action, start);
+            // Animated sprites deliberately make the normal result gate
+            // busy. Only the attack heading uses this first presented frame.
+            renderer.once('postrender', () => {
+                if (attackStarts.get(action) !== start || root.BattleManager._action !== action || !actionReady(scene)) {
+                    attackStarts.delete(action);
+                    return;
+                }
+                start.name = name;
+                speak(scene, scene._actionLogWindow, [name + ' attacks.'], true, true);
+            });
+        },
+        attackResult(scene, action, name) {
+            const start = attackStarts.get(action);
+            return { name, start: start?.scene === scene ? start : null };
+        },
+        suspend(scene) {
+            if (current?.scene === scene && current.attacking && actionReady(scene)) clearPending(scene);
+            else retire(scene);
+        },
         observe(scene, window) {
             const rows = take(window);
             const damage = takeDamage(scene);
-            if (!rows.length && !damage.length && !scene._wqaRadialReport && !scene._wqaEnemyCollapses?.length &&
+            if (!rows.length && !damage.length && !scene._wqaRadialReport && !scene._wqaDefeatDue &&
                 !scene._wqaBattleConditions?.length && !scene._wqaResistedRows?.length && !scene._wqaMomentumPending) return;
             const renderer = host.graphics.app?.renderer;
             if (!ready(scene, window) || typeof renderer?.once !== 'function') {
@@ -173,7 +210,8 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         leave(scene) {
             retire(scene);
             if (scene) {
-                scene._wqaEnemyCollapses = null;
+                scene._wqaEnemyCollapses = scene._wqaLethalDamage = null;
+                scene._wqaDefeatDue = false;
                 scene._wqaBattleConditions = null;
                 scene._wqaSeenConditions = null;
                 scene._wqaResistedRows = scene._wqaMomentumPending = null;

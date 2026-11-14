@@ -7,7 +7,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const { createBattleLog } = require('../src/battle/action-log');
-const { recordAttackSource } = require('../src/battle/damage-popup');
+const { attackSource, expectLethalDamage } = require('../src/battle/damage-popup');
 const { recordCollapse } = require('../src/battle/outcomes');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { nativeTextHost } = require('./native-text-host.cjs');
@@ -54,14 +54,16 @@ for (const name of ['setDrawColour', 'setOutline', 'setAlignment', 'setShadow', 
     Sprite_Text.prototype[name] = function () { return this; };
 Sprite_Text.prototype.setBlendColor = () => {};
 const c = vm.createContext({
-    ...host, Sprite_Damage, Sprite_Battler, Game_Enemy, Game_ActionResult: function () {}, Scene_Battle: function () {}, Scene_Message: function () {},
+    ...host, Sprite_Damage, Sprite_Battler, Game_Enemy,
+    Sprite_BattleScreenParticipant: function () {}, Window_BattleLog: function () {},
+    Approximately: (a, b, delta) => Number.isFinite(a) && Math.abs(a - b) <= delta, Game_ActionResult: function () {}, Scene_Battle: function () {}, Scene_Message: function () {},
     Sprite_Damage_prototype_initialize: function () { Sprite.prototype.initialize.call(this); this._flashColor = []; },
     SceneManager: { _scene: scene }, Graphics: { app: { stage: scene, renderer }, width: 640, height: 360 }, BattleManager: battle,
     a2_0x990531() { throw Error('Unresolved battle property'); },
     $gameMessage: { isBusy: () => false }, $gameTroop: { _interpreter: {} }, $gameTemp: { _animationQueue: [] },
     $gameScreen: { update() {}, startFlash() {} }, $gameTimer: { update() {} },
-    Time: { GetDeltaTime: () => tick }, Lerp: (from, to, amount) => from + (to - from) * amount,
-    EaseFunction: { EaseOutOver: value => value }, InverseLerp: (from, to, value) => (value - from) / (to - from),
+    Time: { GetDeltaTime: () => tick, GetGameTime: () => 0 }, Lerp: (from, to, amount) => from + (to - from) * amount,
+    EaseFunction: { EaseOutOver: value => value, None: value => value }, InverseLerp: (from, to, value) => (value - from) / (to - from),
     Clamp1: value => Math.max(0, Math.min(1, value))
 });
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
@@ -73,6 +75,8 @@ const log = createBattleLog(c, { manager: c.SceneManager, graphics: c.Graphics, 
 }, () => false);
 c.WendyQuestAccessBattleLogReady = log.observe;
 c.WendyQuestAccessBattleLogLeaving = log.retire;
+c.WendyQuestAccessBattleLogBlocked = log.suspend;
+c.WendyQuestAccessLethalDamage = target => expectLethalDamage(scene, target);
 
 const ally = field.addChild(Object.assign(new Sprite_Battler(), { x: 100, y: 130, _battler: new Battler() }));
 const enemy = field.addChild(Object.assign(new Sprite_Battler(), { x: 280, y: 125, _battler: new Game_Enemy() }));
@@ -178,8 +182,12 @@ c.BattleHelper = { GetSubActorSprite: id => id === 3 ? frygor : null, GetBattler
 c.AudioManager = { playSe() {} };
 c.CoroutineManager = { StartCoroutine(run) { delayed = run.finish; } };
 c.OverTime = function (_duration, finish) { this.finish = finish; };
-c.WendyQuestAccessAttackSource = (target, performer, subject, companion) =>
-    recordAttackSource(scene, target, performer, subject, companion);
+c.WendyQuestAccessAttackAnimation = (action, performer, subject) =>
+    log.startAttack(scene, action, attackSource(scene, performer, subject, action));
+c.WendyQuestAccessAttackSource = (target, performer, subject, action) => {
+    const name = attackSource(scene, performer, subject, action);
+    if (name && target.result()?.used) target.result()._wqaAttackSource = log.attackResult(scene, action, name);
+};
 battle.applySubstitute = () => enemy._battler;
 battle._logWindow.push = () => {};
 battle._logWindow.displayActionResults = (_subject, target) => assert.equal(target, enemy._battler);
@@ -195,9 +203,13 @@ const action = (item, outcome = { hpAffected: true, hpDamage: 17 }) => ({
 battle._action = action(skills[9]);
 battle.invokeNormalAction(ally._battler, right._battler);
 assert.equal(enemy._battler.paintResult, null);
+c.$gameTemp._animationQueue.push({});
+frame();
+assert.equal(seen.at(-1), 'Frygor attacks.', 'announce during the animation before native results exist');
+c.$gameTemp._animationQueue.pop();
 delayed(1);
 advance(40);
-assert.equal(seen.at(-1), 'Frygor attacks, 17 damage.');
+assert.equal(seen.at(-1), '17 damage.');
 battle._action = action(skills[5]);
 battle.invokeNormalAction(ally._battler, enemy._battler);
 advance(40);
@@ -208,10 +220,17 @@ advance(40);
 assert.equal(seen.at(-1), 'Golden Archer, 17 HP damage.');
 battle.applySubstitute = () => ally._battler;
 battle._logWindow.displayActionResults = () => {};
-battle._action = action(skills[83]);
+battle._action = Object.assign(action(skills[83]), { subject: () => right._battler });
+const walk = c.Sprite_BattleScreenParticipant.prototype.startMove;
+walk.call(right, 40, 0, 12, 0, null, undefined, undefined, battle._action);
+walk.call(right, 40, 0, 12, 0, null, undefined, undefined, battle._action);
+const beforeMove = seen.length;
+frame();
+assert.equal(seen.length, beforeMove + 1);
+assert.equal(seen.at(-1), 'Lil Pink Salty attacks.');
 battle.invokeNormalAction(right._battler, ally._battler);
 advance(40);
-assert.equal(seen.at(-1), 'Lil Pink Salty attacks, 17 damage.');
+assert.equal(seen.at(-1), '17 damage.');
 battle._action = action(skills[83], { missed: true });
 battle.invokeNormalAction(right._battler, ally._battler);
 advance(40);
@@ -220,6 +239,23 @@ right.bitmap = { isReady: () => true };
 recordCollapse(scene, right);
 advance(1);
 assert.equal(seen.at(-1), 'Lil Pink Salty defeated.');
+enemy.bitmap = { isReady: () => true };
+enemy._battler.isEnemy = () => true;
+enemy._battler.isDead = () => true;
+result(enemy, { used: true, hpAffected: true, hpDamage: 22 });
+const queued = [];
+const nativeLog = Object.assign(new c.Window_BattleLog(), {
+    push: (...row) => queued.push(row), displayCritical() {}, displayDamage() {}, displayAffectedStatus() {}, displayFailure() {}
+});
+nativeLog.displayActionResults(ally._battler, enemy._battler);
+assert(queued.some(row => row[0] === 'popupDamage'));
+recordCollapse(scene, enemy);
+const beforeKill = seen.length;
+log.observe(scene, sceneLog);
+renderer.emit('postrender');
+assert.equal(seen.length, beforeKill, 'the collapse notification waits for the delayed number');
+advance(40);
+assert.equal(seen.at(-1), 'Golden Archer, 22 HP damage. Golden Archer defeated.');
 const reused = new c.Game_ActionResult();
 reused._wqaAttackSource = 'Frygor';
 reused.clear();

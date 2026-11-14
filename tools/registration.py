@@ -526,7 +526,8 @@ def windows_notification(original):
         166632: b', (item?.id===31||item?.id===32)?'
                 b'globalThis.WendyQuestAccessAbilitySource?.(item,fmt):undefined',
         162511: b'    if(SceneManager._scene?._wqaBattleStarted&&SceneManager._scene._logWindow===this){'
-                b'BattleManager._wqaBattleSpritesBusy=undefined;' + BATTLE_LOG_LEAVING + b';}\n',
+                b'BattleManager._wqaBattleSpritesBusy=undefined;'
+                b'SceneManager._scene._wqaBattleLogActive&&globalThis.WendyQuestAccessBattleLogBlocked?.(SceneManager._scene);}\n',
         7547: b'\n        if (text && (textState._wqaMessage || textState._wqaPaint)) this._wqaRecordPaint(textState, text);',
         7872: b'\n' + paint + b'\n',
         11423: b'\n        if (textState._wqaMessage || textState._wqaPaint) '
@@ -857,12 +858,12 @@ def battle_notification(original):
             !SceneManager._nextScene && !SceneManager._exiting && !SceneManager._wqaNativeAutosaves &&
             !Graphics._wqaResize && Graphics.app?.stage === this) {
             if (wqaLog._wqaBattleLogRows?.length || this._wqaRadialReport || this._wqaDamageRows?.length ||
-                this._wqaEnemyCollapses?.length || this._wqaResistedRows?.length ||
+                this._wqaDefeatDue || this._wqaResistedRows?.length ||
                 (this._wqaMomentumPending && Graphics.frameCount >= this._wqaMomentumNextFrame) ||
                 (this._wqaBattleConditions?.length && Graphics.frameCount >= this._wqaNextConditionFrame))
                 globalThis.WendyQuestAccessBattleLogReady?.(this,wqaLog);
         } else if (this._wqaBattleLogActive || wqaLog?._wqaBattleLogRows?.length || this._wqaDamageRows?.length) {
-            globalThis.WendyQuestAccessBattleLogLeaving?.(this);
+            globalThis.WendyQuestAccessBattleLogBlocked?.(this);
         }
     }
 '''
@@ -954,6 +955,14 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         # including the delayed branch and companions whose action uses Wendy.
         198700: b'const wqaAction=this._action;let wqaPerformer=null;',
         199255: b'wqaPerformer=_0x258fbd;',
+        199511: b'globalThis.WendyQuestAccessAttackAnimation?.(wqaAction,wqaPerformer,_0x15034e);',
+        # Only the attack approaches pass an action to the default motion
+        # helper. Its changed-destination branch confirms movement began.
+        8083: b',wqaAttack',
+        8552: b'wqaAttack&&globalThis.WendyQuestAccessAttackAnimation?.(wqaAttack,this,wqaAttack.subject()),',
+        137212: b',undefined,undefined,BattleManager._action',
+        180906: b',_0x199732',
+        267498: b'globalThis.WendyQuestAccessLethalDamage?.(_0x5683b7);',
         199967: attack_source,
         200118: attack_source,
         241897: b'this._wqaBattleStarted=true;',
@@ -982,9 +991,10 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         287369: b',wqaSource',  # BattleHelper.logAction
         287578: b',wqaSource',
         # This installed plugin overrides the stock result clear method.
-        234266: b'if(this._wqaAttackSource)this._wqaAttackSource=null;',
+        234266: b'if(this._wqaAttackSource)this._wqaAttackSource=null;if(this._wqaLethalDamage)this._wqaLethalDamage=null;',
         274246: b'if(_0x11e1e4&&SceneManager._scene?._wqaBattleStarted)'
-                b'this._wqaDamageCaption={text:_0x11e1e4,target:_0x51b330,source:_0x550832._wqaAttackSource};',
+                b'this._wqaDamageCaption={text:_0x11e1e4,target:_0x51b330,source:_0x550832._wqaAttackSource,'
+                b'lethal:_0x550832._wqaLethalDamage||globalThis.WendyQuestAccessLethalDamage?.(_0x51b330)};',
         276706: damage_update,
     })
 

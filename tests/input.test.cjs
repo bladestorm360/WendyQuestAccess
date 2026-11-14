@@ -405,9 +405,12 @@ assert.equal(navigationAction(letters, navigationGesture({ key: 'P', shiftKey: t
 assert.equal(navigationAction(brackets, navigationGesture({ key: '|', shiftKey: true })), 'filterToggle');
 assert.equal(navigationAction(letters, 'Shift+\\'), '');
 assert.equal(navigationAction(brackets, 'Shift+P'), '');
-const conflict = normalizeNavigation({ bindings: { letters: { questObjective: 'Shift+P' } } });
-assert.equal(navigationAction(conflict, 'Shift+P'), 'questObjective');
-assert.equal(conflict.bindings.letters.filterToggle, null);
+const legacyQuest = normalizeNavigation({ bindings: { letters: { questObjective: 'Shift+P', nextDestination: 'N' } } });
+assert.equal(navigationAction(legacyQuest, 'Shift+P'), 'filterToggle');
+assert.equal(navigationAction(legacyQuest, 'N'), 'nextDestination');
+assert.equal(navigationAction(letters, 'Q'), '');
+assert.equal(navigationAction(brackets, 'Q'), '');
+assert.equal(nativeNavigationConflict({ Input: { keyMapper: { 81: 'pageup' } } }, 'Q'), true);
 assert.equal(navigationAction(letters, 'P'), 'directions');
 assert.equal(navigationAction(brackets, 'P'), 'currentDestination');
 assert.equal(navigationAction(brackets, navigationGesture({ key: '{', shiftKey: true })), 'previousCategory');

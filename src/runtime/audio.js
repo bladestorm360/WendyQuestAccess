@@ -104,7 +104,8 @@ function createAudio(host) {
             complete?.(-1);
             return false;
         }
-        const lane = wallUntil ? WALL_LANES[cue] : source === 'footstep' && cue === CUE.footstep ? FOOTSTEP : 0;
+        const movement = source === 'footstep' && cue === CUE.footstep || source === 'bump' && cue === CUE.wallBump;
+        const lane = wallUntil ? WALL_LANES[cue] : movement ? FOOTSTEP : 0;
         if (lane === undefined) return false;
         if (!generation) generation = new Int32Array(new SharedArrayBuffer((WALL_DEADLINE + 1) * Int32Array.BYTES_PER_ELEMENT));
         const [right, up, forward] = bearing;

@@ -27,12 +27,15 @@ const audioGroup = group => group === 'audio' || group === 'soundscape' || group
 
 function normalizeAudio(value) {
     const volume = value?.wallVolume;
+    const wallBumpVolume = value?.wallBumpVolume;
     const footstepVolume = value?.footstepVolume;
     const beaconVolume = value?.beaconVolume;
     const caveVolume = value?.caveVolume;
     const battleVolume = value?.battleTimingVolume;
     return { enabled: value?.enabled !== false, hrtf: value?.hrtf !== false, wall: value?.wall === true,
         wallVolume: Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : 65,
+        wallBump: value?.wallBump === true,
+        wallBumpVolume: Number.isInteger(wallBumpVolume) && wallBumpVolume >= 0 && wallBumpVolume <= 100 ? wallBumpVolume : 50,
         footsteps: value?.footsteps === true,
         footstepVolume: Number.isInteger(footstepVolume) && footstepVolume >= 0 && footstepVolume <= 100 ? footstepVolume : 50,
         beacon: value?.beacon === true,
@@ -234,7 +237,9 @@ function createSettingsMenu(root, host) {
                 'Review previous and next lines with ' + gestureName(keys.reviewPrevious) + ' and ' +
                     gestureName(keys.reviewNext) + '. First and last with ' + gestureName(keys.reviewFirst) + ' and ' +
                     gestureName(keys.reviewLast) + '.',
-                'Use Read details on a dialogue line to describe the active speaker. Open World Map from Items and use Read details for the quest pin and landmarks.',
+                'Use Read details on the field for the quest tracker. In dialogue it describes the speaker or the item icon on an acquisition message.',
+                'Use Read details for the displayed World Atlas, cavern and ruins maps, and ending and credit cards.',
+                'Use Read details for inventory, Battle Bag and shop items, equipment comparisons, purchase quantities, the last manual save result, and coupon responses.',
                 'Under Audio, enable Cutscene descriptions for an independent voice during selected story animations. Adjust its speed and volume there.'
             ],
             Pathfinder: [
@@ -242,8 +247,7 @@ function createSettingsMenu(root, host) {
                     binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
                     binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
                 'Read the current map name ' + binding('mapName') + '. Describe the map ' + binding('mapDescription') +
-                    '. Read the visible quest objective ' +
-                    binding('questObjective') + '.',
+                    '. Read the visible quest tracker ' + gestureName(keys.details) + '.',
                 'All combines destinations and bookmarks. Use ' + binding('filterToggle') +
                     ' to switch between all active destinations and reachable destinations only.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
@@ -412,7 +416,14 @@ function createSettingsMenu(root, host) {
                         [key]: Math.min(max, Math.max(min, value + direction * step)) } }));
             }
         }
+        items.wallBump = button(owner, 'Wall bump, ' + (audio.wallBump ? 'on' : 'off'), () =>
+            update('wallBump', { ...audio, wallBump: !audio.wallBump }));
+        items.wallBumpLower = button(owner, 'Decrease wall bump volume, ' + audio.wallBumpVolume + ' percent', () =>
+            update('wallBumpLower', { ...audio, wallBumpVolume: Math.max(0, audio.wallBumpVolume - 10) }));
+        items.wallBumpRaise = button(owner, 'Increase wall bump volume, ' + audio.wallBumpVolume + ' percent', () =>
+            update('wallBumpRaise', { ...audio, wallBumpVolume: Math.min(100, audio.wallBumpVolume + 10) }));
         const preview = (bearing, cue, gain, pitch) => previewAudio(owner, bearing, cue, gain, pitch);
+        button(owner, 'Preview wall bump', () => preview([0, 0, 1], 'wallBump', audio.wallBumpVolume / 100));
         button(owner, 'Preview wall tone ahead', () => preview([0, 0, 1], 'wallNorth', audio.wallVolume / 100));
         button(owner, 'Preview wall tone on the right', () => preview([1, 0, 0], 'wallEast', audio.wallVolume / 100));
         button(owner, 'Preview wall tone behind', () => preview([0, 0, -1], 'wallSouth', audio.wallVolume / 100));
@@ -459,7 +470,7 @@ function createSettingsMenu(root, host) {
             ...beaconSpeech }[selection] || keymap;
         for (const [action, name] of Object.entries(ACTIONS)) {
             const gesture = bindings[layout][action];
-            const occupied = nativeNavigationConflict(root, gesture, undefined, action) ? ', used by the game' : '';
+            const occupied = nativeNavigationConflict(root, gesture, undefined) ? ', used by the game' : '';
             const item = button(owner, `${name}, ${gestureName(gesture)}${occupied}`, () => {
                 if (loading || saving) return;
                 owner.capture = owner.selected = action;
@@ -481,7 +492,7 @@ function createSettingsMenu(root, host) {
         const { layout, bindings } = navigation;
         const action = owner.capture;
         const duplicate = navigationAction(navigation, gesture);
-        if (!unassign && (nativeNavigationConflict(root, gesture, eventCode, action) || gesture === keys.settings || gesture === keys.puzzleGuide ||
+        if (!unassign && (nativeNavigationConflict(root, gesture, eventCode) || gesture === keys.settings || gesture === keys.puzzleGuide ||
             (duplicate && duplicate !== action))) {
             status(owner, `${gestureName(gesture)} is already in use. Choose another key.`);
             return;
@@ -780,7 +791,7 @@ function createSettingsMenu(root, host) {
         }
         const gesture = navigationGesture(event);
         const action = navigationAction(navigation, gesture);
-        if (action && !nativeNavigationConflict(root, gesture, event.keyCode, action) && host.fieldCommand(action)) return;
+        if (action && !nativeNavigationConflict(root, gesture, event.keyCode) && host.fieldCommand(action)) return;
         if (action) host.fieldKeyDenied?.(action);
         const chord = puzzleGesture(event);
         const puzzle = chord && (chord === keys.puzzleGuide ? 'puzzleGuide' : chord === keys.puzzleStop ? 'puzzleStop' : '');

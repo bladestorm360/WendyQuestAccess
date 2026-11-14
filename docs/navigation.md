@@ -117,11 +117,15 @@ The [installed-method fixture](../tests/autowalk.cjs) followed native routes on 
 
 ## Map descriptions
 
-The overview can exceed six sentences when important landmarks warrant it. Chillcrest names the ice-cream terraces, Frostyna’s blue house, Elder Frosty’s tower and the red-roofed Wendy’s. The tile-art comparison also informed the Russetwood, Float Fort, Nuggedor and Burgenburg descriptions. These overviews stay within the speech packet and are read only on request.
+The overview can exceed six sentences when important landmarks warrant it. Chillcrest names the ice-cream terraces, Frostyna’s blue house, Elder Frosty’s tower and the red-roofed Wendy’s. The tile-art comparison also informed the Russetwood, Float Fort, Nuggedor and Burgenburg descriptions. Cold Brew Trail names fries, a spoon holding soft serve, ladders and blue ice cliffs. Its ground is described by its snow-white appearance. The same tile sheet appears in Chillcrest, Frosty Peak, Float Fort and the nearby shore. The shore uses distinct lavender beach tiles. These overviews stay within the speech packet and are read only on request.
 
 Press **Shift+M** while exploring. The mod reads a short, prewritten paragraph about the current area’s terrain and visible landmarks. Change the shortcut under **F8 → Navigation → Describe current map**. Requests use the same field readiness as the map name and do not start a route. The description is read through the established screen-reader output.
 
 The catalog covers visually inspected playable maps and rooms, including houses, caves and entered ruins. On the 13 Fryshire maps using the wet or dry variant, the text follows the live tileset and rain state. The Salt Caverns description ends with how lighting its torches gradually illuminates the passages. The world map selects one of five land regions using the surrounding native terrain or reads the open-water overview. Descriptions omit hidden entrances, contents of treasure, puzzle answers and future progression. The text is bundled with the plugin and requires no map images or speech audio at runtime. [Map descriptions](../src/world/map-descriptions.js)
+
+## Frosty Peak route prerequisites
+
+Directions stop at the next verified obstacle when roaming enemies and ice block the same route. If an enemy blocks access to an ice block, the mod gives the safe walking prefix and identifies the ice as the next interaction. With a beacon active, it resumes guidance to the ice when the enemy clears. Once the native melt finishes, directions resume for the original selection. A story approach still requires stepping onto its native trigger. The western map edge is labeled Exit toward Mountain Pass. [Route investigation](navigation-audit.md#frosty-peak-combined-obstructions)
 
 ## Displayed maps and ruins markers
 

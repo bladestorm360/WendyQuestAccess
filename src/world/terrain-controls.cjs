@@ -3,7 +3,7 @@
 // The map-specific records are derived from the installed tile-edit commands.
 // Only an active, reachable native control can become a prerequisite.
 const { composeWorld } = require('./geometry.cjs');
-const { solveWorldRoute } = require('./routes.cjs');
+const { solveRoute, solveWorldRoute, encounterObstacles } = require('./routes.cjs');
 
 function routeThroughControl(geometry, live, request, controls, cancelled) {
     if (live.mode !== 'walk' || !controls || request.entrances || request.vehicle || request.area || request.motion)
@@ -21,7 +21,7 @@ function routeThroughControl(geometry, live, request, controls, cancelled) {
         const opened = { ...current, cells: current.cells.slice() };
         for (const [cell, flags] of changes) opened.cells[cell] = (opened.cells[cell] & 240) | flags;
         const onward = solveWorldRoute(opened, { ...request, x: approach.arrival.x, y: approach.arrival.y }, cancelled);
-        if (onward.status === 'ready') return { ...approach, status: 'controlRoute', event: id };
+        if (onward.status === 'ready' || onward.status === 'interrupted') return { ...approach, status: 'controlRoute', event: id };
     }
     return null;
 }
@@ -45,7 +45,7 @@ function routeThroughIce(geometry, live, request, cancelled) {
         if (first) {
             const goal = solveWorldRoute(world, { ...request, x, y }, cancelled);
             if (goal.status === 'cancelled') return goal;
-            if (goal.status === 'ready') return { ...first, status: 'iceRoute' };
+            if (goal.status === 'ready' || goal.status === 'interrupted') return { ...first, status: 'iceRoute' };
         }
         for (const [slot, block] of ice.entries()) {
             if (removed & (1 << slot)) continue;
@@ -63,4 +63,24 @@ function routeThroughIce(geometry, live, request, cancelled) {
     return null;
 }
 
-module.exports = { routeThroughControl, routeThroughIce };
+function routeThroughTerrain(geometry, live, request, controls, cancelled) {
+    const plan = world => routeThroughControl(geometry, world, request, controls, cancelled) ||
+        (!request.refresh && routeThroughIce(geometry, world, request, cancelled));
+    const direct = plan(live);
+    if (direct || cancelled()) return direct;
+    if (live.mode !== 'walk' || request.refresh || request.entrances || request.vehicle || request.area || request.motion ||
+        (!controls?.length && !live.events.some(event => event.meltable && !event.erased))) return null;
+    // Ice and a moving encounter can block different parts of the same
+    // route. Use the relaxed world only to prove continuation. Verify the
+    // first step on the unchanged snapshot before giving any instructions.
+    const obstacles = new Set(encounterObstacles(live.events, request.event));
+    if (!obstacles.size) return null;
+    const candidate = plan({ ...live, events: live.events.filter(event => !obstacles.has(event)) });
+    if (!candidate || candidate.status === 'cancelled') return candidate;
+    const prefix = solveRoute(geometry, live, { x: request.x, y: request.y, event: candidate.event, field: true }, cancelled);
+    if (prefix.status === 'ready') return { ...prefix, status: candidate.status, event: candidate.event };
+    if (prefix.status === 'enemyBlocked') return { ...prefix, terrain: { status: candidate.status, event: candidate.event } };
+    return ['interrupted', 'cancelled'].includes(prefix.status) ? prefix : null;
+}
+
+module.exports = { routeThroughTerrain, routeThroughControl, routeThroughIce };

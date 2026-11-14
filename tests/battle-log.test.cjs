@@ -67,6 +67,7 @@ const observer = createBattleLog(c, { manager: c.SceneManager, graphics: c.Graph
 }, (_scene, record) => { if (append) lines.push(formatSpeech(record)); return append; });
 c.WendyQuestAccessBattleLogReady = (scene, window) => { observations++; observer.observe(scene, window); };
 c.WendyQuestAccessBattleLogLeaving = observer.retire;
+c.WendyQuestAccessBattleLogBlocked = observer.suspend;
 function frame() { c.Graphics.frameCount++; scene.update(); renderer.emit('postrender'); }
 
 log.pushMessage('Synthetic damage, \\V[1].', 6);

@@ -27,6 +27,7 @@ const EXITS = {
     127: { 1: ['First floor', 126] },
     157: { 2: ['Second floor', 158] },
     158: { 1: ['First floor', 157] },
+    27: { 22: ['Exit toward Mountain Pass', 113], 23: ['Exit toward Mountain Pass', 113] },
     28: { 6: ['Cauldron exterior', 57], 7: ['Third pull room', 55],
         8: ['First pull room', 51], 9: ['Second pull room', 53] },
     32: { 6: ['Cauldron exterior', 57], 7: ['First pull room', 51], 8: ['Second pull room', 53] },
@@ -115,6 +116,7 @@ const BEACH_HANDOFFS = Object.freeze(Object.keys(BEACH_HANDOFF_NAMES).map(Number
 
 function localHandoffName(map, event) {
     if (map === 13) return BEACH_HANDOFF_NAMES[event];
+    if (map === 27 && [27, 32].includes(event)) return 'Peak approach';
     if (map === 15 && event >= 46 && event <= 49) return 'Scene trigger';
     return undefined;
 }
@@ -212,6 +214,9 @@ function localDestination(root, event, page) {
             return { name: transfer[0], category: 'exits', eventAction: 'bump' };
     }
     const floorAction = trigger === 1 && event._priorityType !== 1;
+    if (map === 27 && floorAction && [27, 32].includes(id) &&
+        list[list.length - 3]?.code === 121 && list[list.length - 3].parameters[0] === 41 && list[list.length - 2]?.code === 214)
+        return { name: 'Peak approach', category: 'events', eventAction: 'step', handoffs: [27, 32] };
     const to = (mapId, indent = 0) => list.some(command => command.code === 201 &&
         command.indent === indent && command.parameters[0] === 0 && command.parameters[1] === mapId);
     if (floorAction) {
@@ -280,6 +285,7 @@ function localDestination(root, event, page) {
     // The quest-enabled page stays browsable while an obstacle blocks access.
     if (map === 15 && id >= 31 && id <= 33 && page.image?.characterName === '!Button')
         return { name: 'Gate switch', category: 'objects', showBlocked: event._pageIndex === 1 };
+    if (map === 27 && id === 43 && event._pageIndex === 0) return { name: 'Bridge button', category: 'objects' };
     if (map === 87 && id >= 121 && id <= 130 && page.list[35]?.parameters?.[3]?.pictureName === 'system/Caffeine Caverns Map')
         return { name: 'Map board', category: 'objects' };
     // The base game shows a generic prompt and identifies these only after OK.

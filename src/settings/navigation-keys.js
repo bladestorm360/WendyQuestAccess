@@ -3,9 +3,9 @@
 const ROUTE_ACTIONS = { previousDestination: 'Previous destination', nextDestination: 'Next destination',
     currentDestination: 'Read selected destination', directions: 'Directions', previousCategory: 'Previous category',
     nextCategory: 'Next category' };
-const FIELD_KEYS = { mapName: 'M', mapDescription: 'Shift+M', questObjective: 'Q', beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
+const FIELD_KEYS = { mapName: 'M', mapDescription: 'Shift+M', beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
 const ACTIONS = Object.freeze({ ...ROUTE_ACTIONS, mapName: 'Read current map name', mapDescription: 'Describe current map',
-    questObjective: 'Read quest objective', beaconToggle: 'Toggle navigation beacon',
+    beaconToggle: 'Toggle navigation beacon',
     wallToggle: 'Toggle wall sounds', filterToggle: 'Toggle destination filter', beaconStop: 'Stop current navigation' });
 const LAYOUT_NAMES = Object.freeze({ letters: 'Letters', brackets: 'Brackets and backslash' });
 const DEFAULTS = Object.freeze({
@@ -27,13 +27,10 @@ function navigationGesture(event) {
     return GESTURE.test(result) ? result : '';
 }
 
-function nativeNavigationConflict(root, gesture, eventCode, action) {
+function nativeNavigationConflict(root, gesture, eventCode) {
     if (!gesture) return false;
     const base = gesture[gesture.length - 1];
-    const nativeAction = root.Input?.keyMapper?.[eventCode || NATIVE_CODES[base] || base.charCodeAt(0)];
-    // Stock Q maps to Page Up, which has no settled field action on this build.
-    // The tracker read observes the key without cancelling native input.
-    return !!nativeAction && !(action === 'questObjective' && gesture === 'Q' && nativeAction === 'pageup');
+    return !!root.Input?.keyMapper?.[eventCode || NATIVE_CODES[base] || base.charCodeAt(0)];
 }
 
 function normalizeNavigation(saved, reserved = []) {

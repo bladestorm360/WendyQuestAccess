@@ -2,7 +2,7 @@
 
 const { drawnText, visibleSprite } = require('./presentation');
 const { enemyIconIndex, enemyState } = require('./enemy-state');
-const { enemyLabel } = require('./damage-popup');
+const { enemyLabel, expectLethalDamage } = require('./damage-popup');
 const { portraitActor, visibleCondition, visibleMomentum } = require('./party-vitals');
 
 const MAX_RESULTS = 8;
@@ -14,8 +14,24 @@ function recordCollapse(scene, sprite) {
     const field = scene?._spriteset?._battleField;
     if (!field || sprite.parent !== field || !visibleSprite(field, sprite)) return;
     const name = enemyLabel(scene, sprite);
-    if (name && (scene._wqaEnemyCollapses?.length || 0) < MAX_RESULTS)
-        (scene._wqaEnemyCollapses ||= []).push(name + ' defeated.');
+    if (!name || (scene._wqaEnemyCollapses?.length || 0) >= MAX_RESULTS) return;
+    const target = sprite._battler || sprite._enemy;
+    const ticket = scene._wqaLethalDamage?.get(target) ||
+        (target?.isDamagePopupRequested?.() ? expectLethalDamage(scene, target) : null);
+    (scene._wqaEnemyCollapses ||= []).push({ name, ticket });
+    if (!ticket || ticket.queued) scene._wqaDefeatDue = true;
+}
+
+function readCollapses(scene) {
+    const lines = [];
+    scene._wqaDefeatDue = false;
+    if (!scene._wqaEnemyCollapses?.length) return lines;
+    scene._wqaEnemyCollapses = scene._wqaEnemyCollapses.filter(({ name, ticket }) => {
+        if (ticket && !ticket.queued) return true;
+        lines.push(name + ' defeated.');
+        return false;
+    });
+    return lines;
 }
 
 function recordResistance(scene, effect, text, frame) {
@@ -140,4 +156,4 @@ function readConditions(root, graphics, scene) {
     return lines;
 }
 
-module.exports = { recordCollapse, recordCondition, readConditions, recordResistance, readResistance, recordMomentum, readMomentum };
+module.exports = { readCollapses, recordCollapse, recordCondition, readConditions, recordResistance, readResistance, recordMomentum, readMomentum };

@@ -55,6 +55,8 @@ def animated_text_methods():
 if sys.argv[2:] == ['damage']:
     methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy'),
                manager_method(battle, 'invokeNormalAction')]
+    methods.append(sprite_method(battle, 'Sprite_BattleScreenParticipant', 'startMove'))
+    methods.append(sprite_method(battle, 'Window_BattleLog', 'displayActionResults'))
     start = battle.index("Game_ActionResult['prototype']['clear']=function(")
     methods.append(battle[start:battle.index('},Game_Actor', start) + 1] + ';')
     methods.extend(animated_text_methods())

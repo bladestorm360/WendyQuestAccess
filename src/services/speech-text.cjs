@@ -209,6 +209,9 @@ function formatSpeech(message) {
             }
             else if (message.guideAction && facing) parts.push(`Face ${facing} and press the action button`);
             else if (facing && !beaconOnly) parts.push(`face ${facing}`);
+            const afterEnemy = message.enemyBlocked === true && label({ name: message.afterEnemy });
+            if (afterEnemy)
+                parts.push('Once clear, approach ' + afterEnemy + ' and press the action button');
             const guide = label({ name: message.guide });
             if (beaconOnly && !parts.length && !guide) {
                 text = message.directionsOnly === true ? '' : name;

@@ -701,6 +701,11 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
     return possible.status === 'unreachable' && blockedApproach ? { status: 'approachBlocked' } : finishEntry(world, possible, entry);
 }
 
+function encounterObstacles(events, target) {
+    return events.filter(event => event.movingEnemy && event.normal && !event.through &&
+        !event.erased && event.id !== target && !event.rectangle && !Number.isInteger(event.tileFlag));
+}
+
 function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     if (cancelled()) return { status: 'cancelled' };
     const world = composeWorld(geometry, snapshot, cancelled);
@@ -711,8 +716,7 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
 
     // Only relax verified moving encounter tiles in a second worker solve.
     // Keep static geometry, rectangles and floor events in both searches.
-    const enemies = world.events.filter(event => event.movingEnemy && event.normal && !event.through &&
-        !event.erased && event.id !== request.event && !event.rectangle && !Number.isInteger(event.tileFlag));
+    const enemies = encounterObstacles(world.events, request.event);
     if (cancelled()) return { status: 'cancelled' };
     if (!enemies.length) return result;
     const occupied = new Map(enemies.map(event => [indexOf(world, event.x, event.y), event.id]));
@@ -721,7 +725,8 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
         events: snapshot.events.filter(event => !excluded.has(event)) }, cancelled);
     if (!relaxed) return { status: 'cancelled' };
     const possible = solveWorldRoute(relaxed, request, cancelled);
-    if (possible.status !== 'ready' || possible.reenter) return possible.status === 'cancelled' ? possible : result;
+    if (!['ready', 'interrupted'].includes(possible.status) || possible.reenter)
+        return possible.status === 'cancelled' ? possible : result;
     const legs = [];
     let cell = indexOf(world, request.x, request.y);
     let distance = 0;
@@ -744,7 +749,16 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
         }
         legs.push(leg);
     }
+    if (possible.status === 'interrupted') {
+        // The final activation edge is outside the returned walking legs.
+        // Check it against the current collider too before naming the floor event.
+        const heading = DIRECTIONS.indexOf(possible.boundary);
+        if (step(world, cell, heading) >= 0) return possible;
+        const enemy = occupied.get(offset(world, cell, heading));
+        if (enemy) return { status: 'enemyBlocked', enemy, boundary: possible.boundary, legs, distance,
+            arrival: { x: possible.arrival.x, y: possible.arrival.y, facing: null } };
+    }
     return result;
 }
 
-module.exports = { solveRoute, solveWorldRoute, findReachable, walkingLanding, routeGoals, inside };
+module.exports = { solveRoute, solveWorldRoute, encounterObstacles, findReachable, walkingLanding, routeGoals, inside };
