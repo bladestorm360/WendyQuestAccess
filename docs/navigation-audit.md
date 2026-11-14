@@ -2,6 +2,10 @@
 
 November 12, 2026 · Steam build 26578620 · Installed Events update `1d1d7ad6383dda3f6136502d9a68724666e5d82e`
 
+## Ice blocks and elevator triggers
+
+The November 14 follow-up matched 46 native ice-melt action pages across all 239 maps. Active ice appears as **Ice block** in **Objects**. Fry Fields, French Fry Forest and the Mech Café register a separate chest event before a native move route gives it a chest sprite and moves it into place. The covered chest stays out of browsing and quest aliasing until its live sprite is assigned. The regression covers all three reveals, the alternate graybox sequence and the opened chest state. The field log recorded declined inputs and lacked the successful selection needed to identify the exact reported target. The elevator approach is under **Exits**. Walking onto the actual platform starts **Ride elevator** under **Events**. [Local destinations](../src/world/local-destinations.js) · [All-map fixture](../tests/local-destinations.cjs)
+
 ## Results
 
 - **73 maps** had a sampled route where an active NPC, merchant or exit was omitted because the route crossed a native floor event first. **42 maps** had a matching generic entry in **Events** and **51** had a matching entry in another category. Those counts overlap. **72 of the 73** had a usable first-event entry in every observed interruption. The exception was a synthetic world-map shoreline state.

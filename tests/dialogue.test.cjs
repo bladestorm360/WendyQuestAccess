@@ -1037,6 +1037,54 @@ async function verifyBattleDialogue() {
     assert.equal(auto.epoch(), 0, 'native battle phase work retires automatic dialogue first');
 }
 
+async function verifySpeakerDetails() {
+    const f = await enter(mapData(19));
+    const { c, scene, window, settings, speaker } = f;
+    const art = { parent: window, worldVisible: true, worldAlpha: 1, alpha: 1,
+        bitmap: { isReady: () => true } };
+    window._faceSprite = art;
+    window._lastFaceName = 'FrygorConcerned';
+    c.$gameMessage.faceName = () => 'FrygorConcerned';
+    Object.assign(settings, { text: 'A line of dialogue.', speaker: 'Frygor', faceReady: true });
+    f.until(() => window.pause);
+    speaker._animationRunning = false;
+    f.tick(false);
+    const details = () => {
+        const gesture = { key: 'i', keyCode: 73, code: 'KeyI', preventDefault() {}, stopPropagation() {} };
+        f.dispatchWindowEvent('keydown', gesture);
+        f.dispatchWindowEvent('keyup', gesture);
+    };
+    details();
+    assert.equal(f.packets().length, 0, 'speaker details must wait for presentation');
+    f.frame();
+    assert.equal(formatSpeech(f.packets().at(-1)), 'Frygor. A line of dialogue.');
+    details();
+    assert.equal(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')),
+        'Frygor. A golden fry-shaped crest, a red headband and a quiver of fries.');
+    assert(window.pause);
+    f.advance();
+    const length = f.records.filter(record => record.kind === 'menuDetails').length;
+    details();
+    assert.equal(f.records.filter(record => record.kind === 'menuDetails').length, length, 'retired speaker cannot be read through the stale line');
+
+    Object.assign(c.Graphics, { width: 640, height: 360 });
+    const nativeEvent = { _characterName: 'NPCs - 32x32', _characterIndex: 1 };
+    c.$gameMap._events = [null, nativeEvent];
+    const tilemap = {};
+    scene._spriteset = { _tilemap: tilemap, _characterSprites: [{ parent: tilemap, _character: nativeEvent,
+        _characterName: nativeEvent._characterName, _characterIndex: 1, worldVisible: true, worldAlpha: 1,
+        texture: { valid: true }, worldTransform: { tx: 20, ty: 20 } }] };
+    c.$gameMessage._wqaSpeakerEvent = 1;
+    c.$gameMessage.faceName = () => '';
+    Object.assign(settings, { text: 'An unportrayed line.', speaker: 'Townsperson', faceReady: true });
+    f.until(() => window.pause);
+    speaker._animationRunning = false;
+    f.tick();
+    details();
+    assert.equal(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')), 'Townsperson. Short brown hair, a green shirt and dark trousers.');
+    console.log('Verified active-dialogue details, portrait and world sprite identity, and native handback.');
+}
+
 async function verifyRepeat() {
     const f = await enter(mapData(19));
     const { c, window, speaker, settings, choice } = f;
@@ -1202,6 +1250,7 @@ async function main() {
     await verifyBattleDialogue();
 
     await verifyRepeat();
+    await verifySpeakerDetails();
     console.log('Verified installed dialogue, the chamber chest hint, Salt Caverns guidance, cave patrols and four recovery branches.');
 }
 

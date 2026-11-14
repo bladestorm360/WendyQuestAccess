@@ -91,7 +91,7 @@ function run(method, scenario, play) {
 }
 
 
-function check(method, scenario, cue, side) {
+function check(method, scenario, cue) {
     const result = run('observed' + method, scenario, true);
     assert.deepEqual(result.outcome, run('native' + method, scenario, false).outcome);
     if (cue === undefined) {
@@ -102,16 +102,16 @@ function check(method, scenario, cue, side) {
         sample.progress >= sample.start && sample.progress <= sample.end &&
         sample.progress < sample.limit && sample.progress < 1);
     assert(first);
-    assert.deepEqual(result.beats, [{ cue, at: first.at, progress: first.progress, bearing: [side, 0, 1], pitch: 1.16 }]);
+    assert.deepEqual(result.beats, [{ cue, at: first.at, progress: first.progress, bearing: [0, 0, 1], pitch: 1 }]);
     return result;
 }
 
 const ordinaryPower = { settings: {}, press: [790], lower: 0.9, upper: 1, iceStart: 0.4, iceEnd: 0.55 };
-const ordinary = check('Power', ordinaryPower, CUE.battlePower, 1);
+const ordinary = check('Power', ordinaryPower, CUE.battlePower);
 const accuracy = { ...ordinaryPower, press: [760] };
-check('Accuracy', accuracy, CUE.battleAccuracy, -1);
+check('Accuracy', accuracy, CUE.battleAccuracy);
 const mid = { ...accuracy, lower: 0.45, upper: 0.58, press: [690] };
-check('Accuracy', mid, CUE.battleAccuracy, -1);
+check('Accuracy', mid, CUE.battleAccuracy);
 
 for (const [method, scenario] of [['Power', ordinaryPower], ['Accuracy', mid]]) {
     const following = run('observed' + method, { ...scenario, press: [], followCue: true }, true);
@@ -122,13 +122,13 @@ for (const [method, scenario] of [['Power', ordinaryPower], ['Accuracy', mid]]) 
 }
 
 const frozen = { ...ordinaryPower, settings: { Frozen: true }, press: [410, 1290] };
-const ice = check('Power', frozen, CUE.battlePower, 1);
+const ice = check('Power', frozen, CUE.battlePower);
 assert(ice.samples.some(sample => sample.blocked && sample.at > 410 && sample.at < 900));
 assert(ice.beats[0].at > 910);
-check('Accuracy', { ...frozen, press: [410, 1280] }, CUE.battleAccuracy, -1);
+check('Accuracy', { ...frozen, press: [410, 1280] }, CUE.battleAccuracy);
 check('Power', { ...frozen, press: [] });
 const frosty = { ...ordinaryPower, settings: { Frosty: true }, press: [1110] };
-const slower = check('Power', frosty, CUE.battlePower, 1);
+const slower = check('Power', frosty, CUE.battlePower);
 assert(slower.beats[0].at > ordinary.beats[0].at + 180);
 check('Power', { ...ordinaryPower, settings: { Soggy: true, Wobble: 0.35 }, press: [] });
 check('Power', { ...ordinaryPower, settings: { Bland: true }, press: [] });

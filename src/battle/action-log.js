@@ -2,7 +2,7 @@
 
 const { battleScenePresented } = require('./presentation');
 const { damageCaption } = require('./damage-popup');
-const { readConditions, readResistance } = require('./outcomes');
+const { readConditions, readResistance, readMomentum } = require('./outcomes');
 
 const MAX_PAINTED_ROWS = 8;
 const MAX_HISTORY = 6;
@@ -110,6 +110,8 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         }
         if (scene._wqaEnemyCollapses?.length) lines.push(...scene._wqaEnemyCollapses.splice(0));
         lines.push(...readConditions(root, host.graphics, scene), ...readResistance(scene, host.graphics));
+        const momentum = readMomentum(scene, host.graphics);
+        if (momentum) lines.push(momentum);
         if (!lines.length) return;
         if (history?.scene !== scene) history = { scene, lines: [] };
         history.lines.push(...lines);
@@ -129,7 +131,7 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             const rows = take(window);
             const damage = takeDamage(scene);
             if (!rows.length && !damage.length && !scene._wqaRadialReport && !scene._wqaEnemyCollapses?.length &&
-                !scene._wqaBattleConditions?.length && !scene._wqaResistedRows?.length) return;
+                !scene._wqaBattleConditions?.length && !scene._wqaResistedRows?.length && !scene._wqaMomentumPending) return;
             const renderer = host.graphics.app?.renderer;
             if (!ready(scene, window) || typeof renderer?.once !== 'function') {
                 release(rows);
@@ -174,7 +176,8 @@ function createBattleLog(root, host, notifications, appendToFocus) {
                 scene._wqaEnemyCollapses = null;
                 scene._wqaBattleConditions = null;
                 scene._wqaSeenConditions = null;
-                scene._wqaResistedRows = null;
+                scene._wqaResistedRows = scene._wqaMomentumPending = null;
+                scene._wqaMomentumValue = scene._wqaMomentumHud = scene._wqaMomentumPips = undefined;
             }
             if (history?.scene === scene) history = null;
         }

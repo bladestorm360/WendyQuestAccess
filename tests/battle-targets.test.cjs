@@ -137,6 +137,17 @@ assert(observer.command(page, 'details'));
 sprites[1]._gaugeSprite.drawGaugeRect(0, 0, 64, 5);
 assert.equal(displayedFill, 22);
 assert.match(messages.at(-1), /HP about 35 percent/);
+sprites[1]._battlerName = 'GoldenArcher';
+sprites[1].texture = { valid: true };
+enemies[1].battlerName = () => 'GoldenArcher';
+assert(observer.command(page, 'details'));
+assert.match(messages.at(-1), /gold armored figure with a narrow visor and a drawn bow/);
+enemies[1].battlerName = () => 'GoldenArcherVAR1';
+assert(observer.command(page, 'details'));
+assert.doesNotMatch(messages.at(-1), /armored figure|orange visor/, 'do not describe a changed enemy using stale art');
+sprites[1]._battlerName = 'GoldenArcherVAR1';
+assert(observer.command(page, 'details'));
+assert.match(messages.at(-1), /bright orange visor/);
 
 const selectedSprite = sprites[1];
 const selectedEnemy = selectedSprite._enemy;

@@ -2,6 +2,7 @@
 
 const { battlePresented, drawnText, visibleSprite } = require('./presentation');
 const { enemyState } = require('./enemy-state');
+const { enemyArt } = require('../dialogue/character-art');
 const { reviewLines, moveReview } = require('../menus/review');
 
 const MAX_SPRITES = 8; // Installed troop data tops out at five.
@@ -76,10 +77,20 @@ function createBattleTargets(root, host, notifications, preferences) {
     }
 
     function setDetails(page) {
-        page.lines = reviewLines(page.rows.map(row => {
+        page.lines = reviewLines(page.rows.flatMap(row => {
             const hp = gaugeLine(row.sprite, row.name);
             const state = enemyState(root, row.sprite);
-            return state ? (hp || row.name) + ', ' + state : hp;
+            const lines = [state ? (hp || row.name) + ', ' + state : hp];
+            const { sprite, enemy } = row;
+            if (page.includeArt && sprite._battlerName === enemy.battlerName?.() &&
+                sprite.worldVisible && sprite.worldAlpha > 0 && sprite.texture?.valid) {
+                const description = enemyArt(sprite._battlerName);
+                if (description) {
+                    if (!lines[0]) lines[0] = row.name;
+                    lines.push(description);
+                }
+            }
+            return lines;
         }));
         page.position = Math.min(page.position, Math.max(0, page.lines.length - 1));
         page.hasReview = page.lines.length > 0;
@@ -174,7 +185,10 @@ function createBattleTargets(root, host, notifications, preferences) {
         controlOwner(scene) { return current?.scene === scene && live(current) ? current : null; },
         command(page, action) {
             if (!page || page !== current || !live(page)) return false;
-            if (action === 'details') show(page, details(page));
+            if (action === 'details') {
+                page.includeArt = true;
+                show(page, details(page));
+            }
             else if (REVIEW.has(action)) {
                 setDetails(page);
                 if (!page.hasReview) return false;

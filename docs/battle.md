@@ -38,6 +38,16 @@ The installed-method fixture used the real scene update, enemy selection and dir
 
 During final gameplay testing, cycle between two opponents while the native target prompt is open, review the HP bar, cancel and reopen the action, then begin timing. Expect current target names and no leftover review after timing begins. Test a multi-target action later if progression permits. The first remaining verification items are audible speech latency, physical controller handback and cumulative native game timings.
 
+## Visual descriptions while targeting
+
+Press the Read details key, **I** by default, to hear the selected enemy art in addition to visible HP and conditions. Descriptions use the art key of the animated sprite bound to the selected battler. The catalog covers all 32 distinct assigned battle artworks, including alternate forms. The existing targets and grouped selection determine which descriptions are eligible. Autodetail continues reading the usual target feedback until the player requests visual detail. Tests switch between the gold archer and its palette variant, including a frame where the battler and drawn art disagree. [Appearance catalog](../src/dialogue/character-art.js) · [Target observer](../src/battle/targets.js)
+
+The power assist now uses a lower metallic strike. Accuracy uses a higher bell. Both are centered, including the menu previews, and each cue begins at the same native perfect-window sample. The capped timing fixture compared 20 complete power-and-accuracy pairs at 9.86 ms native and 11.97 ms with observation. The PCM fixture checks centered output and cue distinction. Audible separation from the native meter remains a gameplay check. [Timing fixture](../tests/battle-cues.test.cjs) · [Sound synthesis](../src/services/windows/spatial-cue.hpp)
+
+## Momentum gains
+
+The battle log appends “Momentum gained” and the displayed filled and total pip counts after they finish painting. The HUD's native target change wakes the observer. The rendered pip sprites supply the spoken values. Gains while the pips are animating to a new total share the final rendered total. Starting pips, spends, stable repaint and a newly replaced HUD stay silent. The bounded queue expires in 90 frames and is retired at battle handback, resize or focus loss. The battle review includes the announcement. The native battle log fixture covers rendering delay, repeated stable draws, spending and a later gain. [HUD reader](../src/battle/party-vitals.js) · [Outcome observer](../src/battle/outcomes.js) · [Battle log fixture](../tests/battle-log.test.cjs)
+
 ## Wendy's battle status
 
 The first command in each group identifies the character whose battle artwork owns that group. From a settled command or target, press **H** to read Wendy's full visible status, including when a companion command has focus. On a default Xbox layout, press and release **View/Select**, then **X** for the same report. The action returns the controller to the game. The keyboard action is remappable under **Read Wendy’s status**.
@@ -82,7 +92,7 @@ The marker in `ActionCommandRadial.Run` at byte 67807 still follows the native c
 
 ## Radial timing tones
 
-Enable **Battle timing assist** under **F8 → Audio** for one short note when a perfect window opens. Confirm at the note. Power uses a lower tone to the right and accuracy a higher tone to the left. The game supplies the meter wind-up and ice-break sounds. The assist defaults off. Its own volume starts at 65 percent and the Audio previews use the same notes as battle.
+Enable **Battle timing assist** under **F8 → Audio** for one short note when a perfect window opens. Confirm at the note. Power uses a lower metallic strike and accuracy a higher bell. Both play in the center. The game supplies the meter wind-up and ice-break sounds. The assist defaults off. Its own volume starts at 65 percent and the Audio previews use the same notes as battle.
 
 On Steam build 26578620, `ActionCommandRadial.BarParams` at byte 52045 of `ActionCommandCombat.js` supplies the normal 94–100 percent power band. A normal 800 ms sweep gives a nominal 48 ms power window. The score requires progress below the failure cutoff and excludes exactly 100 percent. An accuracy band appears after perfect power and uses the native opponent-dependent range. The two source-checked observations at 71224 and 77631 run after geometry and input checks. They admit one note on the first sampled eligible frame per meter and revoke on accepted input, exit from the band or the native phase boundary. Frozen pauses, a missing band, automatic confirmation and the Soggy cutoff can leave no eligible cue. Frosty and equipment changes use the actual live bounds and progress.
 

@@ -1,5 +1,7 @@
 'use strict';
 
+const { fieldArt, portraitArt } = require('./character-art');
+const { renderedSprite } = require('../runtime/rendered-sprite');
 const { readNumberFocus } = require('./number-entry');
 const { moveReview } = require('../menus/review');
 
@@ -62,7 +64,10 @@ function createDialogueObserver(host, notifications) {
             const speaker = !paint.spoken && name?.worldVisible && name.worldAlpha > 0 &&
                 !name._animationRunning && typeof name._currentString === 'string' &&
                 name._currentString.length <= 96 ? name._currentString : '';
-            if (!paint.spoken) paint.speaker = speaker;
+            if (!paint.spoken) {
+                paint.speaker = speaker;
+                if (!autoPaint) paint.portrait = speakerPortrait(context);
+            }
             paint.spoken = paint.end;
             // The draw tracker survives explicit pauses on the same page.
             // Keep the rendered extent and its original name for manual review.
@@ -102,6 +107,34 @@ function createDialogueObserver(host, notifications) {
         const first = choices._wqaChoiceShown === null;
         choices._wqaChoiceShown = index;
         submit(context, { kind: 'dialogueChoice', text: row?.text || '', first, append: first && !!context.epoch });
+    }
+
+    function speakerPortrait({ window }) {
+        const message = host.gameMessage?.();
+        const name = message?.faceName?.();
+        // The custom message window keeps its prior face key after a
+        // portraitless line clears the bitmap.
+        const face = window._faceSprite;
+        if (name && name === window._lastFaceName && face?.bitmap?.isReady?.() && face.parent === window &&
+            face.worldVisible && face.worldAlpha > 0 && face.alpha > 0) return portraitArt(name);
+        return '';
+    }
+
+    function speakerAppearance(context, speaker) {
+        const { scene } = context;
+        const message = host.gameMessage?.();
+        if (message?.faceName?.()) return speakerPortrait(context);
+        if (!speaker || !scene._wqaMapRestored) return '';
+        const event = host.mapEvent?.(message?._wqaSpeakerEvent);
+        const spriteset = scene._spriteset;
+        const sprites = spriteset?._characterSprites;
+        if (!event || event._erased || event._transparent || !Array.isArray(sprites) || sprites.length > 512) return '';
+        const sprite = sprites.find(item => item._character === event);
+        const pose = sprite?.worldTransform;
+        if (!renderedSprite(sprite, spriteset._tilemap) || sprite._characterName !== event._characterName ||
+            sprite._characterIndex !== event._characterIndex || !pose ||
+            !(pose.tx >= 0 && pose.tx <= host.graphics.width && pose.ty >= 0 && pose.ty <= host.graphics.height + 16)) return '';
+        return fieldArt(sprite._characterName, sprite._characterIndex);
     }
 
     function pageIsCurrent(context) {
@@ -177,13 +210,25 @@ function createDialogueObserver(host, notifications) {
     }
     return {
         observe, leave, repeatPage,
-        diagramCommand(scene, action) {
-            return current?.scene === scene && diagramCommand(current, action);
+        command(scene, action) {
+            const context = current;
+            if (context?.scene !== scene) return false;
+            if (action !== 'speakerDetails' && diagramCommand(context, action)) return true;
+            if (action !== 'details' && action !== 'speakerDetails' || !pageIsCurrent(context) ||
+                context.page.automatic) return false;
+            const speaker = context.page.paint.speaker;
+            const description = context.page.paint.portrait || speakerAppearance(context, speaker);
+            if (!description && !speaker) return false;
+            const lines = description ? [speaker, description].filter(Boolean) : ['No visual description for this speaker.'];
+            submit(context, { kind: 'menuDetails', lines });
+            return true;
         },
         controllerOwner(scene) {
             if (!current || current.scene !== scene || current.page?.automatic) return null;
             current.diagramAvailable = current.hasReview = !!diagramIsCurrent(current);
-            return current.diagramAvailable || pageIsCurrent(current) ? current : null;
+            const pageVisible = pageIsCurrent(current);
+            current.speakerAvailable = !!(pageVisible && (current.page.paint.speaker || current.page.paint.portrait));
+            return current.diagramAvailable || pageVisible ? current : null;
         },
         announce(context, record) {
             if (context === current && (pageIsCurrent(context) || diagramIsCurrent(context))) submit(context, record);

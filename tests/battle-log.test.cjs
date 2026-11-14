@@ -7,7 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const { createBattleLog } = require('../src/battle/action-log');
-const { recordCollapse, recordCondition, recordResistance } = require('../src/battle/outcomes');
+const { recordCollapse, recordCondition, recordResistance, recordMomentum } = require('../src/battle/outcomes');
 const { abilitySource } = require('../src/battle/damage-popup');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
@@ -244,6 +244,36 @@ popup.scale.x = popup.scale.y = 1;
 frame();
 assert.equal(lines.length, beforeResistance + 2, 'a second native resistance remains audible');
 
+const hud = scene._statusWindow = { parent: scene, offsetY: 0, bitmap, worldVisible: true,
+    worldAlpha: 1, _momentumCurrent: 0, momentumPips: [] };
+hud.momentumPips = [0, 1, 2].map(() => ({ baseSprite: {
+    parent: hud, bitmap, worldVisible: true, worldAlpha: 1, _frame: { x: 0, y: 0 }
+} }));
+c.WendyQuestAccessMomentumChanged = (owner, window) => recordMomentum(owner, window, c.Graphics.frameCount, true);
+const beforeMomentum = lines.length;
+frame();
+hud._momentumCurrent = 1;
+frame();
+assert.equal(lines.length, beforeMomentum, 'a native target change waits for the visible pip');
+hud.momentumPips[0].baseSprite._frame.x = 32;
+for (let n = 0; n < 4; n++) frame();
+assert.equal(lines.at(-1), 'Momentum gained. 1 of 3.');
+assert.equal(lines.length, beforeMomentum + 1);
+hud._momentumCurrent = 0;
+hud.momentumPips[0].baseSprite._frame.x = 0;
+frame();
+assert.equal(lines.length, beforeMomentum + 1, 'spending must be silent');
+hud._momentumCurrent = 3;
+for (const pip of hud.momentumPips) pip.baseSprite._frame.x = 32;
+scene.update();
+assert.equal(lines.length, beforeMomentum + 1);
+renderer.emit('postrender');
+assert.equal(lines.at(-1), 'Momentum gained. 3 of 3.');
+frame();
+assert.equal(lines.length, beforeMomentum + 2, 'stable repaint must be silent');
+assert.equal(observer.latest(scene).lines.at(-1), 'Momentum gained. 3 of 3.');
+
+console.log('Verified native Momentum retirement, displayed count, and battle review.');
 console.log('Verified native log paint, repeated events, animation cancellation, written and icon-only conditions, enemy KO, and review.');
 console.log('Throttled battle log paint through synthetic postrender and formatted receipt', first.toFixed(2), 'ms.');
 console.log('Throttled 250 stable paint frames', baseline.toFixed(2), 'ms native,', stable.toFixed(2), 'ms enabled.');

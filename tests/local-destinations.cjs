@@ -34,6 +34,9 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     assert.equal(maps.length, 239);
     let checked = 0;
     let fallbackCount = 0;
+    let icePages = 0;
+    const coveredChests = new Map([[14, 20], [15, 15], [29, 11], [134, 22]]);
+    const discoveredCovers = new Map();
     const transfers = new Set();
     const roomNames = new Set();
     for (const { id } of maps) {
@@ -64,20 +67,38 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         for (const entry of data.events) {
             if (!entry) continue;
             for (const [index, page] of entry.pages.entries()) {
+                if (entry.name === 'IceChestIce') {
+                    for (const { code, parameters } of page.list) {
+                        if (code !== 205 || !parameters[1].list.some(move =>
+                            move.code === 41 && move.parameters[0] === 'Chest')) continue;
+                        if (discoveredCovers.has(id)) assert.equal(discoveredCovers.get(id), parameters[0]);
+                        discoveredCovers.set(id, parameters[0]);
+                    }
+                }
                 if (page.list.length < 2 || ![0, 1, 2].includes(page.trigger)) continue;
                 checked++;
-                const event = { _eventId: entry.id, _pageIndex: index, _trigger: page.trigger, _priorityType: page.priorityType };
+                const event = { _eventId: entry.id, _pageIndex: index, _trigger: page.trigger,
+                    _priorityType: page.priorityType, _characterName: page.image.characterName };
                 const ordinary = eventTarget(root, 'walk', event, entry, page);
+                if (page.list.some(({ code, parameters }) =>
+                    code === 250 && parameters[0]?.name === 'WQ/SFX_IceBlockMelt')) {
+                    assert.deepEqual(ordinary, { name: 'Ice block', category: 'objects' });
+                    icePages++;
+                }
                 if (id === 120 && [11, 12].includes(entry.id)) assert.deepEqual(ordinary, { name: 'Cupboard', category: 'objects' });
                 if (id === 124 && entry.id === 15) assert.deepEqual(ordinary, { name: 'Drawer', category: 'objects' });
                 const lease = { page, map: root.$gameMap, trigger: page.trigger, waypoint: false };
                 const names = [ordinary?.name, questDestinationLabel(entry, lease, ordinary)];
                 for (const name of names) assert(!unsafe.test(name || ''), `unsafe label at map ${id} event ${entry.id} page ${index}`);
                 if (ordinary?.category === 'treasure') assert.match(ordinary.name, /^(Chest|Treasure)$/);
-                if (ordinary?.category === 'events') assert.equal(ordinary.name, 'Scene trigger');
+                if (ordinary?.category === 'events')
+                    assert.equal(ordinary.name, id === 98 && entry.id === 16 ? 'Ride elevator' : 'Scene trigger');
             }
         }
     }
+    assert.equal(icePages, 46);
+    assert.deepEqual(discoveredCovers, new Map([...coveredChests].filter(([id]) => id !== 29)));
+    console.log(`Checked ${icePages} ice interactions and native chest sprite reveals across all maps.`);
     console.log(`Verified ${fallbackCount} fallback place names against native transfers.`);
     console.log(`Checked ${checked} actionable pages on all ${maps.length} maps for spoiler-free pathfinder and quest labels.`);
     const inBattle = c.$gameParty.inBattle;
@@ -275,6 +296,29 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const spent = load(53, { variables: { 4: 2 } });
     spent.player.setPosition(7, 10);
     assert(!captureWorld(c).objects.some(item => item.name === 'Pull handle'));
+    for (const [mapId, ice, x, y] of [[14, 31, 53, 39], [15, 53, 46, 44], [29, 12, 3, 7], [134, 4, 4, 4]]) {
+        const chest = coveredChests.get(mapId);
+        const self = [`${mapId},${ice},A`];
+        const iced = load(mapId, { self });
+        iced.player.setPosition(x, y + 1);
+        const before = captureWorld(c).objects;
+        assert.deepEqual(before.filter(item => item.id === ice).map(({ name, category }) => [name, category]),
+            [['Ice block', 'objects']]);
+        assert(!before.some(item => item.id === chest), 'blank chest is absent');
+        const revealed = load(mapId, { self: [...self, `${mapId},${ice},B`, `${mapId},${chest},B`] });
+        revealed.player.setPosition(x, y + 1);
+        const prop = revealed.gameMap._events[chest];
+        // Execute the visible result of the ice event's native move-route
+        // command. Its action page need not update its static page image.
+        Object.assign(prop, { _characterName: 'Chest', _x: x, _y: y });
+        const after = captureWorld(c).objects;
+        assert.deepEqual(after.filter(item => item.id === chest).map(({ name, category }) => [name, category]),
+            [['Chest', 'treasure']]);
+        assert(!after.some(item => item.id === ice), 'melted ice is no longer actionable');
+        const opened = load(mapId, { self: [...self, `${mapId},${ice},B`, `${mapId},${chest},A`] });
+        opened.player.setPosition(x, y + 1);
+        assert(!captureWorld(c).objects.some(item => item.id === chest), 'opened chest is not a destination');
+    }
     const partyMembers = c.$gameParty.members;
     c.$gameParty.members = () => [3];
     const forest = load(15, { switches: [18] });

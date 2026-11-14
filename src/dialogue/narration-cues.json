@@ -1,0 +1,268 @@
+{
+  "mech-abduction": {
+    "text": "Two mechs rise into the air, carrying Elder Tater away.",
+    "beats": [
+      [
+        16,
+        36,
+        0,
+        57,
+        35
+      ]
+    ]
+  },
+  "bacon-bridge-landing": {
+    "text": "Tatoria drops from above and lands with a thud.",
+    "beats": [
+      [
+        77,
+        25,
+        0,
+        76,
+        26
+      ]
+    ]
+  },
+  "baconator-landing": {
+    "text": "A second figure drops from above and shakes the ground.",
+    "beats": [
+      [
+        77,
+        25,
+        0,
+        108,
+        27
+      ]
+    ]
+  },
+  "jail-cell": {
+    "text": "A figure steps into view behind the bars.",
+    "beats": [
+      [
+        134,
+        6,
+        0,
+        24,
+        3
+      ]
+    ]
+  },
+  "double-entrance": {
+    "text": "A second mech sweeps in to join the first.",
+    "beats": [
+      [
+        106,
+        3,
+        0,
+        96,
+        5
+      ],
+      [
+        106,
+        6,
+        0,
+        97,
+        5
+      ],
+      [
+        106,
+        7,
+        0,
+        95,
+        5
+      ],
+      [
+        106,
+        8,
+        0,
+        98,
+        5
+      ]
+    ]
+  },
+  "chomps-intervenes": {
+    "text": "Chomps rushes between Wendy and the laser.",
+    "beats": [
+      [
+        107,
+        3,
+        3,
+        2,
+        9
+      ]
+    ]
+  },
+  "mechs-descend": {
+    "text": "A mech descends in front of Wendy and the Elder.",
+    "beats": [
+      [
+        16,
+        39,
+        0,
+        6,
+        39
+      ]
+    ]
+  },
+  "sludge-rush": {
+    "text": "The blob surges toward Wendy.",
+    "beats": [
+      [
+        20,
+        7,
+        1,
+        14,
+        11
+      ]
+    ]
+  },
+  "chomps-arrives": {
+    "text": "A small mech steps out into the chamber.",
+    "beats": [
+      [
+        63,
+        13,
+        0,
+        78,
+        15
+      ]
+    ]
+  },
+  "mech-office-visit": {
+    "text": "Two guards appear with Elder Tater between them.",
+    "beats": [
+      [
+        114,
+        3,
+        0,
+        23,
+        6,
+        23
+      ]
+    ]
+  },
+  "jail-breach": {
+    "text": "A little mech appears outside the hole in the wall.",
+    "beats": [
+      [
+        134,
+        10,
+        1,
+        70,
+        11,
+        77
+      ]
+    ]
+  },
+  "secret-visitor": {
+    "text": "A figure steps into view near the shrine.",
+    "beats": [
+      [
+        197,
+        18,
+        0,
+        23,
+        9
+      ]
+    ]
+  },
+  "chicken-falls": {
+    "text": "Sir Chicken falls to the floor after charging the mechs.",
+    "beats": [
+      [
+        63,
+        5,
+        1,
+        55,
+        16,
+        419
+      ]
+    ]
+  },
+  "beef-thief-leap": {
+    "text": "Beef Thief leaps at the party.",
+    "beats": [
+      [
+        103,
+        2,
+        0,
+        82,
+        9
+      ],
+      [
+        103,
+        3,
+        0,
+        82,
+        9
+      ],
+      [
+        103,
+        4,
+        0,
+        82,
+        9
+      ],
+      [
+        103,
+        16,
+        0,
+        82,
+        9
+      ],
+      [
+        103,
+        17,
+        0,
+        82,
+        9
+      ],
+      [
+        103,
+        18,
+        0,
+        82,
+        9
+      ],
+      [
+        103,
+        19,
+        0,
+        82,
+        9
+      ]
+    ]
+  },
+  "mech-messenger": {
+    "text": "A small mech rushes into MechBorg's office.",
+    "beats": [
+      [
+        108,
+        3,
+        0,
+        13,
+        6
+      ],
+      [
+        110,
+        4,
+        0,
+        18,
+        6
+      ]
+    ]
+  },
+  "chomps-sacrifice": {
+    "text": "The flash fades. Chomps lies broken on the floor.",
+    "beats": [
+      [
+        107,
+        3,
+        3,
+        89,
+        9,
+        131
+      ]
+    ]
+  }
+}

@@ -13,7 +13,11 @@ Launch WendyQuest through Steam. Press **F8** to open accessibility settings. Us
 - Press **H** for Wendy’s visible status on the field, in pause and Inventory, or in battle. This includes HP, FP and the other gauges or conditions that are shown. On the field, HP and FP are read as percentages. H includes “critical” while the field low-health warning is active. Press **G** to read the gold shown in the pause menu or shop.
 - On a default Xbox-style controller, use the **right stick** to browse and **left trigger** for directions. Press and release **View**, then press **A** to read the selected destination or **Menu** for settings.
 
+Enable **Cutscene descriptions** in **F8 → Audio** to hear short descriptions of selected story animations in a separate voice. Adjust its volume and speed in the same menu.
+
 ## Battle
+
+Press **I** while targeting to hear the enemy’s appearance, displayed HP and conditions. Press **I** on a dialogue line to describe the active speaker when there is a verified portrait or sprite. Map diagrams still use **I** for their details.
 
 Confirm to start the timing meter. Confirm again for power, then for accuracy. **F8 → Audio → Battle timing assist** adds one note when a perfect window opens. Press Confirm when you hear it. The game’s wind-up sounds provide the rest of the timing. When the game shows its resistance popup, speech reports that Wendy resisted a status effect.
 

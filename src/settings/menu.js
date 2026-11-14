@@ -41,7 +41,15 @@ function normalizeAudio(value) {
         caveVolume: Number.isInteger(caveVolume) && caveVolume >= 0 && caveVolume <= 100 ? caveVolume : 65,
         battleTiming: value?.battleTiming === true,
         battleTimingVolume: Number.isInteger(battleVolume) && battleVolume >= 0 && battleVolume <= 100 ? battleVolume : 65,
-        soundscape: normalizeSoundscape(value?.soundscape) };
+        soundscape: normalizeSoundscape(value?.soundscape),
+        narration: normalizeNarration(value?.narration) };
+}
+
+function normalizeNarration(value) {
+    const { volume, speed } = value || {};
+    return { enabled: value?.enabled === true,
+        volume: Number.isInteger(volume) && volume >= 0 && volume <= 100 ? volume : 65,
+        speed: Number.isInteger(speed) && speed >= 80 && speed <= 130 ? speed : 100 };
 }
 
 const ENGLISH_LOCALE = 'en-US';
@@ -219,7 +227,8 @@ function createSettingsMenu(root, host) {
                 'Review previous and next lines with ' + gestureName(keys.reviewPrevious) + ' and ' +
                     gestureName(keys.reviewNext) + '. First and last with ' + gestureName(keys.reviewFirst) + ' and ' +
                     gestureName(keys.reviewLast) + '.',
-                'Open World Map from Items. Read details for the quest pin and nearby atlas landmarks.'
+                'Use Read details on a dialogue line to describe the active speaker. Open World Map from Items and use Read details for the quest pin and landmarks.',
+                'Under Audio, enable Cutscene descriptions for an independent voice during selected story animations. Adjust its speed and volume there.'
             ],
             Pathfinder: [
                 'Previous destination ' + binding('previousDestination') + '. Next destination ' +
@@ -237,6 +246,7 @@ function createSettingsMenu(root, host) {
             Battle: [
                 'Confirm to start the timing meter. Confirm again for power, then for accuracy.',
                 'Turn on Battle timing assist under Audio for one note when a perfect window opens. Press Confirm at the note.',
+                'Use Read details ' + gestureName(keys.details) + ' to describe selected enemies and read their displayed HP and conditions.',
                 'Read Wendy’s status ' + gestureName(keys.wendyStatus) + '.'
             ],
             Controller: [
@@ -376,8 +386,22 @@ function createSettingsMenu(root, host) {
                 update('battleLower', { ...audio, battleTimingVolume: Math.max(0, audio.battleTimingVolume - 10) })),
             battleRaise: button(owner, `Increase battle timing volume, ${audio.battleTimingVolume} percent`, () =>
                 update('battleRaise', { ...audio, battleTimingVolume: Math.min(100, audio.battleTimingVolume + 10) })),
-            soundscape: button(owner, 'Soundscape', () => showSoundscape(owner))
+            soundscape: button(owner, 'Soundscape', () => showSoundscape(owner)),
+            narration: button(owner, `Cutscene descriptions, ${audio.narration.enabled ? 'on' : 'off'}`, () =>
+                update('narration', { ...audio, narration: { ...audio.narration, enabled: !audio.narration.enabled } }))
         };
+        for (const [key, label, step, min, max] of [
+            ['volume', 'cutscene description volume', 10, 0, 100],
+            ['speed', 'cutscene description speed', 10, 80, 130]
+        ]) {
+            for (const [action, direction] of [['Decrease', -1], ['Increase', 1]]) {
+                const control = `${key}${action}`;
+                const value = audio.narration[key];
+                items[control] = button(owner, `${action} ${label}, ${value} percent`, () =>
+                    update(control, { ...audio, narration: { ...audio.narration,
+                        [key]: Math.min(max, Math.max(min, value + direction * step)) } }));
+            }
+        }
         const preview = (bearing, cue, gain, pitch) => previewAudio(owner, bearing, cue, gain, pitch);
         button(owner, 'Preview wall tone ahead', () => preview([0, 0, 1], 'wallNorth', audio.wallVolume / 100));
         button(owner, 'Preview wall tone on the right', () => preview([1, 0, 0], 'wallEast', audio.wallVolume / 100));
@@ -388,8 +412,8 @@ function createSettingsMenu(root, host) {
         button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon arrival', () => preview([0, 0, 1], 'beaconArrival', audio.beaconVolume / 100));
         button(owner, 'Preview cave crossing tone', () => preview([0, 0, 1], 'caveGo', audio.caveVolume / 100));
-        button(owner, 'Preview battle power tone', () => preview([1, 0, 1], 'battlePower', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
-        button(owner, 'Preview battle accuracy tone', () => preview([-1, 0, 1], 'battleAccuracy', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
+        button(owner, 'Preview battle power tone', () => preview([0, 0, 1], 'battlePower', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
+        button(owner, 'Preview battle accuracy tone', () => preview([0, 0, 1], 'battleAccuracy', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
         for (const [direction, bearing] of AUDIO_PREVIEWS) {
             button(owner, `Preview ${direction}`, () => preview(bearing));
         }

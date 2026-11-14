@@ -59,7 +59,7 @@ def fixture(runtime, installed):
     (app / 'package.json').write_text(json.dumps({
         'name': 'wendyquest-access-offline-fixture', 'main': 'index.html',
         'window': {'show': False, 'width': 320, 'height': 200},
-        'chromium-args': '--in-process-gpu --disable-devtools'
+        'chromium-args': '--in-process-gpu --disable-devtools --mute-audio'
     }), encoding='utf8')
     (app / 'index.html').write_text('''<!doctype html><title>WendyQuest Access Offline Fixture</title>
 <script src="pixi.js"></script><script src="fixture.js"></script><script src="plugin.js"></script><script src="resize-markers.js"></script>
@@ -69,7 +69,8 @@ def fixture(runtime, installed):
     objects = objects_notification((installed / OBJECTS_REL).read_bytes()).decode('utf8')
     movement = ['function Game_Player() {}', 'function Game_Map() {}', 'function Game_Interpreter() {}']
     for method in ('Game_Player.prototype.moveByInput', 'Game_Player.prototype.reserveTransfer',
-                   'Game_Map.prototype.setupStartingMapEvent', 'Game_Interpreter.prototype.command201'):
+                   'Game_Map.prototype.setupStartingMapEvent', 'Game_Interpreter.prototype.command201',
+                   'Game_Interpreter.prototype.command205'):
         start = objects.index(method + ' = function(')
         end = objects.index('\n};', start) + 3
         movement.append(objects[start:end])
@@ -442,6 +443,9 @@ function verifyController() {
     controllerStep++;
 }
 Input.keyMapper[87] = 'up';
+let narrationAudio;
+let narrationStarted;
+let narrationFrame;
 const interval = setInterval(() => {
     if (restart) {
         const fs = require('fs');
@@ -471,6 +475,8 @@ const interval = setInterval(() => {
             tap('Escape');
             choose('Audio');
             const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 17).map(item => item.textContent);
+            const narration = Array.from(document.querySelectorAll('dialog button'))
+                .map(button => button.textContent).filter(line => /Cutscene descriptions|cutscene description/i.test(line));
             choose('Soundscape');
             const soundscape = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
             choose('Exits');
@@ -487,7 +493,7 @@ const interval = setInterval(() => {
                 throw Error('The independent menu speech preferences were not restored');
             if (!speechChoices.includes('Language, English') || document.querySelector('dialog').lang !== 'en-US')
                 throw Error('The manual language choice was not restored');
-            restartSettings = { bindings, controller, navigation, audio, soundscape };
+            restartSettings = { bindings, controller, navigation, audio, soundscape, narration };
             fs.writeFileSync(receipt + '.allow-restoration', '');
             pad();
             padTap(0);
@@ -1757,6 +1763,72 @@ const interval = setInterval(() => {
             endingStep++;
         } else if (endingStep === 29 && menuStatus() === 'Preview uses stereo and rear pitch.') {
             fs.writeFileSync(receipt + '.muted-preview', '');
+            choose('Cutscene descriptions, off');
+            endingStep = 80;
+        } else if (endingStep === 80 && menuStatus() === 'Audio settings saved') {
+            choose('Increase cutscene description speed');
+            endingStep++;
+        } else if (endingStep === 81 && menuStatus() === 'Audio settings saved') {
+            choose('Decrease cutscene description volume');
+            endingStep++;
+        } else if (endingStep === 82 && menuStatus() === 'Audio settings saved') {
+            tap('Escape');
+            tap('Escape');
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const tilemap = {};
+            const actor = { _realX: 24, _realY: 32, _characterName: 'Elder', forceMoveRoute() {} };
+            const sprite = { _character: actor, parent: tilemap, worldVisible: true,
+                _characterName: 'Elder', worldAlpha: 1, texture: { valid: true }, worldTransform: { tx: 24, ty: 32 } };
+            const scene = SceneManager._scene = Graphics.app.stage = {
+                _wqaMapRestored: true, _mapLoaded: true, _wqaFieldReady: true, _started: true, _active: true,
+                srcWendy: true, srcStones: true, _fadeDuration: 0, _fadeOpacity: 0,
+                _spriteset: { _tilemap: tilemap, _characterSprites: [sprite] }
+            };
+            const interpreter = Object.assign(new Game_Interpreter(), {
+                _eventId: 36, _mapId: 16, _index: 57, character: () => actor
+            });
+            const list = [{}];
+            const events = [];
+            events[36] = { pages: [{ list }] };
+            window.$dataMap = { events };
+            $gameScreen._brightness = 255;
+            $gameScreen._fadeOutDuration = 0;
+            $gamePlayer._transferring = false;
+            $gameMap.refreshIfNeeded = () => {};
+            $gameMap._needsTilemapRefresh = false;
+            $gameMap._mapId = 16;
+            $gameMap._events = [];
+            $gameMap._events[35] = actor;
+            $gameMap._interpreter = interpreter;
+            const nativeAudio = window.Audio;
+            window.Audio = function () { narrationAudio = new nativeAudio(); return narrationAudio; };
+            narrationStarted = performance.now();
+            narrationFrame = () => {
+                Graphics.frameCount++;
+                WendyQuestAccessNarrationPresent(scene);
+                Graphics.app.renderer.emit('postrender');
+            };
+            WendyQuestAccessNarrationWarm(scene);
+            endingStep++;
+        } else if (endingStep === 83 && Graphics._wqaNarrationPackFinished) {
+            const scene = SceneManager._scene;
+            const interpreter = $gameMap._interpreter;
+            interpreter._list = $dataMap.events[36].pages[0].list;
+            interpreter.command205([35, { wait: false }]);
+            if (!scene._wqaNarrationActive) throw Error('Native cue did not arm');
+            narrationFrame();
+            if (narrationAudio) throw Error('Narration started before native motion');
+            $gameMap._events[35]._realY--;
+            narrationFrame();
+            if (!narrationAudio || narrationAudio.volume !== 0.55 ||
+                narrationAudio.playbackRate !== 1.1) throw Error('Narration did not use saved speed and volume');
+            narrationStarted = performance.now();
+            endingStep++;
+        } else if (endingStep === 84 && narrationAudio?.currentTime > 0.005) {
+            $gamePlayer.reserveTransfer(2, 0, 0, 2, 0);
+            if (SceneManager._scene._wqaNarrationActive || !narrationAudio.paused || narrationAudio.getAttribute('src'))
+                throw Error('Native transfer failed to retire narration');
+            fs.writeFileSync(receipt + '.cutscene-narration-ms', String(performance.now() - narrationStarted));
             clearInterval(interval);
             nw.App.quit();
         }
@@ -1767,9 +1839,11 @@ setTimeout(() => {
     const last = receipt + '.cross-map-last';
     write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, mapVitalsStep, dialoguePadStep, endingStep, restartStep,
         crossMapLeg, crossMapRequested: crossMapStarted > 0, lastTransferMessage: fs.existsSync(last) ? fs.readFileSync(last, 'utf8') : '',
+        narrationState: narrationAudio && { paused: narrationAudio.paused, ready: narrationAudio.readyState,
+            time: narrationAudio.currentTime, error: narrationAudio.error?.message },
         status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
     nw.App.quit();
-}, 12000);
+}, 18000);
 ''', encoding='utf8')
     service = app / 'wendyquest-access'
     service.mkdir()
@@ -2015,6 +2089,8 @@ parentPort.on('message', message => {
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
     for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'walking-catalog.cjs', 'transfer-gates.cjs', 'WendyQuestAudio.node'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
+    shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'narration.webmpack',
+                    service / 'narration.webmpack')
     shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'audio-worker.cjs', service / 'production-audio-worker.cjs')
     (service / 'audio-worker.cjs').write_text('''
 const { parentPort } = require('worker_threads');
@@ -2034,7 +2110,7 @@ parentPort.postMessage = packet => {
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 6 && active.forward === -1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.cave-cue'), String(packet.status));
     }
-    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 15 && active.right > 0.9 && active.forward === 1) {
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 15 && active.right === 0 && active.forward === 1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.battle-cue'),
             JSON.stringify({ status: packet.status, pitch: active.pitch, at: Date.now() }));
     }
@@ -2061,7 +2137,7 @@ require('./production-audio-worker.cjs');
     catalog_hash = hashlib.sha256(json.dumps(catalog, separators=(',', ':')).encode('utf8')).hexdigest()
     inputs = [('1', synthetic, 3, 2), ('2', neighbor, 3, 2), ('3', distant, 3, 2), ('196', cave, 23, 52)]
     (geometry / 'manifest.json').write_text(json.dumps({
-        'build': '26578620', 'maps': {key: {'geometry': hashlib.sha256(data).hexdigest(), 'width': width, 'height': height}
+        'build': '26578620', 'maps': {key: {'geometry': hashlib.sha256(data).hexdigest(), 'width': width, 'height': height, 'tileset': 1}
                                     for key, data, width, height in inputs},
         'walking': {'hash': catalog_hash, 'catalog': catalog}
     }), encoding='utf8')
@@ -2160,7 +2236,7 @@ def main():
         beacon_ms = float(receipt.with_suffix('.json.beacon-ms').read_text(encoding='utf8'))
         battle_cue_ms = float(receipt.with_suffix('.json.battle-cue-ms').read_text(encoding='utf8'))
         battle_cue = json.loads(receipt.with_suffix('.json.battle-cue').read_text(encoding='utf8'))
-        if battle_cue['status'] != 1 or abs(battle_cue['pitch'] - 1.16) > 0.00001:
+        if battle_cue['status'] != 1 or abs(battle_cue['pitch'] - 1) > 0.00001:
             raise RuntimeError('NW battle timing cue did not submit stereo PCM to SDL')
         if receipt.with_suffix('.json.cave-cue').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL')
@@ -2261,6 +2337,13 @@ def main():
                     'Decrease battle timing volume, 65 percent', 'Increase battle timing volume, 65 percent'] or reloaded.get('soundscape') != [
                     'Soundscape, on', 'Decrease volume, 35 percent', 'Exits, off']:
             raise RuntimeError(f'NW settings did not survive restart in the isolated profile: {reloaded}')
+        if reloaded.get('narration') != ['Cutscene descriptions, on', 'Decrease cutscene description volume, 55 percent',
+                'Increase cutscene description volume, 55 percent', 'Decrease cutscene description speed, 110 percent',
+                'Increase cutscene description speed, 110 percent']:
+            raise RuntimeError(f'Cutscene narration preferences did not survive restart: {reloaded}')
+        narration_ms = float(receipt.with_suffix('.json.cutscene-narration-ms').read_text(encoding='utf8'))
+        print(f'Verified cutscene clip decode, volume, rate, delay until visible movement, and transfer retirement. '
+              f'Throttled progress observed after {narration_ms:.1f} ms with 40 ms polling.')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic cold browse submission {browse_submit_ms:.1f} ms, speech receipt '

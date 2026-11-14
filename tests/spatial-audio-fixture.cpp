@@ -119,6 +119,12 @@ int wmain(int argc, wchar_t** argv) {
         for (size_t earlier = 0; earlier < i; ++earlier) assert(battle_cues[earlier] != ahead);
     }
 
+    assert(energy(battle_cues[1], 0) == energy(battle_cues[1], 1));
+    assert(energy(battle_cues[2], 0) == energy(battle_cues[2], 1));
+    assert(crossings(battle_cues[2], 0) > 2 * crossings(battle_cues[1], 0));
+    assert(energy(battle_cues[1], 0) > energy(battle_cues[0], 0));
+    assert(energy(battle_cues[2], 0) > energy(battle_cues[0], 0));
+
     // The meter's approach notes change pitch through each output path.
     for (const bool spatial : {false, true}) {
         Stereo low{}, high{};

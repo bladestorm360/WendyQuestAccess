@@ -7,7 +7,7 @@ const QUEUE_LIMIT = 4;
 const FIELD_MODE = ['settings', ...FIELD_MODE_ACTIONS];
 const MOVING_MODE = ['beaconStop'];
 const FRONT_MODE = ['settings'];
-const DIALOGUE_MODE = ['repeat', 'puzzleStop'];
+const DIALOGUE_MODE = ['repeat', 'speakerDetails', 'puzzleStop'];
 const DIAGRAM_MODE = [...REVIEW_ACTIONS, ...DIALOGUE_MODE];
 const MENU_MODE = ['settings', ...REVIEW_ACTIONS];
 const MENU_VITALS_MODE = [...MENU_MODE, 'battleVitals'];
@@ -52,7 +52,9 @@ function modeAnnouncement(family, context, bindings) {
     const input = context.kind === 'front' ? bindings.settings : bindings.repeat;
     const hint = input === null ? '' : `${buttonName(family, input)} ${next}. `;
     const stop = context.puzzleActive && bindings.puzzleStop != null ? `${buttonName(family, bindings.puzzleStop)} stops the guide. ` : '';
-    return `Mod mode. ${hint}${stop}${buttonName(family, bindings.mode)} cancels.`;
+    const speaker = context.speakerAvailable && bindings.details != null && bindings.details !== bindings.repeat &&
+        bindings.details !== bindings.puzzleStop ? `${buttonName(family, bindings.details)} describes the speaker. ` : '';
+    return `Mod mode. ${hint}${speaker}${stop}${buttonName(family, bindings.mode)} cancels.`;
 }
 
 function rightStick(x, y, previous) {
@@ -176,7 +178,8 @@ function createController(host) {
                 context.kind === 'battle' ? BATTLE_MODE :
                 context.kind === 'battleTarget' ? TARGET_MODE :
                 context.kind === 'credits' || context.diagramAvailable ? DIAGRAM_MODE : DIALOGUE_MODE;
-            for (const action of actions) if ((rising & buttonBit(bindings[action])) &&
+            for (const action of actions) if ((rising & buttonBit(bindings[action === 'speakerDetails' ? 'details' : action])) &&
+                (action !== 'speakerDetails' || context.speakerAvailable && bindings.details !== bindings.puzzleStop) &&
                 (action !== 'puzzleGuide' || context.puzzle) && (action !== 'puzzleStop' || context.puzzleActive) &&
                 (action !== 'beaconStop' || context.beaconActive) && (action !== 'fieldVitals' || context.vitals) &&
                 (!action.startsWith('quest') || context.quest) &&

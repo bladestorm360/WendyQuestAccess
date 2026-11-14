@@ -11,6 +11,7 @@ Reviewed November 12, 2026. Full mod implementation has resumed in the C: checko
 - [Feasibility, recommendation and work estimates](docs/feasibility.md)
 - [Exact installed build, loader, lifecycle, input and offline evidence](docs/engine-evidence.md)
 - [Puzzle and secret access audit](docs/puzzles-and-secrets.md) (contains mechanic and location spoilers)
+- [Cutscene audio description and event audit](docs/cutscene-description.md)
 - [Single scope ledger, feature register and completion gates](docs/feature-checkpoint.md)
 - [Mod architecture, current code and verification](docs/implementation.md)
 - [Field routing, collision and native fixture evidence](docs/navigation.md)

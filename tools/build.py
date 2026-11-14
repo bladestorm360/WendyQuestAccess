@@ -24,11 +24,32 @@ AUDIO_HASHES = {
 }
 
 
+def stage_narration():
+    import struct
+    source = ROOT / 'src/dialogue/narration-cues.json'
+    cues = json.loads(source.read_text(encoding='utf8'))
+    folder = source.parent / 'clips'
+    clips = [(folder / f'{name}.webm').read_bytes() for name in cues]
+    if not clips or len(clips) > 32 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
+        raise ValueError('Malformed narration clips')
+    pack = struct.pack('<' + 'I' * len(clips), *(len(clip) for clip in clips)) + b''.join(clips)
+    if len(pack) > 256 * 1024:
+        raise ValueError('Narration clips exceed their playback budget')
+    target = OUT / 'wendyquest-access/narration.webmpack'
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(pack)
+
+
 def bundle():
+    stage_narration()
     sources = {
         './plugin': 'plugin.js',
         './runtime/renderer': 'runtime/renderer.js',
         './runtime/audio': 'runtime/audio.js',
+        './dialogue/narration': 'dialogue/narration.js',
+        './narration-cues.json': 'dialogue/narration-cues.json',
+        './character-art': 'dialogue/character-art.js',
+        '../dialogue/character-art': 'dialogue/character-art.js',
         './gate': 'runtime/gate.js',
         './frontend/title': 'frontend/title.js',
         './frontend/splash': 'frontend/splash.js',
@@ -110,6 +131,8 @@ def bundle():
     wrappers = []
     for name, relative in sources.items():
         body = (ROOT / 'src' / relative).read_text(encoding='utf8')
+        if name.endswith('.json'):
+            body = 'module.exports = ' + json.dumps(json.loads(body)) + ';'
         wrappers.append(f'{json.dumps(name)}: function(module, exports, require) {{\n{body}\n}}')
     definitions = ',\n'.join(wrappers)
     target.write_text(f'''/*:

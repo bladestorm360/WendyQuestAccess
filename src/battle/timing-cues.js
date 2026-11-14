@@ -4,7 +4,7 @@ const { battlePresented, visibleSprite } = require('./presentation');
 
 const MAX_REQUEST_MS = 48;
 const SOURCE = 'battleTiming';
-const HIT_NOTE_PITCH = 1.16;
+const HIT_NOTE_PITCH = 1;
 
 function createBattleCues(root, host, audio, preferences) {
     let owner = null;
@@ -79,7 +79,7 @@ function createBattleCues(root, host, audio, preferences) {
             const cue = phase === 0 ? audio.cues.battlePower : audio.cues.battleAccuracy;
             const expires = host.now() + MAX_REQUEST_MS;
             audio.play(scene, config.hrtf, cue, config.battleTimingVolume / 100,
-                [phase === 0 ? 1 : -1, 0, 1],
+                [0, 0, 1],
                 () => owner === current && current.phase === phase && current.open &&
                     host.now() < expires && ready(scene, action), undefined, SOURCE, HIT_NOTE_PITCH);
         },

@@ -95,9 +95,21 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
         const double onset = std::min(1.0, offset / 16.0);
         return (toe ? 0.30 : 0.27) * onset * value * std::exp(-7.0 * offset / footstep_pip_frames);
     }
-    if (cue >= Cue::battle_lead && cue <= Cue::battle_ice) {
-        const double frequency = cue == Cue::battle_lead ? 440.0 : cue == Cue::battle_power ? 625.0 :
-            cue == Cue::battle_accuracy ? 950.0 : time < 0.022 ? 1360.0 : 1050.0;
+    if (cue == Cue::battle_power || cue == Cue::battle_accuracy) {
+        // One short, bright strike starts at the native perfect boundary.
+        // A lower metallic accent marks power and a higher bell marks accuracy.
+        const bool power = cue == Cue::battle_power;
+        const double length = power ? 0.055 : 0.060;
+        if (time >= length) return 0.0;
+        const auto strike = std::min({1.0, time / 0.001, (length - time) / 0.012});
+        const auto phase = tau * pitch * (power ? 550.0 : 1375.0) * time;
+        const auto overtones = power
+            ? 0.28 * std::sin(2.0 * phase) + 0.13 * std::sin(3.0 * phase)
+            : 0.24 * std::sin(1.55 * phase) + 0.12 * std::sin(2.17 * phase);
+        return strike * (0.64 * std::sin(phase) + std::exp(-27.0 * time) * overtones);
+    }
+    if (cue == Cue::battle_lead || cue == Cue::battle_ice) {
+        const double frequency = cue == Cue::battle_lead ? 440.0 : time < 0.022 ? 1360.0 : 1050.0;
         const auto segment = cue == Cue::battle_ice ? std::fmod(time, 0.022) : time;
         const double length = cue == Cue::battle_ice ? 0.022 : 0.044;
         if (time >= 0.044) return 0.0;

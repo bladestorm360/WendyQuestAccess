@@ -5,7 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { createHash } = require('crypto');
-const { bakeMap, encodeMap } = require('../src/world/geometry.cjs');
+const { bakeMap, encodeMap, CELL_BITS } = require('../src/world/geometry.cjs');
 const { MAX_CATALOG_BYTES } = require('../src/world/walking-catalog.cjs');
 const { transferMap, bakeCatalog } = require('./transfer-catalog.cjs');
 
@@ -55,7 +55,31 @@ function bake(installed, destination) {
         const geometry = bakeMap(map, flags);
         const binary = encodeMap(id, geometry);
         fs.writeFileSync(path.join(output, `${id}.wqg`), binary, { flag: 'wx' });
-        manifest.maps[id] = { input: digest(source), geometry: digest(binary), width: geometry.width, height: geometry.height };
+        const entry = manifest.maps[id] = { input: digest(source), geometry: digest(binary), width: geometry.width,
+            height: geometry.height, tileset: map.tilesetId };
+        // Derive only variants the native map script can select. Keep the
+        // differences in the existing local map index for worker-only use.
+        const variants = new Set();
+        for (const event of map.events) {
+            for (const page of event?.pages || []) {
+                for (const command of page.list) {
+                    if (command.code === 282 && command.parameters[0] !== map.tilesetId)
+                        variants.add(command.parameters[0]);
+                }
+            }
+        }
+        if (variants.size) {
+            entry.variants = {};
+            for (const variant of variants) {
+                const alternate = bakeMap(map, tilesets[variant]?.flags);
+                const changes = [];
+                for (let cell = 0; cell < alternate.cells.length; cell++) {
+                    if (geometry.cells[cell] !== alternate.cells[cell])
+                        changes.push((alternate.cells[cell] << CELL_BITS) | cell);
+                }
+                entry.variants[variant] = changes;
+            }
+        }
         transferMaps.set(id, transferMap(id, map, geometry, flags, common));
         cells += geometry.cells.length;
     }

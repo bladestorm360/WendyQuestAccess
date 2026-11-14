@@ -3,7 +3,7 @@
 const { drawnText, visibleSprite } = require('./presentation');
 const { enemyIconIndex, enemyState } = require('./enemy-state');
 const { enemyLabel } = require('./damage-popup');
-const { portraitActor, visibleCondition } = require('./party-vitals');
+const { portraitActor, visibleCondition, visibleMomentum } = require('./party-vitals');
 
 const MAX_RESULTS = 8;
 // RPG Maker rotates the enemy icon every 40 frames. The observation window
@@ -39,6 +39,41 @@ function readResistance(scene, graphics) {
         return false;
     });
     return lines;
+}
+
+// The HUD updates its target only on native gains or spends. The target
+// wakes the observer, but only the rendered pips can supply the spoken count.
+function recordMomentum(scene, hud, frame, ready) {
+    const before = scene._wqaMomentumValue;
+    const sameHud = scene._wqaMomentumHud === hud && scene._wqaMomentumPips === hud.momentumPips;
+    const after = hud._momentumCurrent;
+    scene._wqaMomentumValue = after;
+    scene._wqaMomentumHud = hud;
+    scene._wqaMomentumPips = hud.momentumPips;
+    if (!sameHud || !ready || !Number.isInteger(before) || !Number.isInteger(after) || after <= before) {
+        scene._wqaMomentumPending = null;
+        return;
+    }
+    scene._wqaMomentumPending = { target: after, until: frame + 90 };
+    scene._wqaMomentumNextFrame = frame;
+}
+
+function readMomentum(scene, graphics) {
+    const pending = scene._wqaMomentumPending;
+    if (!pending || graphics.frameCount < scene._wqaMomentumNextFrame) return '';
+    const hud = scene._statusWindow;
+    if (graphics.frameCount > pending.until || hud !== scene._wqaMomentumHud ||
+        hud.momentumPips !== scene._wqaMomentumPips || hud._momentumCurrent !== pending.target) {
+        scene._wqaMomentumPending = null;
+        return '';
+    }
+    const pips = visibleSprite(scene, hud) && hud.offsetY === 0 && visibleMomentum(hud);
+    if (!pips || pips.filled !== pending.target) {
+        scene._wqaMomentumNextFrame = graphics.frameCount + 3;
+        return '';
+    }
+    scene._wqaMomentumPending = null;
+    return `Momentum gained. ${pips.filled} of ${pips.total}.`;
 }
 
 function recordCondition(root, scene, target, state, added, speak) {
@@ -105,4 +140,4 @@ function readConditions(root, graphics, scene) {
     return lines;
 }
 
-module.exports = { recordCollapse, recordCondition, readConditions, recordResistance, readResistance };
+module.exports = { recordCollapse, recordCondition, readConditions, recordResistance, readResistance, recordMomentum, readMomentum };

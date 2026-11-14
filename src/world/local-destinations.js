@@ -8,6 +8,8 @@ const EXITS = {
     13: { 1: ['Crispy Ruins', 16], 2: ['Crispy Ruins', 16],
         7: ["Elder Tater's house", 116], 16: ['Road to Russetwood', 113] },
     16: { 20: ['Road to Russetwood', 113, 114], 21: ['Road to Russetwood', 113, 114] },
+    93: { 1: ['Elevator entrance', 98], 8: ['Elevator entrance', 98], 24: ['Elevator entrance', 98],
+        25: ['Elevator entrance', 98], 26: ['Elevator entrance', 98] },
     23: { 1: ['Return to Russetwood', 12], 2: ['Second floor', 24] },
     24: { 1: ['First floor', 23] },
     54: { 1: ['Return to Russetwood', 12] },
@@ -54,6 +56,9 @@ const TOUCH_TRANSFERS = {
 };
 
 const PULLS = { 51: [2], 53: [3, 4], 55: [4] };
+// These events exist before their ice block's movement route assigns the
+// chest sprite. The stock page image can stay blank even after the reveal.
+const COVERED_CHESTS = { 14: 20, 15: 15, 29: 11, 134: 22 };
 
 // Only these authored Crispy Beach floor events can qualify a route up to
 // its first native interruption. The route still ends before the event.
@@ -113,7 +118,24 @@ function localDestination(root, event, page) {
     // the person without trying to start the background interpreter.
     if (map === 13 && id === 5 && event._pageIndex === 1 && trigger === 4 && page.image?.characterName === '~ElderTater')
         return { name: 'Elder Tater', category: 'people', waypoint: true, handoffs: BEACH_HANDOFFS };
+    // Stepping onto the platform starts the ride through switches 481 and
+    // 483. This page plays no dialogue and has no direct transfer command.
+    if (map === 98 && id === 16 && trigger === 1 && event._pageIndex === 0 &&
+        list[0]?.code === 121 && list[0].parameters[0] === 481 &&
+        list[1]?.code === 121 && list[1].parameters[0] === 483)
+        return { name: 'Ride elevator', category: 'events', eventAction: 'step' };
+    if (COVERED_CHESTS[map] === id) {
+        return trigger === 0 && list.length > 1 && event._characterName === 'Chest'
+            ? { name: 'Chest', category: 'treasure' } : null;
+    }
     if (trigger !== 0) return undefined;
+    // The ice is drawn by MapScene's animated objects, independently of the
+    // blank action sprite and any underlying chest.
+    if (/^Ice(?:Block|ChestIce|$)/.test(root.$dataMap?.events?.[id]?.name || '') &&
+        list.some(({ code, parameters }) => code === 250 && parameters[0]?.name === 'WQ/SFX_IceBlockMelt') &&
+        list.some(({ code, parameters }) => code === 357 && parameters[0] === 'MapScene' &&
+            parameters[1] === 'AnimatedObjectSetState'))
+        return { name: 'Ice block', category: 'objects' };
     // The workshop has a book on the desk and two separate cupboards.
     if (map === 120 && (id === 11 || id === 12)) return { name: 'Cupboard', category: 'objects' };
     // This event's editor name describes an item. The visible prop is a drawer.

@@ -75,7 +75,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         !Number.isInteger(player._x) || !Number.isInteger(player._y)) return null;
 
     const flags = routing ? root.$dataTilesets?.[map._tilesetId]?.flags : null;
-    if (routing && (data.tilesetId !== map._tilesetId || !Array.isArray(flags) || !Array.isArray(data.data) ||
+    if (routing && (!Number.isInteger(map._tilesetId) || !Array.isArray(flags) || !Array.isArray(data.data) ||
         data.data.length !== count * 6 || !Array.isArray(map._tileEvents) || !Array.isArray(map._vehicles))) return null;
     const terrain = routing ? terrainDelta(root.$gameTileChanges?.[id], data.data, flags, count) : null;
     if (routing && !terrain) return null;
@@ -140,7 +140,8 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         if (vehicle?._mapId === id && vehicle._type !== mode) vehicles.push({ x: vehicle._x, y: vehicle._y,
             type: vehicle._type, through: vehicle._through === true });
     }
-    return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles, aircraft: aircraftAt(map) } };
+    return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles,
+        tileset: map._tilesetId, aircraft: aircraftAt(map) } };
 }
 
 module.exports = { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks };

@@ -12,7 +12,7 @@ const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createBattleLog } = require('./battle/action-log');
 const { recordAttackSource, abilitySource } = require('./battle/damage-popup');
-const { recordCollapse, recordCondition, recordResistance } = require('./battle/outcomes');
+const { recordCollapse, recordCondition, recordResistance, recordMomentum } = require('./battle/outcomes');
 const { createRadialResult } = require('./battle/radial-result');
 const { battleVitals, menuVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
@@ -27,6 +27,7 @@ const { createFootsteps } = require('./world/footsteps');
 const { createBeacon } = require('./world/beacon');
 const { createCaveTiming } = require('./world/cave-timing');
 const { createSoundscape } = require('./world/soundscape');
+const { createNarration } = require('./dialogue/narration');
 const { createDialogueObserver } = require('./dialogue/observer');
 const { captureDiagram } = require('./dialogue/map-diagram');
 const { createCredits, creditSlots } = require('./dialogue/credits');
@@ -54,6 +55,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let treasure = null;
     let autosaveNotice = null;
     let dialogue = null;
+    let narration = null;
     let credits = null;
     let audio = null;
     let wall = null;
@@ -103,6 +105,8 @@ function boot(root, nodeRequire, nodeProcess) {
             saveInfo: index => root.DataManager.savefileInfo(index),
             actor: id => root.$dataActors?.[id],
             variable: id => root.$gameVariables?.value(id),
+            gameMessage: () => root.$gameMessage,
+            mapEvent: id => Number.isInteger(id) && id > 0 ? root.$gameMap?._events?.[id] : null,
             makeWord() { return new Int32Array(new SharedArrayBuffer(4)); },
             schedule(task) { root.setTimeout(task, 0); },
             titleStillReady() {
@@ -158,6 +162,7 @@ function boot(root, nodeRequire, nodeProcess) {
         host.dialogueDiagram = (scene, window) =>
             captureDiagram(root, host.graphics, scene, window, quests?.visibleObjective(scene));
         dialogue = createDialogueObserver(host, notifications);
+        narration = createNarration(root, host, () => audioPreferences);
         credits = createCredits(root, host, notifications, host.speechPreferences);
         field = createField(root, host, notifications);
         mapBanner = createMapBannerObserver(root, host, notifications, field.ready);
@@ -290,7 +295,10 @@ function boot(root, nodeRequire, nodeProcess) {
                 if (master || value.soundscape !== audioPreferences.soundscape) soundscape.leave();
                 if (master || value.battleTiming !== audioPreferences.battleTiming ||
                     value.battleTimingVolume !== audioPreferences.battleTimingVolume) battleCues.retire();
+                if (value.enabled !== audioPreferences.enabled || value.narration !== audioPreferences.narration)
+                    narration.leave();
                 audioPreferences = value;
+                root.Graphics._wqaNarrationEnabled = value.enabled && value.narration.enabled && value.narration.volume > 0;
                 root.Graphics._wqaWallEnabled = value.enabled && value.wall && value.wallVolume > 0;
                 root.Graphics._wqaFootstepsEnabled = value.enabled && value.footsteps && value.footstepVolume > 0;
                 root.Graphics._wqaCaveTimingEnabled = value.enabled && value.caveTiming && value.caveVolume > 0;
@@ -307,6 +315,7 @@ function boot(root, nodeRequire, nodeProcess) {
                     owner.group === panel && controlContext() === owner && !host.screenFading(), report, audio.cues[cue], gain, pitch);
             },
             suspend(scene) {
+                narration.leave(scene);
                 interaction.leave(scene);
                 wall.leave(scene);
                 footsteps.leave(scene);
@@ -343,7 +352,7 @@ function boot(root, nodeRequire, nodeProcess) {
                     if (handled || action === 'gold') return handled;
                     return battleFocus.command(battleFocus.controlOwner(scene), action) ||
                         battleTargets.command(battleTargets.controlOwner(scene), action) ||
-                        dialogue.diagramCommand(scene, action) || credits.command(scene, action) || quests.command(scene, action);
+                        dialogue.command(scene, action) || credits.command(scene, action) || quests.command(scene, action);
                 }
                 catch { return false; }
             },
@@ -373,7 +382,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 else if (context.kind === 'battle') battleFocus.command(context, action);
                 else if (context.kind === 'battleTarget') battleTargets.command(context, action);
                 else if (context.kind === 'field') fieldAction(action);
-                else if (context.kind === 'dialogue') dialogue.diagramCommand(context.scene, action);
+                else if (context.kind === 'dialogue') dialogue.command(context.scene, action);
                 else if (context.kind === 'credits') credits.command(context.scene, action);
             }
         });
@@ -386,6 +395,7 @@ function boot(root, nodeRequire, nodeProcess) {
             if (root.Input?._wqaSettingsPads) delete root.Input._wqaSettingsPads[event.gamepad.index];
         });
         for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+            narration.leave();
             splash.leave(host.manager._scene);
             interaction.leave(host.manager._scene);
             treasure.leave(host.manager._scene);
@@ -400,6 +410,7 @@ function boot(root, nodeRequire, nodeProcess) {
             battleTargets.retire(host.manager._scene);
             battleTiming.retire(host.manager._scene);
             battleCues.retire(host.manager._scene);
+            if (host.manager._scene) host.manager._scene._wqaMomentumPending = null;
             battleLog.retire(host.manager._scene);
             radialResult.retire(host.manager._scene);
             quests.leave(host.manager._scene);
@@ -606,6 +617,18 @@ function boot(root, nodeRequire, nodeProcess) {
             root.document.hasFocus() ? scene : null;
     }
 
+    root.WendyQuestAccessMomentumChanged = function (scene, hud) {
+        try {
+            const manager = root.SceneManager;
+            const graphics = root.Graphics;
+            const ready = scene === manager._scene && graphics.app?.stage === scene && scene._started &&
+                scene._active && !scene._fadeDuration && !scene._fadeOpacity && !scene._wqaSettingsActive &&
+                !manager._nextScene && !manager._exiting && !manager._wqaNativeAutosaves &&
+                !graphics._wqaResize && !root.$gameScreen?._fadeOutDuration && root.document.hasFocus();
+            recordMomentum(scene, hud, graphics.frameCount, ready);
+        } catch { /* Keep the native HUD update in charge. */ }
+    };
+
     root.WendyQuestAccessEnemyCollapse = function (sprite) {
         try {
             const scene = outcomeScene();
@@ -703,6 +726,21 @@ function boot(root, nodeRequire, nodeProcess) {
         try { bitmap.addLoadListener(() => { pending.delete(bitmap); }); }
         catch { scene._wqaPreloadOverflow = true; }
     };
+
+    root.WendyQuestAccessNarrationAccepted = function (scene, interpreter, actor, switched) {
+        try { narration?.accepted(scene, interpreter, actor, switched); } catch { narration?.leave(scene); }
+    };
+
+    root.WendyQuestAccessNarrationPresent = function (scene) {
+        try { narration?.present(scene); } catch { narration?.leave(scene); }
+    };
+
+    root.WendyQuestAccessNarrationWarm = function (scene) {
+        if (!narration?.needsPack) return;
+        try { narration.warm(scene); } catch { narration.leave(scene); }
+    };
+
+    root.WendyQuestAccessNarrationLeaving = function (scene) { narration?.leave(scene); };
 
     root.WendyQuestAccessStepNavigationReady = function (scene) { field?.stepReady(scene); };
     root.WendyQuestAccessIdleInput = function (scene) { return field?.idleInput(scene); };
@@ -823,6 +861,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessResizeStarting = function () {
+        narration?.leave();
         titleWaiting = null;
         filesWaiting = null;
         fieldWaiting = null;
@@ -854,6 +893,7 @@ function boot(root, nodeRequire, nodeProcess) {
         battleTargets?.retire(scene);
         battleTiming?.retire(scene);
         battleCues?.retire(scene);
+        if (scene) scene._wqaMomentumPending = null;
         battleLog?.retire(scene);
         radialResult?.retire(scene);
     };

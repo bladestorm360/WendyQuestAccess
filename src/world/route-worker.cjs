@@ -4,7 +4,7 @@ const { parentPort, workerData } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
 const { createHash } = require('crypto');
-const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS } = require('./geometry.cjs');
+const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, CELL_BITS } = require('./geometry.cjs');
 const { solveRoute, findReachable } = require('./routes.cjs');
 const { MAX_CATALOG_BYTES, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
@@ -15,6 +15,7 @@ const directory = workerData.geometryDirectory;
 let manifest = null;
 let walking;
 let cachedId = 0;
+let cachedTileset;
 let cachedGeometry = null;
 
 function readBounded(name, limit, cancelled) {
@@ -33,8 +34,8 @@ function readBounded(name, limit, cancelled) {
     }
 }
 
-function geometry(id, cancelled) {
-    if (id === cachedId) return cachedGeometry;
+function geometry(id, tileset, cancelled) {
+    if (id === cachedId && tileset === cachedTileset) return cachedGeometry;
     if (!manifest) {
         const bytes = readBounded('manifest.json', 128 * 1024, cancelled);
         if (!bytes || cancelled()) return null;
@@ -42,15 +43,32 @@ function geometry(id, cancelled) {
         if (source.build !== BUILD || !source.maps) throw new Error('Unsupported map geometry build');
         manifest = source;
     }
-    const expected = manifest.maps[id]?.geometry;
+    const entry = manifest.maps[id];
+    const expected = entry?.geometry;
     if (!expected) throw new Error('Map geometry is unavailable');
+    const variant = tileset === undefined || tileset === entry.tileset ? null : entry.variants?.[tileset];
+    if (tileset !== undefined && tileset !== entry.tileset && !Array.isArray(variant))
+        throw new Error('Unverified active tileset');
     const bytes = readBounded(`${id}.wqg`, HEADER + MAX_CELLS, cancelled);
     if (!bytes || cancelled()) return null;
     if (createHash('sha256').update(bytes).digest('hex') !== expected) throw new Error('Map geometry changed');
     if (cancelled()) return null;
-    cachedGeometry = decodeMap(id, bytes);
+    const geometry = decodeMap(id, bytes);
+    if (variant) {
+        if (variant.length > geometry.cells.length) throw new Error('Invalid tileset variant');
+        for (let index = 0; index < variant.length; index++) {
+            if ((index & 63) === 0 && cancelled()) return null;
+            const packed = variant[index];
+            const cell = packed & (MAX_CELLS - 1);
+            const flags = packed >>> CELL_BITS;
+            if (!Number.isInteger(packed) || cell >= geometry.cells.length || flags > 255)
+                throw new Error('Invalid alternate terrain');
+            geometry.cells[cell] = flags;
+        }
+    }
     cachedId = id;
-    return cachedGeometry;
+    cachedTileset = tileset;
+    return cachedGeometry = geometry;
 }
 
 function walkingCatalog() {
@@ -76,7 +94,7 @@ parentPort.on('message', message => {
     try {
         // A retired cold job can close its current file handle and return.
         // Each subsequent disk operation and the solver need current admission.
-        const base = !cancelled() && geometry(map, cancelled);
+        const base = !cancelled() && geometry(map, live?.tileset, cancelled);
         if (base && !cancelled()) {
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');

@@ -82,7 +82,8 @@ function load(id, states = {}) {
         event._pageIndex = event.findProperPageIndex();
         const page = event.page();
         Object.assign(event, { _through: page ? page.through : true, _priorityType: page?.priorityType ?? 0,
-            _tileId: page?.image.tileId ?? 0, _trigger: page?.trigger, _erased: false, _starting: false });
+            _tileId: page?.image.tileId ?? 0, _characterName: page?.image.characterName || '',
+            _trigger: page?.trigger, _erased: false, _starting: false });
         return event;
     });
     gameMap._vehicles = ['boat', 'ship', 'airship'].map(type => Object.assign(new c.Game_Vehicle(), {
@@ -989,6 +990,43 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 async function main() {
     const catalog = bake(game, derived);
     assert.deepEqual(catalog, { maps: 239, cells: 191235 });
+    const manifest = JSON.parse(fs.readFileSync(path.join(derived, 'manifest.json'), 'utf8'));
+    const weatherMaps = [12, 13, 14, 15, 16, 17, 161, 162, 164, 165, 166, 207, 208];
+    assert.deepEqual(Object.keys(manifest.maps).map(Number).filter(id => manifest.maps[id].variants), weatherMaps);
+    const rainChecks = compared;
+    for (const id of weatherMaps) {
+        const fixture = load(id);
+        const { map, gameMap, player } = fixture;
+        const entry = manifest.maps[id];
+        const native = map.events.flatMap(event => event?.pages || []).flatMap(page => page.list)
+            .find(command => command.code === 282);
+        assert.deepEqual(native.parameters, [11]);
+        assert.equal(entry.tileset, 7);
+        gameMap.refresh = () => {};
+        c.SceneManager._scene._wqaRouteActive = true;
+        let invalidations = 0;
+        c.WendyQuestAccessFieldChanged = () => invalidations++;
+        c.ImageManager = { loadTileset: () => ({ isReady: () => true }) };
+        const weather = new c.Game_Interpreter();
+        assert(weather.command282(native.parameters));
+        assert(weather.command282(native.parameters));
+        assert.equal(invalidations, 1, 'reapplying the active weather tileset leaves route admission alone');
+        c.SceneManager._scene._wqaRouteActive = false;
+        const expected = bakeMap(map, tilesets[11].flags);
+        const derived = fixture.geometry.cells.slice();
+        for (const cell of entry.variants[11]) derived[cell & 16383] = cell >>> 14;
+        assert.deepEqual(derived, expected.cells);
+        compare({ ...fixture, geometry: expected });
+        if (id === 12 || id === 15) {
+            const [x, y] = id === 12 ? [37, 19] : [25, 24];
+            player.setPosition(x, y);
+            const { live } = captureWorld(c);
+            assert.equal(live.tileset, 11);
+            const request = { x, y, targetX: x, targetY: y, field: true };
+            await verifyWorker(fixture, request, live, result => assert.equal(result.status, 'ready'));
+        }
+    }
+    console.log(`Checked ${compared - rainChecks} dry-weather collision edges across ${weatherMaps.length} maps.`);
     const worldMap = read('Map113.json');
     const describe = (x, y) => mapDescription({ $gameMap: { _mapId: 113 }, $gamePlayer: { _x: x, _y: y }, $dataMap: worldMap });
     for (const [x, y, region] of [[16, 30, 'Fryshire'], [13, 17, 'The Chilly North'], [35, 16, 'Nugget Sands'],

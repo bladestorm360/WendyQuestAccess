@@ -30,7 +30,7 @@ function pairedValue(hud, label, icon, current, divider, total) {
     return label + ' ' + value + (max ? ' of ' + max : '');
 }
 
-function momentum(hud) {
+function visibleMomentum(hud) {
     const pips = hud.momentumPips;
     if (!Array.isArray(pips) || !pips.length || pips.length > 5) return '';
     let filled = 0;
@@ -40,7 +40,7 @@ function momentum(hud) {
         if (!visibleSprite(hud, sprite) || frame?.y !== 0 || (frame.x !== 0 && frame.x !== 32)) return '';
         if (frame.x === 32) filled++;
     }
-    return 'Momentum ' + filled + ' of ' + pips.length;
+    return { filled, total: pips.length };
 }
 
 function visibleCondition(hud, graphics, id) {
@@ -131,9 +131,10 @@ function hudVitals(hud, graphics, name, includeExperience = false, mapMeters = f
     const frame = hud._frame;
     const critical = mapMeters && hp && hud.isLowHealth === true &&
         frame?.x === 128 && frame.y === 0 && frame.width === 128 && frame.height === 128;
+    const momentum = visibleMomentum(hud);
     const lines = reviewLines([name, critical ? hp + ', critical' : hp, fp,
         level && 'Level ' + level + (progress ? ', ' + progress : ''),
-        momentum(hud), ...statusLines(hud, graphics)]);
+        momentum && 'Momentum ' + momentum.filled + ' of ' + momentum.total, ...statusLines(hud, graphics)]);
     return lines.length > 1 ? { kind: 'menuDetails', lines } : null;
 }
 
@@ -166,4 +167,4 @@ function battleVitals(scene, graphics) {
     return hudVitals(scene._statusWindow, graphics, main.name);
 }
 
-module.exports = { portraitActor, battleVitals, menuVitals, fieldVitals, fieldVitalsVisible, visibleCondition };
+module.exports = { portraitActor, battleVitals, menuVitals, fieldVitals, fieldVitalsVisible, visibleCondition, visibleMomentum };
