@@ -1,6 +1,7 @@
 'use strict';
 
 const { MAX_CELLS, MAX_EVENTS } = require('./geometry.cjs');
+const { WENDYS_RESTAURANTS } = require('./local-destinations');
 
 const BOOKMARK_LIMIT = 64;
 const BOOKMARK_NAME_LIMIT = 64;
@@ -22,8 +23,12 @@ function location(value) {
     const { map, mode, kind } = value;
     if (kind === 'point' && [value.x, value.y].every(axis => Number.isInteger(axis) && axis >= 0 && axis < MAX_CELLS))
         return { map, mode, kind, x: value.x, y: value.y };
-    if (kind === 'entity' && positive(value.event, MAX_EVENTS) && ENTITY_CATEGORIES.includes(value.category))
-        return { map, mode, kind, event: value.event, category: value.category };
+    if (kind === 'entity' && positive(value.event, MAX_EVENTS) && ENTITY_CATEGORIES.includes(value.category)) {
+        const { event, category } = value;
+        // Prior releases saved the employee behind the counter as a merchant.
+        const employee = category === 'merchants' && event === 4 && WENDYS_RESTAURANTS.has(map);
+        return { map, mode, kind, event, category: employee ? 'people' : category };
+    }
     return null;
 }
 

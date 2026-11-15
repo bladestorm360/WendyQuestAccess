@@ -67,7 +67,7 @@ function run(method, scenario, play) {
     const action = battle._currentActionCommand = Object.assign(new c.ActionCommandRadial(), {
         _spriteBase: { parent: scene }, _hitZoneSize: 0.1,
         InputPressed() {
-            if (scenario.followCue && beats.length) return true;
+            if (scenario.followCue && beats.length && now - beats[0].at >= (scenario.cueDelay || 0)) return true;
             if (!press.length || now < press[0]) return false;
             press.shift();
             return true;
@@ -102,7 +102,9 @@ function check(method, scenario, cue) {
         sample.progress >= sample.start && sample.progress <= sample.end &&
         sample.progress < sample.limit && sample.progress < 1);
     assert(first);
-    assert.deepEqual(result.beats, [{ cue, at: first.at, progress: first.progress, bearing: [0, 0, 1], pitch: 1 }]);
+    const previous = result.samples[result.samples.indexOf(first) - 1];
+    const note = method === 'Accuracy' && previous && !previous.blocked ? previous : first;
+    assert.deepEqual(result.beats, [{ cue, at: note.at, progress: note.progress, bearing: [0, 0, 1], pitch: 1 }]);
     return result;
 }
 
@@ -120,6 +122,18 @@ for (const [method, scenario] of [['Power', ordinaryPower], ['Accuracy', mid]]) 
     const { start, end, limit } = following.samples.at(-1);
     assert(accepted && !frozen && progress >= start && progress <= end && progress < limit && progress < 1);
 }
+
+// Blandhawk has a five-percent band. This legal roll ends at 94.7%.
+const narrow = { ...accuracy, lower: 0.897, upper: 0.947, press: [], followCue: true, cueDelay: 30 };
+const narrowAccuracy = run('observedAccuracy', narrow, true);
+assert.equal(narrowAccuracy.beats.length, 1);
+const [narrowResult, narrowAccepted] = narrowAccuracy.outcome;
+assert(narrowAccepted && narrowResult >= narrow.lower && narrowResult <= narrow.upper,
+    'A two-frame response to the accuracy cue reached ' + Math.floor(narrowResult * 100) + '%.');
+assert(narrowAccuracy.beats[0].progress < narrow.lower, 'the predicted opening uses the previous update');
+const promptAccuracy = run('observedAccuracy', { ...narrow, cueDelay: 0 }, true);
+assert(promptAccuracy.outcome[0] >= narrow.lower && promptAccuracy.outcome[0] <= narrow.upper,
+    'the earliest native response is inside the same window');
 
 const frozen = { ...ordinaryPower, settings: { Frozen: true }, press: [410, 1290] };
 const ice = check('Power', frozen, CUE.battlePower);

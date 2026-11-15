@@ -6,6 +6,10 @@ const MAX_REQUEST_MS = 48;
 const SOURCE = 'battleTiming';
 const HIT_NOTE_PITCH = 1;
 
+function inPerfectWindow(progress, start, end, limit) {
+    return start < end && progress >= start && progress <= end && progress < limit && progress < 1;
+}
+
 function createBattleCues(root, host, audio, preferences) {
     let owner = null;
 
@@ -65,9 +69,17 @@ function createBattleCues(root, host, audio, preferences) {
                 current.phase = phase;
                 current.emitted = false;
             }
-            // These are the bounds used by the native perfect-hit and failure
-            // branches. A confirm already handled on this frame owns the result.
-            if (blocked || !(start < end && progress >= start && progress <= end && progress < limit && progress < 1)) {
+            // The cue is observed after native input. Lead a steady accuracy
+            // sweep by one measured increment so the next input check can use
+            // the opening of the band's native window.
+            let opening = false;
+            if (phase === 1) {
+                const advance = progress - current.accuracyProgress;
+                current.accuracyProgress = blocked ? undefined : progress;
+                opening = progress < start && advance > 0 && !action._params?.wobbleAmount &&
+                    inPerfectWindow(progress + advance, start, end, limit);
+            }
+            if (blocked || (!opening && !inPerfectWindow(progress, start, end, limit))) {
                 endSweep(scene, action);
                 return;
             }

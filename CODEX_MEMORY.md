@@ -169,3 +169,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Field enemy names](docs/deployment.md#field-enemy-names) records the sprite mapping and verification. [Critical-hit streaks](docs/battle.md#critical-hit-streaks) records the game's battle cap, saved record and chest threshold.
 
 [Formation-backed field enemy audit](docs/deployment.md#formation-backed-field-enemy-audit) verifies all 206 actionable named encounter pages, including the Lost Ruins Heat Lamp.
+
+[Kathryn categories and accuracy cue](docs/deployment.md#kathryn-categories-and-accuracy-cue) records the restaurant routes, existing-bookmark verification and native reproduction of the narrow accuracy miss.

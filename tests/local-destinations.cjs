@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { captureWorld, eventTarget } = require('../src/world/snapshot');
 const { createTerrainJourney } = require('../src/world/terrain-journey');
 const { questDestinationLabel } = require('../src/world/quest-destinations');
+const { readBookmarks } = require('../src/world/bookmark-records');
 const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { mapPlace } = require('../src/world/map-banner');
@@ -284,16 +285,24 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     for (const [map, switches] of [[181, []], [182, []], [183, []], [183, [63]], [184, []], [186, []]]) {
         const restaurant = load(map, { switches });
         restaurant.player.setPosition(10, 5);
-        const view = captureWorld(c);
+        const saved = readBookmarks({ build: '26578620', version: 1, nextId: 3, entries: [4, 5].map(event => ({
+            kind: 'entity', map, mode: 'walk', event, category: 'merchants', id: event - 3,
+            revision: 1, name: event === 4 ? 'Talk to Kathryn' : 'Place an order'
+        })) });
+        const view = captureWorld(c, true, undefined, undefined, saved.entries);
         const counters = view.objects.filter(item => [4, 5].includes(item.id));
         assert.deepEqual(counters.map(({ id, category, name }) => [id, category, name]), [
-            [4, 'merchants', 'Kathryn'], [5, 'merchants', "Kathryn's shop"]
+            [4, 'people', 'Kathryn'], [5, 'merchants', 'Kathryn']
         ]);
-        const order = { x: 10, y: 5, event: 5, field: true };
-        verifyRoute(restaurant, order, solveRoute(restaurant.geometry, view.live, order));
+        assert.deepEqual(view.objects.filter(item => item.category === 'bookmarks').map(item =>
+            [item.event, item.name]), [[4, 'Talk to Kathryn'], [5, 'Place an order']]);
+        for (const event of [4, 5]) {
+            const request = { x: 10, y: 5, event, field: true };
+            verifyRoute(restaurant, request, solveRoute(restaurant.geometry, view.live, request));
+        }
     }
     c.$dataCommonEvents = restaurantCommon;
-    console.log("Verified both merchant entries at five Wendy's locations and the native shop approach.");
+    console.log("Verified Kathryn's NPC and shop routes, and prior bookmarks, at all five Wendy's locations.");
 
     const beachSwitches = [31];
     const beach = load(13, { switches: beachSwitches, self: ['13,5,C', '13,8,A', '13,14,A', '13,20,A'] });

@@ -354,11 +354,11 @@ function localDestination(root, event, page) {
     if (trigger !== 0) return undefined;
     if ((id === 4 || id === 5) && WENDYS_RESTAURANTS.has(map) && root.$dataMap?.events?.[id]?.name === 'Kathryn') {
         if (id === 4 && page.image?.characterName === 'NPC - Wendys Staff')
-            return { name: 'Kathryn', category: 'merchants', eventAction: 'talk' };
+            return { name: 'Kathryn', category: 'people', eventAction: 'talk' };
         // Nuggedor delegates the shop command to its region's common event.
         if (id === 5 && list.some(row => row.code === 302 || row.code === 117 && row.parameters[0] === 46 &&
             root.$dataCommonEvents?.[46]?.list[0]?.code === 302))
-            return { name: "Kathryn's shop", category: 'merchants' };
+            return { name: 'Kathryn', category: 'merchants' };
     }
     // The ice is drawn by MapScene's animated objects, independently of the
     // blank action sprite and any underlying chest.
@@ -399,4 +399,4 @@ function localDestination(root, event, page) {
 }
 
 module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, concealedDestination, visibleChestBarrier,
-    chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS };
+    chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

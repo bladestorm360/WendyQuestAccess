@@ -22,7 +22,7 @@ Enable **Cutscene descriptions** in **F8 → Audio** to hear short descriptions 
 
 At the start of battle, the mod reads the enemy formation before the first focused command. Highlight a target to hear its name and visible HP percentage. Target review distinguishes enemies that share a name by position. Basic attacks name the attacker as the animation starts, followed by the displayed damage. A defeat follows its damage announcement. Special attacks use their existing text.
 
-Confirm to start the timing meter. Confirm again for power, then for accuracy. **F8 → Audio → Battle timing assist** adds one note when a perfect window opens. Press Confirm when you hear it. The game’s wind-up sounds provide the rest of the timing. When the game shows its resistance popup, speech reports that Wendy resisted a status effect.
+Confirm to start the timing meter. Confirm again for power, then for accuracy. **F8 → Audio → Battle timing assist** adds one note for each perfect window. Press Confirm when you hear it. The game’s wind-up sounds provide the rest of the timing. When the game shows its resistance popup, speech reports that Wendy resisted a status effect.
 
 ## Read details with I
 
