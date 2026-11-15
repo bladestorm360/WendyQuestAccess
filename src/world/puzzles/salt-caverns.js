@@ -47,16 +47,18 @@ function createSaltGuide(root) {
         const prefix = visit.reset + 'Salt Caverns. ';
         if (state.finalOpen || state.order === 4)
             return { target: exit, text: prefix + 'The color sequence is complete. Follow directions to the north exit.' };
-        if (!state.eastOpen && !(state.mask & 128) && root.$gamePlayer?._y >= 29)
-            return { target: exit, text: prefix + 'Open the way to the four colored crystals first. The final order is ' + ORDER + '.' };
         const step = state.order;
         if (state.hits & (1 << step)) {
             return { target: select(97), text: prefix +
                 'This attempt needs a reset. Use Crystal reset, then hit the colors in order: ' + ORDER + '.' };
         }
-        const name = saltControlName(CRYSTALS[step]);
-        return { target: select(CRYSTALS[step]), text: prefix + step + ' of 4 colors complete. Next, hit the ' +
-            name.toLowerCase() + '. Full order: ' + ORDER + '.' };
+        const target = select(CRYSTALS[step]);
+        const plan = prefix + step + ' of 4 colors complete. Color order is ' + ORDER + '.';
+        // The worker selects any terrain crystal or floor prerequisite from
+        // the same live state used by Directions. Name the color itself only
+        // once its native approach is available.
+        return { target, text: plan,
+            readyText: plan + ' Activate the ' + saltControlName(CRYSTALS[step]).toLowerCase() + '.' };
     }
 
     return {

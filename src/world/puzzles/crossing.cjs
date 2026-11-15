@@ -141,29 +141,41 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     const origin = indexOf(world.player, request.x, request.y);
     const area = request.area && clipRectangle(world.player, request.area);
     if (origin < 0 || (area && !inside(world.player, origin, area))) return { status: 'unavailable' };
-    const goals = routeGoals(world.player, request, cancelled);
-    if (cancelled()) return { status: 'cancelled' };
-    if (!goals) return { status: 'unavailable' };
-    if (goals[origin]) return { status: 'ready', distance: 0, legs: [],
-        arrival: { x: request.x, y: request.y, facing: goals[origin] === 1 ? null : goals[origin] } };
-    const distances = distancesToApproach(world.player, goals, origin, area, cancelled);
-    if (!distances) return { status: 'cancelled' };
-    const candidates = crossingCandidates(world.player, origin, distances);
-    if (!candidates.length) return { status: 'unreachable' };
+    // Guide targets are ordered by the verified room state. Test a small
+    // set against the same static collision, then simulate one crossing.
+    const alternatives = Array.isArray(request.guideOptions) && request.guideOptions.length <= 6
+        ? request.guideOptions : [request];
+    let selected;
+    let candidates;
+    for (const option of alternatives) {
+        const goals = routeGoals(world.player, option, cancelled);
+        if (cancelled()) return { status: 'cancelled' };
+        if (!goals) continue;
+        const guide = request.guideOptions ? { guideEvent: option.event } : {};
+        if (goals[origin]) return { status: 'ready', distance: 0, legs: [], ...guide,
+            arrival: { x: request.x, y: request.y, facing: goals[origin] === 1 ? null : goals[origin] } };
+        const distances = distancesToApproach(world.player, goals, origin, area, cancelled);
+        if (!distances) return { status: 'cancelled' };
+        candidates = crossingCandidates(world.player, origin, distances);
+        if (!candidates.length) continue;
+        selected = guide;
+        break;
+    }
+    if (!selected) return { status: 'unreachable' };
     const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
     if (request.timingCue === true) {
         const opening = openingFor(world, motion, player, candidates, cancelled);
         if (cancelled()) return { status: 'cancelled' };
-        if (opening) return { status: 'timedCue', opening };
+        if (opening) return { status: 'timedCue', opening, ...selected };
     }
     for (const candidate of candidates) {
         const startWindow = checkedStartWindow(world, motion, player, candidate, cancelled);
         if (cancelled()) return { status: 'cancelled' };
         if (startWindow >= MIN_START_WINDOW) return { status: 'timed', direction: DIRECTIONS[candidate.heading],
-            tiles: candidate.count, startWindow, terminal: candidate.terminal,
+            tiles: candidate.count, startWindow, terminal: candidate.terminal, ...selected,
             alternate: candidate.heading !== candidates[0].heading };
     }
-    return { status: 'timedWait' };
+    return { status: 'timedWait', ...selected };
 }
 
 module.exports = { previewCrossing };

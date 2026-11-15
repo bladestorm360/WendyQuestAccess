@@ -13,6 +13,7 @@ const { bakeMap, decodeMap, composeWorld, indexOf, DIRECTIONS, step, surface } =
 const { solveRoute } = require('../src/world/routes.cjs');
 const { warningApproach, captureMotion } = require('../src/world/puzzles/cave');
 const { verifyCaveProgression } = require('./cave-progression.cjs');
+const { verifyNavigationAuditFixes } = require('./navigation-regressions.cjs');
 const { verifyLocalDestinations } = require('./local-destinations.cjs');
 const { verifyVehicleNavigation } = require('./vehicle-navigation.cjs');
 const { verifyAutowalk } = require('./autowalk.cjs');
@@ -1312,6 +1313,7 @@ async function main() {
     verifyNativePatrolMotion();
     verifyCaveProgression(c, load, snapshot, verifyRoute, read);
     await verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read);
+    await verifyNavigationAuditFixes(c, load, verifyRoute, verifyWorker, read);
     await verifyVehicleNavigation(c, load, read, verifyWorker);
     await verifyAutowalk(c, load, verifyWorker);
     verifySoundscape(c, load);

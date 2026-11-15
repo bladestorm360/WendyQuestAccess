@@ -137,12 +137,14 @@ function formatSpeech(message) {
             const steps = message.tiles;
             if (!heading || !Number.isInteger(steps) || steps < 1 || steps > 3) return '';
             text = `${message.alternate ? 'Alternate preview' : 'Preview'}. ${steps} ${steps === 1 ? 'step' : 'steps'} ${heading}${message.terminal ? ' to an event' : ''}. Recheck if you wait.`;
+            if (message.guide) text += ' ' + label({ name: message.guide });
             break;
         }
         case 'timedCue': {
             const heading = HEADINGS[message.direction];
             if (!heading) return '';
             text = `${message.alternate ? 'Alternate opening. ' : ''}One tile ${heading}${message.terminal ? ' to an event' : ''} on the tone.`;
+            if (message.guide) text += ' ' + label({ name: message.guide });
             break;
         }
         case 'treasureReward': {
@@ -193,6 +195,12 @@ function formatSpeech(message) {
                 parts.push(`${label({ name: message.boundaryName }) || 'Floor event'} one tile ${boundary}`);
                 if (message.manualHandoff === true) parts.push(`Move ${boundary} to continue, then request directions again`);
             }
+            else if (message.takeExit && label({ name: message.exit }) && !message.reenter) {
+                const exit = label({ name: message.exit });
+                const action = message.bump && facing ? 'Move ' + facing :
+                    message.enter ? (facing ? 'Face ' + facing + ' and press' : 'Press') + ' the action button' : 'Continue';
+                parts.push(action + ' to take the ' + exit);
+            }
             else if (message.reenter === true)
                 parts.push(message.sailing ? 'Sail off this tile and back to activate' : 'Walk off this tile and back to activate');
             else if (message.bump === true && facing) parts.push(`Move ${facing} to activate`);
@@ -207,11 +215,12 @@ function formatSpeech(message) {
                 const discovery = label({ name: message.discovery });
                 if (discovery) parts.push(`Then request walking directions to ${discovery}`);
             }
-            else if (message.guideAction && facing) parts.push(`Face ${facing} and press the action button`);
+            else if (message.guideAction) parts.push(facing ? `Face ${facing} and press the action button` : 'Press the action button');
             else if (facing && !beaconOnly) parts.push(`face ${facing}`);
             const afterEnemy = message.enemyBlocked === true && label({ name: message.afterEnemy });
             if (afterEnemy)
                 parts.push('Once clear, approach ' + afterEnemy + ' and press the action button');
+            if (message.onwardUnavailable) parts.push('Onward directions are unavailable from that exit');
             const guide = label({ name: message.guide });
             if (beaconOnly && !parts.length && !guide) {
                 text = message.directionsOnly === true ? '' : name;

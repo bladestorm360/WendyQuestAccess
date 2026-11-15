@@ -13,6 +13,7 @@ const { browse, createDestinationBrowser, activeMovingEnemy } = require('./desti
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
 const { CONTROLS } = require('./terrain-control-labels.cjs');
+const { createTerrainJourney, BRIDGE_REASON, CRYSTAL_REASON, PULL_REASON, STONE_ISLAND } = require('./terrain-journey');
 const { saltControlName } = require('./puzzles/salt-state.cjs');
 const { mapPlace } = require('./map-banner');
 const { mapDescription } = require('./map-descriptions');
@@ -87,6 +88,7 @@ function createField(root, host, notifications) {
     const salt = createSaltGuide(root);
     const cave = createCaveGuide(root, host.graphics);
     const transfers = createTransferBookmarks(root, host);
+    const terrainJourney = createTerrainJourney(root);
     const selectionSites = new WeakMap();
     let browser = createDestinationBrowser();
     let owner = null;
@@ -204,7 +206,7 @@ function createField(root, host, notifications) {
 
     function navigationRequest(job) {
         return job && (job.action === 'directions' || job.action === 'currentDestination' ||
-            job.action === 'puzzleGuide' && salt.available(job.scene) || BROWSE.has(job.action));
+            job.action === 'puzzleGuide' && !!guideFor(job.scene) || BROWSE.has(job.action));
     }
 
     function follow(job, result, record, walkingJob = job) {
@@ -239,6 +241,35 @@ function createField(root, host, notifications) {
 
     function presentRoute(job, record) {
         present(job, job.beaconStarted && !preferences().speakBeaconPath ? { ...record, beaconOnly: true } : record);
+    }
+
+    function terrainExit(job, result) {
+        const gate = result.gate;
+        const approach = job.terrainApproach;
+        const edge = approach?.entrances.find(item => item.event === result.entrance && item.approach === result.approach);
+        if (gate === 'pull' ? root.$gameVariables?.value?.(4) !== 2 : gate && root.$gameSwitches?.value?.(gate) !== false)
+            return status(job, 'The passage changed. Request directions again.');
+        if (approach && result.entrance && (!edge || !transfers.matchesState(approach.state) || !transfers.current(edge)))
+            return status(job, 'The exit changed. Request directions again.');
+        if (gate === 97 && !edge) return status(job, BRIDGE_REASON + ' No verified route to an exit from here.');
+        const event = edge?.event ?? result.event;
+        const exit = routeBoundary(root, event, preferences().spoilers === true).exit ||
+            (edge && root.$dataMapInfos?.[edge.map]?.name) || CONTROLS[job.map]?.[event] || 'exit';
+        const text = gate === 145 ? CRYSTAL_REASON : gate === 97 ? BRIDGE_REASON : gate === 'pull' ? PULL_REASON : job.guide;
+        if (gate && !job.journey && !result.onwardUnavailable)
+            terrainJourney.begin(gate, job.map, job.destination, edge?.map ?? (gate === 'pull' ? 57 : 27));
+        else if (edge && !result.onwardUnavailable) terrainJourney.advance(job.map, edge.map);
+        job.entrance = edge;
+        const handoff = result.boundaryEvent && result.boundaryEvent !== event &&
+            localHandoffName(job.map, result.boundaryEvent);
+        const bump = gate === 'pull' && !handoff || !!edge && edge.action && root.$gameMap._events[event]?._trigger === 1;
+        startBeaconApproach(job, result, event);
+        return presentRoute(job, { kind: 'routeDirections', name: job.label, guide: text,
+            legs: result.legs, facing: result.arrival.facing, more: result.more === true,
+            exit: handoff ? undefined : exit, useExit: true, boundary: result.boundary,
+            boundaryName: handoff, manualHandoff: !!handoff,
+            bump, enter: edge?.action && !bump, reenter: result.reenter === true, takeExit: !!edge || bump,
+            onwardUnavailable: result.onwardUnavailable === true });
     }
 
     function startBeaconApproach(job, result, event) {
@@ -317,6 +348,26 @@ function createField(root, host, notifications) {
             if (job.area && !warningApproach(root.$gameMap, player._x, player._y, job.target))
                 return status(job, 'Warning sign directions are no longer available');
             const result = packet.result;
+            if (result?.guideEvent !== undefined) {
+                const chosen = job.guideOptions?.find(({ target }) => target.id === result.guideEvent);
+                const event = root.$gameMap._events?.[result.guideEvent];
+                if (!chosen || !event || event._erased || event._x !== chosen.target.x || event._y !== chosen.target.y)
+                    return status(job, 'The next step changed. Request guidance again.');
+                const { target, hint } = chosen;
+                job.label = target.name;
+                job.target = target.id;
+                job.eventAction = target.eventAction;
+                job.guide = hint;
+                if (job.timing && result.status === 'timedCue')
+                    job.timing = host.caveTiming.capture(job.scene, job.timing.motion, target);
+                selectGuideTarget(target);
+            }
+            if (result?.status === 'terrainExit' || job.terrainOnward && result?.entrance && ['ready', 'interrupted'].includes(result.status))
+                return terrainExit(job, result);
+            if (result?.status === 'terrainGate')
+                return status(job, (result.gate === 97 ? BRIDGE_REASON : CRYSTAL_REASON) + ' No verified route to an exit from here.');
+            if (job.terrainOnward && ['unreachable', 'unavailable'].includes(result?.status))
+                return status(job, job.guide + ' No verified route to an exit from here.');
             if (job.remote && result?.status === 'ready' && !admitRemoteRoute(job, result))
                 return status(job, 'The entrance changed. Request directions again.');
             if (result?.status === 'timedCue') {
@@ -324,13 +375,14 @@ function createField(root, host, notifications) {
                     // One fresh native sample after a cold/late worker result.
                     // The previous snapshot and expired opening are retired.
                     job.cueRetried = true;
+                    job.performed = false;
                     return afterRender();
                 }
                 if (!job.timing || !host.caveTiming.start(job.timing, job.x, job.y, result.opening))
                     return status(job, 'Patrol timing changed. Request directions again.');
                 job.scene._wqaPreviewUntil = job.motionFrame + result.opening.through - 22;
                 return present(job, { kind: 'timedCue', direction: result.opening.direction, terminal: result.opening.terminal,
-                    alternate: result.opening.alternate });
+                    alternate: result.opening.alternate, guide: job.guide });
             }
             if (result?.status === 'timed') {
                 const age = host.graphics.frameCount - job.motionFrame;
@@ -339,10 +391,11 @@ function createField(root, host, notifications) {
                     return status(job, 'Patrol timing changed. Request directions again');
                 job.scene._wqaPreviewUntil = job.motionFrame + result.startWindow;
                 return present(job, { kind: 'timedDirections', direction: result.direction, tiles: result.tiles,
-                    terminal: result.terminal === true, alternate: result.alternate === true });
+                    terminal: result.terminal === true, alternate: result.alternate === true, guide: job.guide });
             }
-            if (result?.status === 'timedWait') status(job, 'No crossing preview ready. Check the patrols and request again');
+            if (result?.status === 'timedWait') status(job, [job.guide, 'Wait for an opening and request directions again.'].filter(Boolean).join(' '));
             else if (result?.status === 'ready') {
+                if (job.readyGuide) job.guide = job.readyGuide;
                 if (result.land && !canLand(root.$gameMap, result.arrival.x, result.arrival.y))
                     return status(job, 'Landing site changed. Request directions again.');
                 if (job.landingBookmark) {
@@ -379,7 +432,8 @@ function createField(root, host, notifications) {
                     bump: job.eventAction === 'bump',
                     conversation: job.eventAction === 'talk',
                     board: !!job.vehicle, land: result.land === true,
-                    guideAction: job.action === 'puzzleGuide' && !!result.arrival.facing && !!saltControlName(job.target),
+                    guideAction: job.eventAction === 'interact' ||
+                        job.action === 'puzzleGuide' && !!result.arrival.facing && !!saltControlName(job.target),
                     discovery: result.discovery && worldBoundaryName(root, result.discovery) });
             }
             else if (result?.status === 'iceRoute') {
@@ -393,10 +447,18 @@ function createField(root, host, notifications) {
             }
             else if (result?.status === 'controlRoute') {
                 const prerequisite = CONTROLS[job.map]?.[result.event];
-                if (!prerequisite) return status(job, 'Control directions unavailable');
+                if (!prerequisite || result.gate && root.$gameSwitches?.value?.(result.gate) !== false)
+                    return status(job, 'The passage changed. Request directions again.');
+                const reason = {
+                    103: 'The office entrance opens after the scene with Chomps.',
+                    115: 'The return opens after the rescue encounter.',
+                    119: 'Speak to Elder Tater to open the way.',
+                    145: 'The crystal opens the passage.'
+                }[result.gate];
                 startBeaconApproach(job, result, result.event);
                 presentRoute(job, { kind: 'routeDirections', name: job.label, legs: result.legs, facing: result.arrival.facing,
-                    more: result.more === true, prerequisite });
+                    guide: reason, more: result.more === true, prerequisite,
+                    prerequisiteMove: result.step ? result.boundary : undefined });
             }
             else if (result?.status === 'saltRoute') {
                 const event = result.actions?.[0];
@@ -436,7 +498,8 @@ function createField(root, host, notifications) {
                 follow(job, result, record);
             }
             else if (result?.status === 'interrupted') {
-                const handoff = !job.eventAction && localHandoffName(job.map, result.boundaryEvent);
+                const handoff = (job.request.handoffs?.includes(result.boundaryEvent) || !job.eventAction) &&
+                    localHandoffName(job.map, result.boundaryEvent);
                 const { exit, boundaryName } = job.mode === 'walk' ?
                     routeBoundary(root, result.boundaryEvent, preferences().spoilers === true) : {};
                 startBeaconApproach(job, result, result.boundaryEvent);
@@ -445,13 +508,15 @@ function createField(root, host, notifications) {
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
                     guide: job.guide, activate, exit, useExit,
                     boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
-                    manualHandoff: !!handoff, more: result.more === true });
+                    manualHandoff: !!handoff || job.action === 'puzzleGuide' && !!boundaryName, more: result.more === true });
             }
             else if (result?.status === 'approachBlocked') status(job, (job.guide ? job.guide + ' ' : '') + 'A floor event blocks the approach');
             else if (job.remote && ['unreachable', 'unavailable'].includes(result?.status))
                 status(job, 'No verified reachable entrance');
             else if (result?.status === 'unreachable') {
                 if (job.guide) return status(job, job.guide + ' No verified route from here.');
+                if (job.map === 87 && job.target === 79)
+                    return status(job, 'This cave mouth is separate from the main cavern. It is reached from the east side of Cracked Cove.');
                 const reason = job.mode === 'walk' ? 'No walkable route' : job.mode === 'airship' ?
                     'No connected landing' : 'No sailing route';
                 status(job, job.nearestLanding ? 'No landing site is available' : reason);
@@ -523,6 +588,7 @@ function createField(root, host, notifications) {
 
     function route(job, snapshot, target, area, motion) {
         job.label = target.name;
+        job.destination = target;
         job.area = area;
         const destination = destinationRequest(target);
         job.target = destination.event;
@@ -531,20 +597,54 @@ function createField(root, host, notifications) {
         job.point = target.point === true;
         job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
         job.nearestLanding = target.nearestLanding === true;
-        job.autowalk = job.action !== 'puzzleGuide' && !timedCave(snapshot.map) && preferences().autowalk;
+        job.autowalk = job.action !== 'puzzleGuide' && !job.journey && !timedCave(snapshot.map) && preferences().autowalk;
         job.motionFrame = motion?.frame;
         if (motion) {
             host.caveTiming?.warm(job.scene);
             job.timing = host.caveTiming?.capture(job.scene, motion, target);
         }
-        submit(job, snapshot, { ...destination, stopBeforeEvent: job.eventAction === 'step',
+        const terrainTransfer = snapshot.live?.terrainGate === false && !job.journey &&
+            [77, 79, 80, 81, 84, 85].includes(snapshot.map) ? terrainTransferRequest(job, STONE_ISLAND) : undefined;
+        const guideOptions = motion && job.guideOptions?.map(({ target }) => destinationRequest(target));
+        submit(job, snapshot, { ...destination, terrainTransfer, guideOptions, stopBeforeEvent: job.eventAction === 'step',
             limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
             surface: snapshot.mode !== 'walk',
             beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk, timingCue: !!job.timing });
     }
 
+    function terrainTransferRequest(job, map) {
+        const { entrances, state } = transfers.candidates();
+        const copy = ({ event, map, x, y, approach }) => ({ event, map, x, y, approach });
+        job.terrainApproach = { entrances, state };
+        return { map, state, candidates: entrances.map(copy), discoveries: transfers.discoveries(entrances) };
+    }
+
+    function resumeTerrainJourney(job, snapshot) {
+        const next = terrainJourney.next(snapshot);
+        if (!next) return false;
+        if (next.restore && next.target) {
+            const { category, id } = next.target;
+            owner.browser.category = category;
+            owner.browser.selections[category] = id;
+        }
+        if (next.restore) return false;
+        job.journey = true;
+        job.guide = next.text;
+        if (next.transfer) {
+            job.label = 'Next exit';
+            job.terrainOnward = true;
+            return submit(job, snapshot, { field: true, limit: 8, beacon: host.beacon?.enabled() === true,
+                transfer: terrainTransferRequest(job, next.transfer) }), true;
+        }
+        if (!next.target) return status(job, next.text + ' The next action is unavailable.'), true;
+        if (next.map) terrainJourney.advance(snapshot.map, next.map);
+        route(job, snapshot, next.target);
+        return true;
+    }
+
     function select(job, snapshot) {
         snapshot.objects = includeSavedBookmarks(snapshot, snapshot.bookmarks, quest => questDestinationCurrent(root, job.scene, quest));
+        if (job.action === 'directions' && !job.changes.length && resumeTerrainJourney(job, snapshot)) return;
         const result = browse(owner.browser, snapshot, job.changes);
         job.quest = result.target?.quest;
         job.scene._wqaQuestNavigation = !!job.quest;
@@ -556,12 +656,21 @@ function createField(root, host, notifications) {
         if (job.action !== 'directions') return present(job, { kind: 'fieldTarget', name: target.name, category,
             dx: target.x - snapshot.x, dy: target.y - snapshot.y, outOfReach: target.outOfReach, handoff: target.handoff });
         if (!timedCave(snapshot.map)) return route(job, snapshot, target);
+        return timedRoute(job, snapshot, target);
+    }
+
+    function timedRoute(job, snapshot, target) {
         const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.event ?? target.id);
         const motion = area ? null : captureMotion(root, host.graphics);
-        if (!area && !motion) return status(job, 'Patrol timing is unavailable here');
-        const terrain = captureWorld(root);
+        if (!area && !motion) return status(job, [job.guide, 'Patrol timing is unavailable here.'].filter(Boolean).join(' '));
+        const terrain = snapshot.live ? snapshot : captureWorld(root);
         if (!terrain) return status(job, 'Map information unavailable');
         route(job, terrain, target, area, motion);
+    }
+
+    function selectGuideTarget(target) {
+        owner.browser.category = target.category;
+        owner.browser.selections[target.category] = target.id;
     }
 
     function savedBookmark(selection) {
@@ -701,8 +810,8 @@ function createField(root, host, notifications) {
             job.action !== 'puzzleGuide' && (!routing || job.changes.length > 0);
         const label = salt.available(job.scene) ? (id, fallback) => salt.label(job.scene, id, fallback) : undefined;
         const bookmarks = host.bookmarks?.();
-        const saltGuide = job.action === 'puzzleGuide' && salt.available(job.scene);
-        const snapshot = captureWorld(root, filtering || routing && !timed || saltGuide, label, job.scene, bookmarks,
+        const puzzleGuide = job.action === 'puzzleGuide';
+        const snapshot = captureWorld(root, filtering || routing && !timed || puzzleGuide, label, job.scene, bookmarks,
             false, preferences().spoilers === true);
         if (!snapshot) return status(job, 'Map information unavailable');
         if (navigationRequest(job)) snapshot.bookmarks = bookmarks;
@@ -711,18 +820,15 @@ function createField(root, host, notifications) {
             return submit(job, snapshot, { candidates: snapshot.objects.map(destinationRequest) }, true);
         }
         job.performed = true;
-        if (job.action === 'puzzleGuide') {
+        if (puzzleGuide) {
             const result = guideFor(job.scene)?.review(job.scene, snapshot.objects, snapshot.x, snapshot.y);
             if (!result) return retire(job.scene);
-            if (result.target) {
-                owner.browser.category = result.target.category;
-                owner.browser.selections[result.target.category] = result.target.id;
-                if (saltGuide) {
-                    job.guide = result.text;
-                    return route(job, snapshot, result.target);
-                }
-            }
-            return status(job, result.text);
+            if (!result.target) return status(job, result.text);
+            selectGuideTarget(result.target);
+            job.guide = result.text;
+            job.readyGuide = result.readyText;
+            job.guideOptions = result.options;
+            return timed ? timedRoute(job, snapshot, result.target) : route(job, snapshot, result.target);
         }
         select(job, snapshot);
     }
@@ -742,6 +848,7 @@ function createField(root, host, notifications) {
 
     for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
         transfers.clear();
+        terrainJourney.clear();
         autowalk.stop();
         if (owner) { clearIceRoute(owner.scene); retire(owner.scene); }
     });
@@ -767,6 +874,7 @@ function createField(root, host, notifications) {
         if (action === 'beaconStop') {
             if (!ready(scene, true)) return false;
             const waitingForIce = iceRoute?.scene === scene;
+            terrainJourney.clear();
             clearIceRoute(scene);
             const walking = autowalk.stop(scene) || pendingAutowalk(scene);
             const beaming = host.beacon?.stop(scene);
@@ -811,6 +919,7 @@ function createField(root, host, notifications) {
         browserOwner(scene);
         if (BROWSE.has(action) || puzzle) {
             owner.remoteBookmark = null;
+            terrainJourney.clear();
             transfers.clear();
         }
         queue({ scene, action, changes, text, step, idle, controller, retries: 0 });

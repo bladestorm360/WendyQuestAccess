@@ -18,7 +18,12 @@ function transferMap(id, map, geometry, flags, common) {
         if (cell < 0) continue;
         // The projected map can add authored barriers but cannot infer a
         // remote switch has removed one. Native state is checked on arrival.
-        const action = page => page.list.length > 1 && [0, 1, 2].includes(page.trigger);
+        // The harmless approach switch precedes the south cave exit.
+        // Model its onward link only here. A live route stops at the switch.
+        const caveSetup = id === 87 && event === 102 && pages.length === 1 &&
+            pages[0].trigger === 1 && pages[0].priorityType === 0 && pages[0].list.length === 2 &&
+            pages[0].list[0]?.code === 121 && pages[0].list[0].parameters.join(',') === '96,96,0';
+        const action = page => !caveSetup && page.list.length > 1 && [0, 1, 2].includes(page.trigger);
         const blocked = pages.some(page => page.priorityType === 1 && !page.through);
         const floor = pages.find(page => page.priorityType !== 1 && page.trigger !== 0 && action(page));
         const normal = pages.find(page => page.priorityType === 1 && action(page));

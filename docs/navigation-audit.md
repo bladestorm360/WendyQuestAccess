@@ -163,3 +163,18 @@ Local reproducible evidence is under `C:/Games/Dev/WendyQuestAccess-analysis/wen
 | Breakfast Isles, jail, workshop and office story prerequisites | 2–4 hours |
 | Salt Caverns opening and state-aware stealth route guide | 2–4 hours |
 | Optional automatic solution | Estimate after verifying each full native endpoint and its reset and handback conditions |
+
+## Navigation audit corrections
+
+The exit browser now uses the verified Caffeine Caverns landing names and identifies the two Cracked Cove cave mouths separately. The south exit pauses one step before the setup tile and gives the movement key to continue. The elevator boarding tiles are in Exits on both landing maps. The Office encounters and the same-map relocations that stage dialogue are Events. The north Burgenburg exit uses the Road to Mech Office name once its cross-map page is active. [Active-page naming](../src/world/local-destinations.js) · [Native approach solver](../src/world/routes.cjs)
+
+| Route | First native action and handback |
+| --- | --- |
+| Frosty Peak and Cold Brew Trail cave | Directions identify the shared crystal, lead through Frosty Peak to the other cave, and keep the original destination for the return after the crystal changes the passage. |
+| Breakfast Isles | The six bridge maps verify that the encounter opens a route to the selected destination. Directions name Breakfast Stone Island and recommend a verified exit. If the walking catalog cannot prove the onward link, directions say so at the reachable exit. Bacon Beach's sampled western landing has a verified onward link. |
+| Cauldron | The worker derives each pull handle's collision changes and checks the scripted retreat before offering it. From the isolated side entrance it gives the warning tile and the exit, then directs the player around through the main entrance at the verified Cauldron stage. |
+| MechBorg's Tower, Assembly Room and Mech Jail | Directions offer the native Chomps scene, Elder Tater conversation or rescue encounter when the live approach and onward connection are demonstrable. The worker can still report an intervening enemy or an unverified approach. |
+
+The baker records only map-specific collision, local trigger locators and the bounded verified movement effects. It derives geometry outside Git from the supported build. Each directions request carries current terrain edits, positions and the relevant native progression flag. Hypothetical states are confined to the worker. The route ends at the first manual action, and the next request checks fresh game state. [Terrain bake](../tools/bake-controls.cjs) · [Worker prerequisites](../src/world/terrain-controls.cjs) · [Retained selection](../src/world/terrain-journey.js)
+
+The focused collision replay matched the baked walking flags with the installed tile setter and flood routines on 14 distinct terrain-effect pages. Packaged-worker regressions check the Caffeine handoff, the six Breakfast Isles approaches, the two Cave and Cauldron detours, the workshop and jail prerequisites, and the route to the tower scene from its verified side. Other tower approaches can be blocked by moving enemies or separate routes. Live progression and audible timing remain to be confirmed. [Regression fixture](../tests/navigation-regressions.cjs)

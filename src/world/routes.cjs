@@ -671,10 +671,12 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
         return finishEntry(world, route(world, start, goals, cancelled, area), entry);
     const stops = tiles.touch;
     let blockedApproach = false;
+    const handoffs = new Set();
     const targetStop = request.waypoint === true ? undefined : request.event;
     for (let cell = 0; cell < stops.length; cell++) {
         if ((cell & 63) === 0 && cancelled()) return { status: 'cancelled' };
         if (cell === start || !goals[cell] || !stops[cell] || stops[cell] === targetStop) continue;
+        if (!entry && request.handoffs?.includes(stops[cell])) handoffs.add(stops[cell]);
         goals[cell] = 0;
         blockedApproach = true;
     }
@@ -698,7 +700,17 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
             arrival: { x: before % world.width, y: Math.floor(before / world.width), facing: null } };
     }
     const possible = route(world, start, goals, cancelled, area, stops, true);
-    return possible.status === 'unreachable' && blockedApproach ? { status: 'approachBlocked' } : finishEntry(world, possible, entry);
+    if (possible.status !== 'unreachable') return finishEntry(world, possible, entry);
+    // A verified approach can itself be a floor event. Stop before stepping
+    // onto it, then let the native interpreter run before continuing.
+    let handoff;
+    for (const event of handoffs) {
+        const prefix = solveWorldRoute(world, { x: request.x, y: request.y, event, field: true,
+            stopBeforeEvent: true, area }, cancelled, tiles);
+        if (prefix.status === 'cancelled') return prefix;
+        if (prefix.status === 'interrupted' && (!handoff || prefix.distance < handoff.distance)) handoff = prefix;
+    }
+    return handoff || (blockedApproach ? { status: 'approachBlocked' } : possible);
 }
 
 function encounterObstacles(events, target) {

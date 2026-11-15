@@ -32,8 +32,12 @@ function caveDestination(map, event, entry, page) {
         page.list[index].parameters[1] === exit[2])) return { name: exit[0], category: 'exits' };
     if (map === 197 && id === 11 && event._trigger === 0) return { name: 'Statue', category: 'objects' };
     if (event._pageIndex !== 0 || event._trigger !== 1 || event._x !== entry.x || event._y !== entry.y) return null;
-    if ((map === 199 && (id === 22 || id === 24)) || (map === 201 && CHASE_FLOORS.has(id)) ||
-        (map === 202 && id >= 5 && id <= 11)) return { name: 'Scene trigger', category: 'events', eventAction: 'step' };
+    if (map === 199 && (id === 22 || id === 24))
+        return { name: 'Patrol line trigger', category: 'events', eventAction: 'step' };
+    if (map === 201 && CHASE_FLOORS.has(id))
+        return { name: 'Mech chase trigger', category: 'events', eventAction: 'step' };
+    if (map === 202 && id >= 5 && id <= 11)
+        return { name: 'Staircase scene', category: 'events', eventAction: 'step' };
     return null;
 }
 
@@ -66,6 +70,11 @@ function ownsRoute(map, list, index, expectedActor) {
     const actor = map._events?.[id];
     return command?.code === 205 && (expectedActor === undefined || id === expectedActor) &&
         actor?._moveRouteForcing === true && actor._moveRoute === command.parameters[1];
+}
+
+function activeDistraction(map, data, id) {
+    const page = data?.events?.[id]?.pages?.[0];
+    return !!page && CRYSTALS[id]?.[1].some(index => ownsRoute(map, page.list, index));
 }
 
 function localOutcome(root, action) {
@@ -133,4 +142,4 @@ function createCaveProgress(root, graphics) {
     };
 }
 
-module.exports = { CHASES, corridorMap, caveDestination, createCaveProgress };
+module.exports = { CHASES, CRYSTALS, activeDistraction, corridorMap, caveDestination, createCaveProgress };

@@ -84,6 +84,18 @@ function caffeineEntrance(page, index) {
     return [];
 }
 
+function caffeineEscape(entry, page, common) {
+    const { list } = page;
+    const codes = [117, 111, 357, 657, 357, 657, 657, 123, 0, 412, 201, 0];
+    if (entry.pages.length !== 1 || page.trigger !== 1 || page.priorityType !== 1 || !flagsAre(page) ||
+        list.length !== codes.length || !codes.every((code, index) => rowIs(list[index], code, index >= 2 && index <= 8 ? 1 : 0)) ||
+        !audioOnly(common) || !callsStairSound(list[0]) || !parametersAre(list[1], [2, 'A', 1]) ||
+        !questCommand(list[2], 'completeQuest') || !questCommand(list[4], 'startQuest') ||
+        !parametersAre(list[7], ['A', 0])) return [];
+    const edge = transferTo(list[10], 87);
+    return landingIs(edge, 85, 7, 27) ? [{ ...edge, approach: 2 }] : [];
+}
+
 function cauldronExterior(page, index) {
     if (page.priorityType !== 0 || page.trigger !== 1 || !LAYOUTS[index]) return [];
     const { list, conditions } = page;
@@ -425,6 +437,7 @@ function transferOptions(map, entry, page, common) {
     const stair = houseStair(map, entry.id);
     if (stair) return audioOnly(common) ? houseBranches(stair, page.list, map) || [] : [];
     const index = entry.pages.indexOf(page);
+    if (map === 87 && entry.id === 73) return caffeineEscape(entry, page, common);
     if (map === 87 && entry.id === 91) return caffeineEntrance(page, index);
     const special = cauldronSpecial(map, entry.id, page, index, common);
     if (special !== undefined) return special;

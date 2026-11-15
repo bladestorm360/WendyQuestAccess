@@ -3,11 +3,12 @@
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
 const { localDestination, iceOpensPassage, inactiveFloorScene, concealedDestination,
-    chillcrestQuestExit, WEST_CHILLCREST } = require('./local-destinations');
+    chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
+const { GATE_SWITCHES } = require('./terrain-control-labels.cjs');
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
 function eventTarget(root, mode, event, entry, page, spoilers = false) {
@@ -111,7 +112,13 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         }
         if (routesOnly || event._erased || !spoilers && concealedDestination(id, event)) continue;
         const quest = quests?.get(eventId);
-        if (!action && !quest?.waypoint) continue;
+        if (!action && !quest?.waypoint) {
+            // The office has a visible access path before its native
+            // entrance page is enabled. Broad browsing keeps the entrance.
+            if (id === 97 && mode === 'walk' && pendingOfficeExit(root, event, entry))
+                objects.push({ id: eventId, x, y, name: 'Mech Office', category: 'exits', eventAction: 'bump' });
+            continue;
+        }
         const target = action ? eventTarget(root, mode, event, entry, page, spoilers) : undefined;
         if (target && (!quest || target.category !== 'events')) {
             if (label) target.name = label(eventId, target.name);
@@ -167,7 +174,11 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             type: vehicle._type, through: vehicle._through === true });
     }
     return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles,
-        tileset: map._tilesetId, aircraft: aircraftAt(map), ...(id === 19 && !routesOnly ? { salt: saltState(root) } : {}) } };
+        tileset: map._tilesetId, aircraft: aircraftAt(map),
+        ...(GATE_SWITCHES[id] ? { terrainMap: id, terrainSwitch: GATE_SWITCHES[id],
+            terrainGate: root.$gameSwitches?.value?.(GATE_SWITCHES[id]) } : {}),
+        ...(id === 55 ? { pullStage: root.$gameVariables?.value?.(4) } : {}),
+        ...(id === 19 && !routesOnly ? { salt: saltState(root) } : {}) } };
 }
 
 module.exports = { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks };

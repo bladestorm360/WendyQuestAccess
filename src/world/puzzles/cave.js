@@ -1,7 +1,7 @@
 'use strict';
 
 const { copyPatrol, TIMING_CUE, STAMP_WIDTH, matchesMotionStamp } = require('./patrol-motion.cjs');
-const { CHASES, corridorMap, caveDestination, createCaveProgress } = require('./cave-progression');
+const { CHASES, CRYSTALS, activeDistraction, corridorMap, caveDestination, createCaveProgress } = require('./cave-progression');
 
 const ROOMS = Object.freeze({
     196: { patrols: [4, 5, 6, 7, 12, 13, 14, 15, 17, 18], checkpoints: [21], sign: 2 },
@@ -272,29 +272,65 @@ function createCaveGuide(root, graphics) {
         state.outcome = checkpoint ? 'Returned to a checkpoint after capture.' : 'Returned after capture.';
     }
 
+    function choicesFor(roomId, state, x, y) {
+        if (roomId === 196) return [
+            [21, 'Step on the checkpoint to save this crossing.', root.$gameVariables?.value?.(90) === 0],
+            [20, 'Continue toward the next patrol room.']
+        ];
+        if (roomId === 199) {
+            const triggers = x < 20 ? [24, 22] : [22, 24];
+            return [...triggers.map(id => [id, 'Step onto the trigger, then let the line of mechs begin moving.']),
+                [26, 'Cross behind the patrol line to the next room.']];
+        }
+        if (roomId === 200) {
+            const checkpoint = root.$gameVariables?.value?.(90);
+            const ordered = [5, 19, 10].map(id => {
+                const event = root.$gameMap._events[id];
+                const usable = event?._pageIndex === 0 && !event._erased &&
+                    root.$gameSwitches?.value?.(CRYSTALS[id][0]) === false;
+                return { id, usable, distance: usable ? Math.abs(x - event._x) + Math.abs(y - event._y) : Infinity };
+            });
+            const moving = ordered.some(({ id }) => activeDistraction(root.$gameMap, root.$dataMap, id));
+            const crystals = moving ? [] : ordered.filter(({ usable }) => usable).sort((a, b) => a.distance - b.distance)
+                .map(({ id }) => [id, 'Activate the distraction crystal, then move while the patrol turns away.']);
+            // Each checkpoint is a native recovery landing. A distraction
+            // is useful only while its real activation branch is available.
+            return [
+                [6, 'Step on the first checkpoint before crossing the patrol route.', checkpoint < 2],
+                [15, 'Reach the checkpoint below the exit.', checkpoint < 3 && y <= 14],
+                ...crystals,
+                [15, 'Reach the checkpoint below the exit.', checkpoint < 3 && y > 14],
+                [11, moving ? 'The distraction is active. Continue toward the chase-room entrance.' : 'Continue to the chase-room entrance.']
+            ];
+        }
+        if (roomId === 201) return [[2, state.outcome === 'A mech started chasing you.' ?
+            'Keep moving toward the staircase passage. Recheck each turn.' : 'Follow the next safe step toward the staircase passage. Passing a trigger can start a chase.']];
+        return {
+            206: [[11, 'Enter the cave to begin the patrol route.']],
+            202: [[4, 'Go up the staircase to the chamber. Step through the scene when prompted.']],
+            197: [[11, 'Use the statue to complete the route.']]
+        }[roomId];
+    }
+
     function review(scene, objects, x, y) {
         const map = root.$gameMap;
         const room = ROOMS[map._mapId];
         const state = activate(scene);
-        if (!room) {
-            const hints = {
-                206: [11, 'Get directions to the cave entrance and use the native entry prompt when it appears.'],
-                202: [4, 'Get directions to the chamber entrance. The stairs may start a scene.'],
-                197: [11, 'Get directions to the statue. The island exit is in Exits.']
-            };
-            const [id, hint] = hints[map._mapId];
-            const target = objects.find(item => item.id === id);
-            return { target, text: [state.outcome, target ? `${target.name} selected.` : '', hint].filter(Boolean).join(' ') };
+        const find = id => objects.find(item => item.id === id && item.category !== 'quests');
+        const sign = room?.sign && !state.sign && warningApproach(map, x, y, room.sign) && find(room.sign);
+        const next = sign ? [[room.sign, 'Read the warning sign before crossing.']] :
+            choicesFor(map._mapId, state, x, y);
+        const options = [];
+        for (const [id, hint, include = true] of next || []) {
+            const target = include && find(id);
+            if (!target) continue;
+            const eventAction = target.eventAction || (target.category === 'objects' ? 'interact' : 'step');
+            options.push({ target: { ...target, eventAction }, hint });
         }
-        const target = !state.sign && room.sign && warningApproach(map, x, y, room.sign) && objects.find(item => item.id === room.sign);
-        const patrol = patrolInView(room, map, root.$dataMap, scene, graphics.app?.renderer?.screen, x, y);
-        const hint = target ? 'Warning sign selected. Get directions, then use the action button at the sign.' :
-            { 199: 'Events lists the scene triggers for the patrol line. The next room is in Exits.',
-                200: 'Find distraction crystals and checkpoints in Objects.',
-                201: 'Events lists the scene triggers for the chase. Find the staircase passage in Exits.' }[map._mapId] ||
-                'Avoid contact with patrols.';
-        const text = ['Secret cave.', state.outcome, hint, patrol || 'No patrol in view at this check.'].filter(Boolean).join(' ');
-        return { target, text };
+        const patrol = room && patrolInView(room, map, root.$dataMap, scene, graphics.app?.renderer?.screen, x, y);
+        const text = ['Secret Cave.', state.outcome, options[0]?.hint || 'Wait for a clear approach and check again.',
+            patrol].filter(Boolean).join(' ');
+        return { options, target: options[0]?.target, text };
     }
 
     return {

@@ -85,6 +85,44 @@ function walkingCatalog() {
     return walking;
 }
 
+function transferRoute(base, map, live, request, transfer, cancelled) {
+    const catalog = walkingCatalog();
+    const entrances = rankEntrances(catalog, map, transfer, manifest.maps, cancelled, live.mode === 'walk');
+    const groundEntrances = transfer.ground && rankEntrances(catalog, map,
+        { ...transfer, candidates: transfer.ground }, manifest.maps, cancelled, false);
+    const discoveries = Array.isArray(transfer.discoveries) && transfer.discoveries.length <= 24
+        ? transfer.discoveries : undefined;
+    const result = solveRoute(base, live, { ...request, entrances, groundEntrances, discoveries }, cancelled);
+    if (map !== 87 || !['unreachable', 'unavailable'].includes(result.status) ||
+        !entrances.some(edge => edge.event === 73 && edge.approach === 2)) return result;
+    const setup = solveRoute(base, live, { ...request, event: 73, bumpDirections: 1, handoffs: [102] }, cancelled);
+    if (setup.status === 'interrupted' && setup.boundaryEvent === 102)
+        return { ...setup, entrance: 73, approach: 2 };
+    return setup.status === 'cancelled' ? setup : result;
+}
+
+function breakfastAccess(base, map, live, request, transfer, cancelled) {
+    const exact = transferRoute(base, map, live, request, transfer, cancelled);
+    if (!['unreachable', 'unavailable'].includes(exact.status)) return exact;
+    // Some native landings require an additional overworld connection.
+    // Search all eligible local returns in one pass, then trim the selected
+    // floor trigger back to its last safe tile.
+    const candidates = transfer.candidates.filter(edge => edge.map === 113 || edge.map === 87);
+    const entrances = candidates.map(({ event, approach }) => ({ event, rank: 1, approach }));
+    const fallback = solveRoute(base, live, { x: request.x, y: request.y, field: true, entrances }, cancelled);
+    if (fallback.status !== 'ready') return fallback.status === 'cancelled' ? fallback : exact;
+    const { entrance, approach } = fallback;
+    const event = live.events.find(item => item.id === entrance);
+    if (event && !event.normal && event.trigger === 1 && !fallback.reenter) {
+        const prefix = solveRoute(base, live, { x: request.x, y: request.y, event: entrance,
+            field: true, stopBeforeEvent: true, entryDirection: approach }, cancelled);
+        if (prefix.status === 'cancelled') return prefix;
+        if (prefix.status === 'interrupted' && prefix.boundaryEvent === entrance)
+            return { ...prefix, entrance, approach, onwardUnavailable: true };
+    }
+    return { ...fallback, onwardUnavailable: true };
+}
+
 // Each request carries a copied world state. Keep one current geometry, with
 // no access to game objects or game files. The caller owns the in-flight cap.
 parentPort.on('message', message => {
@@ -101,26 +139,22 @@ parentPort.on('message', message => {
             if (live.width !== undefined && (live.width !== base.width || live.height !== base.height ||
                 live.scrollType !== base.scrollType)) throw new Error('Map dimensions changed');
             if (request.candidates !== undefined) result = findReachable(base, live, request, cancelled);
-            else if (request.transfer !== undefined) {
-                const catalog = walkingCatalog();
-                const { transfer } = request;
-                const entrances = rankEntrances(catalog, map, transfer, manifest.maps, cancelled, live.mode === 'walk');
-                const groundEntrances = transfer.ground && rankEntrances(catalog, map,
-                    { ...transfer, candidates: transfer.ground }, manifest.maps, cancelled, false);
-                const discoveries = Array.isArray(transfer.discoveries) && transfer.discoveries.length <= 24
-                    ? transfer.discoveries : undefined;
-                result = solveRoute(base, live, { ...request, entrances, groundEntrances, discoveries }, cancelled);
-            }
+            else if (request.transfer !== undefined)
+                result = transferRoute(base, map, live, request, request.transfer, cancelled);
             else result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
             if (map === 19 && live.salt && !request.refresh &&
                 ['unreachable', 'approachBlocked'].includes(result.status)) {
                 result = solveSaltRoute(base, live, request, manifest.maps[map].salt, cancelled) || result;
             }
-            if (['unreachable', 'approachBlocked'].includes(result.status))
-                result = routeThroughTerrain(base, live, request, manifest.maps[map].controls, cancelled) || result;
+            if (request.transfer === undefined && (['unreachable', 'approachBlocked'].includes(result.status) ||
+                map === 97 && request.event === 18 && result.status === 'unavailable')) {
+                const access = request.terrainTransfer && (() => breakfastAccess(base, map, live, request,
+                    request.terrainTransfer, cancelled));
+                result = routeThroughTerrain(base, live, request, manifest.maps[map].controls, cancelled, access) || result;
+            }
             const follows = (result.status === 'ready' || result.status === 'enemyBlocked' || result.status === 'iceRoute') &&
                 !result.reenter && (request.beacon === true || request.autowalk === true);
-            const prefix = ['interrupted', 'saltRoute', 'controlRoute'].includes(result.status);
+            const prefix = ['interrupted', 'saltRoute', 'controlRoute', 'terrainExit'].includes(result.status);
             if (follows || prefix && (request.beacon === true || result.status === 'interrupted' && request.autowalk === true)) {
                 // Two direction bits and the bounded distance to the next turn.
                 // The renderer advances one byte per accepted native step.
@@ -145,7 +179,7 @@ parentPort.on('message', message => {
                     result.autowalkMore = result.legs.length - (last.tiles === 1 ? 1 : 0) > request.limit;
                 }
             }
-            if ((result.status === 'ready' || result.status === 'interrupted' || result.status === 'enemyBlocked' || result.status === 'saltRoute' || result.status === 'controlRoute' || result.status === 'iceRoute') &&
+            if ((result.status === 'ready' || result.status === 'interrupted' || result.status === 'enemyBlocked' || result.status === 'saltRoute' || result.status === 'controlRoute' || result.status === 'terrainExit' || result.status === 'iceRoute') &&
                 Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
                 result.legs.length > request.limit) {
                 result.more = true;

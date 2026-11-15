@@ -13,6 +13,8 @@ const EXITS = {
         25: ['Exit toward Frosty Peak', 113], 26: ['Exit toward Frosty Peak', 113] },
     37: { 3: ['Return to Frosty Peak', 27] },
     96: { 2: ['Burgenburg', 94] },
+    97: { 18: ['Mech Office', 103] },
+    191: { 1: ['Caffeine Caverns, east cave entrance', 87], 2: ['Caffeine Caverns, west cave entrance', 87] },
     204: { 3: ['Return to Frosty Peak', 27] },
     93: { 1: ['Elevator entrance', 98], 8: ['Elevator entrance', 98], 24: ['Elevator entrance', 98],
         25: ['Elevator entrance', 98], 26: ['Elevator entrance', 98] },
@@ -40,7 +42,13 @@ const EXITS = {
     57: { 13: ['Cauldron entrance', 50, 32, 28, 44], 14: ['Side entrance', 55], 20: ['Side entrance', 55] },
     58: { 16: ['Side entrance', 55], 22: ['Side entrance', 55] },
     63: { 1: ['Return to Cauldron', 44] },
-    87: { 91: ['Hidden cave entrance', 205] },
+    87: {
+        73: ['Bacon Beach, south cave exit', 85], 74: ['Devilled Nook', 79], 75: ['Poached Pool', 80],
+        76: ['Quiche Coast', 84], 77: ['Bacon Beach, west cave exit', 85], 78: ['Bacon Beach, east cave exit', 85],
+        79: ['Cracked Cove, east cave exit', 191], 80: ['Cracked Cove, west cave exit', 191],
+        81: ['Scrambled Shores, east cave exit', 81], 82: ['Scrambled Shores, west cave exit', 81],
+        83: ["Benedict's Bight", 66], 84: ['Shellside', 78], 91: ['Hidden cave entrance', 205]
+    },
     128: { 1: ['Second floor', 127] },
     133: { 1: ['First floor', 132] },
     195: { 1: ['Second floor', 127] },
@@ -63,6 +71,11 @@ const TOUCH_TRANSFERS = {
     116: { 8: ['Return to Crispy Beach', 13] },
     117: { 11: ['Return to Russetwood', 12] },
     119: { 3: ['Return to Chillcrest', 25] }
+};
+
+const SCENE_TRANSFERS = {
+    29: { 1: 0 }, 94: { 12: 3, 27: 3 }, 103: { 2: 0, 3: 0, 4: 0, 16: 0, 17: 0, 18: 0, 19: 0 },
+    134: { 10: 1 }
 };
 
 const PULLS = { 51: [2], 53: [3, 4], 55: [4] };
@@ -116,6 +129,8 @@ const BEACH_HANDOFFS = Object.freeze(Object.keys(BEACH_HANDOFF_NAMES).map(Number
 
 function localHandoffName(map, event) {
     if (map === 13) return BEACH_HANDOFF_NAMES[event];
+    if (map === 87 && event === 102) return 'Cave exit approach';
+    if (map === 55 && event === 8) return 'Side passage warning';
     if (map === 27 && [27, 32].includes(event)) return 'Peak approach';
     if (map === 15 && event >= 46 && event <= 49) return 'Scene trigger';
     return undefined;
@@ -184,6 +199,22 @@ function concealedDestination(map, event) {
     return map === 128 && id === 11 || map === 133 && id === 4 || map === 87 && id === 91;
 }
 
+function eventSwitchPage(entry, index, switchId, destination) {
+    const page = entry?.pages?.[index];
+    return page?.trigger === 3 && page.conditions.switch1Valid && page.conditions.switch1Id === switchId &&
+        page.list.some(command => command.code === 201 && command.indent === 0 &&
+            command.parameters[0] === 0 && command.parameters[1] === destination);
+}
+
+function pendingOfficeExit(root, event, entry) {
+    return root.$gameMap._mapId === 97 && event._eventId === 18 && event._pageIndex === -1 &&
+        root.$gameSwitches?.value?.(103) === false &&
+        entry.pages[0]?.trigger === 1 && entry.pages[0].priorityType === 1 &&
+        entry.pages[0].conditions.switch1Valid && entry.pages[0].conditions.switch1Id === 103 &&
+        entry.pages[0].list.some(command => command.code === 201 && command.indent === 0 &&
+            command.parameters[0] === 0 && command.parameters[1] === 103);
+}
+
 function localDestination(root, event, page) {
     const map = root.$gameMap._mapId;
     const id = event._eventId;
@@ -219,7 +250,17 @@ function localDestination(root, event, page) {
         return { name: 'Peak approach', category: 'events', eventAction: 'step', handoffs: [27, 32] };
     const to = (mapId, indent = 0) => list.some(command => command.code === 201 &&
         command.indent === indent && command.parameters[0] === 0 && command.parameters[1] === mapId);
+    if ((trigger === 0 || trigger === 1) && SCENE_TRANSFERS[map]?.[id] === event._pageIndex && to(map))
+        return { name: map === 103 ? 'Encounter trigger' : 'Scene trigger', category: 'events',
+            eventAction: floorAction ? 'step' : trigger === 1 ? 'bump' : undefined };
     if (floorAction) {
+        if (map === 94 && (id === 12 || id === 27) && to(93))
+            return { name: 'Road to Mech Office', category: 'exits', eventAction: 'step' };
+        if (map === 193 && id === 3 && event._pageIndex === 0 &&
+            list.some(command => command.code === 121 && command.indent === 0 &&
+                command.parameters.join(',') === '483,483,0') &&
+            eventSwitchPage(root.$dataMap?.events?.[id], 1, 483, 98))
+            return { name: 'Elevator to the lower landing', category: 'exits', eventAction: 'step' };
         if (map === 14 && id === 25 && to(117)) return { name: "Return to Frygor's house", category: 'exits', eventAction: 'step' };
         if (map === 64 && id === 1 && to(59, 1) && to(45, 1)) return { name: 'Return to Nuggedor', category: 'exits', eventAction: 'step' };
         if (map === 192 && id === 1 && to(98, 1))
@@ -242,6 +283,8 @@ function localDestination(root, event, page) {
         const target = { name: exit[0], category: 'exits' };
         if (trigger === 1 && event._priorityType === 1) target.eventAction = 'bump';
         if (map === 13 && id === 7) target.handoffs = BEACH_HANDOFFS;
+        if (map === 87 && id === 73) target.handoffs = [102];
+        if (map === 55 && id === 2) target.handoffs = [8];
         return target;
     }
     // Follow Elder Tater is a live parallel NPC page. A route approaches
@@ -253,7 +296,7 @@ function localDestination(root, event, page) {
     if (map === 98 && id === 16 && trigger === 1 && event._pageIndex === 0 &&
         list[0]?.code === 121 && list[0].parameters[0] === 481 &&
         list[1]?.code === 121 && list[1].parameters[0] === 483)
-        return { name: 'Ride elevator', category: 'events', eventAction: 'step' };
+        return { name: 'Elevator to the upper landing', category: 'exits', eventAction: 'step' };
     if (COVERED_CHESTS[map] === id) {
         return trigger === 0 && list.length > 1 && event._characterName === 'Chest'
             ? { name: 'Chest', category: 'treasure' } : null;
@@ -295,4 +338,4 @@ function localDestination(root, event, page) {
 }
 
 module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, concealedDestination,
-    chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST };
+    chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit };
