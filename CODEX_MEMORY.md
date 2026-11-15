@@ -174,4 +174,4 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 
 [Breaded Bay boarding and vehicle notices](docs/navigation.md#native-vehicle-transitions) records the Vehicles destination and shared speech ordering. [Timing defaults](docs/battle.md#radial-timing-tones) retain saved off choices.
 
-[Wendy's idle sequence](docs/cutscene-description.md#wendys-idle-sequence) records all verified idle stages, named reaction cues and queued playback. This batch is held for installation.
+[Wendy's idle sequence](docs/cutscene-description.md#wendys-idle-sequence) records all verified idle stages, named reaction cues and queued playback. Private main was verified at `7cedf2b5e07bed81a704c1a164869183d3e6629c` for the held narration, vehicle and timing changes. The installed plugin hash still matches the preceding Kathryn and accuracy payload. Cleanup removed 11,337,177 bytes of reproducible builds and fixtures and retained the existing Kathryn and accuracy rollback.
