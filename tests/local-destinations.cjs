@@ -249,6 +249,24 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     }
     console.log('Verified browser entries and approaches for the three alternate ending story checkpoints.');
 
+    // Both the visible employee and the shop prompt are independent native
+    // events. Nuggedor retains its shop entry after the quest changes its page.
+    const restaurantCommon = c.$dataCommonEvents;
+    c.$dataCommonEvents = commonEvents;
+    for (const [map, switches] of [[181, []], [182, []], [183, []], [183, [63]], [184, []], [186, []]]) {
+        const restaurant = load(map, { switches });
+        restaurant.player.setPosition(10, 5);
+        const view = captureWorld(c);
+        const counters = view.objects.filter(item => [4, 5].includes(item.id));
+        assert.deepEqual(counters.map(({ id, category, name }) => [id, category, name]), [
+            [4, 'merchants', 'Kathryn'], [5, 'merchants', "Kathryn's shop"]
+        ]);
+        const order = { x: 10, y: 5, event: 5, field: true };
+        verifyRoute(restaurant, order, solveRoute(restaurant.geometry, view.live, order));
+    }
+    c.$dataCommonEvents = restaurantCommon;
+    console.log("Verified both merchant entries at five Wendy's locations and the native shop approach.");
+
     const beachSwitches = [31];
     const beach = load(13, { switches: beachSwitches, self: ['13,5,C', '13,8,A', '13,14,A', '13,20,A'] });
     const beachMap = beach.gameMap;

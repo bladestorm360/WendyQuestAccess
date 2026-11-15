@@ -28,7 +28,7 @@ function createFieldDiagnostics(root, host, nodeRequire, nodeProcess) {
             action, map: map?._mapId, move: scene._prevCanMove, ready: scene._wqaFieldReady,
             event: main?._list ? main._eventId : 0, message: root.$gameMessage?.isBusy(),
             tileset: map?._tilesetId, authoredTileset: root.$dataMap?.tilesetId,
-            refresh: !!map?._needsRefresh, weatherRefresh: !!scene._wqaLightningRefreshOnly,
+            refresh: !!map?._needsRefresh, nonPageRefresh: !!scene._wqaNonPageRefreshOnly,
             tileRefresh: !!map?._needsTilemapRefresh, idle: map?.inactiveTime >= 30,
             forcing: !!player?._moveRouteForcing, through: !!player?._through,
             vehicle: player?._vehicleType, modal: !!scene._wqaSettingsActive,

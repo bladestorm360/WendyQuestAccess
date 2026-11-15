@@ -36,7 +36,7 @@ async function verifyReachability(c, load, verifyWorker) {
     assert.equal(matching.length, 1);
     const [conversation] = matching;
     assert.equal(conversation.category, 'people');
-    assert.equal(conversation.name, 'Sir Chicken');
+    assert.equal(conversation.name, 'Chomps');
     assert.equal(conversation.eventAction, 'talk');
     const talk = { x: dialogueView.x, y: dialogueView.y, field: true, event: actor.eventId() };
     assert.equal(findReachable(speechMap.geometry, dialogueView.live, { ...talk, candidates: [talk] }).available[0], 1);
@@ -44,7 +44,7 @@ async function verifyReachability(c, load, verifyWorker) {
     assert.equal(talkRoute.status, 'ready');
     assert(talkRoute.arrival.facing);
     assert.match(formatSpeech({ kind: 'routeDirections', name: conversation.name, legs: talkRoute.legs,
-        facing: talkRoute.arrival.facing, conversation: true }), /^Sir Chicken\. .*press the action button to talk\.$/);
+        facing: talkRoute.arrival.facing, conversation: true }), /^Chomps\. .*press the action button to talk\.$/);
     const opened = load(57, { switches: [81] });
     opened.player.setPosition(20, 23);
     assert.equal(findReachable(opened.geometry, captureWorld(c).live,

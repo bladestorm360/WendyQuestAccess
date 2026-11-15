@@ -134,7 +134,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             !host.graphics._wqaResize && !host.screenFading() && host.hasFocus() && !scene._wqaTerrainWork &&
             !scene._wqaPreloads?.size && !scene._wqaPreloadOverflow &&
             scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 && root.$gameScreen?._brightness === 255 &&
-            (waking || map?.inactiveTime < 30) && (!map?._needsRefresh || scene._wqaLightningRefreshOnly) &&
+            (waking || map?.inactiveTime < 30) && (!map?._needsRefresh || scene._wqaNonPageRefreshOnly) &&
             map && !map._needsTilemapRefresh && !player?._transferring &&
             !player?._vehicleGettingOn && !player?._vehicleGettingOff &&
             !root.$gameMessage?.isBusy() && !map?._interpreter?._list && travelMode(map, player) &&

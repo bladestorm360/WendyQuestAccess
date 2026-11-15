@@ -99,6 +99,7 @@ const INSPECTED_PROPS = {
     158: { 2: 'Letters' }
 };
 
+const WENDYS_RESTAURANTS = new Set([181, 182, 183, 184, 186]);
 const PULLS = { 51: [2], 53: [3, 4], 55: [4] };
 const WEST_CHILLCREST = [14, 18, 19];
 
@@ -351,6 +352,14 @@ function localDestination(root, event, page) {
             ? { name: 'Chest', category: 'treasure' } : null;
     }
     if (trigger !== 0) return undefined;
+    if ((id === 4 || id === 5) && WENDYS_RESTAURANTS.has(map) && root.$dataMap?.events?.[id]?.name === 'Kathryn') {
+        if (id === 4 && page.image?.characterName === 'NPC - Wendys Staff')
+            return { name: 'Kathryn', category: 'merchants', eventAction: 'talk' };
+        // Nuggedor delegates the shop command to its region's common event.
+        if (id === 5 && list.some(row => row.code === 302 || row.code === 117 && row.parameters[0] === 46 &&
+            root.$dataCommonEvents?.[46]?.list[0]?.code === 302))
+            return { name: "Kathryn's shop", category: 'merchants' };
+    }
     // The ice is drawn by MapScene's animated objects, independently of the
     // blank action sprite and any underlying chest.
     if (/^Ice(?:Block|ChestIce|$)/.test(root.$dataMap?.events?.[id]?.name || '') &&

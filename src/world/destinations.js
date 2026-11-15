@@ -98,8 +98,10 @@ function destination(entry, page, trigger, map) {
         (/^~/.test(sprite) || /enemy|patrol|guard|encounter/i.test(name)))
         return { category: 'enemies', name: safeName || 'Enemy' };
     if (trigger !== 0) return null;
+    // Chomps's action pages can open with another party member speaking.
+    // The authored character sheet identifies the actor at the interaction.
     if (npc) return { category: 'people',
-        name: speaker || safeName || 'Person',
+        name: sprite === '~Chomps' ? 'Chomps' : speaker || safeName || 'Person',
         ...(conversation ? { eventAction: 'talk' } : {}) };
     if (reward || SENSITIVE_NAME.test(name))
         return { category: 'objects', name: 'Interaction' };

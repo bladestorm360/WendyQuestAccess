@@ -150,6 +150,36 @@ async function verifyQuestDestinations(c, game, read, load, verifyRoute, verifyW
     assert.equal(afterChest.gameMap._events[14]._pageIndex, 1);
     assert(!quests(stage(afterChest, 'quest4')).some(row => row.id === 14));
 
+    const restaurant = load(183);
+    restaurant.player.setPosition(15, 5);
+    const restaurantScene = stage(restaurant, 'quest19');
+    const aid = targets(restaurantScene, true);
+    const chomps = aid.objects.filter(row => row.id === 8);
+    assert.deepEqual(chomps.map(({ category, name }) => [category, name]), [
+        ['people', 'Chomps'], ['quests', 'Chomps']
+    ]);
+    assert.equal(chomps[0].eventAction, 'talk');
+    assert(questDestinationCurrent(c, restaurantScene, chomps[1].quest));
+    const meet = { x: 15, y: 5, event: 8, field: true };
+    const meetRoute = solveRoute(restaurant.geometry, aid.live, meet);
+    assert.equal(meetRoute.arrival.facing, 8);
+    verifyRoute(restaurant, meet, meetRoute);
+    const departed = load(183, { switches: [63] });
+    departed.player.setPosition(15, 5);
+    assert(!targets(stage(departed, 'quest19')).objects.some(row => row.id === 8));
+
+    // This is the restaurant exit's real landing during Follow Chomps.
+    const town = load(59, { switches: [63] });
+    town.player.setPosition(45, 8);
+    const townScene = stage(town, 'quest20');
+    const following = targets(townScene, true);
+    const markerOutside = following.objects.find(row => row.id === 26 && row.category === 'quests');
+    assert.equal(markerOutside?.name, 'Quest marker near Chomps');
+    assert(markerOutside.quest.waypoint);
+    assert(questDestinationCurrent(c, townScene, markerOutside.quest));
+    const follow = { x: 45, y: 8, event: 26, field: true, waypoint: true };
+    await verifyWorker(town, follow, following.live, result => assert.equal(result.status, 'ready'));
+
     const locked = load(15);
     locked.player.setPosition(24, 17);
     const lockedScene = stage(locked, 'quest10');

@@ -216,6 +216,7 @@ async function main() {
     await verifyIceHandback(flags);
     await verifyVisibleChestBarriers(flags);
     await verifyRuinsHandback();
+    await verifyChompsHandback(flags);
     await verifyBeachHandoffs(flags);
     await verifySurfaceField(flags);
     console.log('Verified native field admission, spoken object selection and route, restored tiles, and stale-route retirement.');
@@ -433,7 +434,7 @@ async function verifyRuinsHandback() {
     f.idleCallbacks.shift()();
     c.Scene_Map.prototype.updateMainMultiply = () => {
         map._needsRefresh = false;
-        scene._wqaLightningRefreshOnly = false;
+        scene._wqaNonPageRefreshOnly = false;
         weather.command122(decrement.parameters);
     };
     map._interpreter._list = conversation.list;
@@ -455,8 +456,117 @@ async function verifyRuinsHandback() {
     }
     assert.deepEqual(f.speech(), ['Entering Crispy Ruins.'], 'entry remains accessible after the native banner has gone');
     map.requestRefresh();
-    assert.equal(scene._wqaLightningRefreshOnly, false, 'an ordinary refresh still invalidates field admission');
+    assert.equal(scene._wqaNonPageRefreshOnly, false, 'an ordinary refresh still invalidates field admission');
     console.log('Verified the Crispy Ruins weather gate and map-name keys with the authored native conversation and timer.');
+}
+
+async function verifyChompsHandback(tilesets) {
+    const data = mapData(59);
+    const f = fixture(data);
+    const { c, frame } = f;
+    const { $gameMap: map, $gamePlayer: player } = c;
+    const packageRoot = path.join(process.argv[2], 'package.nw');
+    const common = JSON.parse(fs.readFileSync(path.join(packageRoot, 'data/CommonEvents.json'), 'utf8'));
+    const source = fs.readFileSync(path.join(packageRoot, 'js/rmmz_objects.js'), 'utf8');
+    function useOriginalMethod(name) {
+        const start = source.indexOf('Game_Interpreter.prototype.' + name + ' = function(');
+        assert(start >= 0);
+        f.run(source.slice(start, source.indexOf('\n};', start) + 3));
+    }
+    for (const name of ['command117', 'setupChild', 'isOnCurrentMap']) useOriginalMethod(name);
+    const variableStack = JSON.parse(execFileSync('python', ['-B', '-W', 'ignore::SyntaxWarning',
+        path.join(__dirname, 'map-producers.py'), packageRoot, 'variable-stack'],
+        { encoding: 'utf8', timeout: 6000, maxBuffer: 10000 }));
+    for (const method of variableStack) f.run(method);
+    f.run('Math.randomInt = () => 0;');
+    c.$dataCommonEvents = common;
+    c.$dataTilesets = tilesets;
+    c.$gameQuest = { getAllAssentedQuests: () => null };
+    c.$gameVariables = new c.Game_Variables();
+    Object.assign(map, { _mapId: 59, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
+        _vehicles: [], _nameDisplay: false });
+    for (const id of [3, 26]) {
+        const entry = data.events[id];
+        const event = f.event(id, 0);
+        Object.assign(event, { _x: entry.x, _y: entry.y, _pageIndex: 0,
+            _trigger: entry.pages[0].trigger, _priorityType: entry.pages[0].priorityType });
+        map._events[id] = event;
+        map.fixtureEvents.push(event);
+    }
+    player._vehicleType = '';
+    player.setPosition(57, 6);
+    player.reserveTransfer(59, 57, 6, 2, 0);
+    c.SceneManager.goto(c.Scene_Map);
+    c.SceneManager.changeScene();
+    c.DataManager.ready = c.ImageManager.ready = true;
+    c.SceneManager.updateScene();
+    await new Promise(setImmediate);
+    const scene = c.Graphics.app.stage;
+    scene._fadeDuration = scene._fadeOpacity = 0;
+    c.SceneManager.updateScene();
+    f.idleCallbacks.shift()();
+
+    const chomps = map._events[26];
+    const guard = chomps._interpreter = new c.Game_Interpreter();
+    guard.setup(chomps.list(), 26);
+    assert.equal(chomps._trigger, 4);
+    assert(guard.command117(chomps.list()[0].parameters));
+    const child = guard._childInterpreter;
+    assert.equal(child._list, common[47].list);
+    const duplicate = Object.assign(new c.Game_Interpreter(), { _mapId: 59, _eventId: 26, _list: child._list });
+    const setVariable = child._list[0].parameters;
+    let writer = child;
+    let extraRefresh = '';
+    c.Scene_Map.prototype.updateMainMultiply = () => {
+        map._needsRefresh = false;
+        if (extraRefresh === 'before') map.requestRefresh();
+        writer.command122(setVariable);
+        if (extraRefresh === 'after') map.requestRefresh();
+    };
+    c.SceneManager.updateScene();
+    assert(map._needsRefresh);
+    assert.equal(c.$gameVariables.value(12), 1);
+    assert(!scene._wqaFieldReady, 'changing the variable keeps the first refresh protected');
+    c.SceneManager.updateScene();
+    assert(scene._wqaFieldReady, 'the parallel repeat must hand back navigation');
+    frame();
+    await new Promise(setImmediate);
+    f.dispatchWindowEvent('keydown', { key: 'p', keyCode: 80 });
+    frame();
+    const directions = f.routePackets.at(-1);
+    assert.equal(directions.request.event, 3);
+    const geometry = bakeMap(data, tilesets[data.tilesetId].flags);
+    const result = solveRoute(geometry, directions.live, directions.request);
+    f.routeReply({ epoch: directions.epoch, sequence: directions.sequence, map: 59, result });
+    frame();
+    assert(f.packets.some(packet => packet.kind === 'routeDirections'));
+
+    for (const phase of ['before', 'after']) {
+        extraRefresh = phase;
+        c.SceneManager.updateScene();
+        assert(!scene._wqaFieldReady);
+    }
+    extraRefresh = '';
+    writer = duplicate;
+    c.SceneManager.updateScene();
+    assert(!scene._wqaFieldReady, 'the same event and list need the real child interpreter');
+    writer = child;
+    c.SceneManager.updateScene();
+    assert(scene._wqaFieldReady);
+
+    c.Time.GetDeltaTime = () => 1 / 60;
+    function measure() {
+        map.inactiveTime = 0;
+        const start = performance.now();
+        for (let frame = 0; frame < 240; frame++) c.SceneManager.updateScene();
+        return performance.now() - start;
+    }
+    const qualified = measure();
+    useOriginalMethod('operateVariable');
+    const stock = measure();
+    assert(!scene._wqaFieldReady, 'stock variable writes keep the old guard closed');
+    console.log('Verified Nuggedor handback, real refresh rejection, and the first change to Saltcaster state.');
+    console.log('Throttled 240 Nuggedor frames:', stock.toFixed(2), 'ms stock writer,', qualified.toFixed(2), 'ms qualified.');
 }
 
 async function verifyOpeningField(tilesets) {
@@ -780,7 +890,7 @@ async function verifyOpeningField(tilesets) {
         assert(start >= 0);
         f.run(originals.slice(start, originals.indexOf('\n};', start) + 3));
     }
-    scene._wqaLightningRefreshOnly = false;
+    scene._wqaNonPageRefreshOnly = false;
     const baseline = measureFrames();
     assert(!scene._wqaFieldReady);
     console.log('Verified the native Crispy Beach lightning timer, F8, destination cycling, directions and unrelated refresh retirement.');

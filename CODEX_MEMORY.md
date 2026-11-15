@@ -161,3 +161,5 @@ The installed vehicle and Float Fort source checkpoint `3b47f45f58161842e0cd05ca
 November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](docs/navigation-audit.md#world-exits-and-nuggedor-mine-route) use confirmed event pages and native discovery state. [Prison narration](docs/cutscene-description.md) and [battle Details](docs/battle.md) are verified separately. See the [exact candidate and installation status](docs/deployment.md#world-map-labels-nuggedor-and-prison-descriptions).
 
 [Hidden ending prerequisites and accessibility checks](docs/puzzles-and-secrets.md#hidden-ending-route) document the native route, solo battle, shared epilogue and final postscript.
+
+[Follow Chomps handback and Wendy's merchant labels](docs/navigation-audit.md#nuggedor-restaurant-and-follow-chomps) document the native market pages, the event-owned repeated variable write and offline coverage. [Assist Amulet and the hidden ending](docs/puzzles-and-secrets.md#daves-assist-amulet) distinguish the local statue branch from story conditions.

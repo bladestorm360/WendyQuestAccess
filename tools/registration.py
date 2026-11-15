@@ -404,22 +404,27 @@ def objects_notification(original):
         2915: b'        if(SceneManager._scene?._wqaBattleStarted){BattleManager._wqaBattleSpritesBusy=undefined;'
               + BATTLE_LOG_LEAVING + b';}\n',
         # FilterController replaces the numeric setter. Both setters still
-        # call onChange. Consume the authored timer's mark once, before the
+        # call onChange. Consume the qualified writer's mark once, before the
         # quest plugin can make a separate request after the numeric write.
         18015: b'const wqaScene=SceneManager._scene;'
-               b'const wqaLightningOnly=wqaScene?._wqaLightningVariableWrite&&'
-               b'(!$gameMap._needsRefresh||wqaScene._wqaLightningRefreshOnly);'
-               b'if(wqaScene?._wqaLightningVariableWrite)wqaScene._wqaLightningVariableWrite=false;',
-        18041: b'if(wqaLightningOnly)wqaScene._wqaLightningRefreshOnly=true;',
-        162252: b'if(this===$gameMap&&SceneManager._scene?._wqaLightningRefreshOnly)'
-                b'SceneManager._scene._wqaLightningRefreshOnly=false;',
-        # Pin the request to the authored parallel lightning event and
-        # retire its one-use mark even if the native variable write throws.
-        278919: b'const wqaLightningScene=variableId===2&&this._mapId===$gameMap?._mapId&&'
-                b'SceneManager._scene?._wqaMapRestored&&this._eventId===(' + lightning +
-                b')[this._mapId]?SceneManager._scene:null;'
-                b'if(wqaLightningScene)wqaLightningScene._wqaLightningVariableWrite=true;',
-        279818: b'finally{if(wqaLightningScene)wqaLightningScene._wqaLightningVariableWrite=false;}',
+               b'const wqaNonPageOnly=wqaScene?._wqaNonPageVariableWrite&&'
+               b'(!$gameMap._needsRefresh||wqaScene._wqaNonPageRefreshOnly);'
+               b'if(wqaScene?._wqaNonPageVariableWrite)wqaScene._wqaNonPageVariableWrite=false;',
+        18041: b'if(wqaNonPageOnly)wqaScene._wqaNonPageRefreshOnly=true;',
+        162252: b'if(this===$gameMap&&SceneManager._scene?._wqaNonPageRefreshOnly)'
+                b'SceneManager._scene._wqaNonPageRefreshOnly=false;',
+        # The timer and Chomps's parallel Saltcaster guard have no page
+        # consumers for their variable writes. For the guard, allow only
+        # an unchanged value from its owned native common event.
+        278919: b'const wqaNonPageScene=(variableId===2||variableId===12)&&this._mapId===$gameMap?._mapId&&'
+                b'SceneManager._scene?._wqaMapRestored&&('
+                b'variableId===2&&this._eventId===(' + lightning + b')[this._mapId]||'
+                b'variableId===12&&this._mapId===59&&this._eventId===26&&operationType===0&&value===1&&'
+                b'this._list===$dataCommonEvents?.[47]?.list&&'
+                b'$gameMap._events[26]?._interpreter?._childInterpreter===this&&$gameVariables.value(12)===1'
+                b')?SceneManager._scene:null;'
+                b'if(wqaNonPageScene)wqaNonPageScene._wqaNonPageVariableWrite=true;',
+        279818: b'finally{if(wqaNonPageScene)wqaNonPageScene._wqaNonPageVariableWrite=false;}',
         # Sunny Fryshire continuously reapplies the same tileset. Keep the
         # native refresh, and retire routes only when the actual ID changes.
         178811: b'\n    if(this._tilesetId!==tilesetId){' + ROUTE_DIRTY + b'}\n    ',
@@ -661,7 +666,7 @@ def map_notification(original):
     this._wqaFieldReady = !!(this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
         this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true && this.srcWendy &&
         this.srcStones && $gameMap.inactiveTime < 30 &&
-        (!$gameMap._needsRefresh || this._wqaLightningRefreshOnly) &&
+        (!$gameMap._needsRefresh || this._wqaNonPageRefreshOnly) &&
         !$gameMap._needsTilemapRefresh && !this._wqaPreloads?.size && !this._wqaPreloadOverflow &&
         !$gamePlayer._transferring && !$gamePlayer._vehicleGettingOn && !$gamePlayer._vehicleGettingOff &&
         $gameScreen._brightness === 255 && !$gameScreen._fadeOutDuration && !this._wqaTerrainWork &&

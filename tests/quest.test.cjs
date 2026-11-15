@@ -334,13 +334,13 @@ assert(tracker.available(stale.next), 'the next real paint supersedes the failed
 for (const mapId of [12, 15]) {
     root.$gameMap._mapId = mapId;
     root.$gameMap._needsRefresh = true;
-    stale.next._wqaLightningRefreshOnly = true;
+    stale.next._wqaNonPageRefreshOnly = true;
     stale.next.QuestNavNeedRefresh();
     stale.next.update();
     renderer.emit('postrender');
     assert(tracker.command(stale.next, 'details'));
     assert.equal(spoken(), 'First visible clue. 2 of 2. Secret route after reveal. 0 of 1');
-    stale.next._wqaLightningRefreshOnly = false;
+    stale.next._wqaNonPageRefreshOnly = false;
     assert.equal(tracker.command(stale.next, 'details'), false);
     assert.equal(tracker.visibleObjective(stale.next), undefined);
 }
