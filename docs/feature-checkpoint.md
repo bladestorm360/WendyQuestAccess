@@ -226,3 +226,5 @@ The **navigation audit corrections** slice covers the confirmed exit and scene l
 The navigation corrections are installed and offline-verified. Gameplay confirmation remains open. The field module retains the request, readiness, output and cancellation handoffs together. Terrain journeys, collision projection and puzzle selection have separate owners. [Verification and gameplay steps](deployment.md#navigation-audit-corrections-deployment)
 
 The **Breakfast Isles onward directions and named exits** scope covers the five missing onward connections, their shared progression triggers, the return to the original destination, and named exit instructions in route speech. The source-to-install planning estimate is 45–90 minutes. [Regional route evidence](navigation-audit.md#breakfast-isles-onward-directions)
+
+Breakfast Isles onward directions and named exits are installed and offline-verified. The six round trip checks and two packaged exit-speech checks passed. Live gameplay remains open. [Installed build and first gameplay check](deployment.md#breakfast-isles-guidance-and-named-exits-deployment)
