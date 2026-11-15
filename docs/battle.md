@@ -142,9 +142,17 @@ At final gameplay handoff, finish a basic attack and listen after the timing inp
 
 ### Critical-hit streaks
 
-The attack damage multiplier reaches 2× at five consecutive critical hits. The saved longest streak continues counting past five and is available in save-slot Details with I. Five also qualifies for a Sacred Reward chest containing Music Pack 2. The chest counts toward the achievement for opening all Sacred Reward chests.
+The attack damage multiplier reaches 2× at five consecutive critical hits. The saved longest streak continues counting past five and is available in save-slot Details with I. Ending a battle resets the combat multiplier and preserves the running saved streak. A failed critical timing attempt resets the running streak. Critical hits can count toward the same record across consecutive battles. Five also qualifies for a Sacred Reward chest containing Music Pack 2. The chest counts toward the achievement for opening all Sacred Reward chests.
 
 For Steam build 26578620, the attack streak limit, multiplier and saved-record update are in BattleSceneArranger.js, in the methods for incrementing the critical streak and reading its damage bonus. Common event 110 sets the reward thresholds. Map 197 events 4 and 11 check the streak record and the all-chest achievement. Common event 207 handles the reward. [Save-slot review](../src/frontend/files.js)
+
+### Repeat encounters and timing practice
+
+In normal play, scripted encounters are finite on a save. Beaten patrols activate a persistent completion page. Story and optional encounters use their own progression gates. Revisiting a map leaves those gates intact. The three maps with random-encounter lists are test maps outside the normal transfer graph. The repeatable battle-test events require the developer branch at startup, which the Steam build initializes to off.
+
+The audit checked direct battles, common events, repeatability gates, and transfer references across the 239 maps in build 26578620. Maps 001, 007 and 082 are the random-encounter test maps. Map 038 event 1 initializes DeveloperMode and gates access to Map 185, whose battle-test events are 19 and 65. Map 020 event 7 resets its ice-block self switch and uses a separate permanent completion page for the fight. The current saved streak is variable 60. The only native runtime reset located is the failed critical timing branch in ActionCommandCombat.js. No map or common event writes that saved variable.
+
+For a practice fight, save to a manual slot before an active encounter, retry from that slot until ready, and keep the successful attempt. Reloading restores the slot's streak and encounter state. [Battle timing assist](#radial-timing-tones)
 
 ## Floating battle results
 
