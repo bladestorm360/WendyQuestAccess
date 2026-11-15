@@ -15,17 +15,17 @@ function verifySoundscape(root, load) {
     let allowed = true;
     let options = { enabled: true, hrtf: false, soundscape: normalizeSoundscape() };
     const audio = {
-        cues: CUE, isPrepared: () => true,
-        play(scene, hrtf, cue, gain, bearing, ready, complete, source) {
+        cues: CUE, soundscapeVoices: 5, isPrepared: () => true,
+        play(scene, hrtf, cue, gain, bearing, ready, complete, source, _pitch, _until, voice) {
             assert.equal(source, 'soundscape');
             assert(ready(), 'the initial copied observation still qualifies for audio');
-            request = { scene, hrtf, cue, gain, bearing, ready };
+            request = { scene, hrtf, cue, gain, bearing, ready, voice };
             played.push(request);
             return true;
         },
-        retire(scene, source) {
+        retire(scene, source, _cue, voice) {
             assert.equal(source, 'soundscape');
-            if (request?.scene === scene) request = null;
+            if (request?.scene === scene && (voice === undefined || request.voice === voice)) request = null;
         }
     };
     const soundscape = createSoundscape(root, () => allowed, audio, () => options);
@@ -62,10 +62,11 @@ function verifySoundscape(root, load) {
     }
 
     function sample(scene) {
+        const before = played.length;
         root.Graphics.frameCount = Math.max(root.Graphics.frameCount + 1, scene._wqaSoundscapeDue || 1);
         soundscape.update(scene);
         sprites.emit('postrender');
-        return request;
+        return played.length > before ? request : null;
     }
 
     root.$gameVariables._Community_Lighting_ScriptActive = false;

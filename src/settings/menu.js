@@ -23,7 +23,8 @@ const AUDIO_PREVIEWS = [
     ['ahead', [0, 0, 1]], ['left', [-1, 0, 0]], ['right', [1, 0, 0]],
     ['behind', [0, 0, -1]], ['above', [0, 1, 0]]
 ];
-const audioGroup = group => group === 'audio' || group === 'soundscape' || group === 'soundscapeCategory';
+const audioGroup = group => group === 'audio' || group === 'audioPreviews' ||
+    group === 'soundscape' || group === 'soundscapeCategory';
 
 function normalizeAudio(value) {
     const volume = value?.wallVolume;
@@ -213,6 +214,7 @@ function createSettingsMenu(root, host) {
         else if (owner.group === 'navigation') showNavigation(owner, selection);
         else if (owner.group === 'bookmarks') bookmarks.show(owner);
         else if (owner.group === 'audio') showAudio(owner, selection);
+        else if (owner.group === 'audioPreviews') showAudioPreviews(owner);
         else if (owner.group === 'soundscape') showSoundscape(owner, selection);
         else if (owner.group === 'soundscapeCategory') showSoundscape(owner, selection, owner.category);
         else if (owner.group === 'help') showHelp(owner, selection);
@@ -376,6 +378,12 @@ function createSettingsMenu(root, host) {
                 update('lower', { ...audio, wallVolume: Math.max(0, audio.wallVolume - 10) })),
             raise: button(owner, `Increase wall volume, ${audio.wallVolume} percent`, () =>
                 update('raise', { ...audio, wallVolume: Math.min(100, audio.wallVolume + 10) })),
+            wallBump: button(owner, 'Wall bump, ' + (audio.wallBump ? 'on' : 'off'), () =>
+                update('wallBump', { ...audio, wallBump: !audio.wallBump })),
+            wallBumpLower: button(owner, 'Decrease wall bump volume, ' + audio.wallBumpVolume + ' percent', () =>
+                update('wallBumpLower', { ...audio, wallBumpVolume: Math.max(0, audio.wallBumpVolume - 10) })),
+            wallBumpRaise: button(owner, 'Increase wall bump volume, ' + audio.wallBumpVolume + ' percent', () =>
+                update('wallBumpRaise', { ...audio, wallBumpVolume: Math.min(100, audio.wallBumpVolume + 10) })),
             footsteps: button(owner, `Footstep sounds, ${audio.footsteps ? 'on' : 'off'}`, () =>
                 update('footsteps', { ...audio, footsteps: !audio.footsteps })),
             footstepLower: button(owner, `Decrease footstep volume, ${audio.footstepVolume} percent`, () =>
@@ -400,7 +408,6 @@ function createSettingsMenu(root, host) {
                 update('battleLower', { ...audio, battleTimingVolume: Math.max(0, audio.battleTimingVolume - 10) })),
             battleRaise: button(owner, `Increase battle timing volume, ${audio.battleTimingVolume} percent`, () =>
                 update('battleRaise', { ...audio, battleTimingVolume: Math.min(100, audio.battleTimingVolume + 10) })),
-            soundscape: button(owner, 'Soundscape', () => showSoundscape(owner)),
             narration: button(owner, `Cutscene descriptions, ${audio.narration.enabled ? 'on' : 'off'}`, () =>
                 update('narration', { ...audio, narration: { ...audio.narration, enabled: !audio.narration.enabled } }))
         };
@@ -416,18 +423,30 @@ function createSettingsMenu(root, host) {
                         [key]: Math.min(max, Math.max(min, value + direction * step)) } }));
             }
         }
-        items.wallBump = button(owner, 'Wall bump, ' + (audio.wallBump ? 'on' : 'off'), () =>
-            update('wallBump', { ...audio, wallBump: !audio.wallBump }));
-        items.wallBumpLower = button(owner, 'Decrease wall bump volume, ' + audio.wallBumpVolume + ' percent', () =>
-            update('wallBumpLower', { ...audio, wallBumpVolume: Math.max(0, audio.wallBumpVolume - 10) }));
-        items.wallBumpRaise = button(owner, 'Increase wall bump volume, ' + audio.wallBumpVolume + ' percent', () =>
-            update('wallBumpRaise', { ...audio, wallBumpVolume: Math.min(100, audio.wallBumpVolume + 10) }));
+        items.soundscape = button(owner, 'Soundscape', () => showSoundscape(owner));
+        items.audioPreviews = button(owner, 'Sound previews', () => showAudioPreviews(owner));
+        button(owner, 'Back', () => showRoot(owner, 'audio'));
+        (items[selection] || items.enabled).focus();
+    }
+
+    function leaveAudioPreviews(owner) {
+        host.audioStop(owner.scene);
+        showAudio(owner, 'audioPreviews');
+    }
+
+    function showAudioPreviews(owner) {
+        owner.group = 'audioPreviews';
+        owner.selected = null;
+        owner.capture = null;
+        owner.heading.textContent = 'Sound previews';
+        owner.status.textContent = loading ? 'Loading settings' : '';
+        owner.contents.textContent = '';
         const preview = (bearing, cue, gain, pitch) => previewAudio(owner, bearing, cue, gain, pitch);
-        button(owner, 'Preview wall bump', () => preview([0, 0, 1], 'wallBump', audio.wallBumpVolume / 100));
         button(owner, 'Preview wall tone ahead', () => preview([0, 0, 1], 'wallNorth', audio.wallVolume / 100));
         button(owner, 'Preview wall tone on the right', () => preview([1, 0, 0], 'wallEast', audio.wallVolume / 100));
         button(owner, 'Preview wall tone behind', () => preview([0, 0, -1], 'wallSouth', audio.wallVolume / 100));
         button(owner, 'Preview wall tone on the left', () => preview([-1, 0, 0], 'wallWest', audio.wallVolume / 100));
+        button(owner, 'Preview wall bump', () => preview([0, 0, 1], 'wallBump', audio.wallBumpVolume / 100));
         button(owner, 'Preview footstep', () => preview([0, -1, 0.15], 'footstep', audio.footstepVolume / 100));
         button(owner, 'Preview beacon ahead', () => preview([0, 0, 1], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconPulse', audio.beaconVolume / 100));
@@ -438,8 +457,8 @@ function createSettingsMenu(root, host) {
         for (const [direction, bearing] of AUDIO_PREVIEWS) {
             button(owner, `Preview ${direction}`, () => preview(bearing));
         }
-        button(owner, 'Back', () => showRoot(owner, 'audio'));
-        (items[selection] || items.enabled).focus();
+        button(owner, 'Back', () => leaveAudioPreviews(owner));
+        owner.contents.firstElementChild.focus();
     }
 
     function showNavigation(owner, selection = 'layout') {
@@ -599,6 +618,7 @@ function createSettingsMenu(root, host) {
         if (owner.capture) showGroup(owner, owner.selected);
         else if (owner.group === 'bookmarks') bookmarks.back(owner);
         else if (owner.unbinding) showController(owner);
+        else if (owner.group === 'audioPreviews') leaveAudioPreviews(owner);
         else if (owner.group === 'soundscapeCategory') showSoundscape(owner, owner.category);
         else if (owner.group === 'soundscape') {
             host.audioStop(owner.scene);

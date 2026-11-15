@@ -476,6 +476,36 @@ async function verifyEnemyBlockedBeacon() {
     console.log('Verified moving-enemy safe prefix and beacon handback, absolute right, cadence and arrival.');
 }
 
+async function verifyColdBrewProgress() {
+    const trail = load(36, { switches: [33, 38], self: [21, 23, 42].map(id => '36,' + id + ',A') });
+    const { gameMap, player, geometry } = trail;
+    for (const id of [21, 23, 42]) {
+        const block = trail.map.events[id].pages[0].list.find(command =>
+            command.code === 357 && command.parameters[1] === 'SetBlocker').parameters[3];
+        gameMap.event(id).SetBlocker(+block.minX, +block.minY, +block.maxX, +block.maxY);
+    }
+    const live = () => captureWorld(c, true, undefined, undefined, [], true).live;
+    player.setPosition(22, 23);
+    const first = { x: 22, y: 23, event: 10, field: true };
+    assert.deepEqual(solveRoute(geometry, live(), first).legs[0], { direction: 2, tiles: 1 });
+    assert(player.canPass(22, 23, 2));
+    player.setPosition(22, 24);
+    const enemy = gameMap.event(14);
+    player._followers = { isSomeoneCollided: () => false };
+    assert(enemy.canPass(21, 23, 2));
+    enemy._y = 24;
+    const after = { ...first, y: 24 };
+    assert.equal(solveRoute(geometry, live(), after).legs[0].direction, 8, 'the fresh detour walks back');
+    const continued = { ...after, followedDirection: 2 };
+    const blocked = solveRoute(geometry, live(), continued);
+    assert.deepEqual(blocked, { status: 'enemyBlocked', enemy: 14, boundary: 4, legs: [], distance: 0,
+        arrival: { x: 22, y: 24, facing: null } });
+    await verifyWorker(trail, continued, live(), result => assert.deepEqual(result, blocked));
+    enemy._y = 23;
+    assert.equal(solveRoute(geometry, live(), continued).legs[0].direction, 4, 'continue west after the enemy moves');
+    console.log('Verified Cold Brew Trail: follow the existing route to a moving encounter and continue when it clears.');
+}
+
 async function verifyNativeBeacon() {
     const fixture = load(196);
     const { player, gameMap, geometry } = fixture;
@@ -1310,6 +1340,7 @@ async function main() {
     verifyWallFeedback();
     await verifyNativeBeacon();
     await verifyEnemyBlockedBeacon();
+    await verifyColdBrewProgress();
     verifyNativePatrolMotion();
     verifyCaveProgression(c, load, snapshot, verifyRoute, read);
     await verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read);

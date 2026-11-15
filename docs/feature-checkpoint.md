@@ -228,3 +228,11 @@ The navigation corrections are installed and offline-verified. Gameplay confirma
 The **Breakfast Isles onward directions and named exits** scope covers the five missing onward connections, their shared progression triggers, the return to the original destination, and named exit instructions in route speech. The source-to-install planning estimate is 45–90 minutes. [Regional route evidence](navigation-audit.md#breakfast-isles-onward-directions)
 
 Breakfast Isles onward directions and named exits are installed and offline-verified. The six round trip checks and two packaged exit-speech checks passed. Live gameplay remains open. [Installed build and first gameplay check](deployment.md#breakfast-isles-guidance-and-named-exits-deployment)
+
+### Party attack names, Cold Brew Trail and navigation audio
+
+Scoped follow-up. Estimated 15–25 minutes for attack diagnosis and native verification, 20–35 minutes for the route and checkpoint regressions, and 30–50 minutes for the exact Pixel Remaster sample integration, build, and deployment checks.
+
+Implementation and offline map checks passed. The actual Cold Brew Trail geometry reproduced a return over the last step when a roaming enemy crossed ahead. The next request now uses a verified prefix up to the enemy. The quest exit projection keeps the explicit selection when adjacent exit tiles trade nearest rank. Field diagnostics include successful route results and selection failures. Checkpoints have their own category. The battle fixture covers Wendy and all four companions with portrait art unavailable, plus the existing enemy, miss, special and damage-before-defeat cases. The audio menu has a separate Sound previews submenu. The addon embeds the 13 hash-pinned FFPR clips and maintains bounded playback for their full lengths. [Navigation](navigation.md) · [Battle](battle.md#basic-attack-names-and-battle-bag-status) · [Audio](audio.md#pixel-remaster-core-samples)
+
+Gameplay confirmation remains open for the reported Cold Brew Trail request sequence and audible attack and spatial cue timing.

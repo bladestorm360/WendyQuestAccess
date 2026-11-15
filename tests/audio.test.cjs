@@ -18,7 +18,7 @@ const audio = createAudio({
     schedule: task => scheduled.push(task),
     createAudioWorker(admission) {
         word = new Int32Array(admission);
-        assert.equal(word.length, 7);
+        assert.equal(word.length, 12);
         starts++;
         return worker;
     }
@@ -108,6 +108,17 @@ assert.equal(Atomics.load(word, 0), crossing.epoch);
 worker.emit('message', { epoch: crossing.epoch, status: 2 });
 audio.retire(scene, 'cave');
 
+for (const slot of [0, 1]) {
+    assert(audio.play(scene, true, CUE.entityDoor, 0.5, [1, 0, 0], () => ready, null, 'soundscape', 1, 0, slot));
+    run();
+    assert.equal(messages.at(-1).lane, 6 + slot);
+    worker.emit('message', { epoch: messages.at(-1).epoch, status: 2 });
+}
+assert(Atomics.load(word, 6) > 0 && Atomics.load(word, 7) > 0);
+audio.retire(scene, 'soundscape', undefined, 0);
+assert(Atomics.load(word, 6) === 0 && Atomics.load(word, 7) > 0);
+audio.retire(scene, 'soundscape');
+
 const until = Date.now() + 3000;
 let eastReady = true;
 for (const [cue, position, available] of [
@@ -133,7 +144,7 @@ assert(audio.play(scene, true, CUE.beaconPulse, 0.5, [0, 0, 1], () => ready, nul
 run();
 assert.equal(messages.at(-1).lane, 0);
 assert(audio.extendWall(scene, until + 100));
-assert.equal(Atomics.load(word, 6), (until + 100) | 0);
+assert.equal(Atomics.load(word, 11), (until + 100) | 0);
 audio.retire(scene, 'wall', CUE.wallNorth);
 assert.deepEqual([...word.slice(1, 6)], [0, epochs[1], 0, epochs[3], epochs[4]]);
 audio.retire(scene, 'wall');

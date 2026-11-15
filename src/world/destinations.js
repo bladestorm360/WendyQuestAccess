@@ -4,7 +4,7 @@ const NON_INTERACTION_COMMANDS = new Set([0, 108, 214, 408, 657]);
 const WEATHER_SETUP_COMMANDS = new Set([0, 108, 223, 224, 225, 230, 236, 245, 246, 250, 408, 657]);
 const SENSITIVE_NAME = /\b(?:gold|coins?|reward|easter\s*egg)\b/i;
 const CATEGORY_LABELS = Object.freeze({ all: 'All', objects: 'Objects', people: 'NPC', merchants: 'Merchants', exits: 'Exits',
-    events: 'Events', treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
+    events: 'Events', checkpoints: 'Checkpoints', treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
 
 function eventName(entry) {
     const raw = typeof entry.name === 'string' ? entry.name.trim() : '';
@@ -117,7 +117,7 @@ function eventDescription(root, entry, page, event) {
     const commands = page.list;
     if (commands.some(command => command.code === 357 &&
         ['ForceAutoSave', 'RequestAutoSave'].includes(command.parameters?.[1])))
-        return { name: 'Autosave checkpoint', category: 'events', eventAction: 'step' };
+        return { name: 'Autosave checkpoint', category: 'checkpoints', eventAction: 'step' };
     if (map === 13 && id >= 21 && id <= 27 || map === 113 && /^EnemyAmbushTrigger/.test(entry.name))
         return { name: 'Encounter trigger', category: 'events', eventAction: 'step' };
     const action = event._priorityType === 1 ? 'bump' : 'step';

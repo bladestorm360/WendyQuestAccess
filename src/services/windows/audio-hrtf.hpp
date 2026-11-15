@@ -79,9 +79,29 @@ public:
         std::array<std::int16_t, cue_frames> mono{};
         alGenBuffers_(static_cast<ALsizei>(buffers_.size()), buffers_.data());
         for (int cue = 0; cue < static_cast<int>(Cue::count); ++cue) {
+            if (!ready()) return false;
+            const auto sound = static_cast<Cue>(cue);
+            const auto clip = navigation_clip(sound);
+            if (!clip.empty() && !wall_loop(sound)) {
+                alBufferData_(buffers_[cue], AL_FORMAT_MONO16, clip.data(), static_cast<ALsizei>(clip.size_bytes()), ffpr::rate);
+                continue;
+            }
+            if (wall_loop(sound)) {
+                // Resample one full period before HRTF to keep SDL's
+                // repeated spatial buffer phase-aligned at 48 kHz.
+                const int frames = sample_frames(sound, 1.0);
+                std::vector<std::int16_t> period(frames);
+                for (int i = 0; i < frames; ++i) {
+                    if ((i % 128) == 0 && !ready()) return false;
+                    period[i] = sample16(cue_sample(sound, i, 1.0));
+                }
+                if (!ready()) return false;
+                alBufferData_(buffers_[cue], AL_FORMAT_MONO16, period.data(), frames * sizeof(std::int16_t), rate);
+                continue;
+            }
             for (int i = 0; i < cue_frames; ++i) {
                 if ((i % 128) == 0 && !ready()) return false;
-                mono[i] = sample16(cue_sample(static_cast<Cue>(cue), i, 1.0));
+                mono[i] = sample16(cue_sample(sound, i, 1.0));
             }
             if (!ready()) return false;
             alBufferData_(buffers_[cue], AL_FORMAT_MONO16, mono.data(), static_cast<ALsizei>(sizeof(mono)), rate);
@@ -102,21 +122,24 @@ public:
         alSource3f_(source_, AL_POSITION, static_cast<float>(p.right), static_cast<float>(p.up), static_cast<float>(-p.forward));
         alSourcef_(source_, AL_GAIN, static_cast<float>(gain));
         alSourcef_(source_, AL_PITCH, static_cast<float>(rate_scale));
-        const bool loop = wall_cycles(cue) != 0;
+        const bool loop = wall_loop(cue);
+        const int period = sample_frames(cue, rate_scale);
+        const int frames = period + (loop ? 0 : render_frames - cue_frames);
+        output.resize(2 * frames);
         alSourcei_(source_, AL_LOOPING, loop ? AL_TRUE : AL_FALSE);
         if (!ready()) return false;
         alSourcePlay_(source_);
         if (loop) {
             // Discard one period so the looping PCM starts with a settled
             // spatial filter history. The SDL callback repeats exactly one period.
-            for (int i = 0; i < cue_frames; i += 128) {
+            for (int i = 0; i < period; i += 128) {
                 if (!ready()) return false;
-                render_(device_, output.data(), std::min(128, cue_frames - i));
+                render_(device_, output.data(), std::min(128, period - i));
             }
         }
-        for (int i = 0; i < render_frames; i += 128) {
+        for (int i = 0; i < frames; i += 128) {
             if (!ready()) return false;
-            render_(device_, output.data() + i * 2, std::min(128, render_frames - i));
+            render_(device_, output.data() + i * 2, std::min(128, frames - i));
         }
         return alGetError_() == AL_NO_ERROR && ready();
     }

@@ -9,7 +9,9 @@ const CUE = Object.freeze({ prepare: -1, preview: 0, wallBump: 1, wallBrush: 2,
 // Match the native mixer's fixed wall lanes and shared deadline word.
 const WALL_LANES = { [CUE.wallNorth]: 1, [CUE.wallEast]: 3, [CUE.wallSouth]: 4, [CUE.wallWest]: 5 };
 const FOOTSTEP = 2;
-const WALL_DEADLINE = 6;
+const SOUNDSCAPE_START = 6;
+const SOUNDSCAPE_VOICES = 5;
+const WALL_DEADLINE = SOUNDSCAPE_START + SOUNDSCAPE_VOICES;
 
 function createAudio(host) {
     let generation = null;
@@ -24,10 +26,10 @@ function createAudio(host) {
     let hrtfResolved = false;
     let nextEpoch = 0;
 
-    function retire(scene, source, cue) {
+    function retire(scene, source, cue, voice) {
         for (let lane = 0; lane < active.length; lane++) {
             const request = active[lane];
-            if (!request || (scene && request.scene !== scene) || (source && request.source !== source) ||
+            if ((voice !== undefined && lane !== SOUNDSCAPE_START + voice) || !request || (scene && request.scene !== scene) || (source && request.source !== source) ||
                 (cue !== undefined && request.cue !== cue)) continue;
             Atomics.store(generation, lane, 0);
             active[lane] = pending[lane] = null;
@@ -44,8 +46,15 @@ function createAudio(host) {
         // Preparation opens the device but never owns a playing voice.
         // Release the channel before notifying callers so a fresh request
         // can use the initialized output immediately.
-        if (!ready || request.cue === CUE.prepare) retire(request.scene, request.source, request.cue);
+        if (!ready || request.cue === CUE.prepare) retireRequest(request);
         if (ready) request.complete?.(status);
+    }
+
+    function retireRequest(request) {
+        const lane = request.lane;
+        if (active[lane] !== request) return;
+        Atomics.store(generation, lane, 0);
+        active[lane] = pending[lane] = null;
     }
 
     function failedWorker() {
@@ -62,7 +71,7 @@ function createAudio(host) {
         if (!request || inFlight || failed) return;
         pending[request.lane] = null;
         if (!request.ready()) {
-            retire(request.scene, request.source, request.cue);
+            retireRequest(request);
             schedule();
             return;
         }
@@ -92,7 +101,7 @@ function createAudio(host) {
         host.schedule(drain);
     }
 
-    function play(scene, hrtf, cue, gain, bearing, ready, complete, source = 'preview', pitch = 1, wallUntil = 0) {
+    function play(scene, hrtf, cue, gain, bearing, ready, complete, source = 'preview', pitch = 1, wallUntil = 0, voice) {
         if (!ready()) return false;
         const primary = active[0];
         if (source === 'soundscape' && primary && primary.source !== 'soundscape') return false;
@@ -105,8 +114,10 @@ function createAudio(host) {
             return false;
         }
         const movement = source === 'footstep' && cue === CUE.footstep || source === 'bump' && cue === CUE.wallBump;
-        const lane = wallUntil ? WALL_LANES[cue] : movement ? FOOTSTEP : 0;
+        const ambient = source === 'soundscape' && Number.isInteger(voice) && voice >= 0 && voice < SOUNDSCAPE_VOICES;
+        const lane = wallUntil ? WALL_LANES[cue] : movement ? FOOTSTEP : ambient ? SOUNDSCAPE_START + voice : 0;
         if (lane === undefined) return false;
+        if (lane === 0 && source !== 'soundscape' && cue !== CUE.prepare) retire(scene, 'soundscape');
         if (!generation) generation = new Int32Array(new SharedArrayBuffer((WALL_DEADLINE + 1) * Int32Array.BYTES_PER_ELEMENT));
         const [right, up, forward] = bearing;
         active[lane] = pending[lane] = {
@@ -119,10 +130,10 @@ function createAudio(host) {
     }
 
     return {
-        cues: CUE, play, retire,
+        cues: CUE, play, retire, soundscapeVoices: SOUNDSCAPE_VOICES,
         extendWall(scene, until) {
             if (!generation || ((Atomics.load(generation, WALL_DEADLINE) - Date.now()) | 0) <= 0 ||
-                !active.some((request, lane) => lane !== 0 && lane !== FOOTSTEP && request?.scene === scene))
+                !active.some((request, lane) => lane > 0 && lane < SOUNDSCAPE_START && lane !== FOOTSTEP && request?.scene === scene))
                 return false;
             Atomics.store(generation, WALL_DEADLINE, until);
             return true;

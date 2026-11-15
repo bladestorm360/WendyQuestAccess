@@ -18,7 +18,7 @@ function eventTarget(root, mode, event, entry, page, spoilers = false) {
     let target = worldDestination(root, mode, event, entry, page);
     if (target === undefined) target = localDestination(root, event, page);
     if (target === undefined) target = checkpointTarget(map, event._eventId, event._pageIndex, event._trigger)
-        ? { name: 'Checkpoint', category: 'objects' }
+        ? { name: 'Checkpoint', category: 'checkpoints' }
         : caveDestination(map, event, entry, page) || destination(entry, page, event._trigger, map) || undefined;
     if (!target) target = worldEventDescription(root, mode, event, page) ||
         (mode === 'walk' && !timedCave(map) && eventDescription(root, entry, page, event)) ||
@@ -66,7 +66,7 @@ function includeSavedBookmarks(snapshot, entries, current) {
     return items;
 }
 
-function captureWorld(root, routing = true, label, scene, bookmarks = [], routesOnly = false, spoilers = false) {
+function captureWorld(root, routing = true, label, scene, bookmarks = [], routesOnly = false, spoilers = false, questExitId) {
     const map = root.$gameMap;
     const player = root.$gamePlayer;
     const data = root.$dataMap;
@@ -141,8 +141,11 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         const transitions = id === 25 ? WEST_CHILLCREST : id === 36 ? [5, 24, 25, 26] :
             id === 113 ? [root.$gameVariables?.value?.(119) === 7 &&
                 root.$gameVariables?.value?.(120) === 11 ? 23 : 22] : [];
-        const next = objects.filter(item => item.category === 'exits' && transitions.includes(item.id))
-            .sort((a, b) => Math.abs(a.x - player._x) + Math.abs(a.y - player._y) -
+        const exits = objects.filter(item => item.category === 'exits' && transitions.includes(item.id));
+        // Several tiles lead to the same next area. Once one is selected,
+        // preserve its event identity when Wendy crosses a distance tie.
+        const next = exits.find(item => item.id === questExitId) ||
+            exits.sort((a, b) => Math.abs(a.x - player._x) + Math.abs(a.y - player._y) -
                 Math.abs(b.x - player._x) - Math.abs(b.y - player._y))[0];
         if (next) objects.push({ ...next, category: 'quests', questExit: true, eventAction: 'step',
             handoffs: transitions });
@@ -174,7 +177,10 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             const category = id === 116 && bookmark.event === 7 && bookmark.category === 'treasure' ? 'objects' : bookmark.category;
             let current = objects.find(item => item.id === bookmark.event && item.category === category);
             if (!current && category === 'events') current = objects.find(item => item.id === bookmark.event &&
-                ['people', 'exits', 'quests'].includes(item.category));
+                ['people', 'exits', 'quests', 'checkpoints'].includes(item.category));
+            if (!current && category === 'objects' && checkpointTarget(id, bookmark.event,
+                map._events[bookmark.event]?._pageIndex, map._events[bookmark.event]?._trigger))
+                current = objects.find(item => item.id === bookmark.event && item.category === 'checkpoints');
             if (!current && category === 'objects' && id === 113 && discoveryEntrance(id, map._events[bookmark.event]))
                 current = objects.find(item => item.id === bookmark.event && ['events', 'quests'].includes(item.category));
             if (current) objects.push({ ...current, ...label, event: current.id });

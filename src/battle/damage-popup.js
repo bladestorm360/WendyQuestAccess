@@ -50,20 +50,25 @@ function attackSource(scene, performer, subject, action) {
     const sprites = scene._spriteset;
     const allies = sprites?._actorSprites;
     const enemies = sprites?._enemySprites;
-    const actor = allies?.length <= MAX_BATTLERS && allies.find(sprite => sprite._actor === subject);
+    const actor = allies?.length <= MAX_BATTLERS && allies.find(sprite => sprite._battler === subject);
     let name;
-    if (actor && COMPANION_ATTACKS.has(skill.id)) {
-        // The native dispatcher may fall back to Wendy when a companion
-        // sprite is unavailable. Attribute to the renderer's actual actor.
-        if (performer === sprites._subActorSprite && performer) name = portraitActor(scene, performer)?.name;
-        else if (performer === actor) name = portraitActor(scene, actor)?.name;
-    } else if (actor && (skill.id === 5 || skill.id === 1)) {
-        name = portraitActor(scene, actor)?.name;
+    if (actor && actor.parent === sprites._battleField) {
+        // The native dispatcher supplies the performer when it starts an effect.
+        // A companion acts through Wendy's battle action but binds its own actor
+        // record. Names are already known at dispatch while the bitmap or pose
+        // being checked by the appearance description can change.
+        if (COMPANION_ATTACKS.has(skill.id)) {
+            if (performer === sprites._subActorSprite && performer?.parent === sprites._battleField)
+                name = performer._actor?.name;
+            else if (performer === actor) name = subject.name?.();
+        } else if (skill.id === 5 || skill.id === 1) {
+            name = subject.name?.();
+        }
     } else if (!actor && ENEMY_ATTACKS.has(skill.id) && enemies?.length <= MAX_BATTLERS) {
         const enemy = enemies.find(sprite => sprite._battler === subject || sprite._enemy === subject);
         if (attached(enemy, sprites._battleField)) name = drawnText(enemy, enemy._nameSprite, 48) || enemyName(enemy);
     }
-    return name;
+    return typeof name === 'string' && name.length <= 48 ? name.trim() : '';
 }
 
 // The native action-result queue runs before both sprite producers.

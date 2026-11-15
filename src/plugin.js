@@ -168,9 +168,9 @@ function boot(root, nodeRequire, nodeProcess) {
         dialogue = createDialogueObserver(host, notifications);
         narration = createNarration(root, host, () => audioPreferences);
         credits = createCredits(root, host, notifications, host.speechPreferences);
-        field = createField(root, host, notifications);
+        const { denied: fieldKeyDenied, routed: fieldRouteResult } = createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
+        field = createField(root, host, notifications, fieldRouteResult);
         mapBanner = createMapBannerObserver(root, host, notifications, field.ready);
-        const fieldKeyDenied = createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
         interaction = createInteractionPrompt(root, host, field.interactionReady, notifications, field.appendInteraction);
         treasure = createTreasureReward(root, host, notifications);
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);

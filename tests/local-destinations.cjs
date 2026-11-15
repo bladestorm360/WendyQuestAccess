@@ -113,7 +113,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 if (ordinary?.category === 'events') {
                     if (id === 27 && [27, 32].includes(entry.id) && index === 0)
                         assert.equal(ordinary.name, 'Peak approach');
-                    else assert.match(ordinary.name, /^(Scene trigger|Encounter trigger|Discovery marker|Scripted movement|Ride elevator|Autosave checkpoint|Island encounter)$/);
+                    else assert.match(ordinary.name, /^(Scene trigger|Encounter trigger|Discovery marker|Scripted movement|Ride elevator|Island encounter)$/);
                 }
             }
         }
@@ -236,7 +236,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const next = solveRoute(beach.geometry, nextView.live, elderRequest);
     assert.equal(next.status, 'interrupted');
     assert.equal(next.boundaryEvent, 35);
-    assert(nextView.objects.some(item => item.id === 35 && item.name === 'Autosave checkpoint'));
+    assert(nextView.objects.some(item => item.id === 35 && item.name === 'Autosave checkpoint' && item.category === 'checkpoints'));
     beach.player.setPosition(beachMap.event(21).x + 1, beachMap.event(21).y);
     const eastern = captureWorld(c);
     const reached = findReachable(beach.geometry, eastern.live, { x: eastern.x, y: eastern.y, candidates });
@@ -295,7 +295,13 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         trail.player.setPosition(32, 6);
         const trailView = captureWorld(c, true, undefined, {});
         assert.equal(trailView.live.events.find(event => event.id === 35).action, false);
-        assert(trailView.objects.some(item => item.questExit && /Frosty Peak/.test(item.name)));
+        const trailQuest = trailView.objects.find(item => item.questExit);
+        assert.match(trailQuest?.name || '', /Frosty Peak/);
+        trail.player.setPosition(31, 6);
+        const closest = captureWorld(c, false, undefined, {}).objects.find(item => item.questExit);
+        assert.notEqual(closest?.id, trailQuest.id, 'a nearby parallel tile becomes the nearest');
+        const retained = captureWorld(c, true, undefined, {}, [], false, false, trailQuest.id);
+        assert.equal(retained.objects.find(item => item.questExit)?.id, trailQuest.id);
         const savedCommon = c.$dataCommonEvents;
         c.$dataCommonEvents = commonEvents;
         for (const [variables, id] of [[{}, 22], [{ 119: 7, 120: 11 }, 23]]) {

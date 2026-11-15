@@ -168,17 +168,23 @@ const actors = data('Actors.json');
 const skills = data('Skills.json');
 ally._actor = ally._battler;
 ally._actor.actor = () => actors[1];
+ally._actor.name = () => actors[1].name;
 ally._battlerName = actors[1].battlerName;
-ally._mainSprite = ally.addChild(Object.assign(new Sprite(), { bitmap: { isReady: () => true } }));
+// Native actor art can be unavailable at effect dispatch. A named action needs
+// the exact native battler binding, which is independent of this bitmap.
+ally._mainSprite = ally.addChild(new Sprite());
+ally.ActionTargetAnimation = () => [0, 60];
 for (const sprite of [enemy, right]) sprite._enemy = sprite._battler;
-const frygor = scene._spriteset._subActorSprite = field.addChild(Object.assign(new Sprite(), {
-    _actor: actors[3], _battlerName: actors[3].battlerName
-}));
-frygor._mainSprite = frygor.addChild(Object.assign(new Sprite(), { bitmap: { isReady: () => true } }));
+const companion = scene._spriteset._subActorSprite = field.addChild(new Sprite());
+companion._mainSprite = companion;
 let delayed;
-frygor.ActionTargetAnimation = () => [6, 60];
+companion.ActionTargetAnimation = (_action, animation) =>
+    [animation === 'FryArrow' ? 0 : 12, 0];
 c.SkillUtility = { ExtractMetaData: item => item.note ? JSON.parse(item.note.slice(item.note.indexOf('{'))) : {} };
-c.BattleHelper = { GetSubActorSprite: id => id === 3 ? frygor : null, GetBattlerSprite: () => null };
+c.BattleHelper = {
+    GetSubActorSprite: id => companion._actor === actors[id] ? companion : null,
+    GetBattlerSprite: subject => subject === ally._battler ? ally : null
+};
 c.AudioManager = { playSe() {} };
 c.CoroutineManager = { StartCoroutine(run) { delayed = run.finish; } };
 c.OverTime = function (_duration, finish) { this.finish = finish; };
@@ -200,20 +206,31 @@ const action = (item, outcome = { hpAffected: true, hpDamage: 17 }) => ({
         target.paintResult = popupResult;
     }
 });
-battle._action = action(skills[9]);
-battle.invokeNormalAction(ally._battler, right._battler);
-assert.equal(enemy._battler.paintResult, null);
+for (const [id, actor, delay] of [[9, 3, false], [12, 4, true], [14, 5, true], [17, 2, true]]) {
+    companion._actor = actors[actor];
+    companion._battlerName = actors[actor].battlerName;
+    const beforeAttack = seen.length;
+    battle._action = action(skills[id]);
+    battle.invokeNormalAction(ally._battler, right._battler);
+    if (delay) assert.equal(enemy._battler.paintResult, null);
+    c.$gameTemp._animationQueue.push({});
+    frame();
+    assert.deepEqual(seen.slice(beforeAttack), [actors[actor].name + ' attacks.']);
+    c.$gameTemp._animationQueue.pop();
+    if (delay) delayed(1);
+    advance(40);
+    assert.deepEqual(seen.slice(beforeAttack), [actors[actor].name + ' attacks.', '17 damage.']);
+    advance(180);
+}
+battle._action = action(skills[5]);
+const wendyStart = seen.length;
+battle.invokeNormalAction(ally._battler, enemy._battler);
 c.$gameTemp._animationQueue.push({});
 frame();
-assert.equal(seen.at(-1), 'Frygor attacks.', 'announce during the animation before native results exist');
+assert.deepEqual(seen.slice(wendyStart), ['Wendy attacks.']);
 c.$gameTemp._animationQueue.pop();
-delayed(1);
 advance(40);
-assert.equal(seen.at(-1), '17 damage.');
-battle._action = action(skills[5]);
-battle.invokeNormalAction(ally._battler, enemy._battler);
-advance(40);
-assert.equal(seen.at(-1), 'Wendy attacks, 17 damage.');
+assert.deepEqual(seen.slice(wendyStart), ['Wendy attacks.', '17 damage.']);
 battle._action = action({ note: '' });
 battle.invokeNormalAction(ally._battler, enemy._battler);
 advance(40);
@@ -260,6 +277,7 @@ const reused = new c.Game_ActionResult();
 reused._wqaAttackSource = 'Frygor';
 reused.clear();
 assert.equal(reused._wqaAttackSource, null);
+ally._mainSprite.bitmap = { isReady: () => true };
 battle._action = action(skills[52]);
 battle.invokeNormalAction(right._battler, ally._battler);
 advance(40);

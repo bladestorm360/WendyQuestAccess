@@ -100,7 +100,8 @@ int wmain(int argc, wchar_t** argv) {
         auto& ahead = entity_cues[i];
         assert(stereo_cue(ahead, cue, {0, 0, 1}, 0.5, ready));
         assert(stereo_cue(back, cue, {0, 0, -1}, 0.5, ready));
-        assert(energy(ahead, 0) > 0 && crossings(back, 0) < crossings(ahead, 0));
+        assert(energy(ahead, 0) > 0 && ahead != back);
+        if (!navigation_clip(cue).empty()) assert(back.size() > ahead.size());
         for (size_t earlier = 0; earlier < i; ++earlier) assert(entity_cues[earlier] != ahead);
         assert(hrtf.render(spatial, cue, {-1, 0, 0}, 0.5, ready));
         assert(energy(spatial, 0) > energy(spatial, 1));
@@ -178,57 +179,48 @@ int wmain(int argc, wchar_t** argv) {
     assert(energy(foot, 0) > 0 && foot != wall);
     assert(hrtf.render(up, Cue::footstep, {-1, -0.2, 0}, 0.55, ready));
     assert(energy(up, 0) > energy(up, 1));
-    constexpr int click_frames = footstep_toe_frame + footstep_pip_frames;
-    const auto silent = [&foot](int start, int end) {
-        return std::all_of(foot.begin() + start * 2, foot.begin() + end * 2, [](auto value) { return value == 0; });
-    };
-    assert(!silent(0, footstep_pip_frames));
-    assert(silent(footstep_pip_frames, footstep_toe_frame));
-    assert(!silent(footstep_toe_frame, click_frames));
-    const auto tail = [](const Stereo& pcm, int frames) {
-        return std::all_of(pcm.begin() + frames * 2, pcm.end(), [](auto value) { return value == 0; });
-    };
-    assert(tail(foot, click_frames));
+    const int foot_frames = sample_frames(Cue::footstep, 1.0);
+    assert(navigation_clip(Cue::footstep).size() == 551);
+    assert(foot[0] == sample16(ffpr::footstep[0] / 32767.0 * 0.55 * std::sqrt(0.5)));
+    assert(std::all_of(foot.begin() + 2 * foot_frames, foot.end(), [](auto value) { return value == 0; }));
     Stereo rear_foot{};
     assert(stereo_cue(rear_foot, Cue::footstep, {0, 0, -1}, 0.55, ready));
-    assert(!tail(rear_foot, click_frames));
-    assert(tail(rear_foot, static_cast<int>(std::ceil(click_frames / rear_pitch))));
+    assert(rear_foot.size() > foot.size());
     const auto crossings = [](Cue cue, int first, int end, double pitch = 1.0) {
         int count = 0;
         for (int i = first + 1; i < end; ++i)
             if (cue_sample(cue, i, pitch) > 0 && cue_sample(cue, i - 1, pitch) <= 0) ++count;
         return count;
     };
-    const int heel = crossings(Cue::footstep, 0, footstep_pip_frames);
-    const int toe = crossings(Cue::footstep, footstep_toe_frame, click_frames);
-    assert(heel > 15 && toe > heel * 1.3);
+    assert(navigation_clip(Cue::beacon_pulse).size() == 1323);
+    assert(sample_frames(Cue::beacon_pulse, beacon_rear_pitch) > sample_frames(Cue::beacon_pulse, 1.0));
     assert(crossings(Cue::beacon_pulse, 192, 1824, beacon_rear_pitch) <
         crossings(Cue::beacon_pulse, 192, 1824));
     const int first_note = crossings(Cue::beacon_arrival, 192, 1248);
     const int second_note = crossings(Cue::beacon_arrival, 1632, 2688);
     const int third_note = crossings(Cue::beacon_arrival, 3072, 4128);
     assert(first_note > 0 && first_note < second_note && second_note < third_note);
-    struct WallCase { Cue cue; Bearing bearing; int cycles; };
-    for (const auto& [cue, bearing, cycles] : std::array<WallCase, 4>{{
-        {Cue::wall_north, {0, 0, 1}, 26}, {Cue::wall_east, {1, 0, 0}, 22},
-        {Cue::wall_west, {-1, 0, 0}, 18}, {Cue::wall_south, {0, 0, -1}, 15}
+    struct WallCase { Cue cue; Bearing bearing; size_t source_frames; };
+    for (const auto& [cue, bearing, source_frames] : std::array<WallCase, 4>{{
+        {Cue::wall_north, {0, 0, 1}, 4425}, {Cue::wall_east, {1, 0, 0}, 4374},
+        {Cue::wall_west, {-1, 0, 0}, 4388}, {Cue::wall_south, {0, 0, -1}, 4410}
     }}) {
-      assert(crossings(cue, 0, cue_frames) == cycles);
-      if (bearing.forward < 0) assert(crossings(cue, 0, cue_frames, rear_pitch) == 11);
-      for (const bool spatial : {false, true}) {
-        assert(spatial ? hrtf.render(wall, cue, bearing, 0.55, ready) : stereo_cue(wall, cue, bearing, 0.55, ready));
-        if (bearing.right > 0) assert(energy(wall, 1) > energy(wall, 0));
-        if (bearing.right < 0) assert(energy(wall, 0) > energy(wall, 1));
-        // A seam is one normal sample-to-sample step, including the
-        // filter history in the HRTF path.
-        for (int channel = 0; channel < 2; ++channel) {
-            const auto seam = std::abs(wall[channel] - wall[2 * (cue_frames - 1) + channel]);
-            int steepest = 0;
-            for (int i = 1; i < cue_frames; ++i)
-                steepest = std::max(steepest, std::abs(wall[2 * i + channel] - wall[2 * (i - 1) + channel]));
-            assert(seam <= steepest + 8);
+        assert(navigation_clip(cue).size() == source_frames);
+        for (const bool spatial : {false, true}) {
+            assert(spatial ? hrtf.render(wall, cue, bearing, 0.55, ready) : stereo_cue(wall, cue, bearing, 0.55, ready));
+            const auto frames = sample_frames(cue, !spatial && bearing.forward < 0 ? rear_pitch : 1.0);
+            assert(wall.size() == 2 * frames);
+            if (bearing.right > 0) assert(energy(wall, 1) > energy(wall, 0));
+            if (bearing.right < 0) assert(energy(wall, 0) > energy(wall, 1));
+            // The imported waveform is spatialized as a full loop.
+            for (int channel = 0; channel < 2; ++channel) {
+                const auto seam = std::abs(wall[channel] - wall[2 * (frames - 1) + channel]);
+                int steepest = 0;
+                for (int i = 1; i < frames; ++i)
+                    steepest = std::max(steepest, std::abs(wall[2 * i + channel] - wall[2 * (i - 1) + channel]));
+                assert(seam <= steepest * 2 + 8);
+            }
         }
-      }
     }
     // Check the exact gain curve used by the callback independently of SDL
     // buffer scheduling. An extended deadline must recover without a jump.
@@ -267,7 +259,7 @@ int wmain(int argc, wchar_t** argv) {
     const auto expired = device.callbacks();
     std::this_thread::sleep_for(std::chrono::milliseconds(25));
     assert(device.callbacks() == expired);
-    std::puts("Verified the two-pip noise step and four wall pitches with HRTF placement and stereo rear pitch.");
+    std::puts("Verified the FFPR footstep sample and four wall samples with HRTF placement and stereo rear pitch.");
     std::puts("Verified periodic stereo/HRTF seams, concurrent footstep and wall voices, the 500 ms wall fade and independent expiry.");
     std::printf("Verified built-in HRTF, full rear-pitch fallback and SDL dummy output generation. Loopback init %.1f ms, five cues %.1f ms.\n",
         std::chrono::duration<double, std::milli>(initialized - begin).count(),

@@ -15,9 +15,9 @@ function createFieldDiagnostics(root, host, nodeRequire, nodeProcess) {
             !scene._wqaPreloads?.size && !scene._wqaPreloadOverflow && !root.$gamePlayer?._transferring;
     }
 
-    // Only declined field gestures reach this path. The log contains gate
-    // state and native event IDs, with no input text, dialogue or save data.
-    return function denied(scene, action) {
+    // Use the same admission and size limit for rejected gestures and completed
+    // route requests. The rows carry copied IDs, snapshots and directions only.
+    function denied(scene, action) {
         if (busy || !scene?._wqaMapRestored || !scene._started || !scene._active || !canWrite(scene)) return;
         const time = host.now();
         if (time - lastAt < 1000) return;
@@ -38,6 +38,11 @@ function createFieldDiagnostics(root, host, nodeRequire, nodeProcess) {
         if (signature === previous && time - lastAt < 15000) return;
         lastAt = time;
         previous = signature;
+        write(scene, row);
+    }
+
+    function write(scene, row) {
+        if (busy || !canWrite(scene)) return;
         busy = true;
         host.schedule(async () => {
             try {
@@ -59,7 +64,26 @@ function createFieldDiagnostics(root, host, nodeRequire, nodeProcess) {
             } catch { /* A read-only installation can still use field controls. */ }
             finally { busy = false; }
         });
-    };
+    }
+
+    function routed(job, result) {
+        if (job.action !== 'directions' || busy || !canWrite(job.scene) || result?.status === 'cancelled') return;
+        const destination = job.destination;
+        const request = job.request;
+        write(job.scene, {
+            action: job.action, outcome: result?.status || 'unavailable',
+            map: job.map, mode: job.mode, from: [job.x, job.y], source: job.controller ? 'controller' : 'keyboard',
+            target: request?.event, targetPoint: request?.targetX === undefined ? undefined : [request.targetX, request.targetY],
+            targetMap: request?.transfer?.map, category: destination?.category,
+            targetTile: destination && Number.isInteger(destination.x) ? [destination.x, destination.y] : undefined,
+            followedDirection: request?.followedDirection, approach: result?.entrance ?? result?.event,
+            blocker: result?.enemy ?? result?.boundaryEvent,
+            distance: result?.distance, legs: result?.legs?.slice(0, 8).map(leg => [leg.direction, leg.tiles]),
+            arrival: result?.arrival, boundary: result?.boundary, reenter: result?.reenter, more: result?.more
+        });
+    }
+
+    return { denied, routed };
 }
 
 module.exports = { createFieldDiagnostics };

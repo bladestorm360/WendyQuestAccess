@@ -209,6 +209,14 @@ function choose(label) {
     if (!button) throw Error('Missing settings control ' + label);
     button.click();
 }
+function preview(label) {
+    choose('Sound previews');
+    choose(label);
+}
+function leavePreviews() {
+    tap('Escape');
+    if (document.activeElement.textContent !== 'Sound previews') throw Error('Preview parent focus was lost');
+}
 function menuStatus() { return document.querySelector('dialog [role=status]')?.textContent; }
 function installTransferPage(map, destination, conversation = false) {
     const list = conversation ? [{ code: 101, indent: 0, parameters: [] }, { code: 0 }] :
@@ -325,17 +333,25 @@ function verifySettings() {
         if (document.activeElement.textContent !== 'Navigation') throw Error('Navigation parent focus was lost');
         choose('Audio');
         if (document.activeElement.textContent !== 'Mod sounds, on') throw Error('Sound defaults were not applied');
+        const labels = Array.from(document.querySelectorAll('dialog button'), item => item.textContent);
+        if (labels.some(label => label.startsWith('Preview '))) throw Error('Preview buttons leaked into Audio settings');
+        const bumps = labels.indexOf('Wall bump, off');
+        if (bumps < 1 || !labels[bumps - 1].startsWith('Increase wall volume') ||
+            !labels[bumps + 2].startsWith('Increase wall bump volume') ||
+            !labels[bumps + 3].startsWith('Footstep sounds')) throw Error('Wall cue controls are separated');
         audioStarted = performance.now();
-        choose('Preview ahead');
+        preview('Preview ahead');
         settingsStep = 8;
     } else if (settingsStep === 8 && menuStatus() === 'Preview uses HRTF.') {
         require('fs').writeFileSync(receipt + '.audio-init-ms', String(performance.now() - audioStarted));
+        leavePreviews();
         choose('HRTF');
         settingsStep++;
     } else if (settingsStep === 9 && menuStatus() === 'Audio settings saved') {
-        choose('Preview behind');
+        preview('Preview behind');
         settingsStep++;
     } else if (settingsStep === 10 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        leavePreviews();
         choose('Wall sounds');
         settingsStep++;
     } else if (settingsStep === 11 && menuStatus() === 'Audio settings saved') {
@@ -345,17 +361,19 @@ function verifySettings() {
     } else if (settingsStep === 12 && menuStatus() === 'Audio settings saved') {
         if (document.activeElement.textContent !== 'Decrease wall volume, 55 percent') throw Error('Wall gain setting failed');
         wallPreviewStarted = performance.now();
-        choose('Preview wall tone on the left');
+        preview('Preview wall tone on the left');
         settingsStep++;
     } else if (settingsStep === 13 && footstepSettingsStep === 0 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         require('fs').writeFileSync(receipt + '.wall-preview-ms', String(performance.now() - wallPreviewStarted));
+        leavePreviews();
         choose('Footstep sounds, off');
         footstepSettingsStep = 1;
     } else if (settingsStep === 13 && footstepSettingsStep === 1 && menuStatus() === 'Audio settings saved') {
         if (document.activeElement.textContent !== 'Footstep sounds, on') throw Error('Footstep setting failed');
-        choose('Preview footstep');
+        preview('Preview footstep');
         footstepSettingsStep = 2;
     } else if (settingsStep === 13 && footstepSettingsStep === 2 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        leavePreviews();
         choose('Wall bump, off');
         footstepSettingsStep = 3;
     } else if (settingsStep === 13 && footstepSettingsStep === 3 && menuStatus() === 'Audio settings saved') {
@@ -363,27 +381,31 @@ function verifySettings() {
         choose('Navigation beacon');
         settingsStep = 14;
     } else if (settingsStep === 14 && menuStatus() === 'Audio settings saved') {
-        choose('Preview beacon arrival');
+        preview('Preview beacon arrival');
         settingsStep++;
     } else if (settingsStep === 15 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        leavePreviews();
         choose('Cave timing cues');
         settingsStep++;
     } else if (settingsStep === 16 && menuStatus() === 'Audio settings saved') {
-        choose('Preview cave crossing tone');
+        preview('Preview cave crossing tone');
         settingsStep++;
     } else if (settingsStep === 17 && battleAudioStep === 0 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        leavePreviews();
         choose('Battle timing assist, off');
         battleAudioStep++;
     } else if (settingsStep === 17 && battleAudioStep === 1 && menuStatus() === 'Audio settings saved') {
         if (document.activeElement.textContent !== 'Battle timing assist, on') throw Error('Battle cue setting failed');
-        choose('Preview battle accuracy tone');
+        preview('Preview battle accuracy tone');
         battleAudioStep++;
     } else if (settingsStep === 17 && battleAudioStep === 2 && menuStatus() === 'Preview uses stereo and rear pitch.') {
+        leavePreviews();
         choose('Mod sounds');
         settingsStep++;
     } else if (settingsStep === 18 && menuStatus() === 'Audio settings saved') {
-        choose('Preview right');
+        preview('Preview right');
         if (menuStatus() !== 'Mod sounds are off.') throw Error('The sound switch did not prevent preview');
+        leavePreviews();
         choose('Mod sounds');
         settingsStep++;
     } else if (settingsStep === 19 && menuStatus() === 'Audio settings saved') {
@@ -496,7 +518,7 @@ const interval = setInterval(() => {
             tap('Escape');
             tap('Escape');
             choose('Audio');
-            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 17).map(item => item.textContent);
+            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 20).map(item => item.textContent);
             const narration = Array.from(document.querySelectorAll('dialog button'))
                 .map(button => button.textContent).filter(line => /Cutscene descriptions|cutscene description/i.test(line));
             choose('Soundscape');
@@ -1851,10 +1873,11 @@ const interval = setInterval(() => {
             if (document.activeElement.textContent !== 'Speech enabled, off') throw Error('The mute switch did not retain focus');
             tap('Escape');
             choose('Audio');
-            choose('Preview right');
+            preview('Preview right');
             endingStep++;
         } else if (endingStep === 29 && menuStatus() === 'Preview uses stereo and rear pitch.') {
             fs.writeFileSync(receipt + '.muted-preview', '');
+            leavePreviews();
             choose('Cutscene descriptions, off');
             endingStep = 80;
         } else if (endingStep === 80 && menuStatus() === 'Audio settings saved') {
@@ -2458,7 +2481,8 @@ def main():
                                                'Previous destination, Left bracket',
                                                'Next destination, N'] or reloaded.get('audio') != [
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
-                    'Increase wall volume, 55 percent', 'Footstep sounds, on', 'Decrease footstep volume, 50 percent',
+                    'Increase wall volume, 55 percent', 'Wall bump, on', 'Decrease wall bump volume, 50 percent',
+                    'Increase wall bump volume, 50 percent', 'Footstep sounds, on', 'Decrease footstep volume, 50 percent',
                     'Increase footstep volume, 50 percent', 'Navigation beacon, on', 'Decrease beacon volume, 65 percent',
                     'Increase beacon volume, 65 percent', 'Cave timing cues, on', 'Decrease cave timing volume, 65 percent',
                     'Increase cave timing volume, 65 percent', 'Battle timing assist, on',

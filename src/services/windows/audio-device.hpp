@@ -10,7 +10,8 @@
 #include <string>
 
 namespace wqa::audio {
-enum OutputLane { ordinary, wall_north, footstep, wall_east, wall_south, wall_west, output_lanes };
+enum OutputLane { ordinary, wall_north, footstep, wall_east, wall_south, wall_west,
+    soundscape_begin, output_lanes = soundscape_begin + 5 };
 
 constexpr bool is_wall_lane(int lane) {
     return lane == wall_north || (lane >= wall_east && lane <= wall_west);
@@ -63,7 +64,7 @@ class Device {
     struct Voice {
         LONG epoch = 0;
         Stereo samples{};
-        int next = render_frames;
+        int next = 0;
         int level = 0;
     };
     std::array<Voice, output_lanes> voices_{};
@@ -96,7 +97,8 @@ class Device {
             for (int lane = 0; lane < output_lanes; ++lane) {
                 auto& voice = self.voices_[lane];
                 if (!admitted(self.word_, voice.epoch, lane)) continue;
-                int count = std::min(capacity, render_frames - voice.next);
+                const int length = static_cast<int>(voice.samples.size() / 2);
+                int count = std::min(capacity, length - voice.next);
                 int remaining = 0;
                 const bool wall = is_wall_lane(lane);
                 if (wall) {
@@ -118,7 +120,7 @@ class Device {
                             mix[i * 2 + channel] += voice.samples[voice.next * 2 + channel];
                     }
                     ++voice.next;
-                    if (wall && voice.next == cue_frames) voice.next = 0;
+                    if (wall && voice.next == length) voice.next = 0;
                 }
                 mixed = std::max(mixed, count);
             }
@@ -141,7 +143,7 @@ class Device {
         bool active = false;
         for (int lane = 0; lane < output_lanes; ++lane) {
             const auto& voice = self.voices_[lane];
-            if (!admitted(self.word_, voice.epoch, lane) || voice.next == render_frames) continue;
+            if (!admitted(self.word_, voice.epoch, lane) || voice.next == static_cast<int>(voice.samples.size() / 2)) continue;
             if (is_wall_lane(lane)) {
                 const auto deadline = static_cast<uint32_t>(InterlockedCompareExchange(self.word_ + output_lanes, 0, 0));
                 const auto ms = static_cast<int32_t>(deadline - unix_ms());
@@ -184,12 +186,13 @@ public:
         return ready_;
     }
 
-    bool publish(LONG epoch, const Stereo& data, int lane = 0) {
-        if (!ready_ || !admitted(word_, epoch, lane) || !SDL_LockAudioStream_(stream_)) return false;
+    bool publish(LONG epoch, Stereo data, int lane = 0) {
+        if (data.empty() || data.size() % 2 || !ready_ || !admitted(word_, epoch, lane) || !SDL_LockAudioStream_(stream_)) return false;
         bool current = admitted(word_, epoch, lane);
         if (current) {
             auto& voice = voices_[lane];
-            voice.samples = data;
+            // Release replaced audio after unlocking the SDL callback.
+            voice.samples.swap(data);
             voice.epoch = epoch;
             voice.next = voice.level = 0;
             current = SDL_SetAudioStreamGetCallback_(stream_, supply, this);

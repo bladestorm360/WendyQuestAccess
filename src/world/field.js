@@ -90,7 +90,7 @@ function localLandingAvailable(map, mode, bookmark) {
     return map === 113 && bookmark.map === map && bookmark.mode === 'walk' && (mode === 'ship' || mode === 'airship');
 }
 
-function createField(root, host, notifications) {
+function createField(root, host, notifications, routeDiagnostics = () => {}) {
     const salt = createSaltGuide(root);
     const cave = createCaveGuide(root, host.graphics);
     const transfers = createTransferBookmarks(root, host);
@@ -217,6 +217,11 @@ function createField(root, host, notifications) {
     }
 
     function follow(job, result, record, walkingJob = job) {
+        if (job.progress && (result.status === 'ready' || result.status === 'enemyBlocked')) {
+            const first = result.legs[0];
+            if (first) owner.routeProgress = { ...job.progress, x: job.x, y: job.y, ...first };
+            else if (result.status === 'ready') owner.routeProgress = null;
+        }
         if (job.autowalk && autowalk.start(walkingJob, result, record)) {
             // The movement owner now watches native outcomes. Ordinary
             // position notifications must leave its path narration admitted.
@@ -372,6 +377,7 @@ function createField(root, host, notifications) {
                     job.timing = host.caveTiming.capture(job.scene, job.timing.motion, target);
                 selectGuideTarget(target);
             }
+            routeDiagnostics(job, result);
             if (result?.status === 'terrainExit' || job.terrainOnward && result?.entrance &&
                 ['ready', 'interrupted', 'enemyBlocked'].includes(result.status))
                 return terrainExit(job, result);
@@ -604,6 +610,25 @@ function createField(root, host, notifications) {
             ...(target.handoffs ? { handoffs: target.handoffs } : {}) };
     }
 
+    function routeProgress(job, snapshot, target, event) {
+        if (job.action !== 'directions' || job.autowalk || job.journey ||
+            snapshot.mode !== 'walk' || snapshot.scrollType || !event) return undefined;
+        job.progress = { event, category: target.category, targetX: target.x, targetY: target.y };
+        const previous = owner.routeProgress;
+        if (!previous || Object.keys(job.progress).some(key => previous[key] !== job.progress[key])) {
+            owner.routeProgress = null;
+            return undefined;
+        }
+        const [dx, dy] = HEADINGS[previous.direction];
+        const x = snapshot.x - previous.x;
+        const y = snapshot.y - previous.y;
+        const distance = x * dx + y * dy;
+        if (x * dy === y * dx && distance >= 0 && distance <= previous.tiles)
+            return distance > 0 ? previous.direction : undefined;
+        owner.routeProgress = null;
+        return undefined;
+    }
+
     function route(job, snapshot, target, area, motion) {
         job.label = target.name;
         job.destination = target;
@@ -624,7 +649,9 @@ function createField(root, host, notifications) {
         const terrainTransfer = snapshot.live?.terrainGate === false && !job.journey &&
             snapshot.live.terrainSwitch === 97 ? terrainTransferRequest(job, STONE_ISLAND) : undefined;
         const guideOptions = motion && job.guideOptions?.map(({ target }) => destinationRequest(target));
-        submit(job, snapshot, { ...destination, terrainTransfer, guideOptions, stopBeforeEvent: job.eventAction === 'step',
+        const followedDirection = !motion && !area ? routeProgress(job, snapshot, target, destination.event) : undefined;
+        submit(job, snapshot, { ...destination, terrainTransfer, guideOptions, followedDirection,
+            stopBeforeEvent: job.eventAction === 'step',
             limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
             surface: snapshot.mode !== 'walk',
             beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk, timingCue: !!job.timing });
@@ -664,10 +691,16 @@ function createField(root, host, notifications) {
     function select(job, snapshot) {
         snapshot.objects = includeSavedBookmarks(snapshot, snapshot.bookmarks, quest => questDestinationCurrent(root, job.scene, quest));
         if (job.action === 'directions' && !job.changes.length && resumeTerrainJourney(job, snapshot)) return;
+        const selected = owner.browser.selections[owner.browser.category];
         const result = browse(owner.browser, snapshot, job.changes);
         job.quest = result.target?.quest;
         job.scene._wqaQuestNavigation = !!job.quest;
-        if (!result.target) return status(job, result.status);
+        if (!result.target) {
+            if (job.action === 'directions') routeDiagnostics({ ...job, map: snapshot.map, mode: snapshot.mode,
+                x: snapshot.x, y: snapshot.y, request: { event: selected },
+                destination: { category: owner.browser.category } }, { status: result.status });
+            return status(job, result.status);
+        }
         const { target, category } = result;
         owner.target = target;
         if (target.saved) return selectSavedBookmark(job, snapshot, target.saved, category);
@@ -838,8 +871,9 @@ function createField(root, host, notifications) {
         const label = salt.available(job.scene) ? (id, fallback) => salt.label(job.scene, id, fallback) : undefined;
         const bookmarks = host.bookmarks?.();
         const puzzleGuide = job.action === 'puzzleGuide';
+        const questExitId = job.changes.length ? undefined : owner.browser.selections.quests;
         const snapshot = captureWorld(root, filtering || routing && !timed || puzzleGuide, label, job.scene, bookmarks,
-            false, preferences().spoilers === true);
+            false, preferences().spoilers === true, questExitId);
         if (!snapshot) return status(job, 'Map information unavailable');
         if (navigationRequest(job)) snapshot.bookmarks = bookmarks;
         if (filtering && snapshot.objects.length) {
@@ -945,7 +979,7 @@ function createField(root, host, notifications) {
         if (owner) retire(owner.scene);
         browserOwner(scene);
         if (BROWSE.has(action) || puzzle) {
-            owner.remoteBookmark = null;
+            owner.remoteBookmark = owner.routeProgress = null;
             terrainJourney.clear();
             transfers.clear();
         }
@@ -962,7 +996,7 @@ function createField(root, host, notifications) {
         owner.remoteBookmark = remote ? { id: entry.id, revision: entry.revision, trail } : null;
         owner.browser.category = 'bookmarks';
         owner.browser.selections.bookmarks = bookmarkId(entry.id);
-        owner.target = null;
+        owner.target = owner.routeProgress = null;
     }
 
     return {

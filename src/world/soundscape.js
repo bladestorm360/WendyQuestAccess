@@ -8,12 +8,12 @@ const { categoryCue } = require('./soundscape-presentation');
 const CUE_NAMES = { person: 'entityPerson', exit: 'entityExit', door: 'entityDoor', stairs: 'entityStairs',
     treasure: 'entityTreasure', object: 'entityObject', checkpoint: 'entityCheckpoint' };
 const MAX_RANGE = 6;
-// A voice carries about 95 ms of PCM including the spatial tail.
-// Leave about 30 ms after it and keep the existing repeat interval.
+// Keep the start and repeat intervals when longer source clips overlap.
 const MIN_GAP = 8;
 const REPEAT_GAP = 26;
 const EXIT_CLUSTER_RADIUS = 2;
-const SAMPLE_FRAMES = MIN_GAP;
+// Covers the 405 ms door sample at the slowest stereo pitch, plus tail.
+const SAMPLE_FRAMES = 36;
 const MAX_DRIFT = 0.5;
 const MAX_COMMANDS = 1024;
 const MAX_SPRITES = MAX_EVENTS + 8;
@@ -41,10 +41,14 @@ function createSoundscape(root, fieldReady, audio, preferences, navigationPrefer
             !root.$gameMap.isAnyEventStarting?.();
     }
 
-    function retireSample(current) {
-        audio.retire(current.scene, 'soundscape');
-        current.sample = null;
-        current.scene._wqaSoundscapeSample = false;
+    function retireSample(current, sample) {
+        audio.retire(current.scene, 'soundscape', undefined, sample?.voice);
+        if (sample) current.samples[sample.voice] = null;
+        else {
+            current.samples.fill(null);
+            current.preparing = false;
+        }
+        current.scene._wqaSoundscapeSample = current.preparing || current.samples.some(Boolean);
     }
 
     function leave(scene) {
@@ -60,7 +64,7 @@ function createSoundscape(root, fieldReady, audio, preferences, navigationPrefer
     function stillEligible(current, sample) {
         const { scene, map, player } = current;
         const { event, entry, page, sprite, index, dx, dy, until, kind, category } = sample;
-        if (owner !== current || current.sample !== sample || !ready(scene) || frame() >= until ||
+        if (owner !== current || current.samples[sample.voice] !== sample || !ready(scene) || frame() >= until ||
             map !== root.$gameMap || current.data !== root.$dataMap || player !== root.$gamePlayer ||
             map._events?.[event._eventId] !== event || event._erased || entry.pages[event._pageIndex] !== page ||
             event._trigger !== page.trigger || !preferences().soundscape.categories[category].enabled ||
@@ -147,20 +151,23 @@ function createSoundscape(root, fieldReady, audio, preferences, navigationPrefer
         }
         if (!audio.isPrepared(hrtf)) {
             const preparing = audio.prepare(scene, hrtf, () => owner === current && ready(scene), status => {
-                audio.retire(scene, 'soundscape');
-                scene._wqaSoundscapeSample = false;
+                current.preparing = false;
+                scene._wqaSoundscapeSample = current.samples.some(Boolean);
                 if (status < 0) current.unavailable = true;
             }, 'soundscape');
-            if (preparing && !current.unavailable) scene._wqaSoundscapeSample = true;
+            if (preparing && !current.unavailable) current.preparing = scene._wqaSoundscapeSample = true;
             return;
         }
-        sample.until = frame() + SAMPLE_FRAMES;
-        current.sample = sample;
+        const voice = current.samples.indexOf(null);
+        if (voice < 0) return;
+        sample.until = time + SAMPLE_FRAMES;
+        sample.voice = voice;
+        current.samples[voice] = sample;
         const { dx, dy } = sample;
         const bearing = sample.distance === 0 ? [0, 0, 1] : [dx, 0, -dy];
         const gain = (soundscape.volume / 100) * (sample.volume / 100) / (1 + 0.22 * sample.distance);
         if (!audio.play(scene, hrtf, audio.cues[CUE_NAMES[sample.kind]], gain, bearing,
-            () => stillEligible(current, sample), null, 'soundscape')) return retireSample(current);
+            () => stillEligible(current, sample), null, 'soundscape', 1, 0, voice)) return retireSample(current, sample);
         for (const id of sample.ids) current.heard.set(id, time);
         scene._wqaSoundscapeSample = true;
         scene._wqaSoundscapeDue = time + MIN_GAP;
@@ -174,11 +181,12 @@ function createSoundscape(root, fieldReady, audio, preferences, navigationPrefer
             owner.player !== root.$gamePlayer) {
             leave();
             owner = { scene, renderer, map: root.$gameMap, data: root.$dataMap, player: root.$gamePlayer,
-                heard: new Map() };
+                heard: new Map(), samples: Array(audio.soundscapeVoices).fill(null), preparing: false };
             scene._wqaSoundscapeActive = scene._wqaPresentation = true;
         }
         const current = owner;
-        if (current.sample && !stillEligible(current, current.sample)) retireSample(current);
+        for (const sample of current.samples)
+            if (sample && !stillEligible(current, sample)) retireSample(current, sample);
         if (frame() < scene._wqaSoundscapeDue) return;
         scene._wqaSoundscapeDue = frame() + REPEAT_GAP;
         if (current.afterPaint || current.unavailable) return;

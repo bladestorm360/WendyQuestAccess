@@ -7,7 +7,7 @@ const BOOKMARK_NAME_LIMIT = 64;
 const ID_LIMIT = 0x7ffffffe;
 const BUILD = '26578620';
 const MODES = Object.freeze({ walk: 'on foot', boat: 'in the small boat', ship: 'aboard the boat', airship: 'in flight' });
-const ENTITY_CATEGORIES = ['objects', 'people', 'merchants', 'exits', 'treasure', 'enemies', 'quests'];
+const ENTITY_CATEGORIES = ['objects', 'people', 'merchants', 'exits', 'treasure', 'enemies', 'quests', 'checkpoints'];
 
 function positive(value, limit) { return Number.isInteger(value) && value > 0 && value <= limit; }
 

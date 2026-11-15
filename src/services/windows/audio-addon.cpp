@@ -111,7 +111,7 @@ struct Owner {
         const double hrtf_pitch = sound == Cue::beacon_pulse && p.forward < 0.0 ? pitch * beacon_rear_pitch : pitch;
         const bool rendered = use_hrtf && hrtf_ready && hrtf->render(samples, sound, p, gain, ready, hrtf_pitch);
         if (!rendered && !stereo_cue(samples, sound, p, gain, ready, pitch)) return 0;
-        if (!device->publish(epoch, samples, lane)) return ready() ? -1 : 0;
+        if (!device->publish(epoch, std::move(samples), lane)) return ready() ? -1 : 0;
         return rendered ? 2 : 1;
     }
 };
@@ -162,6 +162,7 @@ Value play(Env env, Info info) {
         api.napi_get_value_int32(env, args[8], &lane) || lane < 0 || lane >= output_lanes ||
         (is_wall_lane(lane) && (cue != static_cast<int>(wall_lane_cue(lane)) || pitch != 1.0)) ||
         (lane == footstep && cue != static_cast<int>(Cue::footstep) && cue != static_cast<int>(Cue::wall_bump)) ||
+        (lane >= soundscape_begin && (cue < static_cast<int>(Cue::entity_person) || cue > static_cast<int>(Cue::entity_checkpoint))) ||
         !std::isfinite(pitch) || pitch < 0.75 || pitch > 1.25 ||
         !std::isfinite(gain) || gain < 0.0 || gain > 1.0) return number(*owner, -1);
     try { return number(*owner, owner->play(epoch, hrtf == 1, cue, p, gain, pitch, lane)); }

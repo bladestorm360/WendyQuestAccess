@@ -4,12 +4,13 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <span>
+#include <vector>
+#include "navigation-pcm.hpp"
 
 namespace wqa::audio {
 constexpr int rate = 48000;
 constexpr int cue_frames = 4320;
-constexpr int footstep_pip_frames = rate * 13 / 1000;
-constexpr int footstep_toe_frame = rate * 22 / 1000;
 constexpr int render_frames = cue_frames + 256;
 constexpr double rear_pitch = 0.72;
 constexpr double beacon_rear_pitch = 0.88;
@@ -21,16 +22,32 @@ enum class Cue : int {
     wall_east, wall_south, wall_west, count
 };
 
-constexpr int wall_cycles(Cue cue) {
-    // Pixel Remaster's directional pitches, rounded to complete cycles
-    // in a 90 ms loop so both spatial output modes join cleanly.
+constexpr bool wall_loop(Cue cue) {
+    return cue == Cue::wall_north || (cue >= Cue::wall_east && cue <= Cue::wall_west);
+}
+
+constexpr std::span<const std::int16_t> navigation_clip(Cue cue) {
     switch (cue) {
-    case Cue::wall_north: return 26;
-    case Cue::wall_east: return 22;
-    case Cue::wall_south: return 15;
-    case Cue::wall_west: return 18;
-    default: return 0;
+    case Cue::wall_bump: return ffpr::wall_bump;
+    case Cue::beacon_pulse: return ffpr::beacon;
+    case Cue::entity_person: return ffpr::npc;
+    case Cue::entity_exit: return ffpr::exit;
+    case Cue::entity_door: return ffpr::door;
+    case Cue::entity_treasure: return ffpr::chest;
+    case Cue::entity_object: return ffpr::event;
+    case Cue::entity_checkpoint: return ffpr::save_point;
+    case Cue::wall_north: return ffpr::wall_north;
+    case Cue::wall_east: return ffpr::wall_east;
+    case Cue::wall_south: return ffpr::wall_south;
+    case Cue::wall_west: return ffpr::wall_west;
+    case Cue::footstep: return ffpr::footstep;
+    default: return {};
     }
+}
+
+inline int sample_frames(Cue cue, double pitch) {
+    const auto clip = navigation_clip(cue);
+    return clip.empty() ? cue_frames : static_cast<int>(std::ceil(clip.size() * double(rate) / (ffpr::rate * pitch)));
 }
 
 struct Bearing {
@@ -38,7 +55,7 @@ struct Bearing {
     double up;
     double forward;
 };
-using Stereo = std::array<std::int16_t, render_frames * 2>;
+using Stereo = std::vector<std::int16_t>;
 
 inline Bearing normalized(Bearing p) {
     const auto length = std::hypot(p.right, p.up, p.forward);
@@ -46,26 +63,33 @@ inline Bearing normalized(Bearing p) {
     return {p.right / length, p.up / length, p.forward / length};
 }
 
-// Original cue bank. Attack and release prevent discontinuities. Both
-// spatializers use these same identities and only stereo changes rear pitch.
+// Field cues share the original FFPR PCM between the two spatializers.
+// Generated tones remain for Wendy Quest cues without an FFPR equivalent.
 inline double cue_sample(Cue cue, int frame, double pitch) {
     const auto attack = std::min(1.0, frame / 192.0);
     const auto release = std::min(1.0, (cue_frames - 1 - frame) / 960.0);
     const auto envelope = std::min(attack, release);
     const auto time = static_cast<double>(frame) / rate;
-    if (cue == Cue::wall_bump) {
-        const auto phase = tau * 185.0 * pitch * time;
-        return envelope * std::exp(-39.0 * time) * (0.56 * std::sin(phase) + 0.28 * std::sin(3.1 * phase));
+    if (const auto clip = navigation_clip(cue); !clip.empty()) {
+        // Match the Core's linear PCM interpolation. For loops, divide one
+        // complete clip over the output period and interpolate across its seam.
+        const bool loop = wall_loop(cue);
+        const auto position = loop ? static_cast<double>(frame) * clip.size() / sample_frames(cue, pitch)
+            : frame * pitch * ffpr::rate / rate;
+        const auto index = static_cast<size_t>(position);
+        if (index >= clip.size()) return 0.0;
+        const auto next = index + 1 < clip.size() ? clip[index + 1] : loop ? clip.front() : clip.back();
+        return (clip[index] + (next - clip[index]) * (position - index)) / 32767.0;
     }
     if (cue == Cue::wall_brush) {
         const auto phase = tau * 370.0 * pitch * time;
         return envelope * (0.24 * std::sin(phase) + 0.13 * std::sin(4.6 * phase));
     }
-    if (cue == Cue::beacon_pulse || cue == Cue::beacon_turn || cue == Cue::beacon_arrival) {
+    if (cue == Cue::beacon_turn || cue == Cue::beacon_arrival) {
         const bool arrival = cue == Cue::beacon_arrival;
         const double length = arrival ? 0.030 : 0.045;
-        const auto segment = cue == Cue::beacon_pulse ? time : std::fmod(time, length);
-        const double frequency = cue == Cue::beacon_pulse ? 520.0 : cue == Cue::beacon_turn ? 830.0 :
+        const auto segment = std::fmod(time, length);
+        const double frequency = cue == Cue::beacon_turn ? 830.0 :
             time < 0.030 ? 630.0 : time < 0.060 ? 800.0 : 1010.0;
         const auto note = std::min({1.0, segment / 0.004, std::max(0.0, (length - 0.002 - segment) / 0.008)});
         return envelope * note * 0.57 * std::sin(tau * frequency * pitch * segment);
@@ -75,25 +99,6 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
         const double frequency = time < 0.030 ? 690.0 : time < 0.060 ? 930.0 : 1240.0;
         const auto note = std::min({1.0, segment / 0.003, std::max(0.0, (0.028 - segment) / 0.006)});
         return envelope * note * 0.57 * std::sin(tau * frequency * pitch * segment);
-    }
-    if (const int cycles = wall_cycles(cue)) {
-        const auto phase = tau * std::round(cycles * pitch) * frame / cue_frames;
-        return 0.24 * std::sin(phase) + 0.08 * std::sin(2.0 * phase);
-    }
-    if (cue == Cue::footstep) {
-        // The heel holds each noise sample longer for a bassier texture.
-        // A short gap separates the brighter, independently seeded toe pip.
-        const double source = frame * pitch;
-        const bool toe = source >= footstep_toe_frame;
-        const double offset = toe ? source - footstep_toe_frame : source;
-        if (offset >= footstep_pip_frames) return 0.0;
-        uint32_t noise = (static_cast<uint32_t>(offset / (toe ? 4 : 7)) + (toe ? 257u : 1u)) * 0x9e3779b9u;
-        noise ^= noise >> 16;
-        noise *= 0x7feb352du;
-        noise ^= noise >> 15;
-        const double value = (noise >> 24) / 127.5 - 1.0;
-        const double onset = std::min(1.0, offset / 16.0);
-        return (toe ? 0.30 : 0.27) * onset * value * std::exp(-7.0 * offset / footstep_pip_frames);
     }
     if (cue == Cue::battle_power || cue == Cue::battle_accuracy) {
         // One short, bright strike starts at the native perfect boundary.
@@ -117,26 +122,13 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
         const auto phase = tau * frequency * pitch * segment;
         return envelope * note * (0.52 * std::sin(phase) + 0.08 * std::sin(2.0 * phase));
     }
-    if (cue >= Cue::entity_person && cue <= Cue::entity_checkpoint) {
-        // Three short slots permit category rhythms to stay distinct even
-        // when the stereo backend lowers every rear-facing cue's pitch.
-        constexpr std::array<std::array<double, 3>, 7> notes{{
-            {{405, 0, 525}},     // People
-            {{610, 460, 0}},     // Exit
-            {{205, 205, 0}},     // Door
-            {{380, 505, 670}},   // Stairs
-            {{1020, 0, 1350}},   // Treasure
-            {{360, 0, 0}},       // Interactible object
-            {{715, 520, 715}}    // Checkpoint
-        }};
+    if (cue == Cue::entity_stairs) {
+        constexpr double notes[]{380, 505, 670};
         const int slot = frame / (cue_frames / 3);
         const auto segment = static_cast<double>(frame % (cue_frames / 3)) / rate;
-        const auto frequency = notes[static_cast<int>(cue) - static_cast<int>(Cue::entity_person)][slot];
-        if (frequency == 0.0) return 0.0;
         const auto note = std::min({1.0, segment / 0.004, std::max(0.0, (0.029 - segment) / 0.008)});
-        const auto phase = tau * frequency * pitch * segment;
-        const auto harmonic = cue == Cue::entity_door ? 0.19 : 0.06;
-        return envelope * note * (0.48 * std::sin(phase) + harmonic * std::sin(2.0 * phase));
+        const auto phase = tau * notes[slot] * pitch * segment;
+        return envelope * note * (0.48 * std::sin(phase) + 0.06 * std::sin(2.0 * phase));
     }
     const auto phase = tau * 660.0 * pitch * time;
     return envelope * (0.52 * std::sin(phase) + 0.17 * std::sin(2 * phase));
@@ -154,13 +146,14 @@ bool stereo_cue(Stereo& output, Cue cue, Bearing bearing, double gain, Ready rea
     const auto right = gain * std::sqrt(std::max(0.0, (1.0 + pan) * 0.5));
     const auto pitch = rate_scale * (bearing.forward < 0.0 ?
         (cue == Cue::beacon_pulse ? beacon_rear_pitch : rear_pitch) : 1.0);
-    for (int i = 0; i < cue_frames; ++i) {
+    const int frames = sample_frames(cue, pitch);
+    output.assign(2 * (frames + (wall_loop(cue) ? 0 : render_frames - cue_frames)), 0);
+    for (int i = 0; i < frames; ++i) {
         if ((i % 128) == 0 && !ready()) return false;
         const auto sample = cue_sample(cue, i, pitch);
         output[i * 2] = sample16(sample * left);
         output[i * 2 + 1] = sample16(sample * right);
     }
-    std::fill(output.begin() + cue_frames * 2, output.end(), std::int16_t{0});
     return ready();
 }
 }

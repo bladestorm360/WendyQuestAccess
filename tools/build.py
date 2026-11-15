@@ -6,8 +6,10 @@ import json
 import os
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import sys
+import wave
 import zipfile
 
 
@@ -25,7 +27,6 @@ AUDIO_HASHES = {
 
 
 def stage_narration():
-    import struct
     source = ROOT / 'src/dialogue/narration-cues.json'
     cues = json.loads(source.read_text(encoding='utf8'))
     folder = source.parent / 'clips'
@@ -206,14 +207,38 @@ def stage_audio(sdk, services):
     return dependencies
 
 
+def stage_navigation_pcm():
+    source = ROOT / 'src/services/windows/navigation-sounds'
+    manifest = json.loads((source / 'ffpr-sha256.json').read_text(encoding='utf-8'))
+    header = ['#pragma once', 'namespace wqa::audio::ffpr {', 'inline constexpr int rate = 22050;']
+    for filename, expected in manifest.items():
+        path = source / filename
+        if not filename.isascii() or not path.stem.replace('_', '').isalpha() or path.suffix != '.wav':
+            raise ValueError('Invalid navigation sound name')
+        if path.stat().st_size > 24 * 1024 or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            raise ValueError(f'FFPR navigation sample changed: {filename}')
+        with wave.open(str(path), 'rb') as audio:
+            frames = audio.getnframes()
+            if audio.getparams()[:3] != (1, 2, 22050) or not 0 < frames <= 9000 or audio.getcomptype() != 'NONE':
+                raise ValueError(f'Unexpected navigation PCM format: {filename}')
+            samples = struct.unpack(f'<{frames}h', audio.readframes(frames))
+        header.append(f'inline constexpr std::int16_t {path.stem}[] = {{')
+        for index in range(0, frames, 16):
+            header.append('    ' + ', '.join(map(str, samples[index:index + 16])) + ',')
+        header.append('};')
+    header.append('}')
+    (OUT.parent / 'navigation-pcm.hpp').write_text('\n'.join(header) + '\n', encoding='ascii')
+
+
 def compile_native(archive, audio_sdk, vcvars, verify_pipe, verify_audio):
     services = OUT / 'wendyquest-access'
     services.mkdir(parents=True, exist_ok=True)
     headers = stage_prism(archive, services)
     dependencies = stage_audio(audio_sdk, services)
+    stage_navigation_pcm()
     fixture = OUT.parent / 'speech-pipe-fixture.exe'
     audio_fixture = OUT.parent / 'spatial-audio-fixture.exe'
-    audio_headers = [audio_sdk / 'sdl3' / 'include', audio_sdk / 'openal-soft' / 'include']
+    audio_headers = [audio_sdk / 'sdl3' / 'include', audio_sdk / 'openal-soft' / 'include', OUT.parent]
     sources = [
         (ROOT / 'src/services/windows/speech.cpp', services / 'WendyQuestSpeech.exe', OUT.parent / 'speech.obj', [headers], ''),
         (ROOT / 'src/services/windows/audio-addon.cpp', services / 'WendyQuestAudio.node', OUT.parent / 'audio.obj', audio_headers, '/LD'),
@@ -228,7 +253,7 @@ def compile_native(archive, audio_sdk, vcvars, verify_pipe, verify_audio):
         if any(char in str(path) for char in ('"', '%', '!', '\r', '\n')):
             raise ValueError('Unsupported toolchain path characters')
     compiler_commands = '\n'.join(
-        f'cl /nologo /std:c++17 /MT /O2 /GS /guard:cf /EHsc /W4 /wd4191 {mode} '
+        f'cl /nologo /std:{"c++20" if includes == audio_headers else "c++17"} /MT /O2 /GS /guard:cf /EHsc /W4 /wd4191 {mode} '
         + ' '.join(f'/I"{include}"' for include in includes) + ' '
         f'/Fo"{obj}" /Fe"{target}" "{source}" /link /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /CETCOMPAT'
         + (f' /IMPLIB:"{OUT.parent / "audio-import.lib"}"' if mode else '') + '\n'

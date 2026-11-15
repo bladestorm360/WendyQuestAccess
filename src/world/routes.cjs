@@ -724,8 +724,10 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     const world = composeWorld(geometry, snapshot, cancelled);
     if (!world) return { status: 'cancelled' };
     const result = solveWorldRoute(world, request, cancelled);
-    if (!['unreachable', 'approachBlocked'].includes(result.status) || request.field !== true || world.mode !== 'walk' ||
-        request.area || request.entrances !== undefined || request.vehicle) return result;
+    const reversing = result.status === 'ready' && DIRECTIONS.includes(request.followedDirection) &&
+        result.legs[0]?.direction === 10 - request.followedDirection;
+    if (!(reversing || ['unreachable', 'approachBlocked'].includes(result.status)) || request.field !== true ||
+        world.mode !== 'walk' || request.area || request.entrances !== undefined || request.vehicle) return result;
 
     // Only relax verified moving encounter tiles in a second worker solve.
     // Keep static geometry, rectangles and floor events in both searches.
@@ -740,6 +742,11 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     const possible = solveWorldRoute(relaxed, request, cancelled);
     if (!['ready', 'interrupted'].includes(possible.status) || possible.reenter)
         return possible.status === 'cancelled' ? possible : result;
+    // If Wendy already followed this route and an enemy now crosses it, a
+    // fresh detour can undo that progress on every request. Offer the safe
+    // prefix to the blocker if the relaxed route really continues forward.
+    if (reversing && (possible.legs[0]?.direction ?? possible.boundary) === 10 - request.followedDirection)
+        return result;
     const legs = [];
     let cell = indexOf(world, request.x, request.y);
     let distance = 0;
