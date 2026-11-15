@@ -174,6 +174,8 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 
 [Breaded Bay boarding and vehicle notices](docs/navigation.md#native-vehicle-transitions) records the Vehicles destination and shared speech ordering. [Timing defaults](docs/battle.md#radial-timing-tones) retain saved off choices.
 
-[Wendy's idle sequence](docs/cutscene-description.md#wendys-idle-sequence) records all verified idle stages, named reaction cues and queued playback. Private main was verified at `7cedf2b5e07bed81a704c1a164869183d3e6629c` for the held narration, vehicle and timing changes. The installed plugin hash still matches the preceding Kathryn and accuracy payload. Cleanup removed 11,337,177 bytes of reproducible builds and fixtures and retained the existing Kathryn and accuracy rollback.
+[Wendy's idle sequence](docs/cutscene-description.md#wendys-idle-sequence) records all verified idle stages, named reaction cues and queued playback. Private main was verified at `7cedf2b5e07bed81a704c1a164869183d3e6629c` for the held narration, vehicle and timing changes. Before this batch was released, the installed plugin matched the preceding Kathryn and accuracy payload. Cleanup removed 11,337,177 bytes of reproducible builds and fixtures and retained the existing Kathryn and accuracy rollback.
 
 [Autowalk start and arrival](docs/navigation.md#native-input-boundary-for-autowalk) records the shared output queue and native exit boundary. The Frydusa battle artwork and dialogue portrait show five snake heads. [Artwork catalog](src/dialogue/character-art.js)
+
+[Current Steam deployment](docs/deployment.md#autowalk-frydusa-and-the-queued-audio-update) records the verified installation of Autowalk feedback, Frydusa descriptions, vehicle notices, the idle and cutscene clips, and timing defaults.
