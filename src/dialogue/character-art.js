@@ -5,15 +5,15 @@
 const ENEMIES = new Map([
     ["Frydusa", [
         "A squat red fry carton stands on little boots, with tiny gloved hands and narrowed eyes.",
-        "Gold snakes spill from the top, their fanged heads pointed in different directions."
+        "Five golden snake heads spill from the top, their fangs pointed in different directions."
     ]],
     ["Frydusa - VAR1", [
         "A bright scarlet carton with small red hands and feet and round, wide-open eyes.",
-        "Thick golden coils fill the opening, with several snarling snake heads peering out."
+        "Five snarling snake heads peer out from the thick golden coils filling the opening."
     ]],
     ["Frydusa - VAR2", [
         "A scuffed, dark red carton on little feet, with red hands and a crooked grin.",
-        "A tangle of gold snakes leans over the rim, showing sharp teeth and red tongues."
+        "Five golden snake heads lean over the rim, showing sharp teeth and red tongues."
     ]],
     ["Cacodemon", [
         "A small tan, round-faced archer with a swept golden crest and a red headband.",
@@ -204,15 +204,15 @@ const PORTRAITS = new Map([
         "A rounded gray metal casing behind his shoulder has two short orange-tipped tubes."
     ]],
     ["FrydusaSnakes", [
-        "Several golden snakes rear from a red fry carton with little red hands.",
+        "Five golden snake heads rear from a red fry carton with little red hands.",
         "Their coils overlap at the rim, and their open mouths show sharp fangs."
     ]],
     ["FrydusaVAR1Snakes", [
-        "A cluster of gold serpents coils out of a vivid scarlet carton.",
+        "Five golden snake heads rise on thick coils from a vivid scarlet carton.",
         "Narrow eyes, white fangs and red tongues stand out against their rounded heads."
     ]],
     ["FrydusaVAR2Snakes", [
-        "Thick golden snakes coil out of a dark, scuffed red carton.",
+        "Five golden snake heads rise from a dark, scuffed red carton.",
         "Small red hands frame the carton, and several snake mouths hang open."
     ]],
     ['ICM', ENEMIES.get('IceCreamMachine')],

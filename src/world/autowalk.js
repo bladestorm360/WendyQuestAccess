@@ -39,10 +39,22 @@ function createAutowalk(root, ready, preferences, report) {
         return true;
     }
 
-    function end(state, record, failed = false) {
+    function end(state, record, failed = false, arrived = false) {
         stop(state.scene);
-        report(state.scene, record, failed);
+        report(state.scene, record, failed, arrived);
         return 0;
+    }
+
+    function arrive(state, record) {
+        const { facing, ...rest } = record;
+        // The route ends at the native approach. Keep an action or a
+        // necessary turn, with no suggestion that the event ran already.
+        const turn = facing && state.player._direction !== facing;
+        const needsAction = rest.activate || rest.boundary || rest.prerequisite || rest.bump || rest.enter ||
+            rest.conversation || rest.board || rest.land || rest.guideAction || rest.guide || rest.reenter;
+        const detail = turn || needsAction ? { ...rest, legs: [], facing, more: false, directionsOnly: true,
+            beaconOnly: !turn } : null;
+        return end(state, detail, false, true);
     }
 
     function changed(state, name = 'Autowalk stopped. Route changed. Request directions again.') {
@@ -81,8 +93,8 @@ function createAutowalk(root, ready, preferences, report) {
             if (player._x !== arrival.x || player._y !== arrival.y ||
                 (record.land && !canLand(map, arrival.x, arrival.y))) return changed(state);
             if (record.enemyBlocked && !job.enemyCurrent?.()) return changed(state);
-            const name = record.boundary ? record.name : 'At ' + record.name;
-            return end(state, { ...record, name, legs: [], more: false, directionsOnly: record.enemyBlocked === true || record.resumeIce === true });
+            if (record.enemyBlocked) return end(state, { ...record, legs: [], more: false, directionsOnly: true });
+            return arrive(state, record);
         }
         const step = DIRECTIONS[course[index] & 3];
         const x = map.roundXWithDirection(player._x, step);
@@ -104,7 +116,7 @@ function createAutowalk(root, ready, preferences, report) {
                         boundary: step, boundaryName: 'Map cleanup', manualHandoff: true }, true);
                 }
                 if (floor === state.target && index === course.length - 1) {
-                    return end(state, { kind: 'routeDirections', name: 'At ' + record.name, legs: [], activate: step });
+                    return arrive(state, { ...record, activate: step });
                 }
                 return end(state, { kind: 'routeDirections', name: 'Autowalk stopped', legs: [], boundary: step }, true);
             }

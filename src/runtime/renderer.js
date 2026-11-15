@@ -3,6 +3,8 @@
 const { createGate } = require('./gate');
 
 const MAX_PENDING = 8;
+const ARRIVAL_FOLLOWUP_MS = 2500;
+const FIELD_FOLLOWUP = new Set(['interactionPrompt', 'mapBanner', 'questFocus', 'treasureReward', 'dialoguePage']);
 
 function createRenderer(host, waitForSpeechPreference = false) {
     let gate = null;
@@ -18,6 +20,7 @@ function createRenderer(host, waitForSpeechPreference = false) {
     let speechEnabled = waitForSpeechPreference ? null : true;
     let brailleAvailable = true;
     let outputStarted = false;
+    let arrival = null;
     const pending = [];
     const counters = { dropped: 0, discarded: 0, submitted: 0, silenced: 0, silenceUnavailable: 0, workerFailures: 0 };
 
@@ -32,11 +35,11 @@ function createRenderer(host, waitForSpeechPreference = false) {
 
     function drain() {
         while (worker && gate?.domain === 'frontend' && inFlight < MAX_PENDING && pending.length) {
-            const record = pending.shift();
+            const { continueOutput, ...record } = pending.shift();
             try {
                 // A retained logical context can begin a fresh transport
                 // sequence after mute. Its first record has no prior output.
-                if (!outputStarted && record.append) record.append = false;
+                if (!outputStarted && record.append && !continueOutput) record.append = false;
                 worker.postMessage({ ...record, epoch: gate.epoch, ...(speechEnabled ? {} : { brailleOnly: true }) });
                 outputStarted = true;
                 inFlight++;
@@ -104,13 +107,13 @@ function createRenderer(host, waitForSpeechPreference = false) {
         }
     }
 
-    function submit(token, focused) {
+    function submit(token, focused, continueOutput = false) {
         if (failed || !context || token !== context || (speechEnabled === false && !brailleAvailable)) return false;
         if (pending.length + inFlight >= MAX_PENDING) {
             counters.dropped++;
             return false;
         }
-        pending.push({ kind: 'title', ...focused, sequence: ++nextSequence });
+        pending.push({ kind: 'title', ...focused, continueOutput, sequence: ++nextSequence });
         readyOutput();
         return true;
     }
@@ -127,6 +130,7 @@ function createRenderer(host, waitForSpeechPreference = false) {
     function setSpeechEnabled(enabled, maySilence) {
         if (enabled === speechEnabled) return;
         const previous = speechEnabled;
+        if (!enabled) arrival = null;
         speechEnabled = enabled;
         if (previous === null) {
             if (!isPresented?.()) pending.length = 0;
@@ -143,22 +147,49 @@ function createRenderer(host, waitForSpeechPreference = false) {
         catch { workerFailed(); }
     }
 
+    function open(focused, ready = host.titleStillReady, fieldFollowup = false) {
+        if (nextContext >= 0x7ffffffe) return 0;
+        const append = arrival && host.now() < arrival.expires &&
+            (fieldFollowup || FIELD_FOLLOWUP.has(focused.kind));
+        // A presented field notice can keep the arrival in the same FIFO.
+        // After a native boundary, open a fresh gate and append at the
+        // provider to any arrival already admitted before the boundary.
+        if (!append || !arrival.ready?.()) retireOutput();
+        if (!append) arrival = null;
+        const token = context = ++nextContext;
+        isPresented = ready;
+        submit(token, append ? { ...focused, append: true } : focused, !!append);
+        return token;
+    }
+
+    function close(token = context) {
+        if (!context || token !== context) return;
+        context = 0;
+        isPresented = null;
+        if (gate?.domain !== 'silence') retireOutput();
+    }
+
     const notifications = {
-        open(focused, ready = host.titleStillReady) {
-            if (nextContext >= 0x7ffffffe) return 0;
-            retireOutput();
+        open,
+        close,
+        focus: submit,
+        arrive(focused, ready, walking, detail) {
+            if (nextContext >= 0x7ffffffe || !ready()) return 0;
+            const followsWalking = !!walking && context === walking;
+            if (!followsWalking) retireOutput();
             const token = context = ++nextContext;
             isPresented = ready;
-            submit(token, focused);
+            arrival = { token, ready, expires: host.now() + ARRIVAL_FOLLOWUP_MS };
+            submit(token, { ...focused, append: followsWalking });
+            if (detail) submit(token, { ...detail, append: true });
             return token;
         },
-        close(token = context) {
-            if (!context || token !== context) return;
-            context = 0;
-            isPresented = null;
-            if (gate?.domain !== 'silence') retireOutput();
-        },
-        focus: submit
+        endArrival(token, keepOrder) {
+            if (arrival?.token !== token) return;
+            if (arrival.ready) close();
+            if (keepOrder) arrival.ready = null;
+            else arrival = null;
+        }
     };
     return {
         notifications, counters, setSpeechEnabled,

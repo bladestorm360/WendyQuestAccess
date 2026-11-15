@@ -141,6 +141,7 @@ let mapVitalsStep = 0;
 let diagramViewport;
 let browseStarted = 0;
 let autowalkStep = 0;
+let walkPresented = {};
 let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
@@ -894,6 +895,7 @@ const interval = setInterval(() => {
                 executeMove(direction) {
                     if (direction !== 6 || this._x !== 0) throw Error('Unexpected native movement dispatch');
                     this._realX = this._x = 1;
+                    this._direction = 6;
                     this._movementSuccess = true;
                 }
             });
@@ -906,9 +908,22 @@ const interval = setInterval(() => {
             if ($gamePlayer._x !== 1 || !scene._wqaAutowalkActive) throw Error('The directions key did not follow its course');
             $gamePlayer.moveByInput();
             if (scene._wqaAutowalkActive) throw Error('The route did not retire at arrival');
+            const icon = $gamePlayer._interactIcon = { parent: scene, visible: true, worldVisible: true,
+                worldAlpha: 1, scale: { x: 1, y: 1 }, x: 20, y: 40 };
+            icon.children = [{ parent: icon, worldVisible: true, worldAlpha: 1, texture: { valid: true } }];
+            $gamePlayer._iconState = 1;
+            WendyQuestAccessInteractionUpdate(scene, icon);
+            scene.fixtureWalkSave = battleText(scene, 'GAME SAVED');
+            WendyQuestAccessAutosaveNotice(scene, scene.fixtureWalkSave);
             Graphics.app.renderer.emit('postrender');
+            walkPresented = { arrival: scene._wqaArrivalSpeech, interact: !!scene._wqaInteractionActive,
+                autosave: !!scene._wqaAutosaveNotice, slot: scene._wqaFieldReady, mode: $gamePlayer._vehicleType };
             autowalkStep++;
-        } else if (autowalkStep === 3 && require('fs').existsSync(receipt + '.autowalk')) {
+        } else if (autowalkStep === 3 && require('fs').existsSync(receipt + '.autowalk-save')) {
+            WendyQuestAccessAutosaveNoticeEnd(scene, scene.fixtureWalkSave);
+            $gamePlayer._interactIcon = null;
+            $gamePlayer._iconState = 0;
+            WendyQuestAccessInteractionUpdate(scene, null);
             tap('v', 'KeyV');
             choose('Navigation');
             choose('Speak autowalk path, off');
@@ -1328,8 +1343,9 @@ const interval = setInterval(() => {
             tap(String.fromCharCode(92), 'Backslash');
             Graphics.app.renderer.emit('postrender');
             endingStep = 69;
-        } else if (endingStep === 69 && fs.existsSync(receipt + '.cross-map-event-route')) {
-            $gamePlayer.moveByInput();
+        } else if (endingStep === 69) {
+            if (SceneManager._scene._wqaAutowalkActive) $gamePlayer.moveByInput();
+            if (!fs.existsSync(receipt + '.cross-map-event-route')) return;
             if ($gamePlayer._x !== 0 || $gameMap._events[1]._starting)
                 throw Error('Generic event directions crossed the native boundary');
             installTransferPage(3, 2);
@@ -1346,15 +1362,21 @@ const interval = setInterval(() => {
             tap(String.fromCharCode(92), 'Backslash');
             Graphics.app.renderer.emit('postrender');
             fs.writeFileSync(receipt + '.cross-map-submission-ms', String(performance.now() - crossMapStarted));
-        } else if (endingStep === 25 && fs.existsSync(receipt + (crossMapLeg === 0 ? '.cross-map-next' : '.cross-map-entrance'))) {
+        } else if (endingStep === 25) {
+            const approaching = SceneManager._scene;
+            if (approaching._wqaAutowalkActive && !approaching._wqaArrivalSpeech) {
+                if (!approaching._wqaBookmarkEntrance || !approaching._wqaBeaconActive)
+                    throw Error('The entrance did not arm native movement and handback owners');
+                $gamePlayer.moveByInput();
+                if ($gamePlayer._x !== 0 || approaching._wqaAutowalkActive)
+                    throw Error('Autowalk crossed the transfer boundary');
+            }
+            if (!fs.existsSync(receipt + (crossMapLeg === 0 ? '.cross-map-next' : '.cross-map-entrance'))) return;
             if (crossMapLeg === 0)
                 fs.writeFileSync(receipt + '.cross-map-receipt-ms', String(performance.now() - crossMapStarted));
             const source = SceneManager._scene;
-            if (!source._wqaBookmarkEntrance || !source._wqaAutowalkActive || !source._wqaBeaconActive)
-                throw Error('The entrance did not arm native movement and handback owners');
-            $gamePlayer.moveByInput();
-            if ($gamePlayer._x !== 0 || source._wqaAutowalkActive)
-                throw Error('Autowalk crossed the transfer boundary');
+            if (!source._wqaBookmarkEntrance || !source._wqaArrivalSpeech || !source._wqaBeaconActive)
+                throw Error('The entrance did not reach its verified manual handoff');
             $gamePlayer._realX = $gamePlayer._x = 1;
             $gameMap._events[1]._starting = true;
             if (!$gameMap.setupStartingMapEvent() || !Graphics._wqaBookmarkTransferPending)
@@ -1393,7 +1415,9 @@ const interval = setInterval(() => {
             tap(String.fromCharCode(92), 'Backslash');
             Graphics.app.renderer.emit('postrender');
             endingStep = ++crossMapLeg === 1 ? 25 : 27;
-        } else if (endingStep === 27 && fs.existsSync(receipt + '.cross-map-arrived')) {
+        } else if (endingStep === 27) {
+            if (SceneManager._scene._wqaAutowalkActive) $gamePlayer.moveByInput();
+            if (!fs.existsSync(receipt + '.cross-map-arrived')) return;
             fs.unlinkSync(receipt + '.cross-map-stage');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             fs.writeFileSync(receipt + '.battle-stage', '');
@@ -1958,7 +1982,8 @@ setTimeout(() => {
         crossMapLeg, crossMapRequested: crossMapStarted > 0, lastTransferMessage: fs.existsSync(last) ? fs.readFileSync(last, 'utf8') : '',
         narrationState: narrationAudio && { paused: narrationAudio.paused, ready: narrationAudio.readyState,
             time: narrationAudio.currentTime, error: narrationAudio.error?.message },
-        status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
+        autowalkStep, walkPresented, walkReceipts: fs.readdirSync(require('path').dirname(receipt)).filter(name =>
+            name.startsWith('receipt.json.autowalk')), status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
     nw.App.quit();
 }, 18000);
 ''', encoding='utf8')
@@ -2115,7 +2140,8 @@ parentPort.on('message', message => {
                 fs.writeFileSync(receipt + '.cross-map-next', speech);
             if (message.kind === 'routeDirections' && message.name === 'Entrance for Return marker')
                 fs.writeFileSync(receipt + '.cross-map-entrance', speech);
-            if (message.kind === 'routeDirections' && message.name === 'Return marker')
+            if (message.kind === 'fieldStatus' && message.name === 'Arrived.' &&
+                    fs.existsSync(receipt + '.cross-map-entrance'))
                 fs.writeFileSync(receipt + '.cross-map-arrived', speech);
             parentPort.postMessage('ack');
             return;
@@ -2125,7 +2151,7 @@ parentPort.on('message', message => {
                 fs.writeFileSync(receipt + '.bookmark-browse', speech);
             if (message.kind === 'routeDirections' && message.name === 'Return marker')
                 fs.writeFileSync(receipt + '.bookmark-route', speech);
-            if (message.kind === 'routeDirections' && message.name === 'At Return marker')
+            if (message.kind === 'fieldStatus' && message.name === 'Arrived.')
                 fs.writeFileSync(receipt + '.bookmark-arrival', speech);
             if (message.kind === 'fieldTarget' && message.name.includes('Synthetic quest anchor'))
                 fs.writeFileSync(receipt + '.bookmark-entity', speech);
@@ -2164,9 +2190,25 @@ parentPort.on('message', message => {
         parentPort.postMessage('ack');
         return;
     }
-    if (message.kind === 'routeDirections' && message.name === 'At Synthetic wall') {
-        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
-            fs.writeFileSync(receipt + '.autowalk', formatSpeech(message));
+    if (message.kind === 'fieldStatus' && ['Walking.', 'Arrived.'].includes(message.name)) {
+        const suffix = message.name === 'Walking.' ? '.autowalk-start' : '.autowalk';
+        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch) {
+            const file = receipt + suffix;
+            if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify({
+                speech: formatSpeech(message), epoch: message.epoch, sequence: message.sequence, append: !!message.append
+            }));
+        }
+        parentPort.postMessage('ack');
+        return;
+    }
+    if (fs.existsSync(receipt + '.autowalk') && !fs.existsSync(receipt + '.autowalk-save') &&
+            (message.kind === 'interactionPrompt' || message.kind === 'mapBanner')) {
+        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch) {
+            const suffix = message.kind === 'interactionPrompt' ? '.autowalk-interact' : '.autowalk-save';
+            fs.writeFileSync(receipt + suffix, JSON.stringify({
+                speech: formatSpeech(message), epoch: message.epoch, sequence: message.sequence, append: !!message.append
+            }));
+        }
         parentPort.postMessage('ack');
         return;
     }
@@ -2340,15 +2382,15 @@ def main():
             raise RuntimeError(f'NW exited {result} without a receipt: {errors!r}')
         data = json.loads(receipt.read_text(encoding='utf8'))
         records = data.get('records', [])
-        if result or data.get('error') or len(records) != 20 or not all(r.get('sameEpoch') for r in records):
+        if result or data.get('error') or len(records) != 19 or not all(r.get('sameEpoch') for r in records):
             raise RuntimeError(f'NW fixture did not deliver the expected packet: {data}')
-        title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, beacon_autowalk, cave, timed, page, choice, repeat, dialogue_mode, pad_repeat, number = records
+        title, returned_title, title_mode, controller_title, slot, banner, first, second, third, route, pad_route, cave, timed, page, choice, repeat, dialogue_mode, pad_repeat, number = records
         if any(item['name'] != title['name'] for item in (returned_title, controller_title)) or \
                 len({title['epoch'], returned_title['epoch'], controller_title['epoch']}) != 3:
             raise RuntimeError(f'NW fixture did not restore the title focus: {data}')
         if title['kind'] != 'title' or title.get('name') != 'Synthetic title command' or slot['kind'] != 'saveSlot' or \
                 slot.get('slot') != 2 or not slot.get('empty') or banner['kind'] != 'mapBanner' or \
-                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:14]}) != 13:
+                banner.get('name') != 'Synthetic map banner' or len({record['epoch'] for record in records[:13]}) != 12:
             raise RuntimeError(f'NW fixture did not deliver distinct presentation epochs: {data}')
         if title['speech'] != 'WendyQuest. Legend of the Four Corner Stones. Start. Synthetic title command' or \
                 receipt.with_suffix('.json.interaction-prompt').read_text(encoding='utf8') != 'Interact':
@@ -2357,14 +2399,18 @@ def main():
                 any(item['kind'] != 'fieldTarget' for item in (first, second, third)):
             raise RuntimeError(f'NW field selection or layout priority failed: {data}')
         if route['kind'] != 'routeDirections' or route['speech'] != '1 east. face east.' or \
-                pad_route['kind'] != 'routeDirections' or pad_route['speech'] != 'Synthetic wall. 1 east. face east.' or \
-                beacon_autowalk['kind'] != 'routeDirections' or beacon_autowalk['speech'] != '1 east. face east.':
+                pad_route['kind'] != 'routeDirections' or pad_route['speech'] != 'Synthetic wall. 1 east. face east.':
             raise RuntimeError(f'NW field did not publish a route through the packaged worker: {data}')
         submit_ms = float(receipt.with_suffix('.json.route-submit-ms').read_text(encoding='utf8'))
         browse_submit_ms = float(receipt.with_suffix('.json.browse-submit-ms').read_text(encoding='utf8'))
         browse_receipt_ms = float(receipt.with_suffix('.json.browse-receipt-ms').read_text(encoding='utf8'))
-        if receipt.with_suffix('.json.autowalk').read_text(encoding='utf8') != 'At Synthetic wall. face east.':
-            raise RuntimeError('NW autowalk did not announce its verified arrival')
+        walk = [json.loads(receipt.with_suffix('.json' + suffix).read_text(encoding='utf8')) for suffix in
+                ('.autowalk-start', '.autowalk', '.autowalk-interact', '.autowalk-save')]
+        if [item['speech'] for item in walk] != ['Walking.', 'Arrived.', 'Interact', 'GAME SAVED'] or \
+                [item['append'] for item in walk] != [False, True, True, True] or \
+                len({item['epoch'] for item in walk}) != 1 or \
+                any(later['sequence'] != first['sequence'] + 1 for first, later in zip(walk, walk[1:])):
+            raise RuntimeError(f'NW autowalk did not queue arrival, interaction and autosave in order: {walk}')
         if receipt.with_suffix('.json.autowalk-path').read_text(encoding='utf8') != '1 east. face east.' or \
                 receipt.with_suffix('.json.autowalk-stop').read_text(encoding='utf8') != 'Autowalk stopped.':
             raise RuntimeError('NW autowalk narration or explicit stop failed')
@@ -2409,14 +2455,14 @@ def main():
             'quest-nav-unavailable': 'Selected destination is unavailable',
             'bookmark-route': '1 north.',
             'bookmark-browse': 'Bookmarks, Return marker, 1 north',
-            'bookmark-arrival': 'At Return marker. you are here.',
+            'bookmark-arrival': 'Arrived.',
             'bookmark-entity': 'Objects, Synthetic quest anchor, 2 east',
-            'cross-map-entrance': '1 east, take exit to Starting shore.',
+            'cross-map-entrance': 'Move east to take exit to Starting shore.',
             'cross-map-event': 'Events, Scene trigger, 1 east',
             'cross-map-event-route': 'Move east to activate.',
             'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
-            'cross-map-next': '1 east, take exit to Connecting shore.',
-            'cross-map-arrived': 'You are here.',
+            'cross-map-next': 'Move east to take exit to Connecting shore.',
+            'cross-map-arrived': 'Arrived.',
             'battle-formation': 'Enemy formation. 1 Synthetic archer.',
             'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',
             'battle-companion-focus': 'Synthetic companion, Battle commands, Synthetic guard, 1 of 1',
@@ -2502,7 +2548,7 @@ def main():
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic cold browse submission {browse_submit_ms:.1f} ms, speech receipt '
               f'{browse_receipt_ms:.1f} ms with 40 ms polling, warm route submission {submit_ms:.1f} ms.')
-        print('Verified native autowalk dispatch, both narration settings, spoken arrival and explicit cancellation.')
+        print('Verified native autowalk dispatch, both narration settings, Walking and Arrived, ordered interaction and save speech, and explicit cancellation.')
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified Auto language detection and fallback, manual persistence, saved mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')

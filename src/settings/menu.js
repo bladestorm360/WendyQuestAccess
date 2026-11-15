@@ -253,6 +253,7 @@ function createSettingsMenu(root, host) {
                     '. Read the visible quest tracker ' + gestureName(keys.details) + '.',
                 'All combines destinations and bookmarks. Use ' + binding('filterToggle') +
                     ' to switch between all active destinations and reachable destinations only.',
+                'Turn on Autowalk under Navigation to walk with the Directions control. Hear Walking, then Arrived at the approach. Take the final interaction or exit step yourself.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
                 'Turn on Spoiler mode under Navigation to find marked optional secrets before discovering them in the game.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',

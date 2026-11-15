@@ -151,7 +151,8 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
-                 b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaSoundscapeActive||'
+                 b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaArrivalSpeech||'
+                 b'SceneManager._scene?._wqaSoundscapeActive||'
                  b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance||'
                  b'SceneManager._scene?._wqaBookmarkLanding)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
@@ -703,7 +704,7 @@ def map_notification(original):
             globalThis.WendyQuestAccessStepNavigationReady?.(this);
         const wqaIcon = $gamePlayer._iconState === 1 && $gamePlayer._interactIcon?.visible ? $gamePlayer._interactIcon : null;
         if ((this._wqaInteractionActive && this._wqaInteractionActive !== wqaIcon) ||
-            (!this._wqaInteractionActive && !this._wqaInteractionDeferred && wqaIcon && wqaIcon !== this._wqaInteractionSeen &&
+            (!this._wqaInteractionActive && !this._wqaInteractionDeferred && !this._wqaAutowalkActive && wqaIcon && wqaIcon !== this._wqaInteractionSeen &&
             wqaIcon.scale.x > 0 && wqaIcon.children[0]?.texture?.valid))
             globalThis.WendyQuestAccessInteractionUpdate?.(this, wqaIcon);
         if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaBookmarkTransferPending) &&

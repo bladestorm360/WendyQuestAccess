@@ -108,13 +108,23 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     let inFlight = null;
     let sequence = 0;
     let speech = 0;
+    let arrivalScene = null;
     let renderOwner = null;
     let control = null;
     let iceRoute = null;
     const preferences = host.navigationPreferences;
-    const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed) => {
+    const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed, arrived) => {
         if (failed) host.beacon?.stop(scene);
-        if (record && scene === host.manager._scene) command('navigationReport', record);
+        if (arrived) {
+            const previousSpeech = speech;
+            speech = 0;
+            retire(scene);
+            // The native move-by-input hook has verified the settled tile.
+            // Admit arrival before this frame's automatic render callbacks.
+            scene._wqaArrivalSpeech = notifications.arrive({ kind: 'fieldStatus', name: 'Arrived.' },
+                () => ready(scene, true), previousSpeech, record);
+            if (scene._wqaArrivalSpeech) arrivalScene = scene;
+        } else if (record && scene === host.manager._scene) command('navigationReport', record);
         else retire(scene);
     });
 
@@ -230,19 +240,18 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             // The movement owner now watches native outcomes. Ordinary
             // position notifications must leave its path narration admitted.
             job.scene._wqaRouteActive = false;
-            if (preferences().speakAutowalkPath || job.beaconStarted && preferences().speakBeaconPath) {
+            if (result.distance > 0 && !(result.autowalkStop && result.distance === 1))
+                present(job, { kind: 'fieldStatus', name: 'Walking.' }, true);
+            if (speech && preferences().speakAutowalkPath) {
                 if (result.autowalkStop) {
                     const legs = record.legs.slice();
                     if (!record.more) {
                         const last = legs.pop();
                         if (last?.tiles > 1) legs.push({ ...last, tiles: last.tiles - 1 });
                     }
-                    present(job, { ...record, legs, more: result.autowalkMore, activate: result.autowalkStop }, true);
-                } else present(job, record, true);
-            } else if (job.beaconStarted) {
-                present(job, { ...record, beaconOnly: true }, true);
-            } else if (record.enemyBlocked) {
-                present(job, { kind: 'fieldStatus', name: 'Route blocked by an enemy.' }, true);
+                    notifications.focus(speech, { ...record, legs, more: result.autowalkMore, activate: result.autowalkStop,
+                        directionsOnly: true, append: true });
+                } else notifications.focus(speech, { ...record, directionsOnly: true, append: true });
             }
             return;
         }
@@ -972,7 +981,15 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         });
     }
 
+    function retireArrival(scene, keepOrder) {
+        if (!scene || arrivalScene !== scene) return;
+        notifications.endArrival(scene._wqaArrivalSpeech, keepOrder);
+        scene._wqaArrivalSpeech = 0;
+        arrivalScene = null;
+    }
+
     for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+        retireArrival(arrivalScene, false);
         transfers.clear();
         terrainJourney.clear();
         shoreJourney = null;
@@ -1043,6 +1060,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         }
         const changes = active?.scene === scene && !active.performed ? active.changes.slice() : [];
         if (BROWSE.has(action) && changes.length < 16) changes.push(action);
+        retireArrival(scene, false);
         if (owner) retire(owner.scene);
         browserOwner(scene);
         if (BROWSE.has(action) || puzzle) {
@@ -1171,7 +1189,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return active?.scene === scene && ready(scene, true, active.idle);
         },
         interactionReady(scene) {
-            return ready(scene) && !scene._wqaInteractionDeferred;
+            return ready(scene) && !scene._wqaInteractionDeferred && !autowalk.active(scene);
         },
         appendInteraction(scene, record) {
             const token = speech;
@@ -1220,11 +1238,13 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             }
         },
         controlLost(scene) {
+            retireArrival(scene, true);
             autowalk.stop(scene);
             retire(scene);
             if (control?.scene === scene) control = null;
         },
         leave(scene, mapEventId) {
+            retireArrival(scene, true);
             if (!(iceRoute?.scene === scene && iceRoute.started && iceRoute.block._eventId === mapEventId))
                 clearIceRoute(scene);
             transfers.leave(scene);

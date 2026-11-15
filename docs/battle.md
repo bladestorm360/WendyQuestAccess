@@ -96,6 +96,8 @@ The bounded installed-method fixture exercised the actual icon chooser and frame
 
 Enemy condition development cleanup removed 9656301 bytes of generated staging after recording the scan and hashes.
 
+The three Frydusa expressions and their snake-speaker portraits show five distinct heads. The battle and dialogue descriptions use that count, with their separate carton and facial details. [Frydusa artwork descriptions](../src/dialogue/character-art.js)
+
 ## Radial timing audio preparation
 
 Confirm to start timing. Confirm again for power, then for accuracy. The native tutorial teaches the sequence. The ReadMe and F8 Battle Help also give the instructions.

@@ -91,7 +91,7 @@ function createVehicleNotice(root, host, ready, notifications, append = () => fa
                 scene._wqaPresentation = true;
                 const record = { kind: 'fieldStatus', name: TRAVEL_SPEECH[mode] };
                 if (append(scene, record)) return leave(scene);
-                state.token = notifications.open(record, valid);
+                state.token = notifications.open(record, valid, true);
                 if (!state.token) leave(scene);
             });
         } };

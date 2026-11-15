@@ -2,12 +2,52 @@
 
 const assert = require('node:assert/strict');
 const { performance } = require('node:perf_hooks');
+const { EventEmitter } = require('node:events');
+const { createRenderer } = require('../src/runtime/renderer');
 const { createAutowalk } = require('../src/world/autowalk');
 const { captureWorld } = require('../src/world/snapshot');
 const { DIRECTIONS } = require('../src/world/geometry.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
+function verifyArrivalQueue() {
+    const word = new Int32Array(new SharedArrayBuffer(4));
+    const tasks = [];
+    const packets = [];
+    const provider = new EventEmitter();
+    provider.unref = () => {};
+    provider.postMessage = packet => packets.push(packet);
+    let now = 0;
+    const { notifications } = createRenderer({ makeWord: () => word, schedule: task => tasks.push(task),
+        now: () => now, createWorker: () => provider });
+    const ready = () => true;
+    const walking = notifications.open({ kind: 'fieldStatus', name: 'Walking.' }, ready);
+    const arrival = notifications.arrive({ kind: 'fieldStatus', name: 'Arrived.' }, ready, walking);
+    notifications.open({ kind: 'interactionPrompt' }, ready);
+    notifications.open({ kind: 'mapBanner', name: 'Game saved' }, ready);
+    tasks.shift()();
+    const epoch = Atomics.load(word, 0);
+    assert.deepEqual(packets.map(packet => [formatSpeech(packet), !!packet.append, packet.epoch]), [
+        ['Walking.', false, epoch], ['Arrived.', true, epoch], ['Interact', true, epoch], ['Game saved', true, epoch]
+    ]);
+    for (let count = 0; count < 4; count++) provider.emit('message', 'ack');
+    notifications.endArrival(arrival, true);
+    assert.equal(Atomics.load(word, 0), 0, 'native load invalidates the old transport epoch');
+    assert.equal(packets.at(-1).kind, 'cancel');
+    notifications.open({ kind: 'mapBanner', name: 'World map', entering: true }, ready);
+    assert.notEqual(packets.at(-1).epoch, epoch);
+    assert.equal(packets.at(-1).append, true, 'the transition can follow an already admitted arrival');
+    now = 2600;
+    notifications.open({ kind: 'mapBanner', name: 'Other map', entering: true }, ready);
+    assert(!packets.at(-1).append, 'unrelated later speech uses its original behavior');
+    const second = notifications.arrive({ kind: 'fieldStatus', name: 'Arrived.' }, ready);
+    notifications.endArrival(second, false);
+    notifications.open({ kind: 'interactionPrompt' }, ready);
+    assert(!packets.at(-1).append, 'focus loss clears arrival ordering');
+    console.log('Verified arrival-first interaction and save speech, native gate retirement, and appended map entry.');
+}
+
 async function verifyAutowalk(c, load, verifyWorker) {
+    verifyArrivalQueue();
     const { Input, $gameTemp, $gameMessage } = c;
     const scene = c.SceneManager._scene;
     scene._wqaFieldReady = true;
@@ -19,7 +59,7 @@ async function verifyAutowalk(c, load, verifyWorker) {
     const preferences = { autowalk: false, speakAutowalkPath: false };
     const reports = [];
     const ready = () => scene._wqaFieldReady && !c.$gamePlayer.isMoving() && !c.$gamePlayer._transferring;
-    const walk = createAutowalk(c, ready, () => preferences, (_scene, record, failed) => reports.push({ record, failed }));
+    const walk = createAutowalk(c, ready, () => preferences, (_scene, record, failed, arrived) => reports.push({ record, failed, arrived }));
     c.WendyQuestAccessAutowalkInput = walk.input;
     c.WendyQuestAccessFieldMove = walk.moved;
     c.WendyQuestAccessFieldEvent = current => { walk.stop(current); };
@@ -71,7 +111,8 @@ async function verifyAutowalk(c, load, verifyWorker) {
     arm();
     for (let count = 0; walk.active(scene) && count <= statue.result.distance; count++) tick(player);
     assert.deepEqual(position(player), [statue.result.arrival.x, statue.result.arrival.y]);
-    assert.match(formatSpeech(reports.at(-1).record), /At Statue/);
+    assert.equal(reports.at(-1).arrived, true);
+    assert(!reports.at(-1).record?.legs.length, 'arrival never repeats the route');
     assert(!walk.active(scene));
 
     player.setPosition(x, y);
@@ -130,6 +171,7 @@ async function verifyAutowalk(c, load, verifyWorker) {
     tick(origin.player);
     assert.deepEqual(position(origin.player), [9, 16]);
     assert(!origin.gameMap._events[4].isStarting());
+    assert.equal(reports.at(-1).arrived, true);
     assert.match(formatSpeech(reports.at(-1).record), /Move south to activate/);
     c.Input.dir4 = 2;
     tick(origin.player);
@@ -150,6 +192,7 @@ async function verifyAutowalk(c, load, verifyWorker) {
     for (let count = 0; walk.active(scene) && count <= dock.result.distance; count++) tick(sailing.player);
     assert.deepEqual(position(sailing.player), [43, 2]);
     assert.equal(sailing.player._vehicleType, 'ship');
+    assert.equal(reports.at(-1).arrived, true);
     assert.match(formatSpeech(reports.at(-1).record), /Move east to activate/);
 
     const flight = begin(113, 48, 6);
@@ -201,4 +244,5 @@ async function verifyAutowalk(c, load, verifyWorker) {
     console.log('Verified native walking, sailing and flight, manual and pointer priority, floor and collision stops, and transfer retirement.');
 }
 
+if (require.main === module) verifyArrivalQueue();
 module.exports = { verifyAutowalk };
