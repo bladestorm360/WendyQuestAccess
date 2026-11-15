@@ -41,9 +41,10 @@ function normalizeAudio(value) {
         footstepVolume: Number.isInteger(footstepVolume) && footstepVolume >= 0 && footstepVolume <= 100 ? footstepVolume : 50,
         beacon: value?.beacon === true,
         beaconVolume: Number.isInteger(beaconVolume) && beaconVolume >= 0 && beaconVolume <= 100 ? beaconVolume : 65,
-        caveTiming: value?.caveTiming === true,
+        // Unset timing preferences default on. A saved false remains off.
+        caveTiming: value?.caveTiming !== false,
         caveVolume: Number.isInteger(caveVolume) && caveVolume >= 0 && caveVolume <= 100 ? caveVolume : 65,
-        battleTiming: value?.battleTiming === true,
+        battleTiming: value?.battleTiming !== false,
         battleTimingVolume: Number.isInteger(battleVolume) && battleVolume >= 0 && battleVolume <= 100 ? battleVolume : 65,
         soundscape: normalizeSoundscape(value?.soundscape),
         narration: normalizeNarration(value?.narration) };
