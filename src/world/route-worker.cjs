@@ -16,6 +16,7 @@ const admission = new Int32Array(workerData.admission);
 const directory = workerData.geometryDirectory;
 let manifest = null;
 let walking;
+let breakfast;
 let cachedId = 0;
 let cachedTileset;
 let cachedGeometry = null;
@@ -85,42 +86,63 @@ function walkingCatalog() {
     return walking;
 }
 
+function breakfastCatalog(open, cancelled) {
+    if (!breakfast && typeof manifest.breakfast === 'string') {
+        const bytes = readBounded('breakfast.json', MAX_CATALOG_BYTES, cancelled);
+        if (!bytes || cancelled()) return null;
+        if (createHash('sha256').update(bytes).digest('hex') !== manifest.breakfast)
+            throw Error('Regional walking catalog changed');
+        const stages = JSON.parse(bytes);
+        if (!Array.isArray(stages) || stages.length !== 2) throw Error('Invalid regional walking catalog');
+        breakfast = stages.map(stage => readCatalog(stage, manifest.maps));
+    }
+    return breakfast?.[open ? 1 : 0];
+}
+
 function transferRoute(base, map, live, request, transfer, cancelled) {
-    const catalog = walkingCatalog();
+    const regional = typeof transfer.breakfast === 'boolean';
+    const catalog = regional ? breakfastCatalog(transfer.breakfast, cancelled) : walkingCatalog();
     const entrances = rankEntrances(catalog, map, transfer, manifest.maps, cancelled, live.mode === 'walk');
     const groundEntrances = transfer.ground && rankEntrances(catalog, map,
         { ...transfer, candidates: transfer.ground }, manifest.maps, cancelled, false);
     const discoveries = Array.isArray(transfer.discoveries) && transfer.discoveries.length <= 24
         ? transfer.discoveries : undefined;
     const result = solveRoute(base, live, { ...request, entrances, groundEntrances, discoveries }, cancelled);
-    if (map !== 87 || !['unreachable', 'unavailable'].includes(result.status) ||
-        !entrances.some(edge => edge.event === 73 && edge.approach === 2)) return result;
+    if (regional && live.mode === 'walk' && ['ready', 'unreachable', 'unavailable'].includes(result.status)) {
+        // An immediately reachable return to the last shore can be a worse
+        // route than the next verified encounter or floor handoff ahead.
+        const rank = entrances.find(edge => edge.event === result.entrance && edge.approach === result.approach)?.rank ?? Infinity;
+        return regionalHandoff(base, live, request, transfer, entrances.filter(edge => edge.rank < rank), cancelled) || result;
+    }
+    if (!['unreachable', 'unavailable'].includes(result.status)) return result;
+    if (map !== 87 || !entrances.some(edge => edge.event === 73 && edge.approach === 2)) return result;
     const setup = solveRoute(base, live, { ...request, event: 73, bumpDirections: 1, handoffs: [102] }, cancelled);
     if (setup.status === 'interrupted' && setup.boundaryEvent === 102)
         return { ...setup, entrance: 73, approach: 2 };
     return setup.status === 'cancelled' ? setup : result;
 }
 
-function breakfastAccess(base, map, live, request, transfer, cancelled) {
-    const exact = transferRoute(base, map, live, request, transfer, cancelled);
-    if (!['unreachable', 'unavailable'].includes(exact.status)) return exact;
-    // Some native landings require an additional overworld connection.
-    // Search all eligible local returns in one pass, then trim the selected
-    // floor trigger back to its last safe tile.
-    const candidates = transfer.candidates.filter(edge => edge.map === 113 || edge.map === 87);
-    const entrances = candidates.map(({ event, approach }) => ({ event, rank: 1, approach }));
-    const fallback = solveRoute(base, live, { x: request.x, y: request.y, field: true, entrances }, cancelled);
-    if (fallback.status !== 'ready') return fallback.status === 'cancelled' ? fallback : exact;
-    const { entrance, approach } = fallback;
-    const event = live.events.find(item => item.id === entrance);
-    if (event && !event.normal && event.trigger === 1 && !fallback.reenter) {
-        const prefix = solveRoute(base, live, { x: request.x, y: request.y, event: entrance,
-            field: true, stopBeforeEvent: true, entryDirection: approach }, cancelled);
-        if (prefix.status === 'cancelled') return prefix;
-        if (prefix.status === 'interrupted' && prefix.boundaryEvent === entrance)
-            return { ...prefix, entrance, approach, onwardUnavailable: true };
+function regionalHandoff(base, live, request, transfer, entrances, cancelled) {
+    let best;
+    let rank = Infinity;
+    const handoffs = transfer.handoffs || [];
+    for (const { event, approach, rank: nextRank } of entrances) {
+        if (cancelled()) return { status: 'cancelled' };
+        if (nextRank > rank) continue;
+        const target = live.events.find(item => item.id === event && item.action && !item.erased);
+        if (!target) continue;
+        const bump = target.normal && target.trigger === 1;
+        const route = solveRoute(base, live, { x: request.x, y: request.y, field: true, event, handoffs,
+            entryDirection: bump ? undefined : approach,
+            bumpDirections: bump ? approach ? 1 << DIRECTIONS.indexOf(approach) : 15 : undefined }, cancelled);
+        if (route.status === 'cancelled') return route;
+        if (route.status !== 'enemyBlocked' && (route.status !== 'interrupted' || !handoffs.includes(route.boundaryEvent))) continue;
+        if (!best || nextRank < rank || route.distance < best.distance) {
+            best = { ...route, entrance: event, approach, needsEncounter: route.status === 'enemyBlocked' };
+            rank = nextRank;
+        }
     }
-    return { ...fallback, onwardUnavailable: true };
+    return best;
 }
 
 // Each request carries a copied world state. Keep one current geometry, with
@@ -148,7 +170,7 @@ parentPort.on('message', message => {
             }
             if (request.transfer === undefined && (['unreachable', 'approachBlocked'].includes(result.status) ||
                 map === 97 && request.event === 18 && result.status === 'unavailable')) {
-                const access = request.terrainTransfer && (() => breakfastAccess(base, map, live, request,
+                const access = request.terrainTransfer && (() => transferRoute(base, map, live, request,
                     request.terrainTransfer, cancelled));
                 result = routeThroughTerrain(base, live, request, manifest.maps[map].controls, cancelled, access) || result;
             }

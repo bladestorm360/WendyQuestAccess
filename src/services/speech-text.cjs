@@ -169,6 +169,9 @@ function formatSpeech(message) {
             const facing = HEADINGS[message.facing];
             const boundary = HEADINGS[message.boundary];
             const activate = HEADINGS[message.activate];
+            const exit = label({ name: message.exit });
+            const exitName = /^exit(?: |$)/i.test(exit) ? exit : exit && 'exit to ' + exit;
+            const takeExit = exitName && 'take ' + exitName;
             const prerequisite = label({ name: message.prerequisite });
             if (prerequisite) {
                 parts.push('Route to ' + prerequisite);
@@ -185,21 +188,33 @@ function formatSpeech(message) {
             else if (more) parts.push(message.enemyBlocked === true ? 'Route ends at an enemy. More directions available' :
                 'More directions available');
             else if (message.enemyBlocked === true && boundary) parts.push('Blocked by an enemy one tile ' + boundary);
-            else if (boundary && label({ name: message.exit })) {
-                const exit = label({ name: message.exit });
-                if (message.useExit) parts.push('Move ' + boundary + ' to take the ' + exit);
-                else parts.push(exit + ' one tile ' + boundary + '. No verified onward route through this exit');
+            else if (takeExit && (message.useExit || message.takeExit)) {
+                const move = boundary || activate || (message.bump && facing);
+                if (message.reenter) parts.push(`${message.sailing ? 'Sail' : 'Walk'} off this tile and back to ${takeExit}`);
+                else if (move && beaconOnly) parts.push(`Move ${move} to ${takeExit}`);
+                else if (message.enter && !move)
+                    parts.push((facing ? 'Face ' + facing + ' and press' : 'Press') + ' the action button to ' + takeExit);
+                else {
+                    const steps = [...parts];
+                    if (move) {
+                        const last = message.legs[message.legs.length - 1];
+                        if (last && HEADINGS[last.direction] === move) {
+                            directions[directions.length - 1] = `${last.tiles + 1} ${move}`;
+                            steps[0] = directions.join(', ');
+                        } else steps.push('1 ' + move);
+                    }
+                    steps.push(takeExit);
+                    parts.splice(0, parts.length, steps.join(', '));
+                }
             }
-            else if (activate) parts.push(`Move ${activate} to activate`);
+            else if (boundary && exit) parts.push(exitName + ' one tile ' + boundary + '. No verified onward route through this exit');
+            else if (activate) {
+                const next = message.manualHandoff && label({ name: message.boundaryName });
+                parts.push(next ? `Move ${activate} to reach ${next}` : `Move ${activate} to activate`);
+            }
             else if (boundary) {
                 parts.push(`${label({ name: message.boundaryName }) || 'Floor event'} one tile ${boundary}`);
                 if (message.manualHandoff === true) parts.push(`Move ${boundary} to continue, then request directions again`);
-            }
-            else if (message.takeExit && label({ name: message.exit }) && !message.reenter) {
-                const exit = label({ name: message.exit });
-                const action = message.bump && facing ? 'Move ' + facing :
-                    message.enter ? (facing ? 'Face ' + facing + ' and press' : 'Press') + ' the action button' : 'Continue';
-                parts.push(action + ' to take the ' + exit);
             }
             else if (message.reenter === true)
                 parts.push(message.sailing ? 'Sail off this tile and back to activate' : 'Walk off this tile and back to activate');
@@ -220,7 +235,6 @@ function formatSpeech(message) {
             const afterEnemy = message.enemyBlocked === true && label({ name: message.afterEnemy });
             if (afterEnemy)
                 parts.push('Once clear, approach ' + afterEnemy + ' and press the action button');
-            if (message.onwardUnavailable) parts.push('Onward directions are unavailable from that exit');
             const guide = label({ name: message.guide });
             if (beaconOnly && !parts.length && !guide) {
                 text = message.directionsOnly === true ? '' : name;

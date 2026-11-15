@@ -37,4 +37,6 @@ const GATE_SWITCHES = Object.freeze({
     97: 103, 105: 119, 106: 115, 204: 145
 });
 
-module.exports = { CONTROLS, TERRAIN_PAGES, GATE_SWITCHES };
+const BREAKFAST_MAPS = [66, 77, 78, 79, 80, 81, 84, 85, 86, 87, 113, 191];
+
+module.exports = { CONTROLS, TERRAIN_PAGES, GATE_SWITCHES, BREAKFAST_MAPS };

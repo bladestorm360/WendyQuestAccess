@@ -1,5 +1,6 @@
 'use strict';
 
+const { BREAKFAST_MAPS } = require('./terrain-control-labels.cjs');
 const { houseStair, houseBranches } = require('./transfer-events.cjs');
 
 // Each locator describes the active page's native destination. The worker
@@ -12,12 +13,21 @@ const EXITS = {
     36: { 5: ['Exit toward Frosty Peak', 113], 24: ['Exit toward Frosty Peak', 113],
         25: ['Exit toward Frosty Peak', 113], 26: ['Exit toward Frosty Peak', 113] },
     37: { 3: ['Return to Frosty Peak', 27] },
+    66: { 1: ['Caffeine Caverns', 87] },
+    78: { 1: ['Caffeine Caverns', 87] },
+    79: { 1: ['Caffeine Caverns', 87] },
+    80: { 1: ['Caffeine Caverns', 87] },
+    81: { 1: ['Caffeine Caverns, west entrance', 87], 2: ['Caffeine Caverns, east entrance', 87] },
+    84: { 1: ['Caffeine Caverns', 87] },
+    85: { 1: ['Caffeine Caverns, south entrance', 87], 2: ['Caffeine Caverns, west entrance', 87],
+        3: ['Caffeine Caverns, east entrance', 87] },
     96: { 2: ['Burgenburg', 94] },
     97: { 18: ['Mech Office', 103] },
     191: { 1: ['Caffeine Caverns, east cave entrance', 87], 2: ['Caffeine Caverns, west cave entrance', 87] },
     204: { 3: ['Return to Frosty Peak', 27] },
     93: { 1: ['Elevator entrance', 98], 8: ['Elevator entrance', 98], 24: ['Elevator entrance', 98],
         25: ['Elevator entrance', 98], 26: ['Elevator entrance', 98] },
+    20: { 1: ['Salt Caverns', 19] },
     23: { 1: ['Return to Russetwood', 12], 2: ['Second floor', 24] },
     24: { 1: ['First floor', 23] },
     54: { 1: ['Return to Russetwood', 12] },
@@ -127,9 +137,16 @@ const BEACH_HANDOFF_NAMES = Object.freeze({
 });
 const BEACH_HANDOFFS = Object.freeze(Object.keys(BEACH_HANDOFF_NAMES).map(Number));
 
+const BREAKFAST_HANDOFFS = Object.freeze({
+    85: { 44: 'Beach conversation', 49: 'Beach conversation' },
+    86: { 17: 'the island encounter', 21: 'Autosave checkpoint', 33: 'Island warning', 36: 'Island approach' },
+    87: { 102: 'Cave exit approach' },
+    113: { 179: 'Encounter trigger' }
+});
+
 function localHandoffName(map, event) {
     if (map === 13) return BEACH_HANDOFF_NAMES[event];
-    if (map === 87 && event === 102) return 'Cave exit approach';
+    if (BREAKFAST_HANDOFFS[map]?.[event]) return BREAKFAST_HANDOFFS[map][event];
     if (map === 55 && event === 8) return 'Side passage warning';
     if (map === 27 && [27, 32].includes(event)) return 'Peak approach';
     if (map === 15 && event >= 46 && event <= 49) return 'Scene trigger';
@@ -254,6 +271,13 @@ function localDestination(root, event, page) {
         return { name: map === 103 ? 'Encounter trigger' : 'Scene trigger', category: 'events',
             eventAction: floorAction ? 'step' : trigger === 1 ? 'bump' : undefined };
     if (floorAction) {
+        if (map === 17 && id === 7 && to(19)) return { name: 'Salt Caverns', category: 'exits', eventAction: 'step' };
+        if (map !== 113 && BREAKFAST_MAPS.includes(map) && to(113)) {
+            const name = map === 85 ? id >= 37 && id <= 41 ? 'World map, west exit' : 'World map, east exit' : 'World map';
+            return { name, category: 'exits', eventAction: 'step' };
+        }
+        if (map === 86 && id === 17 && list.some(command => command.code === 301 && command.indent === 0))
+            return { name: 'Island encounter', category: 'events', eventAction: 'step' };
         if (map === 94 && (id === 12 || id === 27) && to(93))
             return { name: 'Road to Mech Office', category: 'exits', eventAction: 'step' };
         if (map === 193 && id === 3 && event._pageIndex === 0 &&
@@ -338,4 +362,4 @@ function localDestination(root, event, page) {
 }
 
 module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, concealedDestination,
-    chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit };
+    chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS };

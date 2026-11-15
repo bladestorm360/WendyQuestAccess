@@ -5,7 +5,8 @@ const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName } = require('./world-destinations');
-const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination } = require('./local-destinations');
+const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination, BREAKFAST_HANDOFFS } = require('./local-destinations');
+const { transferOptions } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { tileKey } = require('./geometry.cjs');
@@ -21,18 +22,23 @@ const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE }
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
 
-function routeBoundary(root, eventId, spoilers) {
+function routeBoundary(root, eventId, spoilers, edge) {
     const map = root.$gameMap;
     const event = map._events?.[eventId];
     const entry = root.$dataMap?.events?.[eventId];
     const page = entry?.pages?.[event?._pageIndex];
-    if (!page || event._erased) return {};
+    if (!page || event._erased || !spoilers && concealedDestination(map._mapId, event)) return {};
     const target = eventTarget(root, 'walk', event, entry, page, spoilers);
+    const name = target?.category === 'exits' ? target.name.replace(/^(?:return to|to) /i, '') : '';
+    if (name && name !== 'Exit' && name !== 'Map') return { exit: name };
+    const options = edge ? [edge] : transferOptions(map._mapId, entry, page, root.$dataCommonEvents);
+    const destination = options[0]?.map;
+    if (destination && options.every(option => option.map === destination)) {
+        const exit = destination === 113 ? 'the world map' : root.$dataMapInfos?.[destination]?.name;
+        if (exit && !/^Map\d+$/i.test(exit)) return { exit };
+    }
     if (target?.category === 'events') return { boundaryName: target.name };
-    if (target?.category !== 'exits') return {};
-    const name = map._mapId === 113 && eventId === 19 ? 'Chillcrest entrance' : target.name;
-    if (/^return to /i.test(name)) return { exit: 'exit to ' + name.slice(10) };
-    return { exit: /\b(?:exit|entrance|stairs|landing)\b/i.test(name) ? name : name + ' exit' };
+    return {};
 }
 
 function currentEnemy(root, result) {
@@ -196,6 +202,7 @@ function createField(root, host, notifications) {
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
             (!job.questExit || chillcrestQuestExit(root)) &&
+            (!job.breakfastObjective || root.$gameParty?.getNav?.() === job.breakfastObjective) &&
             (!job.enemyCurrent || job.enemyCurrent()) &&
             (!job.entrance || transfers.current(job.entrance)) &&
             (!job.groundEntrance || transfers.current(job.groundEntrance, 'walk')) &&
@@ -253,23 +260,25 @@ function createField(root, host, notifications) {
             return status(job, 'The exit changed. Request directions again.');
         if (gate === 97 && !edge) return status(job, BRIDGE_REASON + ' No verified route to an exit from here.');
         const event = edge?.event ?? result.event;
-        const exit = routeBoundary(root, event, preferences().spoilers === true).exit ||
-            (edge && root.$dataMapInfos?.[edge.map]?.name) || CONTROLS[job.map]?.[event] || 'exit';
+        const exit = routeBoundary(root, event, preferences().spoilers === true, edge).exit ||
+            CONTROLS[job.map]?.[event] || 'exit';
         const text = gate === 145 ? CRYSTAL_REASON : gate === 97 ? BRIDGE_REASON : gate === 'pull' ? PULL_REASON : job.guide;
-        if (gate && !job.journey && !result.onwardUnavailable)
-            terrainJourney.begin(gate, job.map, job.destination, edge?.map ?? (gate === 'pull' ? 57 : 27));
-        else if (edge && !result.onwardUnavailable) terrainJourney.advance(job.map, edge.map);
+        const blocked = result.needsEncounter === true;
+        if (blocked && !currentEnemy(root, result)) return status(job, 'The enemy moved. Request directions again.');
+        if (gate && !job.journey)
+            terrainJourney.begin(gate, job.map, job.destination, edge?.map ?? (gate === 'pull' ? 57 : 27), { x: job.x, y: job.y }, edge && { x: edge.x, y: edge.y });
+        else if (edge) terrainJourney.advance(job.map, edge.map, { x: edge.x, y: edge.y });
         job.entrance = edge;
         const handoff = result.boundaryEvent && result.boundaryEvent !== event &&
             localHandoffName(job.map, result.boundaryEvent);
         const bump = gate === 'pull' && !handoff || !!edge && edge.action && root.$gameMap._events[event]?._trigger === 1;
+        if (blocked) job.enemyCurrent = () => currentEnemy(root, result);
         startBeaconApproach(job, result, event);
         return presentRoute(job, { kind: 'routeDirections', name: job.label, guide: text,
             legs: result.legs, facing: result.arrival.facing, more: result.more === true,
-            exit: handoff ? undefined : exit, useExit: true, boundary: result.boundary,
-            boundaryName: handoff, manualHandoff: !!handoff,
-            bump, enter: edge?.action && !bump, reenter: result.reenter === true, takeExit: !!edge || bump,
-            onwardUnavailable: result.onwardUnavailable === true });
+            exit: handoff || blocked ? undefined : exit, useExit: true, boundary: result.boundary,
+            boundaryName: handoff, manualHandoff: !!handoff, enemyBlocked: blocked,
+            bump, enter: edge?.action && !bump, reenter: result.reenter === true, takeExit: !!edge || bump });
     }
 
     function startBeaconApproach(job, result, event) {
@@ -335,7 +344,8 @@ function createField(root, host, notifications) {
                 return select(job, snapshot);
             }
             if ((job.quest && !questDestinationCurrent(root, job.scene, job.quest)) ||
-                (job.questExit && !chillcrestQuestExit(root))) {
+                (job.questExit && !chillcrestQuestExit(root)) ||
+                (job.breakfastObjective && root.$gameParty?.getNav?.() !== job.breakfastObjective)) {
                 job.quest = null;
                 job.scene._wqaQuestNavigation = false;
                 return status(job, 'Quest destination changed. Request directions again.');
@@ -362,12 +372,13 @@ function createField(root, host, notifications) {
                     job.timing = host.caveTiming.capture(job.scene, job.timing.motion, target);
                 selectGuideTarget(target);
             }
-            if (result?.status === 'terrainExit' || job.terrainOnward && result?.entrance && ['ready', 'interrupted'].includes(result.status))
+            if (result?.status === 'terrainExit' || job.terrainOnward && result?.entrance &&
+                ['ready', 'interrupted', 'enemyBlocked'].includes(result.status))
                 return terrainExit(job, result);
             if (result?.status === 'terrainGate')
                 return status(job, (result.gate === 97 ? BRIDGE_REASON : CRYSTAL_REASON) + ' No verified route to an exit from here.');
             if (job.terrainOnward && ['unreachable', 'unavailable'].includes(result?.status))
-                return status(job, job.guide + ' No verified route to an exit from here.');
+                return status(job, [job.guide, 'No verified route to an exit from here.'].filter(Boolean).join(' '));
             if (job.remote && result?.status === 'ready' && !admitRemoteRoute(job, result))
                 return status(job, 'The entrance changed. Request directions again.');
             if (result?.status === 'timedCue') {
@@ -425,11 +436,17 @@ function createField(root, host, notifications) {
                         { quest: job.quest, point: job.point, request: { ...request, limit: 8, refreshFacing: fixed ? facing : undefined },
                             destinationReady, enemyCurrent: obstacle => currentEnemy(root, obstacle) });
                 }
+                const exit = !result.land && !job.entrance?.sameScene &&
+                    (job.entrance || job.destination?.category === 'exits' || job.questExit || job.breakfastObjective === 'quest26') &&
+                    routeBoundary(root, job.target, preferences().spoilers === true, job.entrance).exit;
+                const exitEvent = exit && root.$gameMap._events?.[job.target];
+                const bump = job.eventAction === 'bump' || !!exitEvent && exitEvent._trigger === 1 && exitEvent._priorityType === 1;
                 follow(job, result, { kind: 'routeDirections', name: job.label, guide: job.guide,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
-                    reenter: result.reenter === true, enter: job.entrance?.action,
+                    reenter: result.reenter === true, enter: job.entrance?.action ?? exitEvent?._trigger === 0,
+                    exit, takeExit: !!exit,
                     sailing: job.mode === 'ship' || job.mode === 'boat',
-                    bump: job.eventAction === 'bump',
+                    bump,
                     conversation: job.eventAction === 'talk',
                     board: !!job.vehicle, land: result.land === true,
                     guideAction: job.eventAction === 'interact' ||
@@ -498,7 +515,8 @@ function createField(root, host, notifications) {
                 follow(job, result, record);
             }
             else if (result?.status === 'interrupted') {
-                const handoff = (job.request.handoffs?.includes(result.boundaryEvent) || !job.eventAction) &&
+                const regional = BREAKFAST_HANDOFFS[job.map]?.[result.boundaryEvent];
+                const handoff = regional || (job.request.handoffs?.includes(result.boundaryEvent) || !job.eventAction) &&
                     localHandoffName(job.map, result.boundaryEvent);
                 const { exit, boundaryName } = job.mode === 'walk' ?
                     routeBoundary(root, result.boundaryEvent, preferences().spoilers === true) : {};
@@ -604,7 +622,7 @@ function createField(root, host, notifications) {
             job.timing = host.caveTiming?.capture(job.scene, motion, target);
         }
         const terrainTransfer = snapshot.live?.terrainGate === false && !job.journey &&
-            [77, 79, 80, 81, 84, 85].includes(snapshot.map) ? terrainTransferRequest(job, STONE_ISLAND) : undefined;
+            snapshot.live.terrainSwitch === 97 ? terrainTransferRequest(job, STONE_ISLAND) : undefined;
         const guideOptions = motion && job.guideOptions?.map(({ target }) => destinationRequest(target));
         submit(job, snapshot, { ...destination, terrainTransfer, guideOptions, stopBeforeEvent: job.eventAction === 'step',
             limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
@@ -612,11 +630,12 @@ function createField(root, host, notifications) {
             beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk, timingCue: !!job.timing });
     }
 
-    function terrainTransferRequest(job, map) {
+    function terrainTransferRequest(job, map, breakfast = false, point, trail) {
         const { entrances, state } = transfers.candidates();
         const copy = ({ event, map, x, y, approach }) => ({ event, map, x, y, approach });
         job.terrainApproach = { entrances, state };
-        return { map, state, candidates: entrances.map(copy), discoveries: transfers.discoveries(entrances) };
+        return { map, state, breakfast, point, trail, candidates: entrances.map(copy), discoveries: transfers.discoveries(entrances),
+            handoffs: Object.keys(BREAKFAST_HANDOFFS[root.$gameMap._mapId] || {}).map(Number) };
     }
 
     function resumeTerrainJourney(job, snapshot) {
@@ -634,7 +653,7 @@ function createField(root, host, notifications) {
             job.label = 'Next exit';
             job.terrainOnward = true;
             return submit(job, snapshot, { field: true, limit: 8, beacon: host.beacon?.enabled() === true,
-                transfer: terrainTransferRequest(job, next.transfer) }), true;
+                transfer: terrainTransferRequest(job, next.transfer, next.breakfast, next.point, next.trail) }), true;
         }
         if (!next.target) return status(job, next.text + ' The next action is unavailable.'), true;
         if (next.map) terrainJourney.advance(snapshot.map, next.map);
@@ -653,6 +672,14 @@ function createField(root, host, notifications) {
         owner.target = target;
         if (target.saved) return selectSavedBookmark(job, snapshot, target.saved, category);
         owner.remoteBookmark = null;
+        job.breakfastObjective = target.breakfastObjective;
+        if (target.breakfastRegion) {
+            if (job.action !== 'directions') return status(job, target.name);
+            job.label = target.name;
+            job.terrainOnward = true;
+            return submit(job, snapshot, { field: true, limit: 8, beacon: host.beacon?.enabled() === true,
+                transfer: terrainTransferRequest(job, STONE_ISLAND) });
+        }
         if (job.action !== 'directions') return present(job, { kind: 'fieldTarget', name: target.name, category,
             dx: target.x - snapshot.x, dy: target.y - snapshot.y, outOfReach: target.outOfReach, handoff: target.handoff });
         if (!timedCave(snapshot.map)) return route(job, snapshot, target);

@@ -8,7 +8,7 @@ const { worldDestination, worldEventDescription, discoveryEntrance } = require('
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
-const { GATE_SWITCHES } = require('./terrain-control-labels.cjs');
+const { GATE_SWITCHES, BREAKFAST_MAPS } = require('./terrain-control-labels.cjs');
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
 function eventTarget(root, mode, event, entry, page, spoilers = false) {
@@ -146,6 +146,20 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 Math.abs(b.x - player._x) - Math.abs(b.y - player._y))[0];
         if (next) objects.push({ ...next, category: 'quests', questExit: true, eventAction: 'step',
             handoffs: transitions });
+    }
+    if (!routesOnly && scene && mode === 'walk' && BREAKFAST_MAPS.includes(id) &&
+        !objects.some(item => item.category === 'quests')) {
+        const objective = root.$gameParty?.getNav?.();
+        if (objective === 'quest26' && id === 87) {
+            const exit = objects.find(item => item.category === 'exits' && item.id === 73);
+            if (exit) objects.push({ ...exit, category: 'quests', breakfastObjective: objective });
+        }
+        if (objective === 'quest27' && root.$gameSwitches?.value?.(97) === false) {
+            const encounter = id === 86 && objects.find(item => item.category === 'events' && item.id === 17);
+            if (encounter) objects.push({ ...encounter, category: 'quests', breakfastObjective: objective });
+            else if (id !== 86) objects.push({ id: 'breakfast-objective', category: 'quests', name: 'Breakfast Stone Island',
+                breakfastObjective: objective, breakfastRegion: true });
+        }
     }
     if (!routesOnly && mode === 'walk') objects.push(...boardingTargets(map));
     if (!routesOnly && mode === 'airship') objects.push({ id: 517, x: player._x, y: player._y, name: 'Nearest landing site',

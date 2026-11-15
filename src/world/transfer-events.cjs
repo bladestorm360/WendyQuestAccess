@@ -96,6 +96,32 @@ function caffeineEscape(entry, page, common) {
     return landingIs(edge, 85, 7, 27) ? [{ ...edge, approach: 2 }] : [];
 }
 
+function breakfastCaveTransfer(map, entry, page, common) {
+    const { id } = entry;
+    const { list } = page;
+    const ledges = map === 87 && (id === 77 || id === 78);
+    if (!ledges && !(map === 191 && (id === 1 || id === 2))) return null;
+    if (entry.pages.length !== 1 || !flagsAre(page) || page.trigger !== 1 || !audioOnly(common)) return null;
+    if (ledges) {
+        const east = id === 78;
+        const at = east ? 3 : 2;
+        const edge = transferTo(list[at], map);
+        if (page.priorityType !== 1 || list.length !== at + 2 || !questCommand(list[0], 'disableAutoMarker') ||
+            !rowIs(list[1], 117) || !callsStairSound(list[1]) ||
+            (east && (!rowIs(list[2], 121) || !parametersAre(list[2], [96, 96, 0]))) ||
+            !rowIs(list[at], 201) || !rowIs(list[at + 1], 0) ||
+            !landingIs(edge, 85, east ? 24 : 9, east ? 20 : 11)) return null;
+        return edge;
+    }
+    if (page.priorityType !== 0 || !rowIs(list[0], 117) || !callsStairSound(list[0])) return null;
+    const at = id === 1 ? 15 : 2;
+    const edge = transferTo(list[at], map);
+    if (list.length !== at + 2 || !rowIs(list[at], 201) || !rowIs(list[at + 1], 0)) return null;
+    return (id === 1 ? landingIs(edge, 87, 72, 8) && parametersAre(list[6], [2, 'A', 1]) &&
+        questCommand(list[7], 'completeQuest') && questCommand(list[9], 'startQuest')
+        : landingIs(edge, 87, 40, 11) && questCommand(list[1], 'disableAutoMarker')) ? edge : null;
+}
+
 function cauldronExterior(page, index) {
     if (page.priorityType !== 0 || page.trigger !== 1 || !LAYOUTS[index]) return [];
     const { list, conditions } = page;
@@ -439,6 +465,8 @@ function transferOptions(map, entry, page, common) {
     const index = entry.pages.indexOf(page);
     if (map === 87 && entry.id === 73) return caffeineEscape(entry, page, common);
     if (map === 87 && entry.id === 91) return caffeineEntrance(page, index);
+    const breakfast = breakfastCaveTransfer(map, entry, page, common);
+    if (breakfast) return [breakfast];
     const special = cauldronSpecial(map, entry.id, page, index, common);
     if (special !== undefined) return special;
     if (map === 113) {
@@ -456,8 +484,10 @@ function transferOptions(map, entry, page, common) {
     return destination ? [destination] : [];
 }
 
-function catalogTransferOptions(map, entry, common) {
+function catalogTransferOptions(map, entry, common, regional = false) {
     const { pages } = entry;
+    if (!regional && (map === 87 && (entry.id === 77 || entry.id === 78) ||
+        map === 191 && (entry.id === 1 || entry.id === 2))) return [];
     if (map === 87 && entry.id === 91 && pages.length === 2) {
         const first = transferOptions(map, entry, pages[0], common);
         return first.length && transferOptions(map, entry, pages[1], common).length ? first : [];

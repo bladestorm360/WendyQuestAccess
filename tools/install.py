@@ -161,6 +161,10 @@ def verify_geometry(game, geometry):
         if file_hash(data / filename, 2 * MIB) != manifest.get(key):
             raise ValueError(f'Geometry input changed: {filename}')
     expected = {'manifest.json': contents.get('manifest.json')}
+    if 'breakfast' in manifest:
+        if not isinstance(manifest['breakfast'], str) or not HASH.fullmatch(manifest['breakfast']):
+            raise ValueError('Invalid regional walking catalog hash')
+        expected['breakfast.json'] = manifest['breakfast']
     for number, entry in maps.items():
         filename = f'Map{int(number):03}.json'
         if file_hash(data / filename, 2 * MIB) != entry.get('input'):
@@ -214,8 +218,10 @@ def validate_plan(data):
         Path(name) != PLUGIN and Path(name).parts[0] != SERVICE.name for name in plan['payload']
     ):
         raise ValueError('Unexpected payload destination')
-    if len(plan['geometry']) != 240 or 'manifest.json' not in plan['geometry'] or any(
-        name != 'manifest.json' and not re.fullmatch(r'[1-9]\d{0,2}\.wqg', name) for name in plan['geometry']
+    geometry = set(plan['geometry'])
+    maps = geometry - {'manifest.json', 'breakfast.json'}
+    if len(maps) != 239 or 'manifest.json' not in geometry or any(
+        not re.fullmatch(r'[1-9]\d{0,2}\.wqg', name) for name in maps
     ):
         raise ValueError('Unexpected geometry destination')
     return plan

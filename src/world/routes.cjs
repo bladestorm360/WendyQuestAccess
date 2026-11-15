@@ -585,7 +585,7 @@ function entranceRoute(world, start, events, tiles, cancelled) {
     return result;
 }
 
-function orientedApproach(world, tiles, candidate, cancelled) {
+function orientedApproach(world, tiles, candidate, cancelled, start) {
     const heading = DIRECTIONS.indexOf(candidate.approach);
     const target = world.events.find(event => event.id === candidate.event && !event.erased && event.action);
     if (!target || heading < 0 || target.trigger !== 1) return null;
@@ -593,7 +593,8 @@ function orientedApproach(world, tiles, candidate, cancelled) {
         const goals = new Uint8Array(world.cells.length);
         for (let cell = 0; cell < goals.length; cell++) {
             if ((cell & 63) === 0 && cancelled()) return null;
-            if (!tiles.touch[cell] && buttonEvent(world, tiles, cell, heading) === target.id) goals[cell] = candidate.approach;
+            if ((cell === start || !tiles.touch[cell]) && buttonEvent(world, tiles, cell, heading) === target.id)
+                goals[cell] = candidate.approach;
         }
         return { goals };
     }
@@ -610,7 +611,7 @@ function transferEntranceRoute(world, start, request, tiles, cancelled) {
         for (const candidate of request.entrances) {
             if (cancelled()) return { status: 'cancelled' };
             if (!candidate.approach || candidate.rank > rank) continue;
-            const approach = orientedApproach(world, tiles, candidate, cancelled);
+            const approach = orientedApproach(world, tiles, candidate, cancelled, start);
             if (!approach || (approach.entry && approach.entry.before !== start && tiles.touch[approach.entry.before])) continue;
             const result = finishEntry(world, route(world, start, approach.goals, cancelled, undefined, tiles.touch), approach.entry);
             if (result.status === 'ready' && (candidate.rank < rank || result.distance < direct.distance)) {

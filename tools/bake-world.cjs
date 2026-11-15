@@ -10,6 +10,8 @@ const { MAX_CATALOG_BYTES } = require('../src/world/walking-catalog.cjs');
 const { transferMap, bakeCatalog } = require('./transfer-catalog.cjs');
 const { bakeControls } = require('./bake-controls.cjs');
 const { bakeSalt } = require('./bake-salt.cjs');
+const { BREAKFAST_MAPS } = require('../src/world/terrain-control-labels.cjs');
+const { breakfastSource, bakeBreakfast } = require('./bake-breakfast.cjs');
 
 const BUILD = '26578620';
 const ROOT = path.resolve(__dirname, '..');
@@ -48,6 +50,7 @@ function bake(installed, destination) {
     const manifest = { build: BUILD, tilesets: digest(tilesetsBytes), commonEvents: digest(commonBytes),
         mapInfos: digest(mapInfosBytes), maps: {} };
     const transferMaps = new Map();
+    const breakfast = new Map();
     let cells = 0;
     for (const { id } of maps) {
         if (!Number.isInteger(id) || id < 1 || id > 999) throw new Error('Invalid map identifier');
@@ -85,13 +88,19 @@ function bake(installed, destination) {
                 entry.variants[variant] = changes;
             }
         }
-        transferMaps.set(id, transferMap(id, map, geometry, flags, common));
+        const walkingMap = transferMap(id, map, geometry, flags, common);
+        transferMaps.set(id, walkingMap);
+        if (BREAKFAST_MAPS.includes(id)) breakfast.set(id, breakfastSource(id, walkingMap, map, controls, common));
         cells += geometry.cells.length;
     }
     const catalog = bakeCatalog(transferMaps, manifest.maps);
     const bytes = Buffer.from(JSON.stringify(catalog));
     if (bytes.length > MAX_CATALOG_BYTES) throw Error('Walking catalog exceeds its size limit');
     manifest.walking = { hash: digest(bytes), catalog };
+    const region = Buffer.from(JSON.stringify(bakeBreakfast(breakfast, manifest.maps)));
+    if (region.length > MAX_CATALOG_BYTES) throw Error('Regional walking catalog exceeds its size limit');
+    fs.writeFileSync(path.join(output, 'breakfast.json'), region, { flag: 'wx' });
+    manifest.breakfast = digest(region);
     const index = JSON.stringify(manifest);
     if (Buffer.byteLength(index) > 128 * 1024) throw Error('Map geometry manifest exceeds its size limit');
     fs.writeFileSync(path.join(output, 'manifest.json'), index, { flag: 'wx' });

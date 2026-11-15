@@ -15,8 +15,13 @@ const DISCOVERIES = { 11: 89, 75: 76, 78: 80, 81: 83, 85: 84, 86: 88, 90: 13, 92
 const FLOOR_EXITS = { 3: ['Russetwood', 12], 4: ['Russetwood', 12], 74: ['Russetwood', 12],
     19: ['Chillcrest', 25], 22: ['Cold Brew Trail', 36], 23: ['Frosty Peak', 27], 56: ['Sunrise Beach', 76] };
 
-const SOLID_EXITS = { 59: ['Cracked Cove', 191], 60: ['Cracked Cove', 77],
-    63: ['Poached Pools', 80], 64: ['Poached Pools', 80] };
+const SOLID_EXITS = { 59: ['Cracked Cove', 191], 60: ['Brekky Byway', 77],
+    63: ['Poached Pool', 80], 64: ['Poached Pool', 80] };
+const BREAKFAST_EXITS = {
+    61: ['Shellside', 78], 62: ['Devilled Nook', 79], 65: ['Scrambled Shores', 81],
+    66: ['Quiche Coast', 84], 67: ['Quiche Coast', 84], 68: ["Benedict's Bight", 66],
+    69: ['Bacon Beach, north entrance', 85], 70: ['Bacon Beach, west entrance', 85], 71: ['Breakfast Stone Island', 86]
+};
 
 function transfersTo(command, map) {
     return command?.code === 201 && command.indent === 0 && command.parameters[0] === 0 && command.parameters[1] === map;
@@ -38,6 +43,10 @@ function worldDestination(root, mode, event, entry, page) {
             .reduce((mask, edge) => mask | (1 << DIRECTIONS.indexOf(edge.approach)), 0);
         return bumpDirections ? { name: solid[0], category: 'exits', eventAction: 'bump', bumpDirections } : null;
     }
+    const breakfast = BREAKFAST_EXITS[id];
+    if (land && breakfast && event._trigger === 1 && event._pageIndex === 0 &&
+        transferOptions(map, entry, page, root.$dataCommonEvents).some(edge => edge.map === breakfast[1]))
+        return { name: breakfast[0], category: 'exits', eventAction: event._priorityType === 1 ? 'bump' : 'step' };
     if (event._trigger === 1 && event._priorityType !== 1) {
         const list = page.list;
         if (id === 30 && transfersTo(list[4], 26)) return { name: 'Float Fort', category: 'exits' };

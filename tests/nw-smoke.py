@@ -105,7 +105,7 @@ const nativeSelect = SceneManager._scene._commandWindow.select;
 var DataManager = { savefileInfo: () => null };
 var $gameMap, $gamePlayer, $gameScreen, $gameTemp, $dataMap, $dataTilesets, $gameTileChanges;
 var $gameMessage = { isBusy: () => false };
-var $dataSystem = { tileSize: 32, locale: GAME_LOCALE }, $dataMapInfos = [null, { id: 1 }, { id: 2 }, { id: 3 }];
+var $dataSystem = { tileSize: 32, locale: GAME_LOCALE }, $dataMapInfos = [null, { id: 1, name: 'Starting shore' }, { id: 2, name: 'Connecting shore' }, { id: 3, name: 'Far shore' }];
 var Input = { keyMapper: { 81: 'pageup', 90: 'ok' }, clear() {} };
 Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 3: 'menu', 9: 'menu', 12: 'up', 13: 'down' };
 '''.replace('GAME_LOCALE', json.dumps(game_locale)), encoding='utf8')
@@ -2386,11 +2386,11 @@ def main():
             'bookmark-browse': 'Bookmarks, Return marker, 1 north',
             'bookmark-arrival': 'At Return marker. you are here.',
             'bookmark-entity': 'Objects, Synthetic quest anchor, 2 east',
-            'cross-map-entrance': 'Move east to activate.',
+            'cross-map-entrance': '1 east, take exit to Starting shore.',
             'cross-map-event': 'Events, Scene trigger, 1 east',
             'cross-map-event-route': 'Move east to activate.',
             'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
-            'cross-map-next': 'Move east to activate.',
+            'cross-map-next': '1 east, take exit to Connecting shore.',
             'cross-map-arrived': 'You are here.',
             'battle-formation': 'Enemy formation. 1 Synthetic archer.',
             'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',

@@ -2,6 +2,8 @@
 
 const assert = require('node:assert/strict');
 const { captureWorld } = require('../src/world/snapshot');
+const { formatSpeech } = require('../src/services/speech-text.cjs');
+const { BREAKFAST_HANDOFFS } = require('../src/world/local-destinations');
 const { solveRoute } = require('../src/world/routes.cjs');
 const { createCaveGuide } = require('../src/world/puzzles/cave');
 const { createSaltGuide } = require('../src/world/puzzles/salt-caverns');
@@ -67,27 +69,70 @@ async function verifyNavigationAuditFixes(c, load, verifyRoute, verifyWorker, re
         });
     }
 
-    for (const [mapId, x, y, event] of [[77, 1, 8, 23], [79, 9, 1, 6], [80, 27, 4, 1],
-        [81, 18, 23, 1], [84, 28, 12, 3], [85, 1, 16, 32]]) {
-        const { fixture, view } = at(mapId, x, y);
+    function regionalTransfer(fixture, map, open = false, point) {
         const state = transferState(c);
         const common = read('CommonEvents.json');
+        const { id: mapId } = fixture;
         const candidates = fixture.map.events.flatMap(entry => {
             if (!entry) return [];
             const page = entry.pages[fixture.gameMap._events[entry.id]._pageIndex];
             return transferOptions(mapId, entry, page, common).filter(edge => gateAllows(edge.gate, state))
                 .map(edge => ({ ...edge, event: entry.id }));
         });
+        return { map, state, breakfast: open, point, candidates,
+            handoffs: Object.keys(BREAKFAST_HANDOFFS[mapId] || {}).map(Number) };
+    }
+
+    const startingPoints = [[77, 1, 8, 23, 113], [79, 9, 1, 6, 87], [80, 27, 4, 1, 113],
+        [81, 18, 23, 1, 113], [84, 28, 12, 3, 87], [85, 1, 16, 32, 113]];
+    for (const [mapId, x, y, event, destination] of startingPoints) {
+        const { fixture, view } = at(mapId, x, y);
+        const transfer = regionalTransfer(fixture, 86);
         const target = view.objects.find(item => item.id === event);
-        const route = { x, y, event, field: true, terrainTransfer: { map: 86, state, candidates },
+        const route = { x, y, event, field: true, terrainTransfer: transfer,
             bumpDirections: target?.eventAction === 'bump' ? 15 : undefined };
         await verifyWorker(fixture, route, view.live, result => {
             assert.equal(result.status, 'terrainExit', 'island ' + mapId);
             assert.equal(result.gate, 97);
-            assert(candidates.some(edge => edge.event === result.entrance));
-            if (mapId === 85) assert(!result.onwardUnavailable);
+            assert(transfer.candidates.some(edge => edge.event === result.entrance && edge.map === destination));
         });
     }
+
+    for (const [id, x, y, state, status, entrance, boundary] of [
+        [113, 37, 26, {}, 'ready', 68],
+        [113, 41, 39, {}, 'interrupted', 61, 179],
+        [113, 40, 33, { self: ['113,179,A','113,180,A'] }, 'ready', 61],
+        [87, 103, 55, {}, 'enemyBlocked', 73],
+        [87, 69, 75, {}, 'interrupted', 73, 102],
+        [87, 69, 76, { switches: [96] }, 'ready', 73],
+        [85, 7, 27, {}, 'interrupted', 37, 49],
+        [85, 5, 27, { switches: [522] }, 'ready', 41],
+        [113, 27, 41, {}, 'ready', 71]
+    ]) {
+        const { fixture, view } = at(id, x, y, state);
+        const transfer = regionalTransfer(fixture, 86);
+        await verifyWorker(fixture, { x, y, field: true, transfer }, view.live, result => {
+            assert.equal(result.status, status, 'regional route on ' + id);
+            assert.equal(result.entrance, entrance);
+            if (boundary) assert.equal(result.boundaryEvent, boundary);
+            verifyRoute(fixture, { x, y, targetX: result.arrival.x, targetY: result.arrival.y },
+                { ...result, status: 'ready', arrival: { ...result.arrival, facing: null } });
+        });
+    }
+    const returnSite = at(113, 26, 39, { switches: [97, 522] });
+    for (const [id, x, y] of startingPoints) {
+        const transfer = regionalTransfer(returnSite.fixture, id, true, { x, y });
+        await verifyWorker(returnSite.fixture, { x: 26, y: 39, field: true, transfer }, returnSite.view.live, result => {
+            assert.equal(result.status, 'ready', 'return path to ' + id);
+            assert.equal(result.entrance, 70);
+        });
+    }
+
+    const message = { kind: 'routeDirections', name: 'Salt Caverns', directionsOnly: true,
+        legs: [{ direction: 6, tiles: 5 }, { direction: 8, tiles: 3 }, { direction: 6, tiles: 1 }],
+        boundary: 6, exit: 'Salt Caverns', useExit: true };
+    assert.equal(formatSpeech(message), '5 east, 3 north, 2 east, take exit to Salt Caverns.');
+    assert.equal(formatSpeech({ ...message, beaconOnly: true }), 'Move east to take exit to Salt Caverns.');
 
     const opening = at(19, 24, 68);
     const saltScene = { _wqaMapRestored: true };

@@ -83,7 +83,7 @@ function routeThroughControl(geometry, live, request, controls, cancelled, remot
             const exit = map === 204 ? solveWorldRoute(current, { x: request.x, y: request.y,
                 event: id, field: true, stopBeforeEvent: true }, cancelled) : remoteAccess?.();
             if (exit?.status === 'cancelled') return exit;
-            if (exit && (exit.status === 'ready' || exit.status === 'interrupted'))
+            if (exit && (exit.status === 'ready' || exit.status === 'interrupted' || exit.needsEncounter))
                 return { ...exit, status: 'terrainExit', event: id, gate };
             return request.refresh ? null : { status: 'terrainGate', gate };
         }
