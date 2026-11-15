@@ -475,6 +475,16 @@ function transferOptions(map, entry, page, common) {
         const facing = worldFacingEntrances(entry, page, common);
         if (facing) return facing;
     }
+    if (map === 26 && (entry.id === 6 || entry.id === 7) && flagsAre(page)) {
+        const { list } = page;
+        const edge = transferTo(list[2], map);
+        // Float Fort's foot exit parks the boat on the world map before the
+        // transfer. This native entry cannot board it from the town map.
+        if (list.length === 4 && rowIs(list[0], 122) && parametersAre(list[0], [81, 81, 0, 0, 0]) &&
+            rowIs(list[1], 117) && parametersAre(list[1], [139]) && common?.[139]?.list &&
+            rowIs(list[2], 201) && landingIs(edge, 113, 14, 6) && edge.direction === 0 && rowIs(list[3], 0))
+            return [edge];
+    }
     const world = map === 113 ? worldQuestEntrance(entry, page, index, common) || worldWalkingEntrance(entry, page, common) :
         map === 206 ? islandReturn(entry, page) : map === 49 ? bayReturn(entry, page) : null;
     if (world) return [world];

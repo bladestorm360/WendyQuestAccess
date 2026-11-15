@@ -141,7 +141,10 @@ async function verifyAutowalk(c, load, verifyWorker) {
     sailing.player._vehicleType = 'ship';
     const ship = sailing.gameMap.ship();
     Object.assign(ship, { _mapId: 113, _x: 35, _y: 9, _driving: true });
+    const originalSwitches = c.$gameSwitches.value;
+    c.$gameSwitches.value = id => id === 619 || originalSwitches(id);
     const dock = await route(sailing, 51);
+    c.$gameSwitches.value = originalSwitches;
     assert.equal(dock.result.autowalkStop, 6);
     assert(walk.start(dock.job, dock.result, dock.record));
     for (let count = 0; walk.active(scene) && count <= dock.result.distance; count++) tick(sailing.player);

@@ -492,6 +492,30 @@ async function verifyCredits() {
     delete pictures[id];
     f.tick();
     assert.equal(f.epoch(), 0, 'Erasing the card retires its speech context');
+
+    const postscript = ending.findIndex(command => command.code === 111 && command.parameters[1] === 404);
+    const thankYou = [];
+    for (const [step, command] of ending.entries()) {
+        if (step <= postscript || command.code !== 357 || command.parameters[1] !== 'SetPictureText') continue;
+        const { id, text } = command.parameters[3];
+        const index = [30, 31, 32].indexOf(Number(id));
+        if (index < 0) continue;
+        assert(text);
+        textCard(command, index);
+        const unrevealed = spoken().length;
+        f.tick();
+        assert.equal(spoken().length, unrevealed);
+        const fade = ending.slice(step + 1).find(row => row.code === 232 && row.parameters[0] === Number(id));
+        assert(fade);
+        pictures[id]._opacity = fade.parameters[8]; // End of the authored native move.
+        c.Graphics.frameCount += 4;
+        f.tick();
+        thankYou.push(spoken().at(-1));
+        assert.equal(thankYou.at(-1), formatSpeech({ kind: 'dialoguePage', text }));
+    }
+    assert.equal(thankYou.length, 6, 'three closing cards in each branch');
+    console.log('Verified painted ending cards and their fades in both branches.');
+
 }
 
 async function verifyChamberChestHint() {
@@ -1039,6 +1063,69 @@ async function verifyBattleDialogue() {
     assert.equal(auto.epoch(), 0, 'native battle phase work retires automatic dialogue first');
 }
 
+async function verifyEndingDialogue() {
+    const finale = mapData(107);
+    const scene = finale.events[3].pages[4].list;
+    const data = name => JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', name), 'utf8'));
+    const troops = data('Troops.json');
+    const epilogue = mapData(190).events[24].pages[0].list;
+    const endCards = mapData(239).events[1].pages[0].list;
+    const bossBranch = scene.findIndex(command => command.code === 111 && command.parameters[1] === 404);
+    const postscript = endCards.findIndex(command => command.code === 111 && command.parameters[1] === 404);
+    assert.deepEqual(scene[bossBranch].parameters, [0, 404, 1]);
+    assert.deepEqual(endCards[postscript].parameters, [0, 404, 1]);
+    const normalTransfer = scene.findIndex(command => command.code === 201 && command.parameters[1] === 190);
+    const hiddenFight = scene.findIndex(command => command.code === 301 && command.parameters[1] === 150);
+    const hiddenTransfer = scene.findIndex((command, index) => index > hiddenFight && command.code === 201);
+    assert(bossBranch < normalTransfer && normalTransfer < hiddenFight && hiddenFight < hiddenTransfer);
+    assert.equal(scene[hiddenTransfer].parameters[1], 190);
+
+    for (const normalEnding of [true, false]) {
+        const f = await enter(finale, 107);
+        const { c } = f;
+        c.$gameSwitches = { value: id => id === 404 && !normalEnding };
+        const interpreter = c.$gameMap._interpreter;
+        interpreter._list = scene;
+        interpreter._index = bossBranch;
+        interpreter._indent = 0;
+        interpreter._branch = {};
+        assert(interpreter.command111(scene[bossBranch].parameters));
+        assert.equal(interpreter._branch[0], normalEnding);
+        const firstText = normalEnding ? bossBranch + 1 :
+            scene.findIndex((command, index) => index > normalTransfer && command.code === 101 && command.parameters[4] === '<s666>');
+        Object.assign(f.settings, authoredPage(scene, firstText), { faceReady: true });
+        f.until(() => f.window.pause);
+        f.speaker._animationRunning = false;
+        f.tick();
+        assert.equal(f.packets().length, 1);
+        assert.equal(f.packets()[0].text.replace(/\s+/g, ''), f.shown.join('').replace(/\s+/g, ''));
+    }
+
+    const battle = await enter(finale, 107, true);
+    battle.scene._fadeDuration = battle.scene._fadeOpacity = 0;
+    const list = troops[150].pages[0].list;
+    Object.assign(battle.settings, authoredPage(list), { faceReady: true });
+    battle.settings.interpreter = new battle.c.Game_Interpreter();
+    battle.settings.interpreter._list = list;
+    battle.settings.interpreter.setWaitMode('message');
+    battle.until(() => battle.window.pause);
+    battle.speaker._animationRunning = false;
+    battle.tick();
+    assert.equal(battle.packets()[0].text, battle.shown.join('').trim());
+
+    for (const [map, id, list, first] of [[mapData(190), 190, epilogue, undefined],
+        [mapData(239), 239, endCards, endCards.findIndex((row, index) => index > postscript && row.code === 101 &&
+            row.parameters[4] === 'Wendy')]]) {
+        const f = await enter(map, id);
+        Object.assign(f.settings, authoredPage(list, first), { faceReady: true });
+        f.until(() => f.window.pause);
+        f.speaker._animationRunning = false;
+        f.tick();
+        assert.equal(f.packets()[0].text.replace(/\s+/g, ''), f.shown.join('').replace(/\s+/g, ''));
+    }
+    console.log('Verified both finale dialogue branches, the secret fight dialogue, shared epilogue and secret postscript.');
+}
+
 async function verifySpeakerDetails() {
     const f = await enter(mapData(19));
     const { c, scene, window, settings, speaker } = f;
@@ -1119,6 +1206,9 @@ async function verifySpeakerDetails() {
     readSpeaker('Kennick', 9, /^No visual description for this speaker/);
     showRenderedSpeakers(129, [7]);
     readSpeaker('Gemma', 7, /^Gemma\. An older woman.*red headscarf/);
+    showRenderedSpeakers(49, [18, 19, 20, 22]);
+    scene._spriteset._characterSprites[0].worldVisible = false;
+    readSpeaker('Mech Grunts', 14, /^Mech Grunts\. Squat gray robots.*yellow visors.*red shoulder plates/);
     showRenderedSpeakers(25, [21]);
     readSpeaker('Fisherman', 21, /^Fisherman\. A round-faced man with short brown hair/);
     Object.assign(tilemap, { worldVisible: true, worldAlpha: 1 });
@@ -1305,6 +1395,7 @@ async function main() {
     await verifyChamberChestHint();
     await verifyMapDiagrams();
     await verifyCredits();
+    await verifyEndingDialogue();
     console.log('Verified native picture waits, cavern trails, atlas markers, ending cards and current-picture review.');
     await verifyAutomaticClose();
     await verifyBattleDialogue();
@@ -1314,7 +1405,12 @@ async function main() {
     console.log('Verified installed dialogue, the chamber chest hint, Salt Caverns guidance, cave patrols and four recovery branches.');
 }
 
-if (require.main === module)
-    main().catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) {
+    const run = process.argv.includes('--endings') ? async () => {
+        await verifyEndingDialogue();
+        await verifyCredits();
+    } : main;
+    run().catch(error => { console.error(error); process.exitCode = 1; });
+}
 
 module.exports = { enter };

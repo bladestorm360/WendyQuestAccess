@@ -197,3 +197,5 @@ The native result queue links lethal HP damage to the matching popup. The collap
 ### Starting a fight from the field
 
 Facing and pressing Interact on an adjacent roaming enemy can start its existing encounter before contact. The native forward action check accepts normal-priority touch events. The 203 moving encounter pages use a scripted battle setup, which is also used on contact. Random overworld encounters use a separate initiative roll. The reviewed moving encounters add no initiative change for pressing Interact. [Encounter and trigger audit](navigation-audit.md#transfers-encounters-and-movement)
+
+In the Special menu, **I** reads the highlighted ability's displayed description. **Shift+I** remains the explicit sprite review. The active command group and rendered details determine which text is available. [Focus owner](../src/battle/focus.js)

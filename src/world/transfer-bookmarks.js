@@ -2,7 +2,7 @@
 
 const { transferOptions, cauldronIntroductionFinished, SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount,
     worldDiscovery } = require('./transfer-events.cjs');
-const { discoveryEntrance } = require('./world-destinations');
+const { discoveryEntrance, worldEntranceRevealed } = require('./world-destinations');
 const { travelMode, vehicleOnMap } = require('./vehicle-navigation');
 const { transferState, gateAllows } = require('./transfer-gates.cjs');
 const { tileKey } = require('./geometry.cjs');
@@ -12,7 +12,8 @@ function liveEntrances(root, event, state, mode, spoilers) {
     const map = root.$gameMap;
     const id = event?._eventId;
     if (!Number.isInteger(id) || id < 1 || map?._events?.[id] !== event || event._erased ||
-        event._through || event._moveRouteForcing || !spoilers && concealedDestination(map._mapId, event)) return [];
+        event._through || event._moveRouteForcing || !spoilers && concealedDestination(map._mapId, event) ||
+        map._mapId === 113 && !worldEntranceRevealed(root, id, spoilers)) return [];
     const entry = root.$dataMap?.events?.[id];
     const page = entry?.pages?.[event._pageIndex];
     if (!page || event._trigger !== page.trigger || event._priorityType !== page.priorityType) return [];

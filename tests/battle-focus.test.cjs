@@ -176,6 +176,14 @@ skill._followTarget = wendy;
 observer.command(page, 'details');
 assert.match(messages.at(-2), /two silver spatulas with brown handles/);
 assert.match(messages.at(-1), /Reduce incoming damage/);
+wendy.battleOptions[1] = wendy.battleOptions[0];
+wendy._battleOptionsActive = 1;
+assert(observer.command(page, 'details'));
+assert.match(messages.at(-1), /Reduce incoming damage/);
+assert.doesNotMatch(messages.at(-1), /spatula/);
+assert(observer.command(page, 'battleAppearance'));
+assert.match(messages.at(-1), /spatulas/);
+wendy._battleOptionsActive = 0;
 wendy._mainSprite._frame.x = 3 * 64;
 const frozen = wendy._mainSprite.__FrozenOverlay = { parent: wendy._mainSprite, worldVisible: true, worldAlpha: 1,
     texture: { valid: true } };

@@ -107,7 +107,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         assert.equal(source._eventId, expectedEvent);
     }
     function directions(fixture, id, status = 'ready') {
-        const view = captureWorld(c);
+        const view = captureWorld(c, true, undefined, undefined, [], false, true);
         const target = view.objects.find(item => item.id === id);
         assert(target, `Missing native target ${id}`);
         const request = { x: view.x, y: view.y, event: target.nearestLanding ? undefined : target.id, field: true,
@@ -128,8 +128,21 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     ship._driving = true;
     ship.setLocation(113, 35, 9);
     assert.equal(travelMode(gameMap, player), 'ship');
+    const previousQuests = c.$gameParty._quests;
+    c.$gameParty._quests = {};
+    c.$gameSelfSwitches.setValue([113, 107, 'A'], true);
+    const revealed = captureWorld(c).objects;
+    assert(revealed.some(target => target.id === 108 && target.shoreMap === 171));
+    assert(!revealed.some(target => target.id === 110 || target.id === 51 || target.id === 71));
+    c.$gameSwitches.setValue(509, true);
+    assert(!captureWorld(c).objects.some(target => target.id === 51), 'an unlocated mention is insufficient');
+    c.$gameSwitches.setValue(619, true);
+    assert(captureWorld(c).objects.some(target => target.id === 51));
+    c.$gameSwitches.setValue(619, false);
+    c.$gameSelfSwitches.setValue([113, 107, 'A'], false);
+    c.$gameParty._quests = previousQuests;
     const landing = directions(coast, 51);
-    assert.deepEqual(landing.view.objects.map(target => target.id), [24, 30, 31, 51, 158]);
+    assert.deepEqual(landing.view.objects.filter(target => !target.shoreMap).map(target => target.id), [24, 30, 31, 51, 155, 156, 158]);
     assert.equal(landing.result.legs.at(-1).direction, 6);
     await verifyWorker(coast, landing.request, landing.view.live, result => {
         assert.deepEqual(result.arrival, landing.result.arrival);
@@ -185,7 +198,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     const shore = begin(206);
     shore.player.setPosition(9, 16);
     const islandExit = directions(shore, 4);
-    assert.equal(islandExit.target.name, 'Return to world map');
+    assert.equal(islandExit.target.name, 'South exit to world map');
     follow(shore, islandExit.result, 4);
     execute(shore.source);
     assert.deepEqual([shore.player._newMapId, shore.player._newX, shore.player._newY], [113, 48, 7]);
@@ -356,7 +369,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         const first = await answer(east, 21);
         assert.equal(first.boundaryEvent, 19);
         assert.equal(first.boundary, 4);
-        assert.match(formatSpeech(records.at(-1)), /take exit to Chillcrest.*west exit toward Cold Brew Trail/i);
+        assert.match(formatSpeech(records.at(-1)), /take exit to Chillcrest.*west exit to the world map/i);
         assert(enter(east, first).some(row => row.code === 201 && row.parameters.slice(1, 4).join(',') === '25,47,27'));
 
         const town = site(25, 47, 27);
@@ -603,7 +616,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             const packets = [];
             const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
             const field = createField(c, { graphics: c.Graphics, manager: c.SceneManager, hasFocus: () => true,
-                screenFading: () => false, bookmarks: () => [bookmark], navigationPreferences: () => ({}), beacon,
+                screenFading: () => false, bookmarks: () => [bookmark], navigationPreferences: () => ({ spoilers: true }), beacon,
                 makeWord: () => new Int32Array(new SharedArrayBuffer(4)), createRouteWorker: () => worker },
             { open(record) { records.push(record); return records.length; }, close() {} });
             c.WendyQuestAccessSceneLeaving = owner => { leave(owner); field.leave(owner); };
@@ -728,7 +741,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         for (const id of [98, 190]) {
             const { gameMap, player, source } = begin(113);
             const event = gameMap._events[id];
-            const transfers = createTransferBookmarks(c, { graphics: c.Graphics });
+            const transfers = createTransferBookmarks(c, { graphics: c.Graphics, navigationPreferences: () => ({ spoilers: true }) });
             const candidates = transfers.candidates().entrances;
             assert.equal(transfers.discoveries(candidates).length, 23);
             const edge = transfers.discovery(id, 100);

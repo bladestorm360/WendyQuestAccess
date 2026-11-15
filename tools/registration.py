@@ -501,6 +501,15 @@ def objects_notification(original):
                 b'this._mapId===103||this._mapId===106||this._mapId===107||this._mapId===108||'
                 b'this._mapId===110||this._mapId===134||this._mapId===197))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character);',
+        # Native emotes, Frostyna's flash, and the two identical door approaches.
+        287095: b'\n        if(Graphics._wqaNarrationEnabled&&this===$gameMap?._interpreter&&'
+                b'(params[1]===1||params[1]===2||(params[1]>=5&&params[1]<=9)))'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,params[1]);',
+        288646: b'\n    if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._eventId===2&&this._index===15)'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,this.character(0),undefined,-1);',
+        291911: b'\n    if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._index===1&&'
+                b'(this._eventId===8||this._eventId===9)&&params[0]?.name==="WQ/SFX_LowRumble")'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-2);',
         # ShowRewardTokens synchronously appends exactly one reward sprite.
         # Record it after the native call, before any later event command.
         305132: b'const wqaRewardScene=pluginName==="WendyQuest"&&params[1]==="ShowRewardTokens"?SceneManager._scene:null;'

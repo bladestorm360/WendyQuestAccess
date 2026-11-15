@@ -860,7 +860,7 @@ async function verifySurfaceField(tilesets) {
     const player = c.$gamePlayer;
     c.$dataTilesets = tilesets;
     c.$gameTileChanges = {};
-    c.$gameSwitches = { value: () => false };
+    c.$gameSwitches = { value: id => id === 619 };
     const ship = { _type: 'ship', _mapId: 113, _x: 43, _y: 2, _driving: true, isLandOk: () => true };
     Object.assign(map, { _mapId: 113, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
         _vehicles: [null, ship], _nameDisplay: false });

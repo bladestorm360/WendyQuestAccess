@@ -23,7 +23,7 @@ function createTerrainJourney(root) {
     return {
         clear() { trip = null; },
         begin(gate, origin, target, nextMap, originPoint, landing) {
-            if (!target || ![BRIDGES, CRYSTAL, 'pull', 'floatFort'].includes(gate) || !Number.isInteger(nextMap)) return;
+            if (!target || ![BRIDGES, CRYSTAL, 'pull', 'floatFort', 'nuggedorMine'].includes(gate) || !Number.isInteger(nextMap)) return;
             trip = { gate, player: root.$gamePlayer, origin, originPoint, target: { id: target.id, category: target.category },
                 lastMap: origin, nextMap, landing, trail: new Set(), open: false };
         },
@@ -51,6 +51,18 @@ function createTerrainJourney(root) {
                     return { restore: true, target: objects.find(item => item.id === FLOAT_FORT_ENTRANCE && item.category === 'exits') };
                 }
                 return null; // Still on the overworld side of the handoff.
+            }
+            if (gate === 'nuggedorMine') {
+                if (map === 48)
+                    return { target: objects.find(item => item.id === 4 && item.category === 'exits'),
+                        map: root.$gameVariables?.value?.(5) >= 4 ? 45 : 59 };
+                if (trip.lastMap === 48) {
+                    trip = null;
+                    return { restore: true, target: objects.find(item => item.id === target.id && item.category === target.category) };
+                }
+                return { target: objects.find(item => item.id === 2 && item.category === 'exits'), map: 48,
+                    onward: 'Continue through the mine to reach the chest across the channel.',
+                    unavailable: 'The chest is across the channel. The mine entrance is closed.' };
             }
             const stage = gate === 'pull' ? root.$gameVariables?.value?.(4) : undefined;
             const open = gate === 'pull' ? stage >= 3 : root.$gameSwitches?.value?.(gate);

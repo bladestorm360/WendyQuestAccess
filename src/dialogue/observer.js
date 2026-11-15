@@ -17,7 +17,6 @@ const { moveReview } = require('../menus/review');
 // In these shared conversations the interpreter's event owns the message,
 // while the rendered name identifies a different character on the same map.
 const SHARED_SPEAKERS = new Map([
-    [49, new Map([[14, new Map([['Mech Grunts', 0]])]])],
     [130, new Map([8, 9].map(id => [id, new Map([['Kennick', 8], ['Joanne', 9]])]))],
     [181, new Map([
         [11, new Map([['Mari & Shari', 0]])],
@@ -143,12 +142,22 @@ function createDialogueObserver(host, notifications) {
     }
 
     function speakerAppearance(context, speaker) {
-        const { scene } = context;
         const message = host.gameMessage?.();
         if (message?.faceName?.()) return speakerPortrait(context);
-        if (!speaker || !scene._wqaMapRestored) return '';
+        if (!speaker || !context.scene._wqaMapRestored) return '';
         const owner = message?._wqaSpeakerEvent;
-        const eventId = SHARED_SPEAKERS.get(host.mapId?.())?.get(owner)?.get(speaker) ?? owner;
+        const map = host.mapId?.();
+        if (map === 49 && owner === 14 && speaker === 'Mech Grunts') {
+            if ([18, 19, 20, 22].some(id => fieldSpeaker(context, id, speaker)))
+                return ['Squat gray robots with rounded helmets, narrow yellow visors and broad red shoulder plates.',
+                    'Their thick jointed arms end in dark fists, and their feet are red.'];
+            return '';
+        }
+        const eventId = SHARED_SPEAKERS.get(map)?.get(owner)?.get(speaker) ?? owner;
+        return fieldSpeaker(context, eventId, speaker);
+    }
+
+    function fieldSpeaker({ scene }, eventId, speaker) {
         const event = host.mapEvent?.(eventId);
         const spriteset = scene._spriteset;
         const sprites = spriteset?._characterSprites;

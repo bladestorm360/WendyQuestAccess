@@ -2,6 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { captureWorld, eventTarget } = require('../src/world/snapshot');
+const { createTerrainJourney } = require('../src/world/terrain-journey');
 const { questDestinationLabel } = require('../src/world/quest-destinations');
 const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
@@ -34,6 +35,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     assert.equal(maps.length, 239);
     let checked = 0;
     let fallbackCount = 0;
+    let worldReturns = 0;
     let icePages = 0;
     const cleanupPages = [0, 0];
     let weatherSetupPages = 0;
@@ -104,10 +106,28 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 }
                 if (id === 120 && [11, 12].includes(entry.id)) assert.deepEqual(ordinary, { name: 'Cupboard', category: 'objects' });
                 if (id === 124 && entry.id === 15) assert.deepEqual(ordinary, { name: 'Drawer', category: 'objects' });
+                if (entry.name === 'Wendy') {
+                    assert.equal(ordinary?.category, 'objects');
+                    assert.equal(ordinary.name, ({ 96: 'Letters', 125: 'Keg', 139: 'Stack of books',
+                        147: 'Bed', 158: 'Letters' })[id]);
+                }
+                if (id === 139 && [6, 12, 13].includes(entry.id))
+                    assert.deepEqual(ordinary, { name: entry.id === 6 ? 'Book' : 'Stack of books', category: 'objects' });
                 if (id === 195 && entry.id === 4) assert.deepEqual(ordinary, { name: 'Clothing', category: 'objects' });
                 if ((id === 128 || id === 195) && entry.id === 9)
                     assert.deepEqual(ordinary, { name: 'Book', category: 'objects' });
                 const lease = { page, map: root.$gameMap, trigger: page.trigger, waypoint: false };
+                const worldReturn = id !== 185 && !(id === 26 && entry.id === 5) &&
+                    page.list.some(row => row.code === 201 && row.indent === 0 && row.parameters[0] === 0 && row.parameters[1] === 113);
+                if (worldReturn) {
+                    assert.equal(ordinary?.category, 'exits', 'world exit at ' + id + '/' + entry.id);
+                    assert.match(ordinary.name, /^(?:\w+ exit to world map|World map)$/);
+                    worldReturns++;
+                }
+                if (id === 134 && entry.id === 10 && index === 1) {
+                    assert.deepEqual(ordinary, { name: 'Window', category: 'objects' });
+                    assert.equal(questDestinationLabel(entry, lease, ordinary), 'Window');
+                }
                 const names = [ordinary?.name, questDestinationLabel(entry, lease, ordinary)];
                 for (const name of names) assert(!unsafe.test(name || ''), `unsafe label at map ${id} event ${entry.id} page ${index}`);
                 if (ordinary?.category === 'treasure') assert.match(ordinary.name, /^(Chest|Treasure)$/);
@@ -119,6 +139,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
             }
         }
     }
+    assert.equal(worldReturns, 430);
     assert.equal(icePages, 46);
     assert.deepEqual(cleanupPages, [66, 80]);
     console.log('Verified 146 erase-only action and floor pages are omitted across all maps.');
@@ -166,6 +187,67 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         assert.equal(player._newMapId, destination);
         assert.deepEqual([player._newX, player._newY], landing);
     }
+
+    // The route through the mine must land on the chest's side in both
+    // native town variants. A closed mine gives a spoiler-free explanation.
+    for (const [id, stage] of [[59, 3], [45, 4]]) {
+        const town = load(id, { variables: { 5: stage } });
+        town.player.setPosition(51, 10);
+        const snapshot = () => ({ ...captureWorld(c), map: c.$gameMap._mapId });
+        const view = snapshot();
+        const chest = view.objects.find(item => item.id === 3 && item.category === 'treasure');
+        const request = { x: view.x, y: view.y, event: chest.id, field: true };
+        assert.equal(solveRoute(town.geometry, view.live, request).status, 'unreachable');
+        const journey = createTerrainJourney(c);
+        journey.begin('nuggedorMine', id, chest, 48);
+        assert.equal(journey.next(view).target.name, 'South mine entrance');
+        assert.match(journey.next({ ...view, objects: [] }).unavailable, /entrance is closed/);
+        transfer(town, journey.next(view).target.id, [51, 10], 'South mine entrance', 48, [57, 18]);
+        journey.advance(id, 48);
+        const mine = load(48, { variables: { 5: stage } });
+        c.$gamePlayer = town.player;
+        town.player.setPosition(57, 18);
+        assert.equal(journey.next(snapshot()).target.id, 4);
+        journey.advance(48, id);
+        c.$gamePlayer = mine.player;
+        transfer(mine, 4, [57, 18], 'Return to Nuggedor', id, [51, 4]);
+        load(id, { variables: { 5: stage } });
+        c.$gamePlayer = town.player;
+        town.player.setPosition(51, 4);
+        const arrived = snapshot();
+        const restored = journey.next(arrived);
+        assert(restored.restore);
+        assert.equal(restored.target.id, chest.id);
+        await verifyWorker(town, { ...request, x: 51, y: 4 }, arrived.live, result => {
+            assert.equal(result.status, 'ready');
+            assert.equal(result.distance, 8);
+        });
+    }
+    console.log('Verified both Nuggedor mine transfers and the walk to the chest from the far landing.');
+
+    // The alternate ending is reachable through the ordinary Events and
+    // Exits categories. Its early route uses actual story gate pages.
+    for (const [id, event, start, switches, variables, variants, final] of [
+        [25, 14, [1, 17], [475], 10, 4, 'West exit to world map'],
+        [76, 53, [15, 1], [463], 14, 6, null],
+        [94, 12, [11, 1], [466], 16, 5, 'Road to Mech Office']
+    ]) {
+        for (let stage = 0; stage <= variants; stage++) {
+            const location = load(id, { switches, variables: { [variables]: stage } });
+            location.player.setPosition(...start);
+            const view = captureWorld(c, true, undefined, undefined, [], false, true);
+            const gate = view.objects.find(item => item.id === event);
+            if (stage === variants && final === null) {
+                assert.equal(gate, undefined, 'finished guard page is retired');
+                continue;
+            }
+            assert.equal(gate?.name, stage === variants ? final : 'Scene trigger', id + '/' + stage);
+            const path = solveRoute(location.geometry, view.live, { x: view.x, y: view.y, event, field: true,
+                handoffs: gate.handoffs });
+            assert.equal(path.status, 'ready', id + '/' + stage);
+        }
+    }
+    console.log('Verified browser entries and approaches for the three alternate ending story checkpoints.');
 
     const beachSwitches = [31];
     const beach = load(13, { switches: beachSwitches, self: ['13,5,C', '13,8,A', '13,14,A', '13,20,A'] });
@@ -245,7 +327,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const road = load(13, { switches: [11] });
     const roadEvent = road.gameMap.event(16);
     road.player.setPosition(roadEvent.x - 1, roadEvent.y);
-    assert(captureWorld(c).objects.some(item => item.id === roadEvent.eventId() && item.name === 'Road to Russetwood'));
+    assert(captureWorld(c).objects.some(item => item.id === roadEvent.eventId() && item.name === 'East exit to world map'));
     console.log('Verified native Crispy Beach gate activation, next checkpoint, and direct access on the far side.');
 
     function eventAvailability(id, switches, events, visible) {
@@ -282,7 +364,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
             /(?:West|East|South) exit/.test(item.name)).map(item => item.name)).size, 3);
         const quest = view.objects.find(item => item.category === 'quests');
         assert(quest?.questExit);
-        assert.equal(quest.name, 'West exit toward Cold Brew Trail');
+        assert.equal(quest.name, 'West exit to world map');
         const route = solveRoute(exit.geometry, view.live, { x: 1, y: 17, event: quest.id, field: true, stopBeforeEvent: true });
         assert.equal(route.status, 'interrupted');
         assert.equal(route.boundary, 4);
@@ -297,7 +379,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const trailView = captureWorld(c, true, undefined, {});
         assert.equal(trailView.live.events.find(event => event.id === 35).action, false);
         const trailQuest = trailView.objects.find(item => item.questExit);
-        assert.match(trailQuest?.name || '', /Frosty Peak/);
+        assert.equal(trailQuest?.name, 'North exit to world map');
         trail.player.setPosition(31, 6);
         const closest = captureWorld(c, false, undefined, {}).objects.find(item => item.questExit);
         assert.notEqual(closest?.id, trailQuest.id, 'a nearby parallel tile becomes the nearest');
@@ -306,7 +388,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const savedCommon = c.$dataCommonEvents;
         c.$dataCommonEvents = commonEvents;
         for (const [variables, id] of [[{}, 22], [{ 119: 7, 120: 11 }, 23]]) {
-            const world = load(113, { switches: [33], variables });
+            const world = load(113, { switches: [33, 624], variables });
             world.player.setPosition(12, 17);
             const marker = captureWorld(c, true, undefined, {}).objects.find(item => item.questExit);
             assert.equal(marker?.id, id, 'use the authored atlas pin to choose the next exit');
@@ -468,7 +550,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     c.$dataCommonEvents = commonEvents;
     const world = load(113);
     world.player.setPosition(14, 30);
-    const view = captureWorld(c);
+    const view = captureWorld(c, true, undefined, undefined, [], false, true);
     for (const id of [3, 4, 74]) {
         const entries = view.objects.filter(item => item.id === id);
         assert.deepEqual(entries.map(({ name, category }) => [name, category]), [['Russetwood', 'exits']]);
@@ -489,7 +571,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const ruins = load(16, states);
         ruins.player.setPosition(52, 7);
         const exits = captureWorld(c).objects.filter(item => item.id === id);
-        assert.deepEqual(exits.map(({ name, category }) => [name, category]), [['Road to Russetwood', 'exits']]);
+        assert.deepEqual(exits.map(({ name, category }) => [name, category]),
+            [[id === 21 ? 'East exit to world map' : 'Road to Russetwood', 'exits']]);
     }
     for (const [map, id, floor] of [[23, 2, 'Second floor'], [24, 1, 'First floor'],
         [117, 13, 'Second floor'], [118, 3, 'First floor'], [120, 2, 'Second floor'], [122, 1, 'First floor'],
@@ -582,7 +665,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
 
     const shore = load(113);
     shore.player.setPosition(46, 0);
-    const shoreline = captureWorld(c);
+    const shoreline = captureWorld(c, true, undefined, undefined, [], false, true);
     const fromShore = { x: shoreline.x, y: shoreline.y, event: 94, field: true, stopBeforeEvent: true };
     assert.deepEqual(shoreline.objects.filter(item => item.id === 94).map(item => item.category), ['vehicles']);
     assert.deepEqual([...findReachable(shore.geometry, shoreline.live, { ...fromShore,
@@ -595,7 +678,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
 
     const unlocked = load(113, { switches: [221] });
     unlocked.player.setPosition(46, 0);
-    const closedDock = captureWorld(c).objects.filter(item => item.id === 94);
+    const closedDock = captureWorld(c, true, undefined, undefined, [], false, true).objects.filter(item => item.id === 94);
     assert.deepEqual(closedDock.map(item => item.category), ['events'], 'an active floor touch does not promise boarding');
     c.$dataCommonEvents = common;
     console.log('Verified all audited solid transfers, native approach directions, and the generic Cauldron and dock entries.');

@@ -6,13 +6,13 @@ const { renderedSprite } = require('../runtime/rendered-sprite');
 const beats = Object.create(null);
 const clipIds = Object.keys(cues);
 for (const id of clipIds) {
-    for (const [map, event, page, index, actor, switchId] of cues[id].beats) {
+    for (const [map, event, page, index, actor, switchId, visual] of cues[id].beats) {
         beats[map] ??= Object.create(null);
         beats[map][event] ??= Object.create(null);
-        beats[map][event][index] = { id, page, actor, switchId };
+        beats[map][event][index] = { id, page, actor, switchId: switchId ?? undefined, visual };
     }
 }
-const PACK_LIMIT = 256 * 1024;
+const PACK_LIMIT = 384 * 1024;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
 const MIME = 'audio/webm; codecs="opus"';
@@ -110,15 +110,15 @@ function createNarration(root, host, preferences) {
         stopClip();
     }
 
-    function accepted(scene, interpreter, actor, switched) {
+    function accepted(scene, interpreter, actor, switched, visual) {
         if (!pack || !enabled() || !ready(scene)) return;
         const map = root.$gameMap;
         const candidate = beats[interpreter._mapId]?.[interpreter._eventId]?.[interpreter._index];
         if (!candidate) return;
         const page = root.$dataMap?.events?.[interpreter._eventId]?.pages[candidate.page];
         if (interpreter !== map._interpreter || interpreter._mapId !== map._mapId ||
-            page?.list !== interpreter._list || candidate.switchId !== switched) return;
-        const source = map._events[candidate.actor];
+            page?.list !== interpreter._list || candidate.switchId !== switched || candidate.visual !== visual) return;
+        const source = candidate.actor === -1 ? root.$gamePlayer : map._events[candidate.actor];
         if (!source || source._erased || (switched ? !root.$gameSwitches.value(switched) : actor !== source)) return;
         actor = source;
         const prior = scene._wqaNarrationSeen;
@@ -133,7 +133,7 @@ function createNarration(root, host, preferences) {
         scene._wqaNarrationActive = true;
         scene._wqaNarrationSeen = { list: interpreter._list, index: interpreter._index };
         owner = { scene, interpreter, list: interpreter._list, index: interpreter._index,
-            frame: host.graphics.frameCount, sprite, actor, switched, x: actor._realX, y: actor._realY, id: candidate.id };
+            frame: host.graphics.frameCount, sprite, actor, switched, visual, x: actor._realX, y: actor._realY, id: candidate.id };
     }
 
     function present(scene) {
@@ -147,9 +147,19 @@ function createNarration(root, host, preferences) {
         // The finale paints a white full-screen picture over this change.
         // Wait until it clears so the narration follows the visible result.
         if (state.id === 'chomps-sacrifice' && root.$gameScreen?._pictures?.[29]?._opacity > 20) return;
-        const { actor, sprite, switched } = state;
-        const parent = scene._spriteset?._tilemap;
-        const changed = switched ? root.$gameSwitches.value(switched) :
+        const { actor, sprite, switched, visual } = state;
+        const spriteset = scene._spriteset;
+        const parent = spriteset?._tilemap;
+        let visibleEffect = () => true;
+        if (visual > 0) {
+            const balloons = spriteset?._balloonSprites;
+            const balloon = Array.isArray(balloons) && balloons.length <= 32 &&
+                balloons.find(item => item.targetObject === actor && item._target === sprite && item._balloonId === visual);
+            visibleEffect = () => renderedSprite(balloon, spriteset._effectsContainer) && balloon._duration > 0;
+        } else if (visual === -1) {
+            visibleEffect = () => root.$gameScreen._flashColor?.[3] > 0;
+        }
+        const changed = visual !== undefined ? visibleEffect() : switched ? root.$gameSwitches.value(switched) :
             actor._realX !== state.x || actor._realY !== state.y || actor._jumpCount > 0;
         if (!parent || !changed || !actor._characterName || sprite._characterName !== actor._characterName ||
             actor._transparent || !renderedSprite(sprite, parent)) return;
@@ -160,7 +170,7 @@ function createNarration(root, host, preferences) {
         renderer.once('postrender', () => {
             if (owner !== state) return;
             if (host.graphics.frameCount - frameBefore > FRAME_LIMIT) return leave(scene);
-            if (!ready(scene) || !enabled() || !renderedSprite(sprite, parent)) return leave(scene);
+            if (!ready(scene) || !enabled() || !renderedSprite(sprite, parent) || !visibleEffect()) return leave(scene);
             const pose = sprite.worldTransform;
             if (!pose || pose.tx < 0 || pose.tx > host.graphics.width || pose.ty < 0 ||
                 pose.ty > host.graphics.height + 16) {

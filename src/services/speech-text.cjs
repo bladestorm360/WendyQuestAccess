@@ -232,7 +232,7 @@ function formatSpeech(message) {
             }
             else if (message.guideAction) parts.push(facing ? `Face ${facing} and press the action button` : 'Press the action button');
             else if (facing && !beaconOnly) parts.push(`face ${facing}`);
-            const onward = !more && takeExit && message.useExit && label({ name: message.onward });
+            const onward = !more && takeExit && (message.useExit || message.takeExit) && label({ name: message.onward });
             if (onward) parts.push(onward.replace(/\.$/, ''));
             const afterEnemy = message.enemyBlocked === true && label({ name: message.afterEnemy });
             if (afterEnemy)

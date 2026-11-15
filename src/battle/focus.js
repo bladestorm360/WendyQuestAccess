@@ -154,7 +154,9 @@ function createBattleFocus(root, host, notifications, preferences, onReady) {
             if (action === 'details' || action === 'battleAppearance') {
                 const sprite = page.option._followTarget;
                 const companion = sprite === page.scene._spriteset?._subActorSprite;
-                if (action === 'details' && companion && page.lines.length) show(page, details(page));
+                // Wendy's native Special button opens command group one.
+                if (action === 'details' && page.lines.length && (companion || sprite._battleOptionsActive === 1))
+                    show(page, details(page));
                 else {
                     const appearance = partyAppearance(page.scene, sprite);
                     if (action === 'battleAppearance' && !appearance) return false;

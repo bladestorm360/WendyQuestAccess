@@ -4,17 +4,20 @@ const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
 const { localDestination, iceOpensPassage, inactiveFloorScene, concealedDestination,
     chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit } = require('./local-destinations');
-const { worldDestination, worldEventDescription, discoveryEntrance } = require('./world-destinations');
+const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit,
+    worldEntranceRevealed } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
+const { transferOptions } = require('./transfer-events.cjs');
 const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
 const { GATE_SWITCHES, BREAKFAST_MAPS } = require('./terrain-control-labels.cjs');
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
-function eventTarget(root, mode, event, entry, page, spoilers = false) {
+function eventTarget(root, mode, event, entry, page, spoilers = false, questMarker = false) {
     const map = root.$gameMap._mapId;
     if ((!spoilers && concealedDestination(map, event)) || !pageHasInteraction(page) ||
-        inactiveFloorScene(root, event, page) || excludedDestination(entry, page)) return null;
+        inactiveFloorScene(root, event, page) || excludedDestination(entry, page) ||
+        (map === 113 && !worldEntranceRevealed(root, event._eventId, spoilers, questMarker))) return null;
     let target = worldDestination(root, mode, event, entry, page);
     if (target === undefined) target = localDestination(root, event, page);
     if (target === undefined) target = checkpointTarget(map, event._eventId, event._pageIndex, event._trigger)
@@ -23,7 +26,8 @@ function eventTarget(root, mode, event, entry, page, spoilers = false) {
     if (!target) target = worldEventDescription(root, mode, event, page) ||
         (mode === 'walk' && !timedCave(map) && eventDescription(root, entry, page, event)) ||
         target;
-    return target && mode === 'airship' && target.category !== 'exits' ? null : target;
+    if (target && mode === 'airship' && target.category !== 'exits') return null;
+    return worldMapExit(root, mode, event, entry, page, target);
 }
 
 function terrainDelta(changes, layers, flags, count) {
@@ -124,10 +128,18 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 objects.push({ id: eventId, x, y, name: 'Mech Office', category: 'exits', eventAction: 'bump' });
             continue;
         }
-        const target = action ? eventTarget(root, mode, event, entry, page, spoilers) : undefined;
+        const target = action ? eventTarget(root, mode, event, entry, page, spoilers, !!quest) : undefined;
         if (target && (!quest || target.category !== 'events')) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
+        } else if (mode === 'ship' && id === 113 && action) {
+            const land = eventTarget(root, 'walk', event, entry, page, spoilers, !!quest);
+            if (land?.category === 'exits') {
+                const edges = transferOptions(id, entry, page, root.$dataCommonEvents);
+                const shoreMap = edges[0]?.map;
+                if (shoreMap && shoreMap !== 26 && shoreMap !== 49 && edges.every(edge => edge.map === shoreMap))
+                    objects.push({ id: eventId, x, y, name: land.name, category: 'exits', shoreMap });
+            }
         }
         if (quest && target !== null && (mode !== 'airship' || target?.category === 'exits')) {
             const { entryDirection, eventAction, bumpDirections, handoffs } = target || {};

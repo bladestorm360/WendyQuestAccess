@@ -780,8 +780,8 @@ function boot(root, nodeRequire, nodeProcess) {
         catch { scene._wqaPreloadOverflow = true; }
     };
 
-    root.WendyQuestAccessNarrationAccepted = function (scene, interpreter, actor, switched) {
-        try { narration?.accepted(scene, interpreter, actor, switched); } catch { narration?.leave(scene); }
+    root.WendyQuestAccessNarrationAccepted = function (scene, interpreter, actor, switched, visual) {
+        try { narration?.accepted(scene, interpreter, actor, switched, visual); } catch { narration?.leave(scene); }
     };
 
     root.WendyQuestAccessNarrationPresent = function (scene) {

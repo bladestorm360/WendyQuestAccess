@@ -24,6 +24,72 @@ const BREAKFAST_EXITS = {
     69: ['Bacon Beach, north entrance', 85], 70: ['Bacon Beach, west entrance', 85], 71: ['Breakfast Stone Island', 86]
 };
 
+// Main-story introductions persist in Ayatam's save-backed quest records.
+const INTRODUCTIONS = Object.fromEntries([
+    [[10], [13]],
+    [[16, 19], [14, 15]],
+    [[22], [15]],
+    [[28, 29, 31, 46], [16, 17]],
+    [[34], [17, 18]],
+    [[43], [20, 21, 22]],
+    [[17, 18, 32, 39, 41, 42], [22, 23]],
+    [[52], [23, 24]],
+    [[56], [24, 25, 28]],
+    [[59, 60], [25, 26, 27]],
+    [[61, 62, 63, 64, 65, 66, 67, 68, 69, 70], [26, 27]],
+    [[71], [27, 28]],
+    [[25], [29, 30]]
+].flatMap(([events, quests]) => events.map(id => [id, quests])));
+const RUIN_MARKERS = new Map();
+for (const [marker, entrance] of Object.entries(DISCOVERIES)) {
+    if (entrance === 13) continue;
+    if (!RUIN_MARKERS.has(entrance)) RUIN_MARKERS.set(entrance, Number(marker));
+}
+
+function learnedQuest(root, id) {
+    const party = root.$gameParty;
+    const name = 'quest' + id;
+    const quest = party?._quests?.[name];
+    return quest?.assent === true || quest?.reported === true || party?.getNav?.() === name;
+}
+
+function atlasPinAt(root, x, y) {
+    return root.$gameSwitches?.value?.(624) === true && root.$gameVariables?.value?.(119) === x &&
+        root.$gameVariables.value(120) === y;
+}
+
+function islandRevealed(root) {
+    const switches = root.$gameSwitches;
+    if (switches?.value?.(619) === true || root.$gameSelfSwitches?.value?.([113, 90, 'A']) === true) return true;
+    const x = root.$gameVariables?.value?.(109);
+    if ((switches?.value?.(268) === true || switches?.value?.(629) === true) &&
+        (x === 48 || x === 48.5) && root.$gameVariables.value(110) === 4) return true;
+    // A player can find the dock and step ashore before hearing the hint.
+    const player = root.$gamePlayer;
+    return root.$gameMap?._mapId === 113 && (player?._vehicleType === 'walk' || player?._vehicleType === '') &&
+        player._x >= 45 && player._x <= 51 && player._y >= 2 && player._y <= 8;
+}
+
+function worldEntranceRevealed(root, id, spoilers, questMarker = false) {
+    if (spoilers) return true;
+    if ([13, 51, 90, 94].includes(id)) return islandRevealed(root);
+    const marker = RUIN_MARKERS.get(id);
+    if (marker) return marker === 98 ? root.$gameSwitches?.value?.(159) === true :
+        root.$gameSelfSwitches?.value?.([113, marker, 'A']) === true;
+    if (questMarker) return true;
+    // A missing quest producer leaves ordinary names available. The island
+    // and ruins have their own native discovery evidence above.
+    if (!root.$gameParty?._quests && typeof root.$gameParty?.getNav !== 'function') return true;
+    const on = key => root.$gameSwitches?.value?.(key) === true;
+    if (id === FLOAT_FORT_ENTRANCE) return on(38);
+    if (id === 23) return on(38) || atlasPinAt(root, 7, 11);
+    if (id === 22 && on(38) || (id === 16 || id === 19) && on(33)) return true;
+    if (id === 31 && root.$gamePlayer?._vehicleType === 'ship') return true;
+    if (id === 43 && on(54) || id === 25 && on(267) || id === 71 && on(97)) return true;
+    const prerequisites = INTRODUCTIONS[id];
+    return !prerequisites || prerequisites.some(quest => learnedQuest(root, quest));
+}
+
 function transfersTo(command, map) {
     return command?.code === 201 && command.indent === 0 && command.parameters[0] === 0 && command.parameters[1] === map;
 }
@@ -32,11 +98,7 @@ function worldDestination(root, mode, event, entry, page) {
     const map = root.$gameMap._mapId;
     const id = event._eventId;
     const land = mode === 'walk' || mode === 'airship';
-    if (map !== 113) {
-        if (mode === 'walk' && (map === 206 || RUINS.includes(map)) && event._trigger === 1 &&
-            page.list.some(command => transfersTo(command, 113))) return { name: 'Return to world map', category: 'exits' };
-        return undefined;
-    }
+    if (map !== 113) return undefined;
     const solid = SOLID_EXITS[id];
     if (land && solid && event._trigger === 1 && event._priorityType === 1 && event._pageIndex === 0) {
         const edges = worldFacingEntrances(entry, page, root.$dataCommonEvents);
@@ -101,7 +163,39 @@ function worldEventDescription(root, mode, event, page) {
     const sailing = (mode === 'ship' || mode === 'boat') && (id === 24 || id === 158) &&
         page.list.some(command => command.code === 357 && command.parameters?.[0] === 'Tyruswoo_TileControl' &&
             command.parameters[1] === 'set_tile');
-    return sailing ? { name: 'Discovery marker', category: 'events', eventAction: 'step' } : null;
+    if (sailing) return { name: 'Discovery marker', category: 'events', eventAction: 'step' };
+    if (mode === 'ship' && (id === 155 || id === 156) && page.list.some(command =>
+        command.code === 357 && command.parameters?.[0] === 'WendyQuest' && command.parameters[1] === 'ShowRewardTokens')) {
+        const marked = root.$gameSelfSwitches?.value?.([113, id === 155 ? 24 : 158, 'A']) === true;
+        return { name: marked ? 'Map marker' : 'Scene trigger', category: 'events', eventAction: 'step' };
+    }
+    return null;
+}
+
+// These approaches sit inside the edge, or extend a contiguous band
+// around a corner. The side describes the exit on the current map.
+const EXIT_SIDES = {
+    15: { 2: 'Northeast', 3: 'Northeast', 5: 'Northeast' },
+    17: { 8: 'South' }, 20: { 2: 'North', 3: 'North' }, 26: { 6: 'West' },
+    27: { 23: 'West' }, 29: { 1: 'North' }, 49: { 12: 'West' },
+    77: { 58: 'East' }, 80: { 2: 'North', 13: 'North', 34: 'North', 35: 'North', 38: 'North' },
+    134: { 10: 'North' }, 209: { 16: 'South' }
+};
+
+function worldMapExit(root, mode, event, entry, page, target) {
+    const map = root.$gameMap._mapId;
+    if (mode !== 'walk' || map === 113 || map === 185 || target?.category === 'vehicles' ||
+        ![0, 1, 2].includes(event._trigger) ||
+        !page.list.some(row => row.code === 201 && row.parameters?.[0] === 0 && row.parameters[1] === 113 &&
+            (row.indent === 0 || target?.category === 'exits'))) return target;
+    const { width, height } = root.$dataMap;
+    const { x, y } = entry;
+    const vertical = y === 0 ? 'North' : y === height - 1 ? 'South' : '';
+    const horizontal = x === 0 ? 'West' : x === width - 1 ? 'East' : '';
+    const side = EXIT_SIDES[map]?.[event._eventId] ||
+        vertical + (vertical ? horizontal.toLowerCase() : horizontal);
+    return { ...target, category: 'exits', name: side ? side + ' exit to world map' : 'World map',
+        eventAction: target?.eventAction ?? (event._trigger ? event._priorityType === 1 ? 'bump' : 'step' : undefined) };
 }
 
 function discoveryEntrance(map, event) {
@@ -109,9 +203,10 @@ function discoveryEntrance(map, event) {
     return DISCOVERIES[event._eventId];
 }
 
-function worldBoundaryName(root, id) {
+function worldBoundaryName(root, id, spoilers) {
+    if (root.$gameMap._mapId === 113 && !worldEntranceRevealed(root, id, spoilers)) return '';
     const entrance = discoveryEntrance(root.$gameMap._mapId, root.$gameMap._events?.[id]);
     return entrance ? 'Discovery marker' : '';
 }
 
-module.exports = { worldDestination, worldEventDescription, worldBoundaryName, discoveryEntrance, FLOAT_FORT_ENTRANCE };
+module.exports = { worldDestination, worldEventDescription, worldBoundaryName, discoveryEntrance, worldMapExit, worldEntranceRevealed, FLOAT_FORT_ENTRANCE };

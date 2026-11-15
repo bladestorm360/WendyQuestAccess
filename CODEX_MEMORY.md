@@ -157,3 +157,7 @@ The [Breakfast Isles onward guidance and named exits](docs/navigation-audit.md#b
 The vehicle update covers one announcement per settled boat, airship and walking handback. The Float Fort route separates the walking entrance and ship port, and preserves the selected destination through the west Chillcrest handoff when needed. The same batch describes the visible Cold Brew and Devilled Nook chest gaps and labels the hidden room's Clothing. [Vehicle and terrain audit](docs/navigation-audit.md#vehicle-maps-and-float-fort) · [Verification and installation](docs/deployment.md#vehicle-notices-float-fort-and-visible-chests)
 
 The installed vehicle and Float Fort source checkpoint `3b47f45f58161842e0cd05cabd7b50ac723bd635` was verified on private main. The closed-game installer verified the combined update, retained one prior payload for rollback, and cleared its disposable build and test outputs.
+
+November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](docs/navigation-audit.md#world-exits-and-nuggedor-mine-route) use confirmed event pages and native discovery state. [Prison narration](docs/cutscene-description.md) and [battle Details](docs/battle.md) are verified separately. See the [exact candidate and installation status](docs/deployment.md#world-map-labels-nuggedor-and-prison-descriptions).
+
+[Hidden ending prerequisites and accessibility checks](docs/puzzles-and-secrets.md#hidden-ending-route) document the native route, solo battle, shared epilogue and final postscript.

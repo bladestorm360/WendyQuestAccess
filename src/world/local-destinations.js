@@ -1,6 +1,6 @@
 'use strict';
 
-const { BREAKFAST_MAPS, GATE_SWITCHES } = require('./terrain-control-labels.cjs');
+const { GATE_SWITCHES } = require('./terrain-control-labels.cjs');
 const { houseStair, houseBranches } = require('./transfer-events.cjs');
 
 // Each locator describes the active page's native destination. The worker
@@ -75,8 +75,10 @@ const TOUCH_TRANSFERS = {
         30: ['Chillcrest house 2', 130], 31: ['Chillcrest house 3', 131] },
     27: { 17: ['Frosty Peak cave', 37], 44: ['Cold Brew Trail cave', 204] },
     58: { 37: ['Cauldron entrance', 57], 38: ['Cauldron entrance', 57], 39: ['Cauldron entrance', 57] },
+    45: { 1: ['North mine entrance', 48], 2: ['South mine entrance', 48] },
     48: { 3: ['Return to Nuggedor', 45, 59], 4: ['Return to Nuggedor', 45, 59],
         10: ['Return to Nuggedor', 45, 59], 16: ['Return to Nuggedor', 45, 59] },
+    59: { 1: ['North mine entrance', 48], 2: ['South mine entrance', 48] },
     83: { 27: ["Frygor's house", 23] },
     116: { 8: ['Return to Crispy Beach', 13] },
     117: { 11: ['Return to Russetwood', 12] },
@@ -84,8 +86,17 @@ const TOUCH_TRANSFERS = {
 };
 
 const SCENE_TRANSFERS = {
-    29: { 1: 0 }, 94: { 12: 3, 27: 3 }, 103: { 2: 0, 3: 0, 4: 0, 16: 0, 17: 0, 18: 0, 19: 0 },
-    134: { 10: 1 }
+    29: { 1: 0 }, 94: { 12: 3, 27: 3 }, 103: { 2: 0, 3: 0, 4: 0, 16: 0, 17: 0, 18: 0, 19: 0 }
+};
+
+// These props are drawn in the map layers. Their editor names can be
+// the commentator's name, a book title, or a generic group of books.
+const INSPECTED_PROPS = {
+    96: { 5: 'Letters' },
+    125: { 16: 'Keg' },
+    139: { 4: 'Stack of books', 6: 'Book', 12: 'Stack of books', 13: 'Stack of books', 14: 'Stack of books' },
+    147: { 24: 'Bed' },
+    158: { 2: 'Letters' }
 };
 
 const PULLS = { 51: [2], 53: [3, 4], 55: [4] };
@@ -115,8 +126,7 @@ function chillcrestExit(root, event, page) {
         if (start < 0 || otherwise?.code !== 411 || otherwise.indent !== 0) return undefined;
     }
     if (event._trigger !== 0 && event._trigger !== 1) return undefined;
-    return { name: west ? 'West exit toward Cold Brew Trail' : east ? 'East exit toward Frosty Float' :
-        'South exit toward Salt Caverns', category: 'exits', eventAction: event._trigger === 1 ? 'step' : undefined,
+    return { category: 'exits', eventAction: event._trigger === 1 ? 'step' : undefined,
         ...(west ? { handoffs: WEST_CHILLCREST } : {}) };
 }
 
@@ -249,6 +259,8 @@ function localDestination(root, event, page) {
     const list = page.list;
     const townExit = chillcrestExit(root, event, page);
     if (townExit) return townExit;
+    if (map === 134 && id === 10 && trigger === 0 && (event._pageIndex === 0 || event._pageIndex === 1))
+        return { name: 'Window', category: 'objects' };
     const stairs = houseStair(map, id);
     if (stairs) {
         // The landing changes within the same native page when the hidden
@@ -289,10 +301,6 @@ function localDestination(root, event, page) {
         if (map === 26 && (id === 6 || id === 7) && to(113))
             return { name: 'Return to world map', category: 'exits', eventAction: 'step', handoffs: [6, 7] };
         if (map === 17 && id === 7 && to(19)) return { name: 'Salt Caverns', category: 'exits', eventAction: 'step' };
-        if (map !== 113 && BREAKFAST_MAPS.includes(map) && to(113)) {
-            const name = map === 85 ? id >= 37 && id <= 41 ? 'World map, west exit' : 'World map, east exit' : 'World map';
-            return { name, category: 'exits', eventAction: 'step' };
-        }
         if (map === 86 && id === 17 && list.some(command => command.code === 301 && command.indent === 0))
             return { name: 'Island encounter', category: 'events', eventAction: 'step' };
         if (map === 94 && (id === 12 || id === 27) && to(93))
@@ -350,6 +358,8 @@ function localDestination(root, event, page) {
         list.some(({ code, parameters }) => code === 357 && parameters[0] === 'MapScene' &&
             parameters[1] === 'AnimatedObjectSetState'))
         return { name: 'Ice block', category: 'objects' };
+    const prop = INSPECTED_PROPS[map]?.[id];
+    if (prop) return { name: prop, category: 'objects' };
     // The workshop has a book on the desk and two separate cupboards.
     if (map === 120 && (id === 11 || id === 12)) return { name: 'Cupboard', category: 'objects' };
     // This event's editor name describes an item. The visible prop is a drawer.

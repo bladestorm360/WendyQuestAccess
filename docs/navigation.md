@@ -274,3 +274,13 @@ Open **F8 → Navigation → Spoiler mode**. It defaults to off and uses the sha
 Chillcrest has western, southern and eastern world-map exits. In Exits, the western group reads West exit toward Cold Brew Trail once its native page can actually transfer. The earlier page can start the companion conversation instead. The southern exit leads to the overworld beside Salt Caverns. The eastern group leads to the overworld on the Frosty Float side. The cave returns to town.
 
 When Save Elder Frosty is selected, Frostyna has joined and the Frosty Stone has yet to be acquired, the Quests category can offer the active west exit. This covers the state after the native exit marker’s original page is replaced. Directions name the exit at its last step. An unrelated route interrupted by entering Chillcrest reports the entrance and whether an onward route has been verified.
+
+### World map exits, story visibility and sailing destinations
+
+The Exits category uses **World map** for a transfer to the overworld. A known approach adds a direction, such as **East exit to world map**. Directions name the exit at the last step. No direction is added for an interior passage whose side is ambiguous.
+
+The Atlas has fixed artwork and native story markers. With Spoiler mode off, the overworld browser uses the current native marker, saved quest stages and actual discovery flags. The general native exit registry contains all locations, so it does not indicate whether the player has been told about or reached an area. Secret Island needs a plotted hint, its discovery flag or a native arrival. An early mention of an unspecified island is insufficient to identify the entrance. Spoiler mode exposes the authored locations, while native gates still determine access.
+
+On the ship, **All destinations** can list discovered land entrances, including Lost Ruins. Directions use a verified port and continue after the game returns walking control. Request directions again after each named exit. **Reachable only** checks the current travel mode and local approach. Sailing floor interactions are also listed under **Events**, and known ones are named when a route stops there. The two mine exits in Nuggedor are standard **Exits**. Directions to the chest across the channel use the south mine entrance and the far return to Nuggedor, or report that the mine entrance is closed.
+
+The Mech Café jail window appears in **Objects** and, while marked, in **Quests**. In Skella's house, the book stacks and loose books use object labels even when the event's editor name is Wendy or the book's title. [Native route evidence](navigation-audit.md#world-exits-and-nuggedor-mine-route)

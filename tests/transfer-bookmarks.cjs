@@ -216,7 +216,12 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         const ruinsMaps = new Set([161, 162, ...Array.from({ length: 17 }, (_, index) => index + 164), 207, 208]);
         const world = load(113, { self: ['113,75,A', '113,90,A'] });
         world.player.setPosition(1, 1);
+        const discovered = transfers.candidates().entrances;
+        assert.deepEqual(discovered.filter(edge => ruinsMaps.has(edge.map)).map(edge => edge.event), [76]);
+        const previousSpoilers = spoilers;
+        spoilers = true;
         const worldEntrances = transfers.candidates().entrances;
+        spoilers = previousSpoilers;
         assert.equal(worldEntrances.filter(edge => ruinsMaps.has(edge.map)).length, 21);
         assert(worldEntrances.some(edge => edge.event === 1 && edge.map === 13));
         assert(!worldEntrances.some(edge => [30, 31].includes(edge.event)), 'ship ports stay out of walking plans');
@@ -250,6 +255,9 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
             c.$gameVariables.setValue = variableWriter;
         }
         console.log('Verified 21 Lost Ruins entrances, native world reservations, and Secret Island entry and return.');
+
+        // Test every qualifying transfer in isolation from reveal gating.
+        spoilers = true;
 
         for (const [event, switchId, progress, destination] of [[18, 0, 0, 60], [18, 71, 0, 60],
             [46, 0, 3, 59], [46, 0, 4, 45], [52, 0, 0, 209], [69, 0, 0, 85]]) {
