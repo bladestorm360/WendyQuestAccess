@@ -490,6 +490,8 @@ During gameplay, when a crystal arrives during victory, listen for “Momentum g
 
 November 15, 2026. Plan SHA-256 `99631d6fd573e3676ded4a29dd373a4a16e93f3501bd1bd4c1f13f2f450ac2bf`. Plugin SHA-256 `7f432e6093777f41557777c4bf2951a9934a796f7dafc0cc9c44616ad4e30f70`. Nine other native scripts, 41 other payload files and 241 geometry entries match the preceding plan. The seven changed scripts carry the map update or native cancellation predicate.
 
-The focused dialogue, world and matching NW.js fixtures passed. Signed Microsoft Defender scan `B055A769-3247-45A2-87DE-CAE219472D5C` completed at 15:15:45 PST with no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.317.0.
+The focused dialogue, world and matching NW.js fixtures passed. The exact release passed the closed-game installer rehearsal, including rollback, reapplication and unknown-file protection. Signed Microsoft Defender scan `B055A769-3247-45A2-87DE-CAE219472D5C` completed at 15:15:45 PST with no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.317.0.
 
 In flight, cross from water onto eligible ground and listen for “Can land.” Moving between adjacent landable tiles or leaving the area is silent. In Sunrise Bay shop 3, select Shelly under NPC and follow directions to the counter. Press Confirm to talk and I to check her appearance. Inside Wendy’s in Sunrise Bay, Kitty and Jay have separate NPC entries. [Landing](navigation.md#airship-landing-trace) · [Sunrise Bay](navigation-audit.md#sunrise-bay-scene-npcs-and-counter-access)
+
+The Steam launcher lease refused installation while Wendy Quest had a responsive window. The verified candidate is staged on C: pending game closure. The preceding victory Momentum build is still installed.
