@@ -475,3 +475,13 @@ The world and matching NW.js fixtures passed. The exact candidate passed the iso
 The independent Steam status check and installed plan and plugin hashes matched. All four save and configuration hashes matched before and after installation. The preceding verified build is retained in `C:/Games/Dev/WendyQuestAccess-analysis/wendy-facing-pot/rollback-latest`. Cleanup removed 34,454,681 bytes of temporary output and the superseded backup.
 
 With Autowalk on, select **Cooking pot** in **Objects** in the Caves house. Request directions. At “Arrived,” press Confirm to inspect the pot. The offline check exercises arrival from an adjacent tile while facing away from the pot. [Autowalk](navigation.md#native-input-boundary-for-autowalk) · [Object labels](navigation-audit.md)
+
+## Victory Momentum
+
+November 15, 2026. Installed from source checkpoint `58108cf389399c49222ffb6ee6af3c9eb199b6a6`. The focused plan updates the bundled plugin, `rmmz_managers.js` and `BattleSceneArranger.js`. The other 14 native scripts, 41 payload files and 241 geometry entries match the preceding plan. Plan SHA-256 `c5ed881835020e95a865540cd4b5fabeb5af078a23e8b31741f1b15530a82edb`. Plugin SHA-256 `592abbe15ace680492d48500a9fd687d81f0919edd642f4f5207a3bedb1a0932`.
+
+The exact candidate passed the native victory and regular Momentum fixtures, the matching NW.js smoke and the isolated installer rehearsal. Signed Microsoft Defender scan `020ED90D-46B4-49E5-9540-9C6EA893BE1F` completed at 13:59:04 PST with no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.317.0. The wider dialogue fixture reproduced the preceding build's Salt Caverns test failure. [Verification details](feature-checkpoint.md)
+
+The closed-game installer and independent status check verified the installed files. All four save and configuration hashes matched before and after installation. The preceding Autowalk facing build is retained in `C:/Games/Dev/WendyQuestAccess-analysis/wendy-victory-momentum/rollback-latest`. Cleanup removed 24,217,756 bytes of staging and the superseded copy.
+
+During gameplay, when a crystal arrives during victory, listen for “Momentum gained” and the filled pip count after the rewards. [Momentum behavior](battle.md#momentum-gains)
