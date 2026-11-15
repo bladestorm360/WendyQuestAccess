@@ -104,3 +104,62 @@ The 239-map audit covers active event pages and bounded common-event calls. A ve
 ## Frosty Peak combined obstructions
 
 In Map 027, the route from the southeast side to quest marker 33, the northwest chest and the nearby story approach tiles failed when a roaming enemy blocked the usable path to the northwest ice event 41. The earlier solver required each obstruction to account for the full remaining route on its own. It also discarded an opened route that still ended at a required floor trigger. The candidate search can now establish onward connectivity with ordinary walking, verified terrain controls, and native roaming-event locations. It then checks the next interaction or safe prefix against the unchanged live snapshot. The game retains ownership of encounters, melting and transition progression. Peak approach tiles 27 and 32 share the switch-41 dialogue outcome. [Terrain prerequisites](../src/world/terrain-controls.cjs) · [Native step validation](../src/world/routes.cjs) · [World fixture](../tests/world.test.cjs)
+
+## November 14 full-map navigation audit
+
+This engineering record contains progression spoilers. The audited installation is Steam build 26578620, source checkpoint `8420bf846f124ba4630b9fcb7336f421106908b7` and mod plan `0b0729dc95a5b5edd8e1cd32a6ee3ffbb65b2e7a5d134c7fed2baa7fab4a087c`. The stored geometry and its installed inputs matched all 240 verified files. The fixed scope was native transfers and their labels, movement prerequisites, and the current guides. The audit used offline copies of the game data and extracted native methods.
+
+### Exits and scene names
+
+| Map and pathfinder result | Native behavior and required correction |
+| --- | --- |
+| 193:3, page 0, **Scene trigger** in Events | From the upper elevator landing at (10,13), one step south accepts this event. Its final switch 483 selects page 1, which moves Wendy and takes her to the lower landing at Map 098 (10,15). Later rides omit the first-use conversation. Give the ride a stable name in Exits, with a separate first-use dialogue handoff. Include the lower boarding tile 098:16 and its automatic dispatcher 098:19 in the same connection. On Map 192, state 404 already distinguishes descent to the lower landing from the forced ride. |
+| 087, nine Caffeine Caverns exits name the wrong destination | The nine ordinary trigger tiles below all started in the installed-method fixture. The browser uses editor names that disagree with their direct transfers. Use each receiving map's visible name and distinguish different mouths with verified landing positions. Keep first discovery and concealed entries tied to their native pages. |
+| 103:2–4 and 16–19, **Warp tile** in Objects | Each begins with a same-map reposition, then runs dialogue and a battle. All seven could trigger natively from the ordinary entrance. Treat the active pages as encounter events and retire them when the shared encounter state changes. Their repositioning is part of the encounter. |
+| 029:1.0, 094:12.3 and 27.3, 134:10.1, **Warp tile** in Objects | These same-map movements stage dialogue or story scenes. At 094:12 and 094:27, pages 5–7 instead reach Map 093 and currently speak “To Burgenburg.” Read the actual Road to Mech Office exit on these pages and retain the one-time scene action where present. The ordinary return pages on 029 and 134 transfer to Map 113. |
+| 025:14, 18 and 19, west side of Chillcrest | The earlier branch can start Frostyna-related dialogue. Once the native transfer is active, all three tiles are correctly listed as West exit toward Cold Brew Trail. The eastern, southern and walking return sides were also traced. Preserve the precondition, the separate story pages and the set of adjacent exit tiles. |
+| 058:3, 4, 27 and 28, conditional world return | The branch with switch 477 on gives dialogue. The other branch transfers and is correctly labeled an exit in the sampled state. The Chomps conversation and three visibly guarded approaches return to the Cauldron exterior as part of the scene. Preserve both states, including the first playable landing. |
+
+| Caffeine Caverns event | What the mod says | Native destination |
+| --- | --- | --- |
+| 74 | To Bacon Bay | Devilled Nook (079) |
+| 75 | To Bacon Bay | Poached Pool (080) |
+| 76 | To Scrambled Shores | Quiche Coast (084) |
+| 77 | To Scrambled Shores | Bacon Beach (085), western cave landing |
+| 78 | To Quiche Coast | Bacon Beach (085), eastern cave landing |
+| 81 | To Shellside | Scrambled Shores (081), eastern cave landing |
+| 82 | To Devilled Nook | Scrambled Shores (081), western cave landing |
+| 83 | To Poached Pool | Benedict's Bight (066) |
+| 84 | To Benedicts Bight | Shellside (078) |
+
+### Routes that acquire a prerequisite
+
+**Caffeine Caverns has two distinct approach failures.** In Map 087, event 73 is the Bacon Beach exit that advances the escape quest. At (69,75) the current solver says a floor event blocks it. The native approach is to take one step south onto event 102, let it set switch 96, then continue south toward the exit. From (69,76) the pathfinder can verify that final southward activation. Event 102 has no dialogue or encounter. Map 087 event 79 is a separate Cracked Cove mouth reached from its own landing (72,8). The main cavern reaches event 80 instead. The sampled walking route from the western Cracked Cove landing to the other mouth also failed. Give the verified local exit and require a verified outside connection before promising onward directions to the separate mouth.
+
+| Priority and area | Offline witness and next player action |
+| --- | --- |
+| High, Frosty Peak side caves | Interacting with the crystal at 037:4 turns switch 145 on. The two caves' parallel pages 037:5 and 204:4 write the same region footprint on different layers. Six cells change collision on each map. From the usual arrival (3,11) in the second cave, chest 204:1 changes from unreachable to a verified native action approach after the flood. No matching prerequisite route is currently returned. Guide back through the two proven cave entrances on Map 027, identify the crystal and retain the original destination when it opens. |
+| High, Breakfast Isles bridges | The battle at 086:17 advances switch 97. Six bridge producers read it at 077:28, 079:12, 080:27, 081:20, 084:17 and 085:29. Native tile edits enabled 76 distinct sampled destination approaches across those maps, including exits, NPCs and chests. All six maps have an opened-state witness from an authored arrival that reaches the actual target input. Before the switch, explain the story gate and route to the best verified exit toward its objective. After the tile update, replan locally. |
+| High, final workshop and jail | At 105:5, Elder Tater's conversation sets switch 119. The door sequence at 105:12 then changes nine passability cells. From (9,10), 105:11 changes from no route to a route that reaches the autosave boundary at event 63. Route to the conversation, then wait for native handback before continuing. At 106:3, 6, 7 and 8, the rescue encounter opens the return path. From (3,18), exit 106:12 becomes reachable after the encounter and terrain change. Preserve the accepted event, switch 115 and the cleared return state. |
+| Medium, Cauldron pull rooms | In Map 055 the pull at event 4 opens both a chest approach from (8,11) and a return approach from the side entrance at (17,10). The native worker currently gives neither prerequisite. In Map 053, the two adjacent handles represent one control. The tile edit opens a route prefix toward chest 7; a roaming enemy can still block the last approach. Model each control and preserve the progression-dependent return map. Map 051 belongs to the same set, with no additional blocked target confirmed from its sampled arrivals. |
+| Medium, later office and elevator handoffs | The late Map 097 path to 103 is enabled by the floor scene at 097:7, followed by Chomps's wall edit at 097:8. Keep the first approach and later Office exit distinct. The lower elevator, upper ride and Map 192 platform stages retain authored flags, directions and automatic movement. Treat a ride as conditional transportation. The static transfer catalog alone cannot infer the ride or its arrival. |
+| Rechecked, Chillcrest, Cold Brew Trail and Frosty Peak | Existing fixtures cover the west-exit phase, optional nearby cave exits, Cold Brew Trail's passage button and marker handoff, the Frosty Peak bridge and the combined roaming enemy, ice and story approach. Preserve these as controls. The new two-cave crystal connection above is a separate missing dependency. |
+
+The six bridge counts record prospective reachability after the particular native terrain writes. A story scene or moving enemy can still be the next safe stop. Other changes surfaced by the sweep include optional world-map marker edits, Salt Caverns stages already handled by its dedicated worker, and cases already handled by the known same-map controls. These are retained in the local receipt so a future verification can distinguish new coverage from existing behavior. [Prerequisite code](../src/world/terrain-controls.cjs) · [World worker](../src/world/route-worker.cjs) · [Puzzle findings](puzzles-and-secrets.md#november-14-solution-audit)
+
+### Coverage, verification and estimates
+
+- The census includes 239 maps, 6,527 authored event pages, 250 common events, 141,448 rows after expanding common-event calls, and 1,355 transfer occurrences. It included guarded branches, same-map relocations and automatic event continuations. A transfer occurrence can repeat across callers. The state sweep activated all 978 player-triggerable transfer pages in sampled states. It tried 464 distinct authored start or arrival tiles across 192 maps and sampled 1,869 walking regions in baseline states. The other map files still received the content and topology passes.
+- Native page selection supplied 2,064 sampled snapshots. The production browser and reachability functions checked 1,152,028 target and start combinations across 191,235 authored tiles. Of 83 reachable transfer classification candidates, the plain exit check found no reachable unconditional cross-map page hidden as a generic scene in those samples. The manually verified elevator is an indirect transfer. The cave patrol captures, developer screens and guarded dialogue branches explain many static candidates. The focused fixture exercised 18 native trigger approaches.
+- Native tile setters and flood routines replayed 784 writes across 69 source pages. Forty-eight authored page effects changed passage flags. The fixture compared 2,132 changed cardinal edges against native collision. Of 213 newly connected sampled destination approaches across 17 maps, eleven selected before/after cases were replayed from authored or adjacent positions and checked against the actual native movement and activation path. Broad tile replay isolates writes from the full original scene, and the selected cases include their verified gate states.
+- This is a finite offline audit. It samples authored page and branch states and cannot certify every possible combination of quest history, dynamic enemy position, transfer landing or saved delta. Spoken fit and real progression still need gameplay checks.
+
+Local reproducible evidence is under `C:/Games/Dev/WendyQuestAccess-analysis/wendy-deep-navigation`. Run `route-census.cjs` followed by `terrain-native.cjs` with the repository root, verified stock game root and this evidence directory as arguments. Use the shared runner at 640 MB per tree. The second script reuses the existing native world fixture and calls `native-extra.py` for four small methods. The audit evidence is local to this build.
+
+| Implementation slice | Estimate with focused offline checks |
+| --- | --- |
+| Caffeine Caverns labels, elevator exit/scene handoff and late encounter labels | 45–90 minutes |
+| Frosty Peak cave crystal, Cauldron pulls and their onward routes | 1.5–3 hours |
+| Breakfast Isles, jail, workshop and office story prerequisites | 2–4 hours |
+| Salt Caverns opening and state-aware stealth route guide | 2–4 hours |
+| Optional automatic solution | Estimate after verifying each full native endpoint and its reset and handback conditions |
