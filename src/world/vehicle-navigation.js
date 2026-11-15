@@ -54,7 +54,7 @@ function canLand(map, x, y) {
 
 const TRAVEL_SPEECH = { walk: 'On foot.', boat: 'On small boat.', ship: 'On boat.', airship: 'On airship.' };
 
-function createVehicleNotice(root, host, ready, notifications) {
+function createVehicleNotice(root, host, ready, notifications, append = () => false) {
     const modes = new WeakMap();
     let current = null;
 
@@ -79,13 +79,21 @@ function createVehicleNotice(root, host, ready, notifications) {
             root.$gameMap === map && player._vehicleType === type && travelMode(map, player) === mode;
         const state = { scene, renderer, token: 0, present() {
             if (!valid()) return leave(scene);
-            scene._wqaVehicleType = type;
-            const previous = modes.get(player);
-            modes.set(player, mode);
-            if (previous === mode || !previous && mode === 'walk') return leave(scene);
-            scene._wqaPresentation = true;
-            state.token = notifications.open({ kind: 'fieldStatus', name: TRAVEL_SPEECH[mode] }, valid);
-            if (!state.token) leave(scene);
+            // Let other announcements settle after this render so a map or
+            // quest update cannot immediately replace the vehicle notice.
+            host.schedule(() => {
+                if (current !== state) return;
+                if (!valid()) return leave(scene);
+                scene._wqaVehicleType = type;
+                const previous = modes.get(player);
+                modes.set(player, mode);
+                if (previous === mode || !previous && mode === 'walk') return leave(scene);
+                scene._wqaPresentation = true;
+                const record = { kind: 'fieldStatus', name: TRAVEL_SPEECH[mode] };
+                if (append(scene, record)) return leave(scene);
+                state.token = notifications.open(record, valid);
+                if (!state.token) leave(scene);
+            });
         } };
         current = state;
         renderer.once('postrender', state.present);

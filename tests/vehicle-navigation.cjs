@@ -11,6 +11,7 @@ const { createBeacon } = require('../src/world/beacon');
 const { createField } = require('../src/world/field');
 const { createTransferBookmarks } = require('../src/world/transfer-bookmarks');
 const { CUE } = require('../src/runtime/audio');
+const { createRenderer } = require('../src/runtime/renderer');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 async function verifyVehicleNavigation(c, load, read, verifyWorker) {
@@ -202,6 +203,37 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     follow(shore, islandExit.result, 4);
     execute(shore.source);
     assert.deepEqual([shore.player._newMapId, shore.player._newX, shore.player._newY], [113, 48, 7]);
+
+    const bay = begin(49, [38, 221]);
+    bay.player.setPosition(2, 13);
+    const bayBoarding = directions(bay, 12);
+    assert.equal(bayBoarding.target.category, 'vehicles');
+    assert.equal(bayBoarding.target.name, 'Board the boat from the dock');
+    const previousExitBookmark = { id: 1, kind: 'entity', map: 49, mode: 'walk', event: 12,
+        category: 'exits', name: 'Return to the boat' };
+    const bayView = captureWorld(c, true, undefined, undefined, [previousExitBookmark]);
+    assert.equal(bayView.objects.find(target => target.id === 'bookmark-1')?.event, 12);
+    follow(bay, bayBoarding.result, 12);
+    execute(bay.source);
+    assert.deepEqual([bay.player._newMapId, bay.player._newX, bay.player._newY, bay.player._newDirection],
+        [113, 36, 9, 4]);
+    assert.equal(c.$gameSwitches.value(221), true);
+    const portSelection = c.$gameVariables.value(81);
+    assert.equal(portSelection, 1);
+
+    const bayLaunch = begin(113, [38, 221]);
+    c.$gameVariables.setValue(81, portSelection);
+    bayLaunch.player.setPosition(36, 9);
+    bayLaunch.player.setDirection(4);
+    const launchEvent = bayLaunch.gameMap._events[138];
+    launchEvent.setupPage = () => { launchEvent._trigger = undefined; };
+    execute(interpreter(launchEvent.page().list, 138));
+    assert(launchEvent._erased);
+    assert(bayLaunch.player._vehicleGettingOn);
+    settle(bayLaunch.player);
+    assert.equal(travelMode(bayLaunch.gameMap, bayLaunch.player), 'ship');
+    assert.deepEqual([bayLaunch.player._x, bayLaunch.player._y], [35, 9]);
+    console.log('Verified Breaded Bay Vehicles entry, existing bookmark, native dock transfer and boarding.');
 
     const wrongSide = begin(113);
     wrongSide.player.setPosition(45, 2);
@@ -410,7 +442,8 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
 
     function verifyTravelNotices() {
         const frames = new EventEmitter();
-        const host = { graphics: { app: { renderer: frames } } };
+        const scheduled = [];
+        const host = { graphics: { app: { renderer: frames } }, schedule: callback => scheduled.push(callback) };
         const { player, gameMap, ship } = begin(113);
         const owner = {};
         const spoken = [];
@@ -423,6 +456,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             notice.observe(scene);
             assert(frames.listenerCount('postrender') <= 1);
             frames.emit('postrender');
+            while (scheduled.length) scheduled.shift()();
         }
         player.setPosition(17, 6);
         player.setDirection(6);
@@ -450,14 +484,35 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         assert.deepEqual(spoken, ['On boat.', 'On foot.']);
         airship._altitude = airship.maxAltitude();
         notice.observe(owner);
-        notice.leave(owner);
         frames.emit('postrender');
+        notice.leave(owner);
+        while (scheduled.length) scheduled.shift()();
         assert.equal(spoken.length, 2);
         render();
         assert.equal(spoken.at(-1), 'On airship.');
         notice.leave(owner);
         assert(!valid());
-        console.log('Verified one travel notice after native boarding and handback, including the aircraft readiness gate.');
+        // A quest or map banner can claim the shared speech epoch later in
+        // the same render. The travel update must join its surviving epoch.
+        const delivered = [];
+        const outputHost = { ...host, makeWord: () => new Int32Array(new SharedArrayBuffer(4)),
+            createWorker: () => ({ on() {}, unref() {}, postMessage: record => delivered.push(record) }) };
+        const { notifications } = createRenderer(outputHost);
+        let heading = 0;
+        const flight = {};
+        const withHeading = createVehicleNotice(c, outputHost, () => true, notifications,
+            (_scene, record) => notifications.focus(heading, { ...record, append: true }));
+        withHeading.observe(flight);
+        frames.once('postrender', () => {
+            heading = notifications.open({ kind: 'mapBanner', name: 'World map', entering: true }, () => true);
+        });
+        frames.emit('postrender');
+        while (scheduled.length) scheduled.shift()();
+        assert.deepEqual(delivered.map(record => [record.name, !!record.append]), [
+            ['World map', false], ['On airship.', true]
+        ]);
+        assert.equal(delivered[0].epoch, delivered[1].epoch);
+        console.log('Verified boat, foot and airship notices, cancellation and shared speech order.');
     }
 
     async function verifyPortBookmarks() {

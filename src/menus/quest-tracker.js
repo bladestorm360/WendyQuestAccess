@@ -179,6 +179,10 @@ function createQuestTracker(root, host, fieldReady, notifications, preferences) 
             if (current?.scene === scene) retireSpeech(current);
         },
         available(scene) { return current?.scene === scene && ready(current); },
+        append(scene, record) {
+            return current?.scene === scene && !!current.epoch && ready(current, true) &&
+                notifications.focus(current.epoch, { ...record, append: true });
+        },
         visibleObjective(scene) {
             const window = scene._questNavWindow;
             const draft = window?._wqaQuestDraft;

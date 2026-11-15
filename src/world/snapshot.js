@@ -200,6 +200,9 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             // Keep entity bookmarks for the pantry formerly listed as treasure.
             const category = id === 116 && bookmark.event === 7 && bookmark.category === 'treasure' ? 'objects' : bookmark.category;
             let current = objects.find(item => item.id === bookmark.event && item.category === category);
+            // Breaded Bay's native boarding tile used to appear as a world exit.
+            if (!current && id === 49 && bookmark.event === 12 && category === 'exits')
+                current = objects.find(item => item.id === bookmark.event && item.category === 'vehicles');
             if (!current && category === 'events') current = objects.find(item => item.id === bookmark.event &&
                 ['people', 'exits', 'quests', 'checkpoints'].includes(item.category));
             if (!current && category === 'objects' && checkpointTarget(id, bookmark.event,

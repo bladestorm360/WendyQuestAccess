@@ -176,8 +176,9 @@ function boot(root, nodeRequire, nodeProcess) {
         interaction = createInteractionPrompt(root, host, field.interactionReady, notifications, field.appendInteraction);
         treasure = createTreasureReward(root, host, notifications);
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
-        vehicleNotice = createVehicleNotice(root, host, field.ready, notifications);
         quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
+        vehicleNotice = createVehicleNotice(root, host, field.ready, notifications,
+            (scene, record) => mapBanner.append(scene, record) || quests.append(scene, record));
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
         footsteps = createFootsteps(root, field.ready, audio, () => audioPreferences);
         beacon = host.beacon = createBeacon(root, field.ready, audio, () => audioPreferences, field.report, {

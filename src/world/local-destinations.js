@@ -299,6 +299,13 @@ function localDestination(root, event, page) {
         if (map === 26 && id === 5 && event._pageIndex === 1 && list.some(command => command.code === 201 &&
             command.indent === 0 && command.parameters.join(',') === '0,113,17,6,6,0'))
             return { name: 'Board the boat from the quay', category: 'vehicles', eventAction: 'step' };
+        // Breaded Bay's west dock selects its port and triggers the
+        // overworld's same native boarding service after the transfer.
+        if (map === 49 && id === 12 && event._pageIndex === 0 &&
+            list[0]?.code === 122 && list[0].parameters.join(',') === '81,81,0,0,1' &&
+            list[1]?.code === 121 && list[1].parameters.join(',') === '221,221,0' &&
+            list[2]?.code === 201 && list[2].parameters.join(',') === '0,113,36,9,4,0')
+            return { name: 'Board the boat from the dock', category: 'vehicles', eventAction: 'step' };
         if (map === 26 && (id === 6 || id === 7) && to(113))
             return { name: 'Return to world map', category: 'exits', eventAction: 'step', handoffs: [6, 7] };
         if (map === 17 && id === 7 && to(19)) return { name: 'Salt Caverns', category: 'exits', eventAction: 'step' };

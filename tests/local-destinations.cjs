@@ -135,7 +135,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 if ((id === 128 || id === 195) && entry.id === 9)
                     assert.deepEqual(ordinary, { name: 'Book', category: 'objects' });
                 const lease = { page, map: root.$gameMap, trigger: page.trigger, waypoint: false };
-                const worldReturn = id !== 185 && !(id === 26 && entry.id === 5) &&
+                const boardingTile = id === 26 && entry.id === 5 || id === 49 && entry.id === 12;
+                const worldReturn = id !== 185 && !boardingTile &&
                     page.list.some(row => row.code === 201 && row.indent === 0 && row.parameters[0] === 0 && row.parameters[1] === 113);
                 if (worldReturn) {
                     assert.equal(ordinary?.category, 'exits', 'world exit at ' + id + '/' + entry.id);
@@ -168,7 +169,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     assert.equal(fieldEnemyNames.size, 16);
     console.log('Verified ' + enemyPages + ' field encounter pages and ' + fieldEnemyNames.size +
         ' enemy graphics against ' + formations.length + ' native formations.');
-    assert.equal(worldReturns, 430);
+    assert.equal(worldReturns, 429);
     assert.equal(icePages, 46);
     assert.deepEqual(cleanupPages, [66, 80]);
     console.log('Verified 146 erase-only action and floor pages are omitted across all maps.');

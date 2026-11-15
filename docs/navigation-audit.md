@@ -199,7 +199,7 @@ The east Chillcrest exit arrives at (14, 17). The south exit arrives at (13, 18)
 
 ## World exits and Nuggedor mine route
 
-The native map audit checked 3,004 actionable pages on 239 maps. All 430 qualifying direct world-return pages use the shared world-map label. The Float Fort quay is a boarding interaction. Scripted approaches retain their native interaction type and reservations. For the world-map discovery example, Map 113 event 107's self-switch reveals entrance 108. The boat view lists that land destination and leaves the undiscovered pair hidden with Spoiler mode off.
+The native map audit checked 3,004 actionable pages on 239 maps. All 429 qualifying direct world-return pages use the shared world-map label. The Float Fort quay and Breaded Bay dock are boarding interactions. Scripted approaches retain their native interaction type and reservations. For the world-map discovery example, Map 113 event 107's self-switch reveals entrance 108. The boat view lists that land destination and leaves the undiscovered pair hidden with Spoiler mode off.
 
 The reported Nuggedor chest is event 3 on both town variants, Maps 59 and 45. The worker finds the approach from the town side cut off by the channel. Event 2 leads to the south landing in Map 48. Map 48 event 4 returns to the far bank on the town variant chosen by the native stage. Both paths and the final eight-tile approach were verified against the native fixture. When the mine is closed, the announcement names the channel and the closed entrance. It leaves the story condition to the game. The terrain journey keeps the original selection across those transfers and resumes only when the player requests directions.
 

@@ -177,7 +177,7 @@ function worldEventDescription(root, mode, event, page) {
 const EXIT_SIDES = {
     15: { 2: 'Northeast', 3: 'Northeast', 5: 'Northeast' },
     17: { 8: 'South' }, 20: { 2: 'North', 3: 'North' }, 26: { 6: 'West' },
-    27: { 23: 'West' }, 29: { 1: 'North' }, 49: { 12: 'West' },
+    27: { 23: 'West' }, 29: { 1: 'North' },
     77: { 58: 'East' }, 80: { 2: 'North', 13: 'North', 34: 'North', 35: 'North', 38: 'North' },
     134: { 10: 'North' }, 209: { 16: 'South' }
 };
