@@ -2,6 +2,7 @@
 
 const cues = require('./narration-cues.json');
 const { renderedSprite } = require('../runtime/rendered-sprite');
+const { idleBeats } = require('./idle-narration');
 
 const beats = Object.create(null);
 const clipIds = Object.keys(cues);
@@ -12,7 +13,8 @@ for (const id of clipIds) {
         beats[map][event][index] = { id, page, actor, switchId: switchId ?? undefined, visual };
     }
 }
-const PACK_LIMIT = 384 * 1024;
+const PACK_LIMIT = 1024 * 1024;
+const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
 const MIME = 'audio/webm; codecs="opus"';
@@ -123,79 +125,130 @@ function createNarration(root, host, preferences) {
         actor = source;
         const prior = scene._wqaNarrationSeen;
         if (prior?.list === interpreter._list && prior.index === interpreter._index) return;
-        if (owner) leave(owner.scene);
         // Sample only the authored actor, and only once at the accepted
         // command. The frame callback verifies the same sprite and ownership.
         const sprites = scene._spriteset?._characterSprites;
         const sprite = Array.isArray(sprites) && sprites.length <= 512 &&
             sprites.find(item => item._character === actor);
         if (!sprite) return;
-        scene._wqaNarrationActive = true;
+        if (owner && (owner.scene !== scene || owner.list !== interpreter._list)) leave(owner.scene);
+        const context = owner ?? begin(scene, interpreter);
+        if (context.queue.length >= QUEUE_LIMIT) return;
         scene._wqaNarrationSeen = { list: interpreter._list, index: interpreter._index };
-        owner = { scene, interpreter, list: interpreter._list, index: interpreter._index,
-            frame: host.graphics.frameCount, sprite, actor, switched, visual, x: actor._realX, y: actor._realY, id: candidate.id };
+        context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual,
+            x: actor._realX, y: actor._realY, id: candidate.id });
     }
 
-    function present(scene) {
-        const state = owner;
-        if (!state || state.scene !== scene) return;
-        const limit = state.id === 'chomps-sacrifice' ? FLASH_LIMIT : FRAME_LIMIT;
-        if (!ready(scene) || !enabled() || state.interpreter !== root.$gameMap._interpreter ||
-            state.interpreter._list !== state.list || state.actor._erased ||
-            !state.started && host.graphics.frameCount - state.frame > limit) return leave(scene);
-        if (state.pending || state.started) return;
+    function begin(scene, interpreter = null) {
+        scene._wqaNarrationActive = true;
+        owner = { scene, interpreter, list: interpreter?._list, queue: [], paintPending: false };
+        return owner;
+    }
+
+    function idleReady(scene) {
+        const { $gameMap: map, $gamePlayer: player } = root;
+        return ready(scene) && enabled() && !map._interpreter?._list && !map.isEventRunning?.() &&
+            !map._needsRefresh && !root.$gameMessage?.isBusy() && !player?.isInVehicle?.() &&
+            !player?._moveRouteForcing && map.inactiveTime >= 30;
+    }
+
+    function idle(scene) {
+        if (!pack || owner && (owner.scene !== scene || owner.interpreter) || !idleReady(scene)) return;
+        const map = root.$gameMap;
+        let context = owner;
+        for (const [index, beat] of idleBeats.entries()) {
+            const bit = 1 << index;
+            if ((scene._wqaIdleNarrationMask & bit) || map.inactiveTime < beat.start ||
+                map.inactiveTime >= beat.end || !beat.visible(scene, map, root.$gamePlayer) ||
+                context?.queue.some(state => state.bit === bit)) continue;
+            context ??= begin(scene);
+            if (context.queue.length >= QUEUE_LIMIT) break;
+            context.queue.push({ id: beat.id, bit, idle: beat, frame: host.graphics.frameCount });
+        }
+    }
+
+    function playNext(context) {
+        if (clip || !context.queue[0]?.confirmed) return;
+        const { id } = context.queue.shift();
+        try {
+            const setting = preferences().narration;
+            const audio = new root.Audio();
+            if (!audio.canPlayType(MIME)) return leave(context.scene);
+            const url = root.URL.createObjectURL(new root.Blob([pack[id]], { type: 'audio/webm' }));
+            clip = { audio, url };
+            // Native frame presentation starts the next confirmed clip. An
+            // ended/error handler only releases its own playback resources.
+            const finished = () => { if (clip?.audio === audio) stopClip(); };
+            audio.addEventListener('ended', finished, { once: true });
+            audio.addEventListener('error', finished, { once: true });
+            audio.volume = setting.volume / 100;
+            if ('preservesPitch' in audio) audio.preservesPitch = true;
+            audio.defaultPlaybackRate = audio.playbackRate = setting.playbackPercent / 100;
+            audio.src = url;
+            audio.play()?.catch(finished);
+        } catch { leave(context.scene); }
+    }
+
+    function mayPresent(context) {
+        const { scene, interpreter, list } = context;
+        return interpreter ? ready(scene) && enabled() &&
+            interpreter === root.$gameMap._interpreter && interpreter._list === list : idleReady(scene);
+    }
+
+    function visibleActorCue(scene, state) {
         // The finale paints a white full-screen picture over this change.
-        // Wait until it clears so the narration follows the visible result.
-        if (state.id === 'chomps-sacrifice' && root.$gameScreen?._pictures?.[29]?._opacity > 20) return;
+        if (state.id === 'chomps-sacrifice' && root.$gameScreen?._pictures?.[29]?._opacity > 20) return false;
         const { actor, sprite, switched, visual } = state;
         const spriteset = scene._spriteset;
         const parent = spriteset?._tilemap;
-        let visibleEffect = () => true;
+        if (!parent || actor._erased || !actor._characterName || sprite._characterName !== actor._characterName ||
+            actor._transparent || !renderedSprite(sprite, parent)) return false;
+        const pose = sprite.worldTransform;
+        if (!pose || pose.tx < 0 || pose.tx > host.graphics.width || pose.ty < 0 ||
+            pose.ty > host.graphics.height + 16) return false;
         if (visual > 0) {
-            const balloons = spriteset?._balloonSprites;
-            const balloon = Array.isArray(balloons) && balloons.length <= 32 &&
-                balloons.find(item => item.targetObject === actor && item._target === sprite && item._balloonId === visual);
-            visibleEffect = () => renderedSprite(balloon, spriteset._effectsContainer) && balloon._duration > 0;
-        } else if (visual === -1) {
-            visibleEffect = () => root.$gameScreen._flashColor?.[3] > 0;
+            const balloons = spriteset._balloonSprites;
+            return Array.isArray(balloons) && balloons.length <= 32 && balloons.some(balloon =>
+                balloon.targetObject === actor && balloon._target === sprite && balloon._balloonId === visual &&
+                balloon._duration > 0 && renderedSprite(balloon, spriteset._effectsContainer));
         }
-        const changed = visual !== undefined ? visibleEffect() : switched ? root.$gameSwitches.value(switched) :
-            actor._realX !== state.x || actor._realY !== state.y || actor._jumpCount > 0;
-        if (!parent || !changed || !actor._characterName || sprite._characterName !== actor._characterName ||
-            actor._transparent || !renderedSprite(sprite, parent)) return;
+        if (visual === -1) return root.$gameScreen._flashColor?.[3] > 0;
+        if (visual !== undefined) return true;
+        if (switched) return root.$gameSwitches.value(switched);
+        return actor._realX !== state.x || actor._realY !== state.y || actor._jumpCount > 0;
+    }
+
+    function present(scene) {
+        const context = owner;
+        if (!context || context.scene !== scene) return;
+        if (!mayPresent(context)) return leave(scene);
+        if (context.paintPending || (clip && context.queue.every(state => state.confirmed))) return;
+        const frame = host.graphics.frameCount;
+        // Keep already rendered descriptions even after the effect disappears.
+        // Only unpainted effects expire on the short native presentation budget.
+        context.queue = context.queue.filter(state => state.confirmed ||
+            frame - state.frame <= (state.id === 'chomps-sacrifice' ? FLASH_LIMIT : FRAME_LIMIT));
+        if (!clip && !context.queue.length) return leave(scene);
         const renderer = host.graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return leave(scene);
-        state.pending = true;
-        const frameBefore = host.graphics.frameCount;
+        context.paintPending = true;
         renderer.once('postrender', () => {
-            if (owner !== state) return;
-            if (host.graphics.frameCount - frameBefore > FRAME_LIMIT) return leave(scene);
-            if (!ready(scene) || !enabled() || !renderedSprite(sprite, parent) || !visibleEffect()) return leave(scene);
-            const pose = sprite.worldTransform;
-            if (!pose || pose.tx < 0 || pose.tx > host.graphics.width || pose.ty < 0 ||
-                pose.ty > host.graphics.height + 16) {
-                state.pending = false;
-                return;
+            if (owner !== context) return;
+            context.paintPending = false;
+            if (!mayPresent(context)) return leave(scene);
+            if (host.graphics.frameCount - frame > FRAME_LIMIT) return;
+            for (const state of context.queue) {
+                if (state.confirmed) continue;
+                const map = root.$gameMap;
+                state.confirmed = state.idle ? map.inactiveTime < state.idle.end &&
+                    state.idle.visible(scene, map, root.$gamePlayer) : visibleActorCue(scene, state);
+                if (state.confirmed && state.bit) scene._wqaIdleNarrationMask |= state.bit;
             }
-            state.started = true;
-            try {
-                const setting = preferences().narration;
-                const audio = new root.Audio();
-                if (!audio.canPlayType(MIME)) return leave(scene);
-                const url = root.URL.createObjectURL(new root.Blob([pack[state.id]], { type: 'audio/webm' }));
-                clip = { audio, url };
-                audio.addEventListener('ended', () => { if (clip?.audio === audio) leave(scene); }, { once: true });
-                audio.addEventListener('error', () => { if (clip?.audio === audio) leave(scene); }, { once: true });
-                audio.volume = setting.volume / 100;
-                if ('preservesPitch' in audio) audio.preservesPitch = true;
-                audio.defaultPlaybackRate = audio.playbackRate = setting.playbackPercent / 100;
-                audio.src = url;
-                audio.play()?.catch(() => { if (clip?.audio === audio) leave(scene); });
-            } catch { leave(scene); }
+            playNext(context);
         });
     }
 
-    return { accepted, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

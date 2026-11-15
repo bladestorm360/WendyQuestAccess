@@ -16,7 +16,7 @@ Launch WendyQuest through Steam. Press **F8** to open accessibility settings. Us
 - Press **H** for Wendy’s visible status on the field, in pause and Inventory, or in battle including Bag and Special. This includes HP, FP and the other gauges or conditions that are shown. On the field, HP and FP are read as percentages. The gold diamonds beside Wendy’s portrait show filled Momentum pips. H includes “critical” while the field low-health warning is active. Press **G** to read the gold shown in the pause menu or shop.
 - On a default Xbox-style controller, use the **right stick** to browse and **left trigger** for directions. Press and release **View**, then press **A** to read the selected destination or **Menu** for settings. Left Trigger also takes a request during a step. “Mod mode” confirms entry.
 
-Enable **Cutscene descriptions** in **F8 → Audio** to hear short descriptions of selected story animations in a separate voice. Adjust its volume and speed in the same menu. The default speed is 200 percent.
+Enable **Cutscene descriptions** in **F8 → Audio** to hear short descriptions of selected story animations and Wendy’s long-idle sequence in a separate voice. Adjust its volume and speed in the same menu. The default speed is 200 percent.
 
 ## Battle
 

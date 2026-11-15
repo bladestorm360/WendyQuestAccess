@@ -3,6 +3,7 @@
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
+const fs = require('node:fs');
 const vm = require('node:vm');
 const { createBattleCues } = require('../src/battle/timing-cues');
 const { CUE } = require('../src/runtime/audio');
@@ -141,9 +142,30 @@ assert(ice.samples.some(sample => sample.blocked && sample.at > 410 && sample.at
 assert(ice.beats[0].at > 910);
 check('Accuracy', { ...frozen, press: [410, 1280] }, CUE.battleAccuracy);
 check('Power', { ...frozen, press: [] });
-const frosty = { ...ordinaryPower, settings: { Frosty: true }, press: [1110] };
-const slower = check('Power', frosty, CUE.battlePower);
-assert(slower.beats[0].at > ordinary.beats[0].at + 180);
+// Use the shipped state data rather than assuming the three statuses send
+// the same settings. Frosty slows the sweep and Spicy changes the native sound.
+const states = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/States.json'), 'utf8'));
+for (const [stateId, name, flag] of [[39, 'Frosty', 'Frosty'], [11, 'Spicy', 'Spicy'], [23, 'Spicy+', 'Spicy']]) {
+    const state = states[stateId];
+    assert.equal(state.name, name);
+    const settings = JSON.parse(state.note.slice(state.note.indexOf('{'))).ACSettings;
+    assert.equal(settings[flag], true);
+    for (const [method, cue] of [['Power', CUE.battlePower], ['Accuracy', CUE.battleAccuracy]]) {
+        const scenario = { ...mid, settings, press: [1060] };
+        const result = check(method, scenario, cue);
+        const normal = check(method, { ...scenario, settings: {} }, cue);
+        if (flag === 'Frosty') assert(result.beats[0].at > normal.beats[0].at + 100);
+        else assert.equal(result.beats[0].at, normal.beats[0].at);
+        // The narrow power band can close two updates after its first sample.
+        const cueDelay = method === 'Accuracy' ? 30 : 0;
+        const following = run('observed' + method, { ...scenario, press: [], followCue: true, cueDelay }, true);
+        assert.equal(following.beats.length, 1);
+        const [progress, accepted, frozen] = following.outcome;
+        const { start, end, limit } = following.samples.at(-1);
+        assert(accepted && !frozen && progress >= start && progress <= end && progress < limit,
+            name + ' ' + method + ' accepts an input following the cue');
+    }
+}
 check('Power', { ...ordinaryPower, settings: { Soggy: true, Wobble: 0.35 }, press: [] });
 check('Power', { ...ordinaryPower, settings: { Bland: true }, press: [] });
 check('Accuracy', { ...accuracy, lower: 1, upper: 1 });
@@ -191,7 +213,7 @@ assert(!preparedReady());
 preparedComplete(2);
 assert.equal(scene._wqaBattleCueActive, false);
 
-console.log('Verified native power and accuracy outcomes, one note per eligible window, next-frame confirm, early confirmation, frozen pause, Frosty speed and Soggy cutoff.');
+console.log('Verified native power and accuracy outcomes, one note per eligible window, next-frame confirm, early confirmation, frozen pause, both Frosty and Spicy meters, and Soggy cutoff.');
 console.log('Throttled observed sweep wall time', ordinary.elapsed.toFixed(2), 'ms across', ordinary.samples.length, 'samples.');
 console.log('Throttled 20 complete power and accuracy pairs', nativeTotal.toFixed(2), 'ms native,',
     observedTotal.toFixed(2), 'ms enabled.');

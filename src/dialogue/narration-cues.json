@@ -265,8 +265,8 @@
       ]
     ]
   },
-  "anger-reaction": {
-    "text": "An anger mark flashes overhead.",
+  "anger-mitch": {
+    "text": "An anger mark flashes over Mitch.",
     "beats": [
       [
         12,
@@ -278,6 +278,20 @@
         5
       ],
       [
+        83,
+        18,
+        0,
+        0,
+        18,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-megan": {
+    "text": "An anger mark flashes over Megan.",
+    "beats": [
+      [
         12,
         19,
         0,
@@ -287,6 +301,20 @@
         5
       ],
       [
+        83,
+        19,
+        0,
+        0,
+        19,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-mina": {
+    "text": "An anger mark flashes over Mina.",
+    "beats": [
+      [
         12,
         20,
         0,
@@ -294,7 +322,12 @@
         20,
         null,
         5
-      ],
+      ]
+    ]
+  },
+  "anger-tatoria": {
+    "text": "An anger mark flashes over Tatoria.",
+    "beats": [
       [
         24,
         2,
@@ -310,132 +343,6 @@
         0,
         1,
         4,
-        null,
-        5
-      ],
-      [
-        25,
-        12,
-        0,
-        1,
-        12,
-        null,
-        5
-      ],
-      [
-        25,
-        20,
-        0,
-        1,
-        20,
-        null,
-        5
-      ],
-      [
-        59,
-        15,
-        0,
-        0,
-        15,
-        null,
-        5
-      ],
-      [
-        59,
-        16,
-        0,
-        1,
-        16,
-        null,
-        5
-      ],
-      [
-        59,
-        18,
-        0,
-        1,
-        18,
-        null,
-        5
-      ],
-      [
-        83,
-        2,
-        0,
-        0,
-        2,
-        null,
-        5
-      ],
-      [
-        83,
-        18,
-        0,
-        0,
-        18,
-        null,
-        5
-      ],
-      [
-        83,
-        19,
-        0,
-        0,
-        19,
-        null,
-        5
-      ],
-      [
-        83,
-        20,
-        0,
-        0,
-        20,
-        null,
-        5
-      ],
-      [
-        94,
-        8,
-        0,
-        0,
-        8,
-        null,
-        5
-      ],
-      [
-        94,
-        9,
-        0,
-        0,
-        9,
-        null,
-        5
-      ],
-      [
-        94,
-        10,
-        0,
-        0,
-        10,
-        null,
-        5
-      ],
-      [
-        94,
-        11,
-        0,
-        0,
-        11,
-        null,
-        5
-      ],
-      [
-        107,
-        3,
-        3,
-        30,
-        9,
         null,
         5
       ],
@@ -456,7 +363,170 @@
         4,
         null,
         5
+      ]
+    ]
+  },
+  "anger-milly": {
+    "text": "An anger mark flashes over Milly.",
+    "beats": [
+      [
+        25,
+        12,
+        0,
+        1,
+        12,
+        null,
+        5
       ],
+      [
+        94,
+        11,
+        0,
+        0,
+        11,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-marge": {
+    "text": "An anger mark flashes over Marge.",
+    "beats": [
+      [
+        25,
+        20,
+        0,
+        1,
+        20,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-mallory": {
+    "text": "An anger mark flashes over Mallory.",
+    "beats": [
+      [
+        59,
+        15,
+        0,
+        0,
+        15,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-magnus": {
+    "text": "An anger mark flashes over Magnus.",
+    "beats": [
+      [
+        59,
+        16,
+        0,
+        1,
+        16,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-mayor": {
+    "text": "An anger mark flashes over the mayor.",
+    "beats": [
+      [
+        59,
+        18,
+        0,
+        1,
+        18,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-mike": {
+    "text": "An anger mark flashes over Mike.",
+    "beats": [
+      [
+        83,
+        2,
+        0,
+        0,
+        2,
+        null,
+        5
+      ],
+      [
+        83,
+        20,
+        0,
+        0,
+        20,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-mckay": {
+    "text": "An anger mark flashes over McKay.",
+    "beats": [
+      [
+        94,
+        8,
+        0,
+        0,
+        8,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-monty": {
+    "text": "An anger mark flashes over Monty.",
+    "beats": [
+      [
+        94,
+        9,
+        0,
+        0,
+        9,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-milhouse": {
+    "text": "An anger mark flashes over Milhouse.",
+    "beats": [
+      [
+        94,
+        10,
+        0,
+        0,
+        10,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-chomps": {
+    "text": "An anger mark flashes over Chomps.",
+    "beats": [
+      [
+        107,
+        3,
+        3,
+        30,
+        9,
+        null,
+        5
+      ]
+    ]
+  },
+  "anger-kraz": {
+    "text": "An anger mark flashes over Kraz.",
+    "beats": [
       [
         156,
         5,
@@ -465,7 +535,12 @@
         5,
         null,
         5
-      ],
+      ]
+    ]
+  },
+  "anger-son-of-baconator": {
+    "text": "An anger mark flashes over Son of Baconator.",
+    "beats": [
       [
         158,
         3,
@@ -486,8 +561,8 @@
       ]
     ]
   },
-  "startled-reaction": {
-    "text": "Someone starts in surprise.",
+  "startled-elder-tater": {
+    "text": "Elder Tater is surprised.",
     "beats": [
       [
         13,
@@ -498,6 +573,20 @@
         null,
         1
       ],
+      [
+        105,
+        12,
+        1,
+        148,
+        5,
+        null,
+        1
+      ]
+    ]
+  },
+  "startled-wendy": {
+    "text": "Wendy is surprised.",
+    "beats": [
       [
         13,
         10,
@@ -561,6 +650,20 @@
         null,
         1
       ],
+      [
+        63,
+        19,
+        1,
+        15,
+        -1,
+        null,
+        1
+      ]
+    ]
+  },
+  "startled-mech-grunt": {
+    "text": "The Mech Grunt is surprised.",
+    "beats": [
       [
         57,
         6,
@@ -650,7 +753,12 @@
         2,
         null,
         1
-      ],
+      ]
+    ]
+  },
+  "startled-frostyna": {
+    "text": "Frostyna is surprised.",
+    "beats": [
       [
         63,
         5,
@@ -659,25 +767,12 @@
         7,
         null,
         1
-      ],
-      [
-        63,
-        19,
-        1,
-        15,
-        -1,
-        null,
-        1
-      ],
-      [
-        105,
-        12,
-        1,
-        148,
-        5,
-        null,
-        1
-      ],
+      ]
+    ]
+  },
+  "startled-frygor": {
+    "text": "Frygor is surprised.",
+    "beats": [
       [
         118,
         5,
@@ -687,6 +782,20 @@
         null,
         1
       ],
+      [
+        63,
+        5,
+        1,
+        58,
+        6,
+        null,
+        1
+      ]
+    ]
+  },
+  "startled-search-and-rescue-officer": {
+    "text": "The search and rescue officer is surprised.",
+    "beats": [
       [
         191,
         3,
@@ -698,8 +807,8 @@
       ]
     ]
   },
-  "hazy-reaction": {
-    "text": "A dizzy swirl appears overhead.",
+  "hazy-wendy": {
+    "text": "A dizzy swirl appears over Wendy.",
     "beats": [
       [
         13,
@@ -709,7 +818,12 @@
         -1,
         null,
         6
-      ],
+      ]
+    ]
+  },
+  "hazy-frostyna": {
+    "text": "A dizzy swirl appears over Frostyna.",
+    "beats": [
       [
         29,
         4,
@@ -718,7 +832,12 @@
         4,
         null,
         6
-      ],
+      ]
+    ]
+  },
+  "hazy-chomps": {
+    "text": "A dizzy swirl appears over Chomps.",
+    "beats": [
       [
         97,
         8,
@@ -730,8 +849,8 @@
       ]
     ]
   },
-  "puzzled-reaction": {
-    "text": "A question mark appears overhead.",
+  "puzzled-wendy": {
+    "text": "A question mark appears over Wendy.",
     "beats": [
       [
         14,
@@ -761,33 +880,6 @@
         2
       ],
       [
-        27,
-        24,
-        1,
-        24,
-        35,
-        null,
-        2
-      ],
-      [
-        27,
-        29,
-        0,
-        44,
-        35,
-        null,
-        2
-      ],
-      [
-        27,
-        30,
-        1,
-        24,
-        35,
-        null,
-        2
-      ],
-      [
         55,
         8,
         0,
@@ -813,7 +905,44 @@
         -1,
         null,
         2
+      ]
+    ]
+  },
+  "puzzled-frygor": {
+    "text": "A question mark appears over Frygor.",
+    "beats": [
+      [
+        27,
+        24,
+        1,
+        24,
+        35,
+        null,
+        2
       ],
+      [
+        27,
+        29,
+        0,
+        44,
+        35,
+        null,
+        2
+      ],
+      [
+        27,
+        30,
+        1,
+        24,
+        35,
+        null,
+        2
+      ]
+    ]
+  },
+  "puzzled-chomps": {
+    "text": "A question mark appears over Chomps.",
+    "beats": [
       [
         134,
         10,
@@ -822,7 +951,12 @@
         11,
         null,
         2
-      ],
+      ]
+    ]
+  },
+  "puzzled-mech-grunt": {
+    "text": "A question mark appears over the Mech Grunt.",
+    "beats": [
       [
         200,
         5,
@@ -850,15 +984,6 @@
         25,
         40,
         0,
-        2,
-        -1,
-        null,
-        9
-      ],
-      [
-        25,
-        40,
-        0,
         7,
         42,
         null,
@@ -868,35 +993,8 @@
         25,
         41,
         0,
-        2,
-        -1,
-        null,
-        9
-      ],
-      [
-        25,
-        41,
-        0,
         7,
         42,
-        null,
-        9
-      ],
-      [
-        29,
-        4,
-        0,
-        0,
-        4,
-        null,
-        9
-      ],
-      [
-        45,
-        37,
-        0,
-        2,
-        -1,
         null,
         9
       ],
@@ -913,26 +1011,8 @@
         59,
         43,
         0,
-        2,
-        -1,
-        null,
-        9
-      ],
-      [
-        59,
-        43,
-        0,
         7,
         44,
-        null,
-        9
-      ],
-      [
-        76,
-        81,
-        0,
-        2,
-        -1,
         null,
         9
       ],
@@ -949,6 +1029,92 @@
         94,
         38,
         0,
+        7,
+        46,
+        null,
+        9
+      ],
+      [
+        94,
+        39,
+        0,
+        7,
+        46,
+        null,
+        9
+      ],
+      [
+        94,
+        43,
+        0,
+        7,
+        46,
+        null,
+        9
+      ],
+      [
+        94,
+        44,
+        0,
+        7,
+        46,
+        null,
+        9
+      ],
+      [
+        94,
+        45,
+        0,
+        7,
+        46,
+        null,
+        9
+      ]
+    ]
+  },
+  "idea-wendy": {
+    "text": "A light bulb appears over Wendy.",
+    "beats": [
+      [
+        25,
+        40,
+        0,
+        2,
+        -1,
+        null,
+        9
+      ],
+      [
+        25,
+        41,
+        0,
+        2,
+        -1,
+        null,
+        9
+      ],
+      [
+        45,
+        37,
+        0,
+        2,
+        -1,
+        null,
+        9
+      ],
+      [
+        59,
+        43,
+        0,
+        2,
+        -1,
+        null,
+        9
+      ],
+      [
+        76,
+        81,
+        0,
         2,
         -1,
         null,
@@ -958,15 +1124,6 @@
         94,
         38,
         0,
-        7,
-        46,
-        null,
-        9
-      ],
-      [
-        94,
-        39,
-        0,
         2,
         -1,
         null,
@@ -976,8 +1133,8 @@
         94,
         39,
         0,
-        7,
-        46,
+        2,
+        -1,
         null,
         9
       ],
@@ -992,28 +1149,10 @@
       ],
       [
         94,
-        43,
-        0,
-        7,
-        46,
-        null,
-        9
-      ],
-      [
-        94,
         44,
         0,
         2,
         -1,
-        null,
-        9
-      ],
-      [
-        94,
-        44,
-        0,
-        7,
-        46,
         null,
         9
       ],
@@ -1025,16 +1164,26 @@
         -1,
         null,
         9
-      ],
+      ]
+    ]
+  },
+  "idea-frostyna": {
+    "text": "A light bulb appears over Frostyna.",
+    "beats": [
       [
-        94,
-        45,
+        29,
+        4,
         0,
-        7,
-        46,
+        0,
+        4,
         null,
         9
-      ],
+      ]
+    ]
+  },
+  "idea-veronica": {
+    "text": "A light bulb appears over Veronica.",
+    "beats": [
       [
         105,
         5,
@@ -1043,7 +1192,12 @@
         61,
         null,
         9
-      ],
+      ]
+    ]
+  },
+  "idea-elder-tater": {
+    "text": "A light bulb appears over Elder Tater.",
+    "beats": [
       [
         105,
         12,
@@ -1052,7 +1206,12 @@
         5,
         null,
         9
-      ],
+      ]
+    ]
+  },
+  "idea-dave-statue": {
+    "text": "A light bulb appears above the Dave statue.",
+    "beats": [
       [
         206,
         11,
@@ -1073,8 +1232,8 @@
       ]
     ]
   },
-  "quiet-reaction": {
-    "text": "Three dots appear overhead.",
+  "quiet-wendy": {
+    "text": "Three dots appear over Wendy.",
     "beats": [
       [
         14,
@@ -1116,26 +1275,8 @@
         76,
         50,
         0,
-        39,
-        91,
-        null,
-        8
-      ],
-      [
-        76,
-        50,
-        0,
         40,
         -1,
-        null,
-        8
-      ],
-      [
-        76,
-        51,
-        0,
-        40,
-        91,
         null,
         8
       ],
@@ -1204,8 +1345,31 @@
       ]
     ]
   },
-  "frustration-reaction": {
-    "text": "A dark cloud appears overhead.",
+  "quiet-reaction": {
+    "text": "Three dots appear overhead.",
+    "beats": [
+      [
+        76,
+        50,
+        0,
+        39,
+        91,
+        null,
+        8
+      ],
+      [
+        76,
+        51,
+        0,
+        40,
+        91,
+        null,
+        8
+      ]
+    ]
+  },
+  "frustration-golden-archer": {
+    "text": "A dark cloud appears over the Golden Archer.",
     "beats": [
       [
         15,
@@ -1215,7 +1379,12 @@
         39,
         null,
         7
-      ],
+      ]
+    ]
+  },
+  "frustration-frygor": {
+    "text": "A dark cloud appears over Frygor.",
+    "beats": [
       [
         29,
         3,
@@ -1224,7 +1393,12 @@
         3,
         null,
         7
-      ],
+      ]
+    ]
+  },
+  "frustration-marshell": {
+    "text": "A dark cloud appears over Marshell.",
+    "beats": [
       [
         81,
         17,
@@ -1337,5 +1511,61 @@
         -2
       ]
     ]
+  },
+  "idle-wendy-glides": {
+    "text": "Wendy glides and bounces off the edges.",
+    "beats": []
+  },
+  "idle-stones-appear": {
+    "text": "Four stones appear in the corners.",
+    "beats": []
+  },
+  "idle-stones-spin": {
+    "text": "The stones spin at the center.",
+    "beats": []
+  },
+  "idle-question": {
+    "text": "A question mark pops up above Wendy.",
+    "beats": []
+  },
+  "idle-hud-slides": {
+    "text": "Wendy’s status display slides away.",
+    "beats": []
+  },
+  "idle-dozes": {
+    "text": "Zs drift over Wendy’s head as she dozes.",
+    "beats": []
+  },
+  "idle-map-dark": {
+    "text": "The map fades to black around Wendy.",
+    "beats": []
+  },
+  "idle-stone-pickup": {
+    "text": "A stone jumps to the center when Wendy touches it.",
+    "beats": []
+  },
+  "idle-stones-bounce": {
+    "text": "The stones scatter and bounce around the screen.",
+    "beats": []
+  },
+  "idle-trails": {
+    "text": "The moving sprites leave trails behind them.",
+    "beats": []
+  },
+  "idle-crt": {
+    "text": "Scan lines and grain appear across the screen.",
+    "beats": []
+  },
+  "idle-ripple": {
+    "text": "The picture begins to ripple.",
+    "beats": []
+  },
+  "idle-color-split": {
+    "text": "Colored outlines separate around the shapes.",
+    "beats": []
+  },
+  "idle-screen-shifts": {
+    "text": "The picture starts stretching and tilting.",
+    "beats": []
   }
 }

@@ -173,3 +173,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Kathryn categories and accuracy cue](docs/deployment.md#kathryn-categories-and-accuracy-cue) records the restaurant routes, existing-bookmark verification and native reproduction of the narrow accuracy miss.
 
 [Breaded Bay boarding and vehicle notices](docs/navigation.md#native-vehicle-transitions) records the Vehicles destination and shared speech ordering. [Timing defaults](docs/battle.md#radial-timing-tones) retain saved off choices.
+
+[Wendy's idle sequence](docs/cutscene-description.md#wendys-idle-sequence) records all verified idle stages, named reaction cues and queued playback. This batch is held for installation.

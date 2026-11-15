@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
@@ -16,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 29);
+assert.equal(Object.keys(clips).length, 76);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -34,71 +36,236 @@ for (const [id, { beats }] of Object.entries(cues)) {
         }
     }
 }
-assert.equal(locators.size, 138);
-for (const id of ['frostyna-idea','frostyna-prison-blast','frostyna-reaction','frygor-frustration','wendy-knocks','wendy-door-reaction']) {
-    const [m, e, p, i, actor, , visual] = cues[id].beats[0];
-    const candidate = { _characterName: actor === -1 ? 'Wendy' : 'NPC' };
-    const status = { _brightness: 255, _flashColor: [0,0,0,0] };
-    const data = map(m);
-    const interpreter = {_index:i, _mapId:m, _eventId:e, _list:data.events[e].pages[p].list};
+assert.equal(locators.size, 139);
+function fixture(m, e, page) {
+    const data = m ? map(m) : null;
+    const list = data?.events[e].pages[page].list;
+    const interpreter = { _mapId: m, _eventId: e };
     const renderer = new EventEmitter();
     const tilemap = {};
     const effects = {};
-    const sprite = { _character:candidate, _characterName:candidate._characterName, parent:tilemap, worldVisible:true, worldAlpha:1,
-        texture:{valid:true}, worldTransform:{tx:100,ty:100} };
-    const spriteset = {_tilemap:tilemap, _effectsContainer:effects, _characterSprites:[sprite], _balloonSprites:[]};
-    const scene = {_wqaFieldReady:true, _wqaMapRestored:true, _mapLoaded:true, _started:true, _active:true, srcWendy:true, srcStones:true,
-        _spriteset:spriteset, _fadeDuration:0, _fadeOpacity:0};
-    const graphics = {app:{stage:scene,renderer}, frameCount:0, width:640,height:480};
+    const spriteset = { _tilemap: tilemap, _effectsContainer: effects, _characterSprites: [], _balloonSprites: [] };
+    const scene = { _wqaFieldReady: true, _wqaMapRestored: true, _mapLoaded: true, _started: true, _active: true,
+        srcWendy: true, srcStones: true, _spriteset: spriteset, _fadeDuration: 0, _fadeOpacity: 0 };
+    const graphics = { app: { stage: scene, renderer }, frameCount: 0, width: 640, height: 480,
+        _wqaNarrationEnabled: true };
+    const switches = new Set();
+    const nativeMap = { inactiveTime: 0, _mapId: m, _interpreter: interpreter, _events: {}, filters: {},
+        getFilterController(id) { return this.filters[id]; } };
+    const status = { _brightness: 255, _flashColor: [0, 0, 0, 0] };
     const played = [];
+    const playback = { enabled: true, narration: { enabled: true, volume: 65, playbackPercent: 200 } };
     const root = {
         ArrayBuffer, DataView, Uint8Array,
-        $gameMap:{_mapId:m,_interpreter:interpreter,_events:{[actor]:candidate}},
-        $dataMap:data, $gameScreen:status, $gamePlayer:actor === -1 ? candidate : {},
+        $gameMap: nativeMap, $dataMap: data, $gameScreen: status, $gamePlayer: {},
+        $gameSwitches: { value: id => switches.has(id) },
         XMLHttpRequest: class {
             open() {}
-            send() {
-                Object.assign(this, { status: 200, response });
-                this.onloadend();
-            }
+            send() { Object.assign(this, { status: 200, response }); this.onloadend(); }
         },
-        Blob: class { constructor(parts) { this.parts = parts; } },
+        Blob: class { constructor(parts) { this.bytes = parts[0]; } },
         URL: {
             createObjectURL(blob) {
-                assert.deepEqual(blob.parts[0], clips[id]);
+                const id = Object.keys(clips).find(key => Buffer.from(clips[key]).equals(Buffer.from(blob.bytes)));
+                assert(id, 'playback uses a catalog clip');
                 return id;
             },
             revokeObjectURL() {}
         },
-        Audio: class {
+        Audio: class extends EventEmitter {
             canPlayType() { return true; }
-            addEventListener() {}
-            play() { played.push(this); }
+            addEventListener(event, listener) { this.once(event, listener); }
+            play() { this.id = this.src; played.push(this); }
             pause() { this.paused = true; }
             removeAttribute() { this.src = ''; }
             load() {}
         }
     };
-    const narration = createNarration(root,{graphics,manager:{_scene:scene},screenFading:()=>false,hasFocus:()=>true},
-        ()=>({enabled:true,narration:{enabled:true,volume:65,playbackPercent:200}}));
-    const activeList = interpreter._list;
-    interpreter._list = null;
+    const narration = createNarration(root, { graphics, manager: { _scene: scene },
+        screenFading: () => false, hasFocus: () => true }, () => playback);
     narration.warm(scene);
-    interpreter._list = activeList;
-    narration.accepted(scene,{...interpreter,_list:[]},candidate,undefined,visual);
-    assert(!scene._wqaNarrationActive);
-    narration.accepted(scene,interpreter,candidate,undefined,visual);
-    narration.present(scene);
-    assert.equal(played.length,0);
-    if (visual > 0) spriteset._balloonSprites.push({...sprite,parent:effects,_balloonId:visual,
-        _duration:30,targetObject:candidate,_target:sprite});
-    if (visual === -1) status._flashColor[3] = 255;
-    narration.present(scene);
-    assert.equal(played.length,0);
-    renderer.emit('postrender');
-    assert.equal(played[0]?.src,id);
-    assert.equal(played[0].playbackRate,2);
-    narration.leave(scene);
-    assert(played[0].paused);
+    interpreter._list = list;
+    function actor(id) {
+        const candidate = { _characterName: id === -1 ? 'Wendy' : 'NPC' };
+        const sprite = { _character: candidate, _characterName: candidate._characterName, parent: tilemap,
+            worldVisible: true, worldAlpha: 1, texture: { valid: true }, worldTransform: { tx: 100, ty: 100 } };
+        spriteset._characterSprites.push(sprite);
+        if (id === -1) root.$gamePlayer = candidate;
+        else nativeMap._events[id] = candidate;
+        return { candidate, sprite };
+    }
+    function balloon(id, candidate, sprite) {
+        spriteset._balloonSprites.push({ parent: effects, worldVisible: true, worldAlpha: 1,
+            texture: { valid: true }, _balloonId: id, _duration: 30, targetObject: candidate, _target: sprite });
+    }
+    function frame(paint = true) {
+        graphics.frameCount++;
+        narration.present(scene);
+        if (paint) renderer.emit('postrender');
+    }
+    return { scene, graphics, root, interpreter, nativeMap, renderer, spriteset, status, switches,
+        played, playback, narration, actor, balloon, frame };
 }
-console.log('Verified the 29 clip containers, all 138 authored beat locators, and six prison cues from acceptance through rendering and retirement.');
+
+for (const id of ['frostyna-idea', 'frostyna-prison-blast', 'frostyna-reaction',
+    'frygor-frustration', 'wendy-knocks', 'wendy-door-reaction']) {
+    const [m, e, p, i, a, , visual] = cues[id].beats[0];
+    const f = fixture(m, e, p);
+    const { candidate, sprite } = f.actor(a);
+    f.interpreter._index = i;
+    f.narration.accepted(f.scene, { ...f.interpreter, _list: [] }, candidate, undefined, visual);
+    assert(!f.scene._wqaNarrationActive);
+    f.narration.accepted(f.scene, f.interpreter, candidate, undefined, visual);
+    if (visual !== -2) f.frame();
+    assert.equal(f.played.length, 0);
+    if (visual > 0) f.balloon(visual, candidate, sprite);
+    if (visual === -1) f.status._flashColor[3] = 255;
+    f.frame(false);
+    assert.equal(f.played.length, 0);
+    f.renderer.emit('postrender');
+    assert.equal(f.played[0]?.id, id);
+    assert.equal(f.played[0].playbackRate, 2);
+    f.narration.leave(f.scene);
+    assert(f.played[0].paused);
+}
+
+const fight = fixture(63, 5, 1);
+const { candidate: collapsed } = fight.actor(16);
+const frygor = fight.actor(6);
+const frostyna = fight.actor(7);
+function accept(index, actor, switched, visual) {
+    fight.interpreter._index = index;
+    fight.narration.accepted(fight.scene, fight.interpreter, actor, switched, visual);
+}
+fight.switches.add(419);
+accept(55, collapsed, 419);
+fight.frame();
+assert.equal(fight.played[0].id, 'chicken-falls');
+accept(58, frygor.candidate, undefined, 1);
+accept(59, frostyna.candidate, undefined, 1);
+fight.balloon(1, frygor.candidate, frygor.sprite);
+fight.balloon(1, frostyna.candidate, frostyna.sprite);
+fight.frame();
+assert.deepEqual(fight.played.map(clip => clip.id), ['chicken-falls']);
+assert(!fight.played[0].paused, 'new descriptions leave existing playback alone');
+fight.spriteset._balloonSprites.length = 0;
+fight.graphics.frameCount += 150;
+fight.played[0].emit('ended');
+fight.frame();
+assert.equal(fight.played[1].id, 'startled-frygor');
+fight.played[1].emit('ended');
+fight.frame();
+assert.equal(fight.played[2].id, 'startled-frostyna');
+assert.equal(cues['startled-frostyna'].text, 'Frostyna is surprised.');
+assert.equal(cues['startled-frygor'].text, 'Frygor is surprised.');
+accept(58, frygor.candidate, undefined, 1);
+fight.balloon(1, frygor.candidate, frygor.sprite);
+fight.frame();
+fight.narration.leave(fight.scene);
+assert(fight.played[2].paused);
+fight.played[2].emit('ended');
+fight.frame();
+assert.equal(fight.played.length, 3, 'native leaving cancels pending descriptions');
+
+// Run the inserted end-of-map-update observer with the game's idle states.
+const idleHook = execFileSync('python', ['-B', '-c', [
+    'from pathlib import Path',
+    'import sys',
+    "sys.path.insert(0, 'tools')",
+    'from registration import MAP_REL, map_notification',
+    'source = map_notification((Path(sys.argv[1]) / MAP_REL).read_bytes()).decode()',
+    "start = source.index('    // Sample optional idle effects')",
+    "end = source.index('    if (this._wqaFieldReady) {', start)",
+    'print(source[start:end])'
+].join('\n'), stock], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 5000 });
+const f = fixture();
+const player = f.actor(-1);
+const { scene, nativeMap } = f;
+scene._wqaFieldReady = false;
+scene.rtSprite = { parent: scene, alpha: 0, worldAlpha: 1, worldVisible: true, texture: { valid: true } };
+const observeIdle = vm.runInNewContext('(function () {\n' + idleHook + '\n})', {
+    Graphics: f.graphics, $gameMap: nativeMap,
+    WendyQuestAccessNarrationPresent: f.narration.present, WendyQuestAccessIdleNarration: f.narration.idle
+});
+function idle(seconds, paint = true) {
+    nativeMap.inactiveTime = seconds;
+    f.graphics.frameCount++;
+    observeIdle.call(scene);
+    if (paint) f.renderer.emit('postrender');
+}
+function expect(id) {
+    const active = f.played.at(-1);
+    assert.equal(active.id, id);
+    active.emit('ended');
+}
+idle(30);
+assert.equal(f.played.length, 0, 'a requested balloon must render');
+f.balloon(2, player.candidate, player.sprite);
+idle(30.25, false);
+assert.equal(f.played.length, 0);
+f.renderer.emit('postrender');
+expect('idle-question');
+scene._statusWindow = { offsetY: -15 };
+idle(41);
+expect('idle-hud-slides');
+f.balloon(10, player.candidate, player.sprite);
+idle(80.5);
+expect('idle-dozes');
+idle(134.5);
+assert.equal(f.played.length, 4, 'the later sleep animation has its own cue');
+scene.rtSprite.alpha = 1;
+scene.bgSprite = { alpha: 0.2 };
+idle(136.5);
+assert.equal(f.played.length, 4, 'the fade waits behind the second sleep cue');
+expect('idle-dozes');
+f.spriteset._balloonSprites.length = 0;
+idle(138);
+expect('idle-map-dark');
+scene.inactiveDirX = 1;
+idle(155);
+expect('idle-wendy-glides');
+scene.stoneSprites = [{ alpha: 1 }];
+idle(176);
+expect('idle-stones-appear');
+scene.collectedStones = [true, false, false, false];
+idle(190);
+expect('idle-stone-pickup');
+scene.stoneSpin = true;
+idle(210);
+expect('idle-stones-spin');
+scene.trailAlpha = 0.5;
+idle(215);
+expect('idle-trails');
+scene.solitaire = true;
+scene.stoneSpin = false;
+idle(240);
+expect('idle-stones-bounce');
+nativeMap.filters.crtFilter = { currentParams: [0, 0, 0.4] };
+idle(291);
+expect('idle-crt');
+nativeMap.filters.displaceFilter = { currentParams: [0, 0, 2] };
+idle(341);
+expect('idle-ripple');
+nativeMap.filters.rgbFilter = { currentParams: [0.5] };
+idle(401);
+expect('idle-color-split');
+scene.rtSkewX = 0.03;
+idle(470);
+assert.equal(f.played[14].id, 'idle-screen-shifts');
+assert.equal(f.played.length, 15);
+idle(0);
+assert(f.played.at(-1).paused);
+assert(!scene._wqaIdleNarrationMask);
+f.playback.narration.enabled = false;
+f.balloon(2, player.candidate, player.sprite);
+idle(30.25);
+assert.equal(f.played.length, 15);
+f.playback.narration.enabled = true;
+idle(30.5, false);
+nativeMap._interpreter._list = [{}];
+f.renderer.emit('postrender');
+assert.equal(f.played.length, 15, 'native event entry retires the pending idle clip');
+nativeMap._interpreter._list = null;
+idle(30.75);
+expect('idle-question');
+console.log('Verified 76 clips, 139 authored locators, 15 idle cues, and uninterrupted named reaction order.');

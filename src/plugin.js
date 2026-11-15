@@ -785,6 +785,10 @@ function boot(root, nodeRequire, nodeProcess) {
         try { narration?.accepted(scene, interpreter, actor, switched, visual); } catch { narration?.leave(scene); }
     };
 
+    root.WendyQuestAccessIdleNarration = function (scene) {
+        try { narration?.idle(scene); } catch { narration?.leave(scene); }
+    };
+
     root.WendyQuestAccessNarrationPresent = function (scene) {
         try { narration?.present(scene); } catch { narration?.leave(scene); }
     };

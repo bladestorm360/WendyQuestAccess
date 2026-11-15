@@ -672,6 +672,17 @@ def map_notification(original):
         $gameScreen._brightness === 255 && !$gameScreen._fadeOutDuration && !this._wqaTerrainWork &&
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
         !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
+    // Sample optional idle effects after the native animation update.
+    if (Graphics._wqaNarrationEnabled && $gameMap.inactiveTime >= 30 && Graphics._wqaNarrationPackFinished) {
+        const wqaIdleSample = Math.floor($gameMap.inactiveTime * 4);
+        if (wqaIdleSample !== this._wqaIdleNarrationSample) {
+            this._wqaIdleNarrationSample = wqaIdleSample;
+            globalThis.WendyQuestAccessIdleNarration?.(this);
+        }
+    } else if ($gameMap.inactiveTime < 30 && this._wqaIdleNarrationSample) {
+        this._wqaIdleNarrationSample = 0;
+        this._wqaIdleNarrationMask = 0;
+    }
     if (this._wqaNarrationActive) globalThis.WendyQuestAccessNarrationPresent?.(this);
     if (this._wqaFieldReady) {
         if (Graphics._wqaNarrationEnabled && !Graphics._wqaNarrationPackFinished && !this._wqaNarrationLoading &&
