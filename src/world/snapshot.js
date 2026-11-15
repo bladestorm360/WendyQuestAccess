@@ -6,7 +6,7 @@ const { localDestination, iceOpensPassage, inactiveFloorScene, concealedDestinat
     chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit,
     worldEntranceRevealed } = require('./world-destinations');
-const { collectQuestDestinations, questDestinationLabel } = require('./quest-destinations');
+const { collectQuestDestinations, questDestinationLabel, questPageHasAction } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { transferOptions } = require('./transfer-events.cjs');
 const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
@@ -26,6 +26,9 @@ function eventTarget(root, mode, event, entry, page, spoilers = false, questMark
     if (!target) target = worldEventDescription(root, mode, event, page) ||
         (mode === 'walk' && !timedCave(map) && eventDescription(root, entry, page, event)) ||
         target;
+    // A marker-only page can be named like an ordinary prop in map data.
+    // Leave its painted quest waypoint eligible even without an object entry.
+    if (target?.category === 'objects' && !questPageHasAction(page)) return undefined;
     if (target && mode === 'airship' && target.category !== 'exits') return null;
     return worldMapExit(root, mode, event, entry, page, target);
 }

@@ -163,3 +163,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Hidden ending prerequisites and accessibility checks](docs/puzzles-and-secrets.md#hidden-ending-route) document the native route, solo battle, shared epilogue and final postscript.
 
 [Follow Chomps handback and Wendy's merchant labels](docs/navigation-audit.md#nuggedor-restaurant-and-follow-chomps) document the native market pages, the event-owned repeated variable write and offline coverage. [Assist Amulet and the hidden ending](docs/puzzles-and-secrets.md#daves-assist-amulet) distinguish the local statue branch from story conditions.
+
+[Concise target speech and standalone quest markers](docs/deployment.md#concise-targeting-and-standalone-quest-markers) tracks the focused plugin update and verification of the existing field Momentum HUD.

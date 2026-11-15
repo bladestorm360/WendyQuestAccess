@@ -150,6 +150,17 @@ async function verifyQuestDestinations(c, game, read, load, verifyRoute, verifyW
     assert.equal(afterChest.gameMap._events[14]._pageIndex, 1);
     assert(!quests(stage(afterChest, 'quest4')).some(row => row.id === 14));
 
+    for (const [map, id] of [[28, 18], [32, 18], [50, 19]]) {
+        const cauldron = load(map);
+        cauldron.player.setPosition(3, 16);
+        const cauldronScene = stage(cauldron, 'quest21');
+        const marked = targets(cauldronScene).objects.filter(target => target.id === id);
+        assert.deepEqual(marked.map(({ name, category }) => [name, category]), [['Quest marker', 'quests']]);
+        assert(marked[0].quest.waypoint);
+        assert(questDestinationCurrent(c, cauldronScene, marked[0].quest));
+        assert(!targets(stage(cauldron, 'quest19')).objects.some(target => target.id === id));
+    }
+
     const restaurant = load(183);
     restaurant.player.setPosition(15, 5);
     const restaurantScene = stage(restaurant, 'quest19');

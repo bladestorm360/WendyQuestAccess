@@ -2445,7 +2445,7 @@ def main():
             'battle-autodetail': 'Shield raised. Cost 2 MP',
             'battle-details': 'Shield raised. Cost 2 MP',
             'battle-review': 'Cost 2 MP, 2 of 2',
-            'battle-target-focus': 'Target, Synthetic target: 50%, 1 of 1',
+            'battle-target-focus': 'Synthetic target: 50%',
             'battle-target-autodetail': 'Synthetic target, Frozen or frosted',
             'battle-target-details': 'Synthetic target, HP 50%, Frozen or frosted',
             'battle-bag-focus': 'Battle Bag, Synthetic item effect, 4, 1 of 1',

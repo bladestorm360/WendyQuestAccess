@@ -73,10 +73,10 @@ function createBattleTargets(root, host, notifications, preferences) {
         page.epoch = notifications.open(record, () => current === page && live(page));
     }
 
-    function statusLine(row, health = gaugePercent(row.sprite)) {
+    function statusLine(row, health = gaugePercent(row.sprite), name = row.reviewName) {
         const state = enemyState(root, row.sprite);
         if (health === null && !state) return '';
-        const label = health === null ? row.name : row.name + ', HP ' + health + '%';
+        const label = health === null ? name : name + ', HP ' + health + '%';
         return state ? label + ', ' + state : label;
     }
 
@@ -90,7 +90,7 @@ function createBattleTargets(root, host, notifications, preferences) {
         const { sprite, enemy } = row;
         const art = sprite._battlerName === enemy.battlerName?.() &&
             sprite.worldVisible && sprite.worldAlpha > 0 && sprite.texture?.valid && enemyArt(sprite._battlerName);
-        return reviewLines([statusLine(row) || row.name, ...(art || []), ...statusAppearance(sprite)]);
+        return reviewLines([statusLine(row) || row.reviewName, ...(art || []), ...statusAppearance(sprite)]);
     }
 
     function publish(job) {
@@ -110,9 +110,12 @@ function createBattleTargets(root, host, notifications, preferences) {
             if (!members.has(sprite._enemy) || !sprite._isSelected ||
                 !visibleSprite(sprite._selectorIconPivot, sprite._selectorIcon)) continue;
             const drawn = labels[position];
+            const name = drawn || 'Target ' + (position + 1);
             const duplicate = drawn && labels.indexOf(drawn) !== labels.lastIndexOf(drawn);
-            const name = drawn ? drawn + (duplicate ? ', enemy ' + (position + 1) : '') : 'Enemy ' + (position + 1);
-            rows.push({ sprite, enemy: sprite._enemy, name, position: position + 1 });
+            // Focus uses the painted name. Explicit review can distinguish
+            // matching labels by their position in the native cursor order.
+            const reviewName = duplicate ? name + ' ' + (position + 1) : name;
+            rows.push({ sprite, enemy: sprite._enemy, name, reviewName });
         }
         if (!rows.length || rows.length !== members.size) return false;
         if (current?.scene === job.scene && current.phase === job.phase && current.action === job.action &&
@@ -124,17 +127,15 @@ function createBattleTargets(root, host, notifications, preferences) {
         const page = current = { ...job, kind: 'battleTarget', rows, position: 0, lines: [], epoch: 0, hasReview: false };
         job.scene._wqaBattleTargetControl = true;
         const settings = preferences();
-        const one = rows.length === 1;
         const labelsWithHealth = rows.map(row => {
             const health = gaugePercent(row.sprite);
             return health === null ? row.name : row.name + ': ' + health + '%';
         });
-        show(page, { kind: 'menuFocus', name: (one ? 'Target, ' : 'Targets, ') + labelsWithHealth.join(', '),
-            indexed: one && settings.indexing, position: rows[0].position, total: choices.length });
+        show(page, { kind: 'menuFocus', name: labelsWithHealth.join(', ') });
         if (settings.autodetail) {
             // HP is already in the focus label. Autodetail can add visible
             // conditions, while appearance is explicitly requested with I.
-            const lines = reviewLines(rows.map(row => statusLine(row, null)));
+            const lines = reviewLines(rows.map(row => statusLine(row, null, row.name)));
             if (lines.length) notifications.focus(page.epoch, { kind: 'menuDetails', lines, append: true });
         }
         setDetails(page);

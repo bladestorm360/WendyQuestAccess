@@ -48,7 +48,7 @@ function linkedPage(root, page, marker, nav, name, objective) {
     });
 }
 
-function hasAction(page) {
+function questPageHasAction(page) {
     return page.list.some(command => !END_OR_COMMENT.includes(command.code) &&
         !(command.code === 357 && command.parameters[0] === PLUGIN &&
             ['questMarker', 'disableAutoMarker'].includes(command.parameters[1])));
@@ -82,7 +82,7 @@ function collectQuestDestinations(root, scene, mode) {
                 (!ACTION.includes(event._trigger) && (marker._generated || event._trigger !== 4))) continue;
             if ((commands += page.list.length) > MAX_COMMANDS) return null;
             if (excludedDestination(entry, page) || !linkedPage(root, page, marker, nav, name, objective)) continue;
-            const waypoint = !ACTION.includes(event._trigger) || !hasAction(page);
+            const waypoint = !ACTION.includes(event._trigger) || !questPageHasAction(page);
             if (waypoint && mode !== 'walk') continue;
             targets.set(id, { markers, index, marker, bitmap: marker.bitmap, nav, map, id, event, page,
                 pageIndex: event._pageIndex, trigger: event._trigger, priority: event._priorityType, through: event._through,
@@ -116,4 +116,4 @@ function questDestinationCurrent(root, scene, lease) {
         marker.bitmap === lease.bitmap && activeMarker(marker, spriteset?._tilemap?.parent);
 }
 
-module.exports = { collectQuestDestinations, questDestinationLabel, questDestinationCurrent };
+module.exports = { collectQuestDestinations, questDestinationLabel, questDestinationCurrent, questPageHasAction };
