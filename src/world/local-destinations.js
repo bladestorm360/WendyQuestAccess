@@ -172,6 +172,14 @@ function inactiveFloorScene(root, event, page) {
     if (event._trigger !== 1 || event._pageIndex !== 0) return false;
     const map = root.$gameMap._mapId;
     const id = event._eventId;
+    if (map === 76 && (id === 78 || id === 79)) {
+        // Both pages give the same introduction. Event 78 is embedded in
+        // an impassable tile. Keep the walking approach at event 79 until
+        // either copy has set the shared completion switch.
+        const completesIntroduction = page.list.some(command => command.code === 121 &&
+            command.indent === 0 && command.parameters.join(',') === '465,465,0');
+        if (completesIntroduction) return id === 78 || root.$gameSwitches?.value?.(465) === true;
+    }
     // The Cold Brew Trail boundary updates the atlas pin and leaves
     // native walking in control. Crossing it needs no player intervention.
     if (map === 36 && id === 35 && page.list.length === 7 && page.list[4]?.code === 117 &&
@@ -263,6 +271,14 @@ function localDestination(root, event, page) {
     if (townExit) return townExit;
     if (map === 134 && id === 10 && trigger === 0 && (event._pageIndex === 0 || event._pageIndex === 1))
         return { name: 'Window', category: 'objects' };
+    // These counters have a separate public prompt for the same dialogue.
+    // Publish one NPC at the interaction tile where the player can talk.
+    if ((map === 150 || map === 151) && trigger === 0 && (id === 5 || id === 6))
+        return id === 6 ? { name: map === 150 ? 'Helly' : 'Shelly', category: 'people', eventAction: 'talk' } : null;
+    // The two diners share one conversation beginning with Kitty's line.
+    // Navigation follows each physical speaker at their own interaction tile.
+    if (map === 186 && trigger === 0 && (id === 15 || id === 16))
+        return { name: id === 15 ? 'Jay' : 'Kitty', category: 'people', eventAction: 'talk' };
     const stairs = houseStair(map, id);
     if (stairs) {
         // The landing changes within the same native page when the hidden

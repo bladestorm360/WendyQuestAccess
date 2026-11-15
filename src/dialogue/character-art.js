@@ -308,8 +308,42 @@ const TOWNSPEOPLE = new Map([
 ]);
 
 const FIELD_ART = new Map([
-    ['~NPCDOG', ['A small brown dog with drooping ears, stubby legs and a black nose.']],
-    ['~MechGrunt', ['A squat, gray robot with a dark visor, jointed limbs and broad red shoulder plates.']],
+    ['~Wendy', [
+        'A freckled young woman with bright blue eyes and red pigtails tied with blue ribbons.',
+        'She wears silver armor over a white and blue skirt, with a small red bow at her throat.'
+    ]],
+    ['~ElderTater', [
+        'A stooped older man with a yellow cap, heavy white eyebrows and a long white beard.',
+        'His olive and gold robes have a broad cream collar.'
+    ]],
+    ['~Frygor', [
+        'A round-faced young man with tan skin and a golden crest held by a red headband.',
+        'He wears gold armor with dark red trim and boots.'
+    ]],
+    ['~BeefThief', [
+        'A slim figure with red eyes under a pointed dark blue hood edged in gold.',
+        'Gray armor and a pale belt stand out against the dark outfit.'
+    ]],
+    ['~NPCDOG', [
+        'A small dark brown dog with drooping ears, stubby legs and a tail curled up over its back.',
+        'Yellow markings stand out around its face.'
+    ]],
+    ['~MechGrunt', [
+        'A squat gray robot with a rounded helmet, a narrow yellow visor and broad red shoulder plates.',
+        'Its thick jointed arms end in dark fists, and its feet are red.'
+    ]],
+    ['~MECHDOUBLE1World', [
+        'A stocky gold robot with a smooth rounded helmet and red eyes.',
+        'It has a boxy chest, jointed arms and wide metal feet.'
+    ]],
+    ['~MECHDOUBLE2World', [
+        'A stocky gold robot with two thin antennae above narrow red eyes.',
+        'Its square chest sits between thick jointed arms and flat metal feet.'
+    ]],
+    ['TREASURE CHEST SPECIAL', [
+        'A squat turquoise chest with bright gold bands and small jewel-like studs.',
+        'A star-shaped clasp sits in the middle of the front.'
+    ]],
     ['~HotSludgeSundae', ENEMIES.get('HotSludgeSundae')],
     ['~HeatLamp', ENEMIES.get('HeatLamp')],
     ['~Axoflopl', ENEMIES.get('Axoflopl')],

@@ -42,6 +42,41 @@ async function verifyNavigationAuditFixes(c, load, verifyRoute, verifyWorker, re
         const target = view.objects.find(item => item.id === id);
         assert.deepEqual([target.name, target.category, target.eventAction], [label, 'exits', 'step']);
     }
+    const sunrise = at(76, 3, 17);
+    assert(!sunrise.view.objects.some(item => item.id === 78));
+    assert.equal(sunrise.view.objects.find(item => item.id === 79)?.category, 'events');
+    const beforeScene = { x: 3, y: 17, event: 79, field: true, stopBeforeEvent: true };
+    await verifyWorker(sunrise.fixture, beforeScene, sunrise.view.live, result => {
+        assert.equal(result.status, 'interrupted');
+        assert.equal(result.boundaryEvent, 79);
+        verifyRoute(sunrise.fixture, { ...beforeScene, targetX: result.arrival.x, targetY: result.arrival.y, event: undefined },
+            { ...result, status: 'ready' });
+    });
+    const savedScene = { id: 7, map: 76, mode: 'walk', kind: 'entity', category: 'events',
+        event: 78, name: 'Sunrise Bay introduction' };
+    assert.equal(captureWorld(c, false, undefined, undefined, [savedScene]).objects
+        .find(item => item.id === 'bookmark-7')?.event, 79);
+    const completed = at(76, 3, 17, { switches: [465] });
+    assert(!completed.view.objects.some(item => item.id === 78 || item.id === 79));
+
+    // Native counter prompts preserve the conversation behind the furniture.
+    for (const [map, x, y, name] of [[150, 5, 7, 'Helly'], [151, 3, 8, 'Shelly']]) {
+        const shop = at(map, x, y);
+        assert.deepEqual(shop.fixture.map.events[5].pages[0].list, shop.fixture.map.events[6].pages[0].list);
+        assert.deepEqual(shop.view.objects.filter(item => [5, 6].includes(item.id)).map(item =>
+            [item.id, item.category, item.name]), [[6, 'people', name]]);
+        const request = { x, y, event: 6, field: true };
+        verifyRoute(shop.fixture, request, solveRoute(shop.fixture.geometry, shop.view.live, request));
+    }
+
+    const restaurant = at(186, 12, 15);
+    const diners = restaurant.view.objects.filter(item => item.category === 'people' && [15, 16].includes(item.id));
+    assert.deepEqual(diners.map(item => [item.id, item.name]), [[15, 'Jay'], [16, 'Kitty']]);
+    for (const target of diners) {
+        const request = { x: 12, y: 15, event: target.id, field: true };
+        verifyRoute(restaurant.fixture, request, solveRoute(restaurant.fixture.geometry, restaurant.view.live, request));
+    }
+
     const office = at(103, 7, 13);
     for (const id of [2, 3, 4, 16, 17, 18, 19])
         assert.equal(office.view.objects.find(item => item.id === id)?.category, 'events');

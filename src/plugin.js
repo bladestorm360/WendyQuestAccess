@@ -110,6 +110,7 @@ function boot(root, nodeRequire, nodeProcess) {
             actor: id => root.$dataActors?.[id],
             variable: id => root.$gameVariables?.value(id),
             gameMessage: () => root.$gameMessage,
+            fieldPlayer: () => root.$gamePlayer,
             mapId: () => root.$gameMap?._mapId,
             mapEvent: id => Number.isInteger(id) && id > 0 ? root.$gameMap?._events?.[id] : null,
             makeWord() { return new Int32Array(new SharedArrayBuffer(4)); },

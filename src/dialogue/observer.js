@@ -1,11 +1,12 @@
 'use strict';
 
-const { fieldArt, portraitArt } = require('./character-art');
+const { enemyArt, fieldArt, portraitArt } = require('./character-art');
 const { rewardIconArt } = require('../services/dialogue-icons.cjs');
 const { readMomentum } = require('../battle/outcomes');
-// The six native Ability Obelisk callers use a blank event over a
-// painted statue. Their speaking character has no bitmap of its own.
-const DAVE_STATUES = new Map([[12, 46], [25, 33], [45, 36], [59, 42], [76, 87], [94, 36]]);
+// These blank events sit over the obelisks painted in the tilemap.
+const DAVE_STATUES = new Map([
+    [12, 46], [25, 33], [45, 36], [59, 42], [76, 87], [94, 36], [197, 11], [206, 14]
+]);
 const DAVE_STATUE_ART = [
     'A golden stone bust of a smiling man with swept hair, square glasses and a tie.',
     'Thin green lines run down its sides to a green W at the base, above a round stone platform.'
@@ -17,15 +18,50 @@ const { moveReview } = require('../menus/review');
 
 // In these shared conversations the interpreter's event owns the message,
 // while the rendered name identifies a different character on the same map.
-const SHARED_SPEAKERS = new Map([
-    [130, new Map([8, 9].map(id => [id, new Map([['Kennick', 8], ['Joanne', 9]])]))],
-    [181, new Map([
-        [11, new Map([['Mari & Shari', 0]])],
-        [20, new Map([['Lusya', 14]])]
-    ])],
-    [184, new Map([[11, new Map([['Kathryn', 4]])]])],
-    [186, new Map([15, 16].map(id => [id, new Map([['Jay', 15], ['Kitty', 16]])]))]
-]);
+const SHARED_SPEAKERS = new Map();
+function bindSpeakers(map, owners, speakers) {
+    if (!SHARED_SPEAKERS.has(map)) SHARED_SPEAKERS.set(map, new Map());
+    const conversations = SHARED_SPEAKERS.get(map);
+    for (const owner of owners) conversations.set(owner, speakers);
+}
+
+bindSpeakers(43, [1], { 'Mech Grunts': [6, 7] });
+bindSpeakers(46, [1], { 'Mech Grunt': [3] });
+bindSpeakers(47, [1], { 'Mech Grunt': [3], 'Mech Grunts': [2, 4] });
+bindSpeakers(49, [14], { 'Mech Grunts': [18, 19, 20, 22] });
+for (const [map, actor] of [[54, 9], [56, 6], [64, 8], [88, 5], [95, 5]])
+    bindSpeakers(map, [2], { Kathryn: [actor] });
+bindSpeakers(57, [6, 7, 8, 9, 10, 11, 12, 23, 24, 25], { 'Mech Grunt': [1, 2] });
+bindSpeakers(58, [6, 7, 8, 9, 10, 11, 12, 20, 24, 25], { 'Mech Grunt': [1, 2] });
+bindSpeakers(60, [87], { Archaeologist: [3] });
+bindSpeakers(76, [50, 51, 54], { Eggward: [49] });
+bindSpeakers(89, [1], { 'Mech Grunt 1': [2, 4], 'Mech Grunt 2': [4, 2], 'Mech Grunts': [2, 4] });
+bindSpeakers(103, [2, 3, 4, 16, 17, 18, 19], { 'Mysterious Person': [9] });
+bindSpeakers(105, [5], { Kathryn: [7], Toby: [8], Willie: [9], Tyler: [10], Veronica: [61] });
+bindSpeakers(107, [3], { 'Frygor?': [5] });
+bindSpeakers(108, [3], { 'Mech Grunt': [6], 'Mech Grunts': [4, 5] });
+bindSpeakers(110, [4], { 'Mech Grunt': [6] });
+bindSpeakers(112, [4], { 'Mech Grunt 1': [6, 7], 'Mech Grunt 2': [7, 6], 'Mech Grunts': [6, 7] });
+bindSpeakers(114, [3], { 'Mech Grunts': [7, 8] });
+bindSpeakers(130, [8, 9], { Kennick: [8], Joanne: [9] });
+bindSpeakers(150, [6], { Helly: [5] });
+bindSpeakers(151, [6], { Shelly: [5] });
+for (const map of [181, 182, 183, 184, 186]) bindSpeakers(map, [5], { Kathryn: [4] });
+bindSpeakers(181, [11], { 'Mari & Shari': [12, 13] });
+bindSpeakers(181, [15], { Tyler: [7] });
+bindSpeakers(181, [20], { Lusya: [14] });
+bindSpeakers(184, [11], { Kathryn: [4] });
+bindSpeakers(186, [15, 16], { Jay: [15], Kitty: [16] });
+bindSpeakers(190, [24], { 'Son of Baconator': [9] });
+bindSpeakers(197, [18], { Dave: [11] });
+bindSpeakers(200, [5], { 'Patrolling Mech': [4] });
+bindSpeakers(206, [11], { Dave: [14] });
+bindSpeakers(239, [1], { Tyler: [7] });
+
+const MECH_GRUNTS_ART = [
+    'Squat gray robots with rounded helmets, narrow yellow visors and broad red shoulder plates.',
+    'Their thick jointed arms end in dark fists, and their feet are red.'
+];
 
 function visible(scene, window) {
     return window?.parent && window.parent === scene._windowLayer && window.worldVisible &&
@@ -159,21 +195,33 @@ function createDialogueObserver(host, notifications) {
     function speakerAppearance(context, speaker) {
         const message = host.gameMessage?.();
         if (message?.faceName?.()) return speakerPortrait(context);
-        if (!speaker || !context.scene._wqaMapRestored) return '';
-        const owner = message?._wqaSpeakerEvent;
-        const map = host.mapId?.();
-        if (map === 49 && owner === 14 && speaker === 'Mech Grunts') {
-            if ([18, 19, 20, 22].some(id => fieldSpeaker(context, id, speaker)))
-                return ['Squat gray robots with rounded helmets, narrow yellow visors and broad red shoulder plates.',
-                    'Their thick jointed arms end in dark fists, and their feet are red.'];
+        if (!speaker) return '';
+        const { scene } = context;
+        if (!scene._wqaMapRestored) {
+            // The paired robot battler has unportrayed dialogue during its encounter.
+            const sprites = scene._spriteset?._enemySprites;
+            if (scene._wqaBattleStarted && speaker === 'Mech Double' && Array.isArray(sprites) &&
+                sprites.length <= 16 && sprites.some(sprite => sprite?._battlerName === 'MechDouble' &&
+                    renderedSprite(sprite, scene._spriteset._battleField))) return enemyArt('MechDouble');
             return '';
         }
-        const eventId = SHARED_SPEAKERS.get(map)?.get(owner)?.get(speaker) ?? owner;
-        return fieldSpeaker(context, eventId, speaker);
+        if (speaker === 'Wendy') return fieldSpeaker(context, host.fieldPlayer?.(), speaker);
+        const owner = message?._wqaSpeakerEvent;
+        const map = host.mapId?.();
+        const bindings = SHARED_SPEAKERS.get(map)?.get(owner);
+        // An audited shared speaker must never fall back to the caller's sprite.
+        const speakers = bindings && Object.prototype.hasOwnProperty.call(bindings, speaker) ? bindings[speaker] : [owner];
+        for (const id of speakers) {
+            const event = host.mapEvent?.(id);
+            const description = fieldSpeaker(context, event, speaker, id);
+            if (!description) continue;
+            if (speaker === 'Mech Grunts' && event._characterName === '~MechGrunt') return MECH_GRUNTS_ART;
+            return description;
+        }
+        return '';
     }
 
-    function fieldSpeaker({ scene }, eventId, speaker) {
-        const event = host.mapEvent?.(eventId);
+    function fieldSpeaker({ scene }, event, speaker, eventId) {
         const spriteset = scene._spriteset;
         const sprites = spriteset?._characterSprites;
         if (!event || event._erased || event._transparent || !Array.isArray(sprites) || sprites.length > 512) return '';

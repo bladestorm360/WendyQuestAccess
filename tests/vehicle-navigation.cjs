@@ -443,15 +443,17 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     function verifyTravelNotices() {
         const frames = new EventEmitter();
         const scheduled = [];
-        const host = { graphics: { app: { renderer: frames } }, schedule: callback => scheduled.push(callback) };
+        const host = { graphics: { frameCount: 0, app: { renderer: frames } }, schedule: callback => scheduled.push(callback) };
         const { player, gameMap, ship } = begin(113);
         const owner = {};
         const spoken = [];
         let valid;
         const notice = createVehicleNotice(c, host, () =>
             !player._vehicleGettingOn && !player._vehicleGettingOff && !player._transferring,
-        { open(record, check) { valid = check; spoken.push(record.name); return spoken.length; }, close() {} });
+        { open(record, check) { valid = check; spoken.push(record.name); return spoken.length; },
+            focus(_token, record) { spoken.push(record.name); }, close() {} });
         function render(scene = owner) {
+            host.graphics.frameCount++;
             notice.observe(scene);
             notice.observe(scene);
             assert(frames.listenerCount('postrender') <= 1);
@@ -477,6 +479,14 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
 
         const airship = gameMap.airship();
         airship.setLocation(113, player._x, player._y);
+        const permitsLanding = airship.isLandOk.bind(airship);
+        const zones = { clear: null, water: null };
+        for (let y = 0; y < gameMap.height(); y++) for (let x = 0; x < gameMap.width() - 1; x++) {
+            if (!permitsLanding(x, y, 2)) zones.water ||= [x, y];
+            else if (permitsLanding(x + 1, y, 2)) zones.clear ||= [x, y];
+        }
+        assert(zones.clear && zones.water);
+        player.setPosition(...zones.water);
         airship._driving = true;
         player._vehicleType = 'airship';
         player._through = true;
@@ -492,6 +502,50 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         assert.equal(spoken.at(-1), 'On airship.');
         notice.leave(owner);
         assert(!valid());
+
+        let checks = 0;
+        airship.isLandOk = (...args) => {
+            checks++;
+            return permitsLanding(...args);
+        };
+        const [east, north] = zones.clear;
+        player.setPosition(east, north);
+        player._realX = east - 0.5;
+        render();
+        assert.equal(checks, 0);
+        assert.equal(spoken.at(-1), 'On airship.');
+        player._realX = east;
+        render();
+        assert.equal(checks, 1);
+        assert.equal(spoken.at(-1), 'Can land.');
+        const firstLanding = spoken.length;
+        for (let frame = 0; frame < 14; frame++) render();
+        assert.equal(checks, 1);
+        player.setPosition(east + 1, north);
+        render();
+        assert.equal(checks, 2);
+        assert.equal(spoken.length, firstLanding, 'adjacent valid tiles share one notice');
+        const event = gameMap._events[90];
+        event.setPosition(east + 1, north);
+        for (let frame = 0; frame < 15; frame++) render();
+        assert.equal(checks, 3);
+        assert.equal(spoken.length, firstLanding, 'loss of eligibility is silent');
+        event.setPosition(...zones.water);
+        for (let frame = 0; frame < 15; frame++) render();
+        assert.equal(checks, 4);
+        assert.equal(spoken.length, firstLanding + 1, 'event movement makes the current tile landable again');
+        player.setPosition(...zones.water);
+        render();
+        assert.equal(spoken.length, firstLanding + 1);
+        player.setPosition(east, north);
+        notice.observe(owner);
+        frames.emit('postrender');
+        notice.leave(owner);
+        while (scheduled.length) scheduled.shift()();
+        assert.equal(spoken.length, firstLanding + 1, 'native handback drops pending landing speech');
+        render();
+        assert.equal(spoken.length, firstLanding + 2);
+
         // A quest or map banner can claim the shared speech epoch later in
         // the same render. The travel update must join its surviving epoch.
         const delivered = [];
@@ -509,7 +563,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         frames.emit('postrender');
         while (scheduled.length) scheduled.shift()();
         assert.deepEqual(delivered.map(record => [record.name, !!record.append]), [
-            ['World map', false], ['On airship.', true]
+            ['World map', false], ['On airship.', true], ['Can land.', true]
         ]);
         assert.equal(delivered[0].epoch, delivered[1].epoch);
         console.log('Verified boat, foot and airship notices, cancellation and shared speech order.');

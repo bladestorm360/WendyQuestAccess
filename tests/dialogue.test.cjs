@@ -10,7 +10,7 @@ const { bakeMap } = require('../src/world/geometry.cjs');
 const { findReachable, solveRoute } = require('../src/world/routes.cjs');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
-    path.join(__dirname, 'dialogue-producers.py'), process.argv[2]], { encoding: 'utf8', timeout: 6000, maxBuffer: 72000 }));
+    path.join(__dirname, 'dialogue-producers.py'), process.argv[2]], { encoding: 'utf8', timeout: 6000, maxBuffer: 96 * 1024 }));
 
 async function enter(map, mapId = 19, battle = false) {
     const f = fixture(map);
@@ -1210,6 +1210,24 @@ async function verifySpeakerDetails() {
     readSpeaker('Kennick', 9, /^No visual description for this speaker/);
     showRenderedSpeakers(129, [7]);
     readSpeaker('Gemma', 7, /^Gemma\. An older woman.*red headscarf/);
+    showRenderedSpeakers(76, [49, 50, 51, 54]);
+    for (const caller of [49, 50, 51, 54])
+        readSpeaker('Eggward', caller, /^Eggward\. A brown-skinned man.*dark, wavy hair.*blue shirt/);
+    scene._spriteset._characterSprites[0].worldVisible = false;
+    readSpeaker('Eggward', 54, /^No visual description for this speaker/);
+    showRenderedSpeakers(150, [5, 6]);
+    readSpeaker('Helly', 6, /^Helly\. An older woman.*brown kerchief/);
+    showRenderedSpeakers(105, [5, 7, 8, 9, 10, 61]);
+    readSpeaker('Kathryn', 5, /^Kathryn\. A worker.*red Wendy/);
+    readSpeaker('Tyler', 5, /^Tyler\. A worker.*red Wendy/);
+    showRenderedSpeakers(186, [15, 16]);
+    for (const caller of [15, 16]) {
+        readSpeaker('Kitty', caller, /^Kitty\. A round-faced woman.*white bonnet/);
+        readSpeaker('Jay', caller, /^Jay\. A round-faced man.*green shirt/);
+    }
+    showRenderedSpeakers(184, [4, 5, 11]);
+    readSpeaker('Kathryn', 5, /^Kathryn\. A worker.*takeout box/);
+    readSpeaker('Kathryn', 11, /^Kathryn\. A worker.*takeout box/);
     showRenderedSpeakers(49, [18, 19, 20, 22]);
     scene._spriteset._characterSprites[0].worldVisible = false;
     readSpeaker('Mech Grunts', 14, /^Mech Grunts\. Squat gray robots.*yellow visors.*red shoulder plates/);
@@ -1413,7 +1431,7 @@ if (require.main === module) {
     const run = process.argv.includes('--endings') ? async () => {
         await verifyEndingDialogue();
         await verifyCredits();
-    } : main;
+    } : process.argv.includes('--speakers') ? verifySpeakerDetails : main;
     run().catch(error => { console.error(error); process.exitCode = 1; });
 }
 

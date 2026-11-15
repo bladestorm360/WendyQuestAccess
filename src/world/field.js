@@ -570,14 +570,13 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     manualHandoff: !!handoff || !!boundaryName && (job.action === 'puzzleGuide' || job.mode === 'ship'),
                     more: result.more === true });
             }
-            else if (result?.status === 'approachBlocked') status(job, (job.guide ? job.guide + ' ' : '') + 'A floor event blocks the approach');
-            else if (job.remote && ['unreachable', 'unavailable'].includes(result?.status))
+            else if (job.remote && ['unreachable', 'approachBlocked', 'unavailable'].includes(result?.status))
                 status(job, 'No verified reachable entrance');
-            else if (result?.status === 'unreachable') {
+            else if (['unreachable', 'approachBlocked'].includes(result?.status)) {
                 if (job.guide) return status(job, job.guide + ' No verified route from here.');
                 if (job.map === 87 && job.target === 79)
                     return status(job, 'This cave mouth is separate from the main cavern. It is reached from the east side of Cracked Cove.');
-                const reason = job.mode === 'walk' ? 'No walkable route' : job.mode === 'airship' ?
+                const reason = job.mode === 'walk' ? 'Not currently reachable' : job.mode === 'airship' ?
                     'No connected landing' : 'No sailing route';
                 status(job, job.nearestLanding ? 'No landing site is available' : reason);
             }

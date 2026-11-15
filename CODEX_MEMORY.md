@@ -187,3 +187,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Victory Momentum](docs/battle.md#momentum-gains) records the shared painted-pip count and the separate reward-message ownership after a native win.
 
 [Current Steam deployment](docs/deployment.md#victory-momentum) verifies the victory Momentum announcement and records the preceding recovery copy.
+
+[Landing eligibility](docs/navigation.md#airship-landing-trace), [speaker sprite audit](docs/engine-evidence.md#dialogue-speaker-sprite-audit) and [Sunrise Bay routes and counters](docs/navigation-audit.md#sunrise-bay-scene-npcs-and-counter-access) record the native landing predicate, verified dialogue bindings and reachable NPC interaction tiles.

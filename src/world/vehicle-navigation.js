@@ -56,46 +56,93 @@ const TRAVEL_SPEECH = { walk: 'On foot.', boat: 'On small boat.', ship: 'On boat
 
 function createVehicleNotice(root, host, ready, notifications, append = () => false) {
     const modes = new WeakMap();
-    let current = null;
+    let pending = null;
+    let output = null;
+
+    function discard(state) {
+        pending = null;
+        state.renderer.off('postrender', state.present);
+    }
 
     function leave(scene) {
-        if (!current || current.scene !== scene) return;
-        const state = current;
-        current = null;
-        state.renderer.off('postrender', state.present);
-        if (state.token) notifications.close(state.token);
+        if (!scene) return;
+        scene._wqaLandingDue = undefined;
+        if (pending?.scene === scene) discard(pending);
+        if (output?.scene === scene) {
+            notifications.close(output.token);
+            output = null;
+        }
+        scene._wqaVehicleNotice = false;
     }
 
     function observe(scene) {
-        if ((current?.scene === scene && !current.token) || !ready(scene, true)) return;
+        if (pending?.scene === scene || !ready(scene, true)) return;
         const renderer = host.graphics.app?.renderer;
         const player = root.$gamePlayer;
         const map = root.$gameMap;
         const mode = travelMode(map, player);
-        if (!mode || !renderer || scene._wqaVehicleType === player._vehicleType) return;
-        if (current) leave(current.scene);
+        if (!mode || !renderer) return;
         const type = player._vehicleType;
-        const valid = () => current === state && ready(scene, true) && root.$gamePlayer === player &&
+        const changed = scene._wqaVehicleType !== type;
+        const x = player._x;
+        const y = player._y;
+        const settled = () => player._x === x && player._y === y &&
+            player._realX === x && player._realY === y;
+        const sample = mode === 'airship' && settled() && (scene._wqaLandingX !== x ||
+            scene._wqaLandingY !== y || !(host.graphics.frameCount < scene._wqaLandingDue));
+        if (!changed && !sample) return;
+        if (pending) leave(pending.scene);
+        if (output && output.scene !== scene) leave(output.scene);
+
+        const valid = () => ready(scene, true) && root.$gamePlayer === player &&
             root.$gameMap === map && player._vehicleType === type && travelMode(map, player) === mode;
-        const state = { scene, renderer, token: 0, present() {
+        function finish() {
+            if (pending !== state) return;
+            discard(state);
+            scene._wqaVehicleNotice = output?.scene === scene;
+            if (!valid()) return;
+            scene._wqaVehicleType = type;
+            const previous = modes.get(player);
+            const sameFlight = previous?.mode === 'airship' && previous.map === map;
+            let landable = mode === 'airship' && sameFlight && previous.landable;
+            let landing = null;
+
+            // The engine checks both terrain and event occupancy. Resample
+            // a stationary tile occasionally because an event can move.
+            if (sample && settled() && ready(scene)) {
+                const allowed = canLand(map, x, y);
+                if (allowed && !landable) landing = { kind: 'fieldStatus', name: 'Can land.' };
+                landable = allowed;
+                scene._wqaLandingX = x;
+                scene._wqaLandingY = y;
+                scene._wqaLandingDue = host.graphics.frameCount + 15;
+            }
+            if (mode !== 'airship') scene._wqaLandingDue = undefined;
+            modes.set(player, { mode, map, landable });
+
+            const travel = previous?.mode !== mode && (previous || mode !== 'walk')
+                ? { kind: 'fieldStatus', name: TRAVEL_SPEECH[mode] } : null;
+            if (!travel && !landing) return;
+            const first = travel || landing;
+            if (append(scene, first)) {
+                if (travel && landing) append(scene, landing);
+                return;
+            }
+            const speech = output = { scene, token: 0 };
+            speech.token = notifications.open(first, () => output === speech && valid(), true);
+            if (!speech.token) output = null;
+            scene._wqaVehicleNotice = !!output;
+            if (speech.token && travel && landing)
+                notifications.focus(speech.token, { ...landing, append: true });
+        }
+        const state = { scene, renderer, present() {
             if (!valid()) return leave(scene);
-            // Let other announcements settle after this render so a map or
-            // quest update cannot immediately replace the vehicle notice.
-            host.schedule(() => {
-                if (current !== state) return;
-                if (!valid()) return leave(scene);
-                scene._wqaVehicleType = type;
-                const previous = modes.get(player);
-                modes.set(player, mode);
-                if (previous === mode || !previous && mode === 'walk') return leave(scene);
-                scene._wqaPresentation = true;
-                const record = { kind: 'fieldStatus', name: TRAVEL_SPEECH[mode] };
-                if (append(scene, record)) return leave(scene);
-                state.token = notifications.open(record, valid, true);
-                if (!state.token) leave(scene);
-            });
+            // Join a map or quest announcement from the same render.
+            host.schedule(finish);
         } };
-        current = state;
+        pending = state;
+        scene._wqaVehicleNotice = true;
+        scene._wqaPresentation = true;
         renderer.once('postrender', state.present);
     }
 

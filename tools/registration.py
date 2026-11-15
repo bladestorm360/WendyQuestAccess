@@ -154,7 +154,7 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaArrivalSpeech||'
                  b'SceneManager._scene?._wqaSoundscapeActive||'
                  b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance||'
-                 b'SceneManager._scene?._wqaBookmarkLanding)')
+                 b'SceneManager._scene?._wqaBookmarkLanding||SceneManager._scene?._wqaVehicleNotice)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                b'SceneManager._scene?._wqaWallAudio||SceneManager._scene?._wqaBeaconActive||'
                b'SceneManager._scene?._wqaCaveTimingActive||SceneManager._scene?._wqaAutowalkActive||'
@@ -703,8 +703,12 @@ def map_notification(original):
             if (this._wqaPlaceFrames === 30)
                 globalThis.WendyQuestAccessMapEntranceReady?.(this);
         }
-        if (this._wqaVehicleType !== $gamePlayer._vehicleType && !this._wqaSettingsActive &&
-            !$gameMap._interpreter?._list && !$gameMessage.isBusy())
+        const wqaVehicleType = $gamePlayer._vehicleType;
+        if ((this._wqaVehicleType !== wqaVehicleType || wqaVehicleType === "airship" &&
+            $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY &&
+            (this._wqaLandingX !== $gamePlayer._x || this._wqaLandingY !== $gamePlayer._y ||
+                !(Graphics.frameCount < this._wqaLandingDue))) &&
+            !this._wqaSettingsActive && !$gameMap._interpreter?._list && !$gameMessage.isBusy())
             globalThis.WendyQuestAccessVehicleReady?.(this);
         if (this._wqaIceRoute && !$gameMap._interpreter?._list)
             globalThis.WendyQuestAccessIceRouteReady?.(this);

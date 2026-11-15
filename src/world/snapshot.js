@@ -199,7 +199,13 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         if (bookmark.kind === 'entity') {
             // Keep entity bookmarks for the pantry formerly listed as treasure.
             const category = id === 116 && bookmark.event === 7 && bookmark.category === 'treasure' ? 'objects' : bookmark.category;
-            let current = objects.find(item => item.id === bookmark.event && item.category === category);
+            // Redirect saved references to the inaccessible copy of the Sunrise Bay introduction.
+            const event = id === 76 && bookmark.event === 78 && category === 'events' ? 79 : bookmark.event;
+            let current = objects.find(item => item.id === event && item.category === category);
+            // The shop counter is the reachable interaction for either old entry.
+            if (!current && (id === 150 || id === 151) &&
+                (bookmark.event === 5 && category === 'people' || bookmark.event === 6 && category === 'objects'))
+                current = objects.find(item => item.id === 6 && item.category === 'people');
             // Breaded Bay's native boarding tile used to appear as a world exit.
             if (!current && id === 49 && bookmark.event === 12 && category === 'exits')
                 current = objects.find(item => item.id === bookmark.event && item.category === 'vehicles');
