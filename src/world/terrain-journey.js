@@ -1,6 +1,8 @@
 'use strict';
 
 const { tileKey } = require('./geometry.cjs');
+const { nearestWestChillcrestExit } = require('./snapshot');
+const { FLOAT_FORT_ENTRANCE } = require('./world-destinations');
 
 const CAVE = 204;
 const PEAK = 27;
@@ -21,7 +23,7 @@ function createTerrainJourney(root) {
     return {
         clear() { trip = null; },
         begin(gate, origin, target, nextMap, originPoint, landing) {
-            if (!target || ![BRIDGES, CRYSTAL, 'pull'].includes(gate) || !Number.isInteger(nextMap)) return;
+            if (!target || ![BRIDGES, CRYSTAL, 'pull', 'floatFort'].includes(gate) || !Number.isInteger(nextMap)) return;
             trip = { gate, player: root.$gamePlayer, origin, originPoint, target: { id: target.id, category: target.category },
                 lastMap: origin, nextMap, landing, trail: new Set(), open: false };
         },
@@ -40,6 +42,15 @@ function createTerrainJourney(root) {
                 ![origin, trip.lastMap, nextMap].includes(map)) {
                 trip = null;
                 return null;
+            }
+            if (gate === 'floatFort') {
+                if (map === 25)
+                    return { target: nearestWestChillcrestExit(objects, snapshot.y), map: 113 };
+                if (trip.lastMap === 25) {
+                    trip = null;
+                    return { restore: true, target: objects.find(item => item.id === FLOAT_FORT_ENTRANCE && item.category === 'exits') };
+                }
+                return null; // Still on the overworld side of the handoff.
             }
             const stage = gate === 'pull' ? root.$gameVariables?.value?.(4) : undefined;
             const open = gate === 'pull' ? stage >= 3 : root.$gameSwitches?.value?.(gate);

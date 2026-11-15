@@ -5,7 +5,7 @@ const { EventEmitter } = require('node:events');
 const { captureWorld } = require('../src/world/snapshot');
 const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { composeWorld, LAND, DIRECTIONS } = require('../src/world/geometry.cjs');
-const { travelMode } = require('../src/world/vehicle-navigation');
+const { travelMode, createVehicleNotice } = require('../src/world/vehicle-navigation');
 const { worldBoundaryName } = require('../src/world/world-destinations');
 const { createBeacon } = require('../src/world/beacon');
 const { createField } = require('../src/world/field');
@@ -82,18 +82,26 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         player._realY = player._y;
         player.updateVehicle();
     }
-    function follow(fixture, result, expectedEvent) {
+    function follow(fixture, result, expectedEvent, eraseOnly = false) {
         const { source, player } = fixture;
         // Spoken directions are capped at eight turns. The beacon course
         // carries every step when the fixture follows a longer route.
         const legs = result.more && result.course
             ? Array.from(result.course, value => ({ direction: DIRECTIONS[value & 3], tiles: 1 })) : result.legs;
         for (const leg of legs) for (let tile = 0; tile < leg.tiles; tile++) {
-            assert(!source._list, 'a native event must end the route');
+            assert(!source._list, 'native event ' + source._eventId + ' must end the route at ' + player._x + ',' + player._y);
             player.moveStraight(leg.direction);
             assert(player.isMovementSucceeded());
             settle(player);
             player.updateNonmoving(true, false);
+            if (eraseOnly && source._list?.map(command => command.code).join(',') === '214,0') {
+                const consumed = fixture.gameMap._events[source._eventId];
+                consumed.setupPage = () => { consumed._trigger = undefined; };
+                execute(source);
+                assert(consumed._erased);
+                source._list = null;
+                source._eventId = undefined;
+            }
         }
         assert.deepEqual([player._x, player._y], [result.arrival.x, result.arrival.y]);
         assert.equal(source._eventId, expectedEvent);
@@ -260,6 +268,8 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         });
     }
 
+    await verifyFloatFort();
+    verifyTravelNotices();
     await verifyPortBookmarks();
     await verifyLandingBookmarks();
     await verifyAirship();
@@ -277,6 +287,165 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     delete c.WendyQuestAccessSceneLeaving;
     delete c.Tyruswoo.TileControl.param;
     console.log('Verified native ship landing, island transfer and return, exact reboarding direction, parked boat and forced handback.');
+
+    async function verifyFloatFort() {
+        const oldScene = c.SceneManager._scene;
+        const app = c.Graphics.app;
+        const screen = c.$gameScreen;
+        const listen = c.addEventListener;
+        const members = c.$gameParty.members;
+        const frames = new EventEmitter();
+        c.addEventListener = () => {};
+        c.$gameScreen = { _brightness: 255 };
+        c.$gameParty.members = () => [4];
+        const owner = { _wqaFieldReady: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0 };
+        c.SceneManager._scene = owner;
+        c.Graphics.app = { stage: owner, renderer: frames };
+        const packets = [];
+        const records = [];
+        const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
+        const field = createField(c, { graphics: c.Graphics, manager: c.SceneManager, hasFocus: () => true,
+            screenFading: () => false, navigationPreferences: () => ({}),
+            makeWord: () => new Int32Array(new SharedArrayBuffer(4)), createRouteWorker: () => worker },
+        { open(record) { records.push(record); return records.length; }, close() {} });
+
+        function site(id, x, y) {
+            const current = begin(id, [33, 38, 250]);
+            current.gameMap.inactiveTime = 0;
+            current.player.setPosition(x, y);
+            if (id === 113) {
+                const gate = current.gameMap._events[145];
+                gate.setupPage = () => { gate._trigger = undefined; };
+                gate.erase();
+            }
+            return current;
+        }
+        function ask(action) {
+            assert(field.command(action));
+            frames.emit('postrender');
+        }
+        async function answer(fixture, event) {
+            const packet = packets.shift();
+            assert(packet);
+            assert.equal(packet.request.event, event);
+            let output;
+            await verifyWorker(fixture, { ...packet.request, beacon: true }, packet.live, result => output = result);
+            worker.emit('message', { ...packet, result: output });
+            return output;
+        }
+        function enter(fixture, result) {
+            follow(fixture, result, undefined, fixture.id === 25);
+            fixture.player.moveStraight(result.boundary);
+            assert(fixture.player.isMovementSucceeded());
+            settle(fixture.player);
+            fixture.player.updateNonmoving(true, false);
+            assert.equal(fixture.source._eventId, result.boundaryEvent);
+            return fixture.source._list;
+        }
+        const east = site(113, 14, 17);
+        const world = captureWorld(c, true, undefined, owner);
+        assert.equal(world.objects.find(item => item.id === 21)?.name, 'Float Fort');
+        assert(!world.objects.some(item => [30, 31].includes(item.id)));
+        for (let index = 0; index < 12 && records.at(-1)?.category !== 'Exits'; index++)
+            ask('nextCategory');
+        assert.equal(records.at(-1)?.category, 'Exits');
+        for (let index = 0; index < world.objects.length && records.at(-1)?.name !== 'Float Fort'; index++)
+            ask('nextDestination');
+        assert.equal(records.at(-1)?.name, 'Float Fort');
+        ask('directions');
+        const first = await answer(east, 21);
+        assert.equal(first.boundaryEvent, 19);
+        assert.equal(first.boundary, 4);
+        assert.match(formatSpeech(records.at(-1)), /take exit to Chillcrest.*west exit toward Cold Brew Trail/i);
+        assert(enter(east, first).some(row => row.code === 201 && row.parameters.slice(1, 4).join(',') === '25,47,27'));
+
+        const town = site(25, 47, 27);
+        // Native transfers keep the same player. Model that identity across
+        // both scene handbacks while loading each map's stock event pages.
+        const player = east.player;
+        c.$gamePlayer = town.player = player;
+        player.setPosition(47, 27);
+        ask('directions');
+        const townPacket = packets[0];
+        assert([14, 18, 19].includes(townPacket?.request.event));
+        const leaving = await answer(town, townPacket.request.event);
+        assert([14, 18, 19].includes(leaving.boundaryEvent));
+        assert(enter(town, leaving).some(row => row.code === 201 && row.parameters.slice(1, 4).join(',') === '113,12,17'));
+
+        const west = site(113, 12, 17);
+        c.$gamePlayer = west.player = player;
+        player.setPosition(12, 17);
+        ask('directions');
+        const last = await answer(west, 21);
+        assert.equal(last.boundaryEvent, 21);
+        assert(enter(west, last).some(row => row.code === 201 && row.parameters.slice(1, 4).join(',') === '26,1,22'));
+
+        const fort = site(26, 2, 22);
+        const quay = directions(fort, 5);
+        assert.equal(quay.target.name, 'Board the boat from the quay');
+        assert.equal(quay.target.category, 'vehicles');
+        follow(fort, quay.result, 5);
+        assert(fort.source._list.some(row => row.code === 201 && row.parameters.slice(1, 5).join(',') === '113,17,6,6'));
+        field.leave(owner);
+        c.SceneManager._scene = oldScene;
+        c.Graphics.app = app;
+        c.$gameScreen = screen;
+        c.addEventListener = listen;
+        c.$gameParty.members = members;
+        console.log('Verified Float Fort from both sides of Chillcrest, including the westward handback and quay.');
+    }
+
+    function verifyTravelNotices() {
+        const frames = new EventEmitter();
+        const host = { graphics: { app: { renderer: frames } } };
+        const { player, gameMap, ship } = begin(113);
+        const owner = {};
+        const spoken = [];
+        let valid;
+        const notice = createVehicleNotice(c, host, () =>
+            !player._vehicleGettingOn && !player._vehicleGettingOff && !player._transferring,
+        { open(record, check) { valid = check; spoken.push(record.name); return spoken.length; }, close() {} });
+        function render(scene = owner) {
+            notice.observe(scene);
+            notice.observe(scene);
+            assert(frames.listenerCount('postrender') <= 1);
+            frames.emit('postrender');
+        }
+        player.setPosition(17, 6);
+        player.setDirection(6);
+        ship.setLocation(113, 18, 6);
+        render();
+        assert(player.triggerButtonAction());
+        render();
+        assert.deepEqual(spoken, []);
+        settle(player);
+        render();
+        render({});
+        assert.deepEqual(spoken, ['On boat.']);
+        assert.equal(typeof valid, 'function');
+        ship._driving = false;
+        player._vehicleType = '';
+        render({});
+        assert.deepEqual(spoken, ['On boat.', 'On foot.']);
+
+        const airship = gameMap.airship();
+        airship.setLocation(113, player._x, player._y);
+        airship._driving = true;
+        player._vehicleType = 'airship';
+        player._through = true;
+        render();
+        assert.deepEqual(spoken, ['On boat.', 'On foot.']);
+        airship._altitude = airship.maxAltitude();
+        notice.observe(owner);
+        notice.leave(owner);
+        frames.emit('postrender');
+        assert.equal(spoken.length, 2);
+        render();
+        assert.equal(spoken.at(-1), 'On airship.');
+        notice.leave(owner);
+        assert(!valid());
+        console.log('Verified one travel notice after native boarding and handback, including the aircraft readiness gate.');
+    }
 
     async function verifyPortBookmarks() {
         const leave = c.WendyQuestAccessSceneLeaving;

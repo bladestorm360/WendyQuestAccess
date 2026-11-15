@@ -104,6 +104,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 }
                 if (id === 120 && [11, 12].includes(entry.id)) assert.deepEqual(ordinary, { name: 'Cupboard', category: 'objects' });
                 if (id === 124 && entry.id === 15) assert.deepEqual(ordinary, { name: 'Drawer', category: 'objects' });
+                if (id === 195 && entry.id === 4) assert.deepEqual(ordinary, { name: 'Clothing', category: 'objects' });
                 if ((id === 128 || id === 195) && entry.id === 9)
                     assert.deepEqual(ordinary, { name: 'Book', category: 'objects' });
                 const lease = { page, map: root.$gameMap, trigger: page.trigger, waypoint: false };

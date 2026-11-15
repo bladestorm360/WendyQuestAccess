@@ -214,10 +214,93 @@ async function main() {
     profileSnapshot(flags);
     await verifyOpeningField(flags);
     await verifyIceHandback(flags);
+    await verifyVisibleChestBarriers(flags);
     await verifyRuinsHandback();
     await verifyBeachHandoffs(flags);
     await verifySurfaceField(flags);
     console.log('Verified native field admission, spoken object selection and route, restored tiles, and stale-route retirement.');
+}
+
+async function verifyVisibleChestBarriers(tilesets) {
+    const { bakeControls } = require('../tools/bake-controls.cjs');
+    for (const [id, chest, gate, x, y, spoilers, message] of [
+        [204, 1, 145, 3, 11, false, 'Chest is unreachable beyond a gap in the floor.'],
+        [204, 1, 145, 3, 11, true, 'Chest is unreachable beyond a gap in the floor.'],
+        [79, 6, 97, 9, 1, false, 'Chest is unreachable across the water.']
+    ]) {
+        const data = mapData(id);
+        const f = fixture(data, false, { spoilers });
+        const { c, routePackets, frame } = f;
+        const map = c.$gameMap;
+        const player = c.$gamePlayer;
+        c.$dataTilesets = tilesets;
+        let open = false;
+        c.$gameSwitches = { value: key => key === gate && open };
+        const flags = tilesets[data.tilesetId].flags;
+        const geometry = bakeMap(data, flags);
+        const controls = bakeControls(id, data, flags);
+        Object.assign(map, { _mapId: id, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
+            _vehicles: [], _nameDisplay: false });
+        for (const entry of data.events.filter(Boolean)) {
+            const page = entry.pages[0];
+            const event = Object.assign(f.event(entry.id, 0), { _x: entry.x, _y: entry.y, _pageIndex: 0,
+                _trigger: page.trigger, _priorityType: page.priorityType, _through: page.through });
+            map._events[entry.id] = event;
+            map.fixtureEvents.push(event);
+        }
+        player._vehicleType = 'walk';
+        player.setPosition(x, y);
+        player.reserveTransfer(id, x, y, 2, 0);
+        c.SceneManager.goto(c.Scene_Map);
+        c.SceneManager.changeScene();
+        c.DataManager.ready = c.ImageManager.ready = true;
+        c.SceneManager.updateScene();
+        await new Promise(setImmediate);
+        const scene = c.Graphics.app.stage;
+        scene._fadeDuration = scene._fadeOpacity = 0;
+        c.SceneManager.updateScene();
+        f.idleCallbacks.shift()();
+        c.SceneManager.updateScene();
+        frame();
+        await new Promise(setImmediate);
+        const key = (value, shiftKey = false) => {
+            f.dispatchWindowEvent('keydown', { key: value, keyCode: value.toUpperCase().charCodeAt(0), shiftKey });
+            f.dispatchWindowEvent('keyup', { key: value });
+            frame();
+        };
+        const reply = (packet, result) => {
+            f.routeReply({ epoch: packet.epoch, sequence: packet.sequence, map: packet.map, result });
+            frame();
+        };
+        assert(scene._wqaFieldReady);
+        for (let index = 0; index < 12 && f.packets.at(-1)?.category !== 'Treasure'; index++) key('l', true);
+        assert.match(formatSpeech(f.packets.at(-1)), /^Treasure, Chest,/);
+        key('p');
+        const blocked = routePackets.at(-1);
+        assert.equal(blocked.request.event, chest);
+        assert.equal(solveRoute(geometry, blocked.live, blocked.request).status, 'unreachable');
+        reply(blocked, { status: 'terrainExit', gate });
+        assert.equal(formatSpeech(f.packets.at(-1)), message);
+        key('p');
+        const retries = routePackets.at(-1);
+        assert.equal(retries.request.event, chest, 'the status does not start an onward journey');
+        reply(retries, { status: 'unreachable' });
+        assert.equal(formatSpeech(f.packets.at(-1)), message);
+
+        open = true;
+        // The same native switch also retires Devilled Nook's bridge scene.
+        if (id === 79) map._events[14]._pageIndex = 2;
+        key('p');
+        const after = routePackets.at(-1);
+        assert.equal(after.live.terrainGate, true);
+        const cells = geometry.cells.slice();
+        for (const [, changes] of controls) for (const [cell, flags] of changes) cells[cell] = (cells[cell] & 240) | flags;
+        const result = solveRoute({ ...geometry, cells }, after.live, after.request);
+        assert.equal(result.status, 'ready', JSON.stringify({ id, result }));
+        reply(after, result);
+        assert.equal(f.packets.at(-1).kind, 'routeDirections');
+    }
+    console.log('Verified visible chest labels, spoiler-safe gap and water messages, and normal routes after opening.');
 }
 
 async function verifyIceHandback(flags) {
@@ -823,7 +906,7 @@ async function verifySurfaceField(tilesets) {
         f.frame();
     }
     reply(first);
-    assert.equal(formatSpeech(directions().at(-1)), '1 east.');
+    assert.equal(formatSpeech(directions().at(-1)), '1 east, take exit to Secret Island boat landing.');
     const pending = request();
     player._vehicleGettingOff = true;
     c.SceneManager.updateScene();

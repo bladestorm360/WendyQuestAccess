@@ -4,8 +4,9 @@ const { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks } = require
 const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
-const { worldBoundaryName } = require('./world-destinations');
-const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination, BREAKFAST_HANDOFFS } = require('./local-destinations');
+const { worldBoundaryName, FLOAT_FORT_ENTRANCE } = require('./world-destinations');
+const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination,
+    visibleChestBarrier, BREAKFAST_HANDOFFS } = require('./local-destinations');
 const { transferOptions } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
@@ -22,13 +23,13 @@ const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE }
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
 
-function routeBoundary(root, eventId, spoilers, edge) {
+function routeBoundary(root, eventId, spoilers, edge, mode = 'walk') {
     const map = root.$gameMap;
     const event = map._events?.[eventId];
     const entry = root.$dataMap?.events?.[eventId];
     const page = entry?.pages?.[event?._pageIndex];
     if (!page || event._erased || !spoilers && concealedDestination(map._mapId, event)) return {};
-    const target = eventTarget(root, 'walk', event, entry, page, spoilers);
+    const target = eventTarget(root, mode, event, entry, page, spoilers);
     const name = target?.category === 'exits' ? target.name.replace(/^(?:return to|to) /i, '') : '';
     if (name && name !== 'Exit' && name !== 'Map') return { exit: name };
     const options = edge ? [edge] : transferOptions(map._mapId, entry, page, root.$dataCommonEvents);
@@ -378,6 +379,11 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 selectGuideTarget(target);
             }
             routeDiagnostics(job, result);
+            if (job.action === 'directions' &&
+                ['terrainExit', 'terrainGate', 'unreachable', 'approachBlocked'].includes(result?.status)) {
+                const barrier = visibleChestBarrier(root, job.map, job.request?.event, preferences().spoilers === true);
+                if (barrier) return status(job, barrier);
+            }
             if (result?.status === 'terrainExit' || job.terrainOnward && result?.entrance &&
                 ['ready', 'interrupted', 'enemyBlocked'].includes(result.status))
                 return terrainExit(job, result);
@@ -444,7 +450,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 }
                 const exit = !result.land && !job.entrance?.sameScene &&
                     (job.entrance || job.destination?.category === 'exits' || job.questExit || job.breakfastObjective === 'quest26') &&
-                    routeBoundary(root, job.target, preferences().spoilers === true, job.entrance).exit;
+                    routeBoundary(root, job.target, preferences().spoilers === true, job.entrance, job.mode).exit;
                 const exitEvent = exit && root.$gameMap._events?.[job.target];
                 const bump = job.eventAction === 'bump' || !!exitEvent && exitEvent._trigger === 1 && exitEvent._priorityType === 1;
                 follow(job, result, { kind: 'routeDirections', name: job.label, guide: job.guide,
@@ -527,10 +533,20 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const { exit, boundaryName } = job.mode === 'walk' ?
                     routeBoundary(root, result.boundaryEvent, preferences().spoilers === true) : {};
                 startBeaconApproach(job, result, result.boundaryEvent);
-                const useExit = !!exit && (job.target === result.boundaryEvent || job.request.handoffs?.includes(result.boundaryEvent));
+                // The east and south world-map approaches are in a separate
+                // walking component. Carry the selection through the town
+                // only when both the west exit and the fort are open.
+                const throughChillcrest = job.map === 113 && job.mode === 'walk' && job.target === FLOAT_FORT_ENTRANCE &&
+                    result.boundaryEvent === 19 && (result.boundary === 4 || result.boundary === 8) &&
+                    root.$gameSwitches?.value?.(33) === true && root.$gameSwitches.value(38) === true && !!exit;
+                if (throughChillcrest)
+                    terrainJourney.begin('floatFort', 113, job.destination, 25);
+                const useExit = !!exit && (throughChillcrest || job.target === result.boundaryEvent ||
+                    job.request.handoffs?.includes(result.boundaryEvent));
                 const activate = job.eventAction === 'step' && job.target === result.boundaryEvent ? result.boundary : undefined;
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
                     guide: job.guide, activate, exit, useExit,
+                    onward: throughChillcrest ? 'Then take the west exit toward Cold Brew Trail.' : undefined,
                     boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent)),
                     manualHandoff: !!handoff || job.action === 'puzzleGuide' && !!boundaryName, more: result.more === true });
             }
@@ -682,7 +698,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return submit(job, snapshot, { field: true, limit: 8, beacon: host.beacon?.enabled() === true,
                 transfer: terrainTransferRequest(job, next.transfer, next.breakfast, next.point, next.trail) }), true;
         }
-        if (!next.target) return status(job, next.text + ' The next action is unavailable.'), true;
+        if (!next.target) return status(job, next.text ? next.text + ' The next action is unavailable.' :
+            'The west exit is unavailable.'), true;
         if (next.map) terrainJourney.advance(snapshot.map, next.map);
         route(job, snapshot, next.target);
         return true;
@@ -715,6 +732,13 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         }
         if (job.action !== 'directions') return present(job, { kind: 'fieldTarget', name: target.name, category,
             dx: target.x - snapshot.x, dy: target.y - snapshot.y, outOfReach: target.outOfReach, handoff: target.handoff });
+        if (target.floatFort) {
+            terrainJourney.begin('floatFort', snapshot.map, target, 113);
+            return resumeTerrainJourney(job, snapshot);
+        }
+        if (snapshot.map === 113 && snapshot.mode === 'walk' && target.id === FLOAT_FORT_ENTRANCE &&
+            root.$gameSwitches?.value?.(38) === false)
+            return status(job, 'The road to Float Fort opens after you obtain the Frosty Stone.');
         if (!timedCave(snapshot.map)) return route(job, snapshot, target);
         return timedRoute(job, snapshot, target);
     }

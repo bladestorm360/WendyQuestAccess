@@ -669,6 +669,9 @@ def map_notification(original):
             if (this._wqaPlaceFrames === 30)
                 globalThis.WendyQuestAccessMapEntranceReady?.(this);
         }
+        if (this._wqaVehicleType !== $gamePlayer._vehicleType && !this._wqaSettingsActive &&
+            !$gameMap._interpreter?._list && !$gameMessage.isBusy())
+            globalThis.WendyQuestAccessVehicleReady?.(this);
         if (this._wqaIceRoute && !$gameMap._interpreter?._list)
             globalThis.WendyQuestAccessIceRouteReady?.(this);
         if (this._wqaStepNavigation && $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY)

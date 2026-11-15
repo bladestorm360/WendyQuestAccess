@@ -66,6 +66,11 @@ function includeSavedBookmarks(snapshot, entries, current) {
     return items;
 }
 
+function nearestWestChillcrestExit(objects, y) {
+    return objects.reduce((best, item) => item.category === 'exits' && WEST_CHILLCREST.includes(item.id) &&
+        (!best || Math.abs(item.y - y) < Math.abs(best.y - y)) ? item : best, null);
+}
+
 function captureWorld(root, routing = true, label, scene, bookmarks = [], routesOnly = false, spoilers = false, questExitId) {
     const map = root.$gameMap;
     const player = root.$gamePlayer;
@@ -150,6 +155,10 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         if (next) objects.push({ ...next, category: 'quests', questExit: true, eventAction: 'step',
             handoffs: transitions });
     }
+    if (!routesOnly && scene && mode === 'walk' && id === 25 && root.$gameSwitches?.value?.(38) === true) {
+        const west = nearestWestChillcrestExit(objects, player._y);
+        if (west) objects.push({ ...west, id: 'float-fort', event: west.id, name: 'Float Fort via west exit', floatFort: true });
+    }
     if (!routesOnly && scene && mode === 'walk' && BREAKFAST_MAPS.includes(id) &&
         !objects.some(item => item.category === 'quests')) {
         const objective = root.$gameParty?.getNav?.();
@@ -201,4 +210,4 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         ...(id === 19 && !routesOnly ? { salt: saltState(root) } : {}) } };
 }
 
-module.exports = { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks };
+module.exports = { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks, nearestWestChillcrestExit };

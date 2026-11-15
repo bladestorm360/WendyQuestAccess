@@ -52,4 +52,46 @@ function canLand(map, x, y) {
     return vehicleOnMap(map, 'airship')?.isLandOk?.(x, y, 2) === true;
 }
 
-module.exports = { vehicleOnMap, travelMode, parkedVehicle, aircraftAt, boardingTargets, canLand };
+const TRAVEL_SPEECH = { walk: 'On foot.', boat: 'On small boat.', ship: 'On boat.', airship: 'On airship.' };
+
+function createVehicleNotice(root, host, ready, notifications) {
+    const modes = new WeakMap();
+    let current = null;
+
+    function leave(scene) {
+        if (!current || current.scene !== scene) return;
+        const state = current;
+        current = null;
+        state.renderer.off('postrender', state.present);
+        if (state.token) notifications.close(state.token);
+    }
+
+    function observe(scene) {
+        if ((current?.scene === scene && !current.token) || !ready(scene, true)) return;
+        const renderer = host.graphics.app?.renderer;
+        const player = root.$gamePlayer;
+        const map = root.$gameMap;
+        const mode = travelMode(map, player);
+        if (!mode || !renderer || scene._wqaVehicleType === player._vehicleType) return;
+        if (current) leave(current.scene);
+        const type = player._vehicleType;
+        const valid = () => current === state && ready(scene, true) && root.$gamePlayer === player &&
+            root.$gameMap === map && player._vehicleType === type && travelMode(map, player) === mode;
+        const state = { scene, renderer, token: 0, present() {
+            if (!valid()) return leave(scene);
+            scene._wqaVehicleType = type;
+            const previous = modes.get(player);
+            modes.set(player, mode);
+            if (previous === mode || !previous && mode === 'walk') return leave(scene);
+            scene._wqaPresentation = true;
+            state.token = notifications.open({ kind: 'fieldStatus', name: TRAVEL_SPEECH[mode] }, valid);
+            if (!state.token) leave(scene);
+        } };
+        current = state;
+        renderer.once('postrender', state.present);
+    }
+
+    return { observe, leave };
+}
+
+module.exports = { vehicleOnMap, travelMode, parkedVehicle, aircraftAt, boardingTargets, canLand, createVehicleNotice };

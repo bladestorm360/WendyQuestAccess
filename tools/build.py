@@ -113,6 +113,7 @@ def bundle():
         './local-destinations': 'world/local-destinations.js',
         './world-destinations': 'world/world-destinations.js',
         './vehicle-navigation': 'world/vehicle-navigation.js',
+        './world/vehicle-navigation': 'world/vehicle-navigation.js',
         './puzzles/salt-caverns': 'world/puzzles/salt-caverns.js',
         './puzzles/salt-state.cjs': 'world/puzzles/salt-state.cjs',
         './salt-state.cjs': 'world/puzzles/salt-state.cjs',

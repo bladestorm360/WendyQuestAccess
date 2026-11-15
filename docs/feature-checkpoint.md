@@ -238,3 +238,7 @@ Implementation and offline map checks passed. The actual Cold Brew Trail geometr
 Gameplay confirmation remains open for the reported Cold Brew Trail request sequence and audible attack and spatial cue timing.
 
 MechBorg portrait wording is implemented and offline-verified for both dialogue expressions. Estimate 5–10 minutes through asset inspection and focused verification, plus packaging and the local launcher lease. The staged follow-up includes it. [Portrait update](deployment.md#mechborg-portrait-wording)
+
+### Vehicle notices, Float Fort routes and visible chests
+
+This scope covers automatic boarding and dismount notices, native ship and airship routing on the world map, Float Fort's walking entrance and quay, the visible Cold Brew and Devilled Nook chests, and the Clothing interaction. Allow 45–75 minutes of engineering for vehicle and Float Fort producer investigation, test coverage and an exact focused deployment. The two chest checks and label correction were estimated at 15–25 minutes. The packaged speech and route fixtures use silent output. Gameplay confirmation covers the spoken transitions and the named Float Fort approach. [Vehicle audit](navigation-audit.md#vehicle-maps-and-float-fort) · [Deployment](deployment.md#vehicle-notices-float-fort-and-visible-chests)

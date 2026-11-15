@@ -1,6 +1,6 @@
 'use strict';
 
-const { worldFacingEntrances, transferOptions } = require('./transfer-events.cjs');
+const { worldFacingEntrances, transferOptions, shipPort } = require('./transfer-events.cjs');
 const { DIRECTIONS } = require('./geometry.cjs');
 const { vehicleOnMap } = require('./vehicle-navigation');
 
@@ -12,6 +12,7 @@ const DISCOVERIES = { 11: 89, 75: 76, 78: 80, 81: 83, 85: 84, 86: 88, 90: 13, 92
     98: 100, 101: 102, 104: 105, 107: 108, 112: 110, 113: 114, 118: 116, 119: 121, 124: 122, 125: 126,
     128: 129, 131: 132, 134: 135, 190: 100 };
 
+const FLOAT_FORT_ENTRANCE = 21;
 const FLOOR_EXITS = { 3: ['Russetwood', 12], 4: ['Russetwood', 12], 74: ['Russetwood', 12],
     19: ['Chillcrest', 25], 22: ['Cold Brew Trail', 36], 23: ['Frosty Peak', 27], 56: ['Sunrise Beach', 76] };
 
@@ -49,8 +50,13 @@ function worldDestination(root, mode, event, entry, page) {
         return { name: breakfast[0], category: 'exits', eventAction: event._priorityType === 1 ? 'bump' : 'step' };
     if (event._trigger === 1 && event._priorityType !== 1) {
         const list = page.list;
-        if (id === 30 && transfersTo(list[4], 26)) return { name: 'Float Fort', category: 'exits' };
-        if (id === 31 && transfersTo(list[13], 49)) return { name: 'Breaded Bay', category: 'exits' };
+        if (id === 30 || id === 31) {
+            if (mode !== 'ship') return null;
+            const port = shipPort(entry, page, root.$dataCommonEvents);
+            const craft = vehicleOnMap(root.$gameMap, mode);
+            return port && craft?.isLandOk(event._x, event._y, port.facing)
+                ? { name: port.name, category: 'exits' } : null;
+        }
         if (id === 51) {
             if (land || root.$gameSwitches?.value?.(224) !== false || list[1]?.code !== 206) return null;
             const craft = vehicleOnMap(root.$gameMap, mode);
@@ -65,6 +71,8 @@ function worldDestination(root, mode, event, entry, page) {
             return { name: 'Board the boat from the island dock', category: 'vehicles', entryDirection: 4 };
         }
         if (land) {
+            if (id === FLOAT_FORT_ENTRANCE && transferOptions(map, entry, page, root.$dataCommonEvents)
+                .some(edge => edge.map === 26)) return { name: 'Float Fort', category: 'exits', eventAction: 'step' };
             if (id === 13 && transfersTo(list[1], 206)) return { name: 'Secret Island', category: 'exits' };
             const floor = FLOOR_EXITS[id];
             if (floor && transferOptions(map, entry, page, root.$dataCommonEvents).some(edge => edge.map === floor[1]))
@@ -106,4 +114,4 @@ function worldBoundaryName(root, id) {
     return entrance ? 'Discovery marker' : '';
 }
 
-module.exports = { worldDestination, worldEventDescription, worldBoundaryName, discoveryEntrance };
+module.exports = { worldDestination, worldEventDescription, worldBoundaryName, discoveryEntrance, FLOAT_FORT_ENTRANCE };

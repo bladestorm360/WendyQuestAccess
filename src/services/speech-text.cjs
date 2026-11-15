@@ -170,7 +170,7 @@ function formatSpeech(message) {
             const boundary = HEADINGS[message.boundary];
             const activate = HEADINGS[message.activate];
             const exit = label({ name: message.exit });
-            const exitName = /^exit(?: |$)/i.test(exit) ? exit : exit && 'exit to ' + exit;
+            const exitName = /\bexit\b/i.test(exit) ? exit : exit && 'exit to ' + exit;
             const takeExit = exitName && 'take ' + exitName;
             const prerequisite = label({ name: message.prerequisite });
             if (prerequisite) {
@@ -232,6 +232,8 @@ function formatSpeech(message) {
             }
             else if (message.guideAction) parts.push(facing ? `Face ${facing} and press the action button` : 'Press the action button');
             else if (facing && !beaconOnly) parts.push(`face ${facing}`);
+            const onward = !more && takeExit && message.useExit && label({ name: message.onward });
+            if (onward) parts.push(onward.replace(/\.$/, ''));
             const afterEnemy = message.enemyBlocked === true && label({ name: message.afterEnemy });
             if (afterEnemy)
                 parts.push('Once clear, approach ' + afterEnemy + ' and press the action button');

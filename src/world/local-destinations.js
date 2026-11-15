@@ -1,6 +1,6 @@
 'use strict';
 
-const { BREAKFAST_MAPS } = require('./terrain-control-labels.cjs');
+const { BREAKFAST_MAPS, GATE_SWITCHES } = require('./terrain-control-labels.cjs');
 const { houseStair, houseBranches } = require('./transfer-events.cjs');
 
 // Each locator describes the active page's native destination. The worker
@@ -216,6 +216,16 @@ function concealedDestination(map, event) {
     return map === 128 && id === 11 || map === 133 && id === 4 || map === 87 && id === 91;
 }
 
+function visibleChestBarrier(root, map, id, spoilers) {
+    // The native chest is drawn across the obstruction. Keep its label in
+    // the browser and use the local terrain in a blocked route response.
+    if (map === 204 && id === 1 && root.$gameSwitches?.value?.(GATE_SWITCHES[map]) === false)
+        return 'Chest is unreachable beyond a gap in the floor.';
+    if (map === 79 && id === 6 && !spoilers && root.$gameSwitches?.value?.(GATE_SWITCHES[map]) === false)
+        return 'Chest is unreachable across the water.';
+    return '';
+}
+
 function eventSwitchPage(entry, index, switchId, destination) {
     const page = entry?.pages?.[index];
     return page?.trigger === 3 && page.conditions.switch1Valid && page.conditions.switch1Id === switchId &&
@@ -271,6 +281,13 @@ function localDestination(root, event, page) {
         return { name: map === 103 ? 'Encounter trigger' : 'Scene trigger', category: 'events',
             eventAction: floorAction ? 'step' : trigger === 1 ? 'bump' : undefined };
     if (floorAction) {
+        // The quay transfers to a facing tile and the overworld's native
+        // boat-positioning event completes boarding there.
+        if (map === 26 && id === 5 && event._pageIndex === 1 && list.some(command => command.code === 201 &&
+            command.indent === 0 && command.parameters.join(',') === '0,113,17,6,6,0'))
+            return { name: 'Board the boat from the quay', category: 'vehicles', eventAction: 'step' };
+        if (map === 26 && (id === 6 || id === 7) && to(113))
+            return { name: 'Return to world map', category: 'exits', eventAction: 'step', handoffs: [6, 7] };
         if (map === 17 && id === 7 && to(19)) return { name: 'Salt Caverns', category: 'exits', eventAction: 'step' };
         if (map !== 113 && BREAKFAST_MAPS.includes(map) && to(113)) {
             const name = map === 85 ? id >= 37 && id <= 41 ? 'World map, west exit' : 'World map, east exit' : 'World map';
@@ -339,6 +356,7 @@ function localDestination(root, event, page) {
     if (map === 124 && id === 15) return { name: 'Drawer', category: 'objects' };
     if (map === 138 && id === 4) return { name: 'Book', category: 'objects' };
     if (map === 138 && id === 9) return { name: 'Food basket', category: 'objects' };
+    if (map === 195 && id === 4) return { name: 'Clothing', category: 'objects' };
     if (map === 146 && id === 15) return { name: 'Bowl', category: 'objects' };
     // These are visibly placed pickups. Use their visible type, including
     // the drink and burger variants with item-specific editor names.
@@ -361,5 +379,5 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, concealedDestination,
+module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, concealedDestination, visibleChestBarrier,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS };

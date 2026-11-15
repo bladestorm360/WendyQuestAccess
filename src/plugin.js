@@ -21,6 +21,7 @@ const { createMapBannerObserver } = require('./world/map-banner');
 const { createInteractionPrompt } = require('./world/interaction-prompt');
 const { createTreasureReward } = require('./world/treasure-reward');
 const { createAutosaveNotice } = require('./world/autosave-notice');
+const { createVehicleNotice } = require('./world/vehicle-navigation');
 const { createField } = require('./world/field');
 const { createFieldDiagnostics } = require('./world/field-diagnostics');
 const { createWallAudio } = require('./world/wall-audio');
@@ -56,6 +57,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let interaction = null;
     let treasure = null;
     let autosaveNotice = null;
+    let vehicleNotice = null;
     let dialogue = null;
     let narration = null;
     let credits = null;
@@ -174,6 +176,7 @@ function boot(root, nodeRequire, nodeProcess) {
         interaction = createInteractionPrompt(root, host, field.interactionReady, notifications, field.appendInteraction);
         treasure = createTreasureReward(root, host, notifications);
         autosaveNotice = createAutosaveNotice(host, field.ready, notifications, mapBanner.append);
+        vehicleNotice = createVehicleNotice(root, host, field.ready, notifications);
         quests = createQuestTracker(root, host, field.ready, notifications, () => speechPreferences);
         wall = createWallAudio(root, field.ready, audio, () => audioPreferences);
         footsteps = createFootsteps(root, field.ready, audio, () => audioPreferences);
@@ -434,6 +437,7 @@ function boot(root, nodeRequire, nodeProcess) {
             radialResult.retire(host.manager._scene);
             quests.leave(host.manager._scene);
             autosaveNotice.leave(host.manager._scene);
+            vehicleNotice.leave(host.manager._scene);
             credits.leave(host.manager._scene);
             controller.reset();
         });
@@ -813,7 +817,11 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessInteractionUpdate = function (scene, icon) {
         try { interaction?.update(scene, icon); } catch { interaction?.leave(scene); }
     };
+    root.WendyQuestAccessVehicleReady = function (scene) {
+        try { vehicleNotice?.observe(scene); } catch { vehicleNotice?.leave(scene); }
+    };
     root.WendyQuestAccessFieldControlLost = function (scene) {
+        vehicleNotice?.leave(scene);
         interaction?.leave(scene);
         quests?.suspend(scene);
         soundscape?.leave(scene);
@@ -908,6 +916,7 @@ function boot(root, nodeRequire, nodeProcess) {
         mapBanner?.leave(scene);
         interaction?.leave(scene);
         autosaveNotice?.leave(scene);
+        vehicleNotice?.leave(scene);
         credits?.leave(scene);
         dialogue?.leave(scene);
         treasure?.leave(scene);
@@ -936,6 +945,7 @@ function boot(root, nodeRequire, nodeProcess) {
         mapBanner?.leave(scene);
         interaction?.leave(scene);
         autosaveNotice?.leave(scene);
+        vehicleNotice?.leave(scene);
         credits?.leave(scene);
         dialogue?.leave(scene);
         treasure?.leave(scene);
