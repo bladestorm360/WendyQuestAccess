@@ -2188,7 +2188,7 @@ parentPort.on('message', message => {
         const count = records.filter(record => record.kind === 'routeDirections' || record.kind === 'fieldStatus').length;
         fs.writeFileSync(receipt + '.route-' + count, '');
     }
-    if (message.kind === 'fieldStatus' && message.name.startsWith('Secret cave.')) fs.writeFileSync(receipt + '.cave', '');
+    if (message.kind === 'fieldStatus' && message.name.startsWith('Secret Cave.')) fs.writeFileSync(receipt + '.cave', '');
     if (message.kind === 'timedCue') fs.writeFileSync(receipt + '.timed', '');
     if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
     if (message.kind === 'dialoguePage' && fs.existsSync(receipt + '.choice')) {
