@@ -183,3 +183,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Autowalk interaction facing](docs/navigation.md#native-input-boundary-for-autowalk) uses native turning at a verified approach. The Caves house pot label comes from the active interaction at Map 136, event 9. [Object audit](docs/navigation-audit.md)
 
 [Current Steam deployment](docs/deployment.md#autowalk-interaction-facing-and-cooking-pot) verifies the interaction turn and corrected pot label.
+
+[Victory Momentum](docs/battle.md#momentum-gains) records the shared painted-pip count and the separate reward-message ownership after a native win.

@@ -2,6 +2,7 @@
 
 const { fieldArt, portraitArt } = require('./character-art');
 const { rewardIconArt } = require('../services/dialogue-icons.cjs');
+const { readMomentum } = require('../battle/outcomes');
 // The six native Ability Obelisk callers use a blank event over a
 // painted statue. Their speaking character has no bitmap of its own.
 const DAVE_STATUES = new Map([[12, 46], [25, 33], [45, 36], [59, 42], [76, 87], [94, 36]]);
@@ -74,7 +75,13 @@ function createDialogueObserver(host, notifications) {
         const number = window._numberInputWindow;
         const pageVisible = visible(scene, window) && window.contentsOpacity > 0;
         const diagram = diagramWaiting && !scene._wqaDiagramShown && host.dialogueDiagram?.(scene, window);
-        if (!context.epoch && !diagram && (!paint || (autoPaint && !pageVisible)) && !choices?.active && !number?.active) {
+        const victoryMomentum = scene._wqaBattleWon && scene._wqaMomentumPending &&
+            host.graphics.frameCount >= scene._wqaMomentumNextFrame;
+        // A delayed crystal can still reach the visible HUD after the final
+        // reward page closes, before the native battle handback.
+        const rewardsClosed = victoryMomentum && window.openness === 0 && !host.gameMessage().hasText();
+        if (!context.epoch && !diagram && !rewardsClosed &&
+            (!paint || (autoPaint && !pageVisible)) && !choices?.active && !number?.active) {
             if (!diagramWaiting) leave(scene);
             return;
         }
@@ -99,11 +106,19 @@ function createDialogueObserver(host, notifications) {
             submit(context, { kind: 'dialoguePage', text, speaker });
         }
 
-        if (pageVisible && paint && context.epoch && scene._wqaVictoryCondition &&
-            context.page?.paint === paint && paint.spoken === paint.end) {
-            const condition = scene._wqaVictoryCondition;
-            scene._wqaVictoryCondition = null;
-            submit(context, { kind: 'battleLog', lines: [condition], append: true });
+        const rewardShown = pageVisible && paint && context.epoch &&
+            context.page?.paint === paint && paint.spoken === paint.end;
+        if ((rewardShown && (scene._wqaVictoryCondition || victoryMomentum)) || rewardsClosed) {
+            const lines = [];
+            if (rewardShown && scene._wqaVictoryCondition) {
+                lines.push(scene._wqaVictoryCondition);
+                scene._wqaVictoryCondition = null;
+            }
+            if (victoryMomentum) {
+                const momentum = readMomentum(scene, host.graphics);
+                if (momentum) lines.push(momentum);
+            }
+            if (lines.length) submit(context, { kind: 'battleLog', lines, append: true });
         }
 
         if (diagram) {

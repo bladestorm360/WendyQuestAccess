@@ -122,8 +122,11 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         }
         lines.push(...readCollapses(scene));
         lines.push(...readConditions(root, host.graphics, scene), ...readResistance(scene, host.graphics));
-        const momentum = readMomentum(scene, host.graphics);
-        if (momentum) lines.push(momentum);
+        // The victory message owns Momentum so it can follow the rewards.
+        if (!scene._wqaBattleWon) {
+            const momentum = readMomentum(scene, host.graphics);
+            if (momentum) lines.push(momentum);
+        }
         if (!lines.length) return;
         if (history?.scene !== scene) history = { scene, lines: [] };
         history.lines.push(...lines);
@@ -168,7 +171,8 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             const rows = take(window);
             const damage = takeDamage(scene);
             if (!rows.length && !damage.length && !scene._wqaRadialReport && !scene._wqaDefeatDue &&
-                !scene._wqaBattleConditions?.length && !scene._wqaResistedRows?.length && !scene._wqaMomentumPending) return;
+                !scene._wqaBattleConditions?.length && !scene._wqaResistedRows?.length &&
+                (scene._wqaBattleWon || !scene._wqaMomentumPending)) return;
             const renderer = host.graphics.app?.renderer;
             if (!ready(scene, window) || typeof renderer?.once !== 'function') {
                 release(rows);

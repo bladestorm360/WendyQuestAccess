@@ -1664,6 +1664,24 @@ const interval = setInterval(() => {
             Graphics.app.renderer.emit('postrender');
             endingStep = 48;
         } else if (endingStep === 48 && fs.existsSync(receipt + '.battle-outcome')) {
+            const scene = SceneManager._scene;
+            scene._wqaBattleWon = true;
+            const hud = scene._statusWindow = { parent: scene, offsetY: 0, worldVisible: true, worldAlpha: 1,
+                bitmap: { isReady: () => true }, _momentumCurrent: 0, momentumPips: [] };
+            hud.momentumPips = [0, 1, 2].map(() => ({ baseSprite: { parent: hud, worldVisible: true, worldAlpha: 1,
+                bitmap: { isReady: () => true }, _frame: { x: 0, y: 0 } } }));
+            WendyQuestAccessMomentumChanged(scene, hud);
+            hud._momentumCurrent = 1;
+            WendyQuestAccessMomentumChanged(scene, hud);
+            WendyQuestAccessDialogueReady(scene);
+            Graphics.app.renderer.emit('postrender');
+            if (!scene._wqaMomentumPending) throw Error('Victory Momentum spoke before the pip was filled');
+            hud.momentumPips[0].baseSprite._frame.x = 32;
+            Graphics.frameCount += 3;
+            WendyQuestAccessDialogueReady(scene);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 97;
+        } else if (endingStep === 97 && fs.existsSync(receipt + '.victory-momentum')) {
             fs.unlinkSync(receipt + '.battle-stage');
             fs.writeFileSync(receipt + '.manual-save-stage', '');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
@@ -2117,6 +2135,15 @@ parentPort.on('message', message => {
                 parentPort.postMessage('ack');
                 return;
             }
+            if (message.kind === 'dialoguePage' && speech === 'Synthetic victory reward.')
+                fs.writeFileSync(receipt + '.battle-victory-epoch', String(message.epoch));
+            if (message.kind === 'battleLog' && speech.startsWith('Momentum gained.')) {
+                if (!message.append || String(message.epoch) !== fs.readFileSync(receipt + '.battle-victory-epoch', 'utf8'))
+                    throw Error('Victory Momentum did not append to the rewards');
+                fs.writeFileSync(receipt + '.victory-momentum', speech);
+                parentPort.postMessage('ack');
+                return;
+            }
             if (message.kind === 'menuFocus' && !target && !fs.existsSync(receipt + '.battle-focus') &&
                 (!message.append || String(message.epoch) !== fs.readFileSync(receipt + '.battle-opening-epoch', 'utf8')))
                 throw Error('First battle menu speech did not queue behind the formation');
@@ -2480,6 +2507,7 @@ def main():
             'battle-radial': 'Power 81%. Accuracy 93%, NICE.',
             'battle-damage': 'Synthetic target, 17 HP damage, elemental resistance.',
             'battle-outcome': 'Synthetic victory reward.',
+            'victory-momentum': 'Momentum gained. 1 of 3.',
             'manual-save': 'Synthetic save finished.',
             'manual-save-details': 'Synthetic save finished.',
             'manual-save-late': 'Save completed.',

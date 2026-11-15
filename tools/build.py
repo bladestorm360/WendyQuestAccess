@@ -75,6 +75,7 @@ def bundle():
         './damage-popup': 'battle/damage-popup.js',
         './battle/damage-popup': 'battle/damage-popup.js',
         './outcomes': 'battle/outcomes.js',
+        '../battle/outcomes': 'battle/outcomes.js',
         './battle/outcomes': 'battle/outcomes.js',
         './world/field-diagnostics': 'world/field-diagnostics.js',
         './battle/radial-result': 'battle/radial-result.js',

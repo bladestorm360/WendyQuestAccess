@@ -61,6 +61,10 @@ for name, tail in [
     ("BattleManager['processVictory']", "},BattleManager['displayExp']"),
     ("Sprite_BattleScreenParticipant['prototype']['StateAnimationCleanUp']", "},Sprite_Battler['prototype']['initialize']"),
     ("BattleManager['displayExp']", "},Game_Unit['prototype']['makeActions']"),
+    ("Game_Battler['prototype']['getMomentum']", "},Game_Battler['prototype']['addMomentum']"),
+    ("Game_Battler['prototype']['addMomentum']", "},Game_Battler['prototype']['setMomentum']"),
+    ("Game_Battler['prototype']['setMomentum']", "},Game_Battler['prototype']['getMomentumMax']"),
+    ("BattleHelper['SpawnMomentumCrystal']", "},BattleHelper['IsBattleScene']"),
 ]:
     methods.append(between(battle, f'{name}=function(', tail) + '};')
 for relative, transform, names in [
@@ -106,6 +110,9 @@ for klass, name, following in [
 ]:
     methods.append(between(custom, f"{klass}['prototype']['{name}']=function(", f'}},{following}[') + '};')
 platform, _ = decode((installed / 'package.nw/js/plugins/MonkeyWrenchMZ.js').read_text(encoding='utf8'))
+for name, tail in [('setOnComplete', 'update'), ('update', 'updateBouncePhase')]:
+    methods.append(between(platform, f"Sprite_MomentumCrystal['prototype']['{name}']=function(",
+                           f"}},Sprite_MomentumCrystal['prototype']['{tail}']") + '};')
 methods.append(between(platform, "Sprite_Text['prototype']['setText']=function(",
                        "},Sprite_Text['prototype']['RedrawText']") + '};')
 print(json.dumps(methods))

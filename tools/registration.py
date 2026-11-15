@@ -373,6 +373,8 @@ def managers_notification(original):
                b'\n    if(this._phase!=="input"&&this._phase!=="ActionCommand")' + BATTLE_CUE_LEAVING + b';'
                b'\n    if(this._phase!=="input"&&this._phase!=="ActionCommand")' + BATTLE_TARGET_LEAVING + b';',
         62280: b'        if(SceneManager._scene?._wqaBattleStarted){' + MAP_LEAVING + b'}\n',
+        # The result code is still owned by the native battle here.
+        77634: b'    if(result===0&&SceneManager._scene?._wqaBattleStarted)SceneManager._scene._wqaBattleWon=true;\n',
     })
 
 
@@ -591,7 +593,13 @@ def windows_notification(original):
     })
 
 
-def dialogue_update(context_ready):
+def dialogue_update(context_ready, victory=False):
+    momentum = b'''
+        const wqaVictoryMomentum = this._wqaBattleWon && this._wqaMomentumPending &&
+            Graphics.frameCount >= this._wqaMomentumNextFrame &&
+            ((this._wqaDialogue && wqaPaint && wqaMessage.openness === 255) ||
+                (wqaMessage?.openness === 0 && !$gameMessage.hasText()));
+''' if victory else b'\n'
     return b'''
     {
         const wqaMessage = this._messageWindow;
@@ -612,8 +620,7 @@ def dialogue_update(context_ready):
         const wqaDiagramWaiting = !!(wqaPicture && !wqaPicture._duration &&
             (wqaPicture._name === "system/Caffeine Caverns Map" || wqaPicture._name === "system/Savoria Map"));
         const wqaVictoryCondition = this._wqaVictoryCondition && this._wqaDialogue &&
-            wqaPaint && wqaMessage.openness === 255;
-        if ((wqaPageWaiting || wqaChoiceWaiting || wqaNumberWaiting || wqaDiagramWaiting || wqaVictoryCondition) &&
+            wqaPaint && wqaMessage.openness === 255;__WQA_MOMENTUM__        if ((wqaPageWaiting || wqaChoiceWaiting || wqaNumberWaiting || wqaDiagramWaiting || wqaVictoryCondition__WQA_VICTORY_CHECK__) &&
             !this._wqaDialoguePending &&
             __WQA_CONTEXT__ && this._started && this._active &&
             this._fadeDuration === 0 && this._fadeOpacity === 0 && !($gameScreen._fadeOutDuration > 0) &&
@@ -624,7 +631,8 @@ def dialogue_update(context_ready):
                 (!wqaMessage._slicedSprite?.visible || (wqaMessage._slicedSpriteFull && wqaMessage._slicedSpriteFaded)))))
             globalThis.WendyQuestAccessDialogueReady?.(this, wqaDiagramWaiting);
     }
-'''.replace(b'__WQA_CONTEXT__', context_ready)
+'''.replace(b'__WQA_CONTEXT__', context_ready).replace(b'__WQA_MOMENTUM__', momentum).replace(
+        b'__WQA_VICTORY_CHECK__', b' || wqaVictoryMomentum' if victory else b'')
 
 
 def map_notification(original):
@@ -888,7 +896,7 @@ def battle_notification(original):
             !Graphics._wqaResize && Graphics.app?.stage === this) {
             if (wqaLog._wqaBattleLogRows?.length || this._wqaRadialReport || this._wqaDamageRows?.length ||
                 this._wqaDefeatDue || this._wqaResistedRows?.length ||
-                (this._wqaMomentumPending && Graphics.frameCount >= this._wqaMomentumNextFrame) ||
+                (!this._wqaBattleWon && this._wqaMomentumPending && Graphics.frameCount >= this._wqaMomentumNextFrame) ||
                 (this._wqaBattleConditions?.length && Graphics.frameCount >= this._wqaNextConditionFrame))
                 globalThis.WendyQuestAccessBattleLogReady?.(this,wqaLog);
         } else if (this._wqaBattleLogActive || wqaLog?._wqaBattleLogRows?.length || this._wqaDamageRows?.length) {
@@ -996,7 +1004,7 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         200118: attack_source,
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=BattleManager._wqaBattleSpritesBusy=undefined;',
-        242214: target_update + bag_update + timing_update + radial_update + log_update + dialogue_update(ready),
+        242214: target_update + bag_update + timing_update + radial_update + log_update + dialogue_update(ready, victory=True),
         # Optional speaker metadata stays on its native row through queuing and paint.
         239515: b',wqaSource',  # Scene_Battle.logAction
         239613: b',wqaSource',

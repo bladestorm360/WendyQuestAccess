@@ -37,10 +37,46 @@ async function verifyBattleOutcomes() {
         c.BattleManager._logWindow.push = action => { if (action === 'waitForTime') settings.battleLogBusy = true; };
     }
 
+    function prepareMomentum({ c, scene }) {
+        c.Graphics.frameCount = 0;
+        c.Clamp = (min, max, value) => Math.max(min, Math.min(max, value));
+        c.RandomRange = (min, max) => (min + max) / 2;
+        c.AudioManager.playSe = () => {};
+        const actor = Object.assign(new c.Game_Battler(), { _momentum: 0, getMomentumMax: () => 3 });
+        const field = { addChild(sprite) { this.crystal = sprite; } };
+        scene._spriteset = { _battleField: field };
+        const hud = scene._statusWindow = { parent: scene, worldVisible: true, worldAlpha: 1,
+            offsetY: 0, bitmap: { isReady: () => true }, _momentumCurrent: 0,
+            GetMomentumPosition: () => ({ x: 320, y: 120 }) };
+        hud.momentumPips = [0, 1, 2].map(() => ({ baseSprite: { parent: hud, worldVisible: true,
+            worldAlpha: 1, bitmap: { isReady: () => true }, _frame: { x: 0, y: 0 } } }));
+        Object.assign(c.BattleHelper, { GetStatusUI: () => hud, GetFirstPartyMember: () => actor,
+            GetBattleField: () => field });
+        c.Sprite_MomentumCrystal.prototype.destroy = function () { field.crystal = null; };
+        return {
+            field,
+            collect() {
+                const before = actor.getMomentum();
+                c.BattleHelper.SpawnMomentumCrystal(12, 24, false);
+                assert.equal(actor.getMomentum(), before, 'crystal spawn alone grants nothing');
+                field.crystal.phase = 2;
+                field.crystal.update();
+                assert.equal(actor.getMomentum(), before + 1);
+                hud._momentumCurrent = actor.getMomentum();
+            },
+            paint() {
+                for (let index = 0; index < hud.momentumPips.length; index++)
+                    hud.momentumPips[index].baseSprite._frame.x = index < actor.getMomentum() ? 32 : 0;
+            }
+        };
+    }
+
     const won = await enter(mapData(19), 19, true);
     arrange(won);
+    const momentum = prepareMomentum(won);
     won.c.BattleManager.processVictory();
     assert.equal(won.c.BattleManager._phase, 'battleEnd');
+    assert.equal(won.scene._wqaBattleWon, true);
     assert.equal(won.scene._wqaBattleInterpreter, undefined);
     won.settings.battleBusy = true;
     won.until(() => won.window.pause);
@@ -62,8 +98,7 @@ async function verifyBattleOutcomes() {
     c.ExtractMetaData = state => JSON.parse(state.note.slice(state.note.indexOf('{')));
     let shieldCleanups = 0;
     c.BattleAnimations = { CrispyStateCleanup() { shieldCleanups++; } };
-    const field = {};
-    scene._spriteset = { _battleField: field };
+    const field = momentum.field;
     const wendySprite = Object.assign(new c.Sprite_BattleScreenParticipant(), {
         parent: field, worldVisible: true, worldAlpha: 1, _battler: { _actorId: 1 }
     });
@@ -73,15 +108,42 @@ async function verifyBattleOutcomes() {
     won.until(() => shieldSpeech());
     assert.equal(formatSpeech(shieldSpeech()), 'Crispy Shield ended.');
     assert.equal(shieldSpeech().append, true);
+    const gains = () => won.records.filter(record => formatSpeech(record).startsWith('Momentum gained.'));
+    momentum.collect();
+    c.Graphics.frameCount++;
+    won.tick();
+    assert.equal(gains().length, 0, 'gain waits for the painted pip during victory');
+    momentum.paint();
+    c.Graphics.frameCount += 3;
+    won.tick(false);
+    assert.equal(gains().length, 0, 'the filled pip must reach postrender');
+    won.frame();
+    assert.equal(gains().length, 1);
+    assert.equal(formatSpeech(gains()[0]), 'Momentum gained. 1 of 3.');
+    assert.equal(gains()[0].epoch, won.packets()[0].epoch, 'the gain shares the reward page lease');
+    assert.equal(gains()[0].append, true);
+    c.Graphics.frameCount++;
+    won.tick();
+    assert.equal(gains().length, 1, 'a stable pip must stay silent');
     won.advance();
     won.until(() => won.packets().length === 2);
     assert.equal(formatSpeech(won.packets()[1]), labels.obtainItem.replace('%1', item.name));
     won.advance();
     assert.equal(won.epoch(), 0);
+    won.until(() => won.window.openness === 0);
+    momentum.collect();
+    momentum.paint();
+    c.Graphics.frameCount++;
+    won.tick();
+    assert.equal(gains().length, 2, 'a late gain can speak after the final reward page closes');
+    assert.equal(formatSpeech(gains()[1]), 'Momentum gained. 2 of 3.');
+    won.c.WendyQuestAccessSceneLeaving(scene);
+    assert.equal(won.epoch(), 0, 'native battle handback retires the late notice');
 
     const lost = await enter(mapData(19), 19, true);
     arrange(lost);
     lost.c.BattleManager.processDefeat();
+    assert(!lost.scene._wqaBattleWon);
     lost.until(() => lost.packets().length === 1);
     assert.equal(formatSpeech(lost.packets()[0]), labels.defeat);
     lost.settings.battleLogBusy = false;
@@ -144,6 +206,6 @@ async function verifyLevelUp() {
 (async () => {
     const receipt = await verifyBattleOutcomes();
     await verifyLevelUp();
-    console.log('Verified the installed victory, rewards, defeat, level-up and skill pages through the native message renderer.');
+    console.log('Verified installed victory rewards, delayed Momentum, defeat, level-up and skill pages through the native message renderer.');
     console.log('Throttled settled battle result to synthetic render and formatted receipt', receipt.toFixed(2), 'ms.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

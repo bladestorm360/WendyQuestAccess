@@ -23,6 +23,10 @@ async function enter(map, mapId = 19, battle = false) {
     c.Game_Picture = function () {};
     c.Sprite_Text = function () {};
     c.Game_Actor = function () {};
+    c.Game_Battler = function () {};
+    c.BattleHelper = {};
+    c.Sprite_MomentumCrystal = function () {};
+    c.a18_0x52f0af = () => { throw Error("Unresolved Momentum property"); };
     c.Sprite_Character = function () {};
     c.Tilemap = function () {};
     c.Game_Character = function () {};
