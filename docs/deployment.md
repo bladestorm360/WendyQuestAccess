@@ -465,3 +465,13 @@ The stock world fixture, matching NW.js smoke and all 16 native syntax checks pa
 The closed-game installer and independent status check verified the installed scripts, payload and geometry. All four save and configuration file hashes matched across installation. The preceding verified build is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-autowalk-release/rollback-latest`, with source checkpoint `112bbd9851259317ef199800a7b915e20beb0725`. Cleanup removed 34,063,542 bytes of staging and the superseded recovery copy.
 
 During gameplay, enable Autowalk under F8 → Navigation and request directions to a nearby NPC or object. Expect “Walking,” then “Arrived,” followed by any applicable prompt. At an exit, you'll hear the final movement or action instruction and complete the transition yourself. Check the updated idle and cutscene clips under F8 → Audio → Cutscene descriptions and the Vehicles category at Breaded Bay when progression permits. [Autowalk](navigation.md#native-input-boundary-for-autowalk) · [Narration](cutscene-description.md) · [Timing](battle.md#radial-timing-tones)
+
+## Autowalk interaction facing and Cooking pot
+
+November 15, 2026. Installed from source checkpoint `5d020d6552e4c7e4b63889d2768e47230ac48d1c`. The focused plan changes only the bundled plugin. The 16 native scripts, 41 other payload files and 241 geometry entries match the preceding plan. Plan SHA-256 `f664908f6a1ec74f1441536af66b10df0db48c9e11f2f6e469cb4f81ab56cdf7`. Plugin SHA-256 `a3d8b13d4788c8d245351ba744f912ab9fce13dff05d69b25b623c753a502658`.
+
+The world and matching NW.js fixtures passed. The exact candidate passed the isolated installer rehearsal for launcher exclusion, interruption rollback, installation, reapplication, unknown-file protection and removal. Signed Microsoft Defender scan `77A39D66-D3AF-4762-8CC4-E54FE7E46317` completed at 13:21:00 PST with no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.311.0.
+
+The independent Steam status check and installed plan and plugin hashes matched. All four save and configuration hashes matched before and after installation. The preceding verified build is retained in `C:/Games/Dev/WendyQuestAccess-analysis/wendy-facing-pot/rollback-latest`. Cleanup removed 34,454,681 bytes of temporary output and the superseded backup.
+
+With Autowalk on, select **Cooking pot** in **Objects** in the Caves house. Request directions. At “Arrived,” press Confirm to inspect the pot. The offline check exercises arrival from an adjacent tile while facing away from the pot. [Autowalk](navigation.md#native-input-boundary-for-autowalk) · [Object labels](navigation-audit.md)

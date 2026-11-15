@@ -274,3 +274,5 @@ The native-method world fixture, all 16 script transforms, and the matching NW.j
 The **interaction-facing and Cooking pot** update turns Wendy toward a verified Autowalk interaction before arrival speech. It shares the native priority and counter checks with the beacon. Map 136 event 9 is labeled Cooking pot. Estimate 15–25 minutes through the focused movement and label checks, plus installer verification and any wait for game closure. [Autowalk](navigation.md#native-input-boundary-for-autowalk) · [Map audit](navigation-audit.md)
 
 The installed-method fixture verified a zero-step route to the pot, a native turn, manual Confirm, a competing same-tile interaction and a point bookmark. The world fixture passed 178,356 movement comparisons. Its 48-step comparison measured 2.01 ms manual and 3.29 ms with Autowalk. The matching NW.js fixture called the stock turn method before “Arrived” and verified queued interaction and save speech. These are offline checks. Device speech and play remain for gameplay confirmation.
+
+The facing and pot update is installed and verified. [Deployment record](deployment.md#autowalk-interaction-facing-and-cooking-pot)
