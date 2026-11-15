@@ -6,6 +6,27 @@ const SENSITIVE_NAME = /\b(?:gold|coins?|reward|easter\s*egg)\b/i;
 const CATEGORY_LABELS = Object.freeze({ all: 'All', objects: 'Objects', people: 'NPC', merchants: 'Merchants', exits: 'Exits',
     events: 'Events', checkpoints: 'Checkpoints', treasure: 'Treasure', enemies: 'Enemies', vehicles: 'Vehicles', quests: 'Quests', bookmarks: 'Bookmarks' });
 
+// Map character sheets identify the visible patrol. A troop can contain
+// different enemies, so its roster cannot supply a field sprite's name.
+const FIELD_ENEMY_NAMES = new Map([
+    ['~Axoflopl', 'Axoflopl'],
+    ['~BlandHawk', 'Blandhawk'],
+    ['~Conehead', 'Conehead'],
+    ['~ConeheadVAR1World', 'Berry Conehead'],
+    ['~Frydusa', 'Frydusa'],
+    ['~GoldenArcher', 'Golden Archer'],
+    ['~GoldenArcherVAR1World', 'Golden Archer+'],
+    ['~HeatLamp', 'Heat Lamp'],
+    ['~HeatLampVAR1world', 'Burnt Lamp'],
+    ['~HotSludgeSundae', 'Hot Sludge Sundae'],
+    ['~Iceburger', 'Iceburger'],
+    ['~LILSALTYVAR1WORLD', 'Lil Pink Salty'],
+    ['~LilSalty', 'Lil Salty'],
+    ['~MechFreezer', 'MechFreezer'],
+    ['~OrEggAmi', 'OrEggAmi'],
+    ['~SoggySnake', 'Soggy Snake']
+]);
+
 function eventName(entry) {
     const raw = typeof entry.name === 'string' ? entry.name.trim() : '';
     return raw.length <= 64 && !/^ev(?:ent)?\s*\d+$/i.test(raw)
@@ -47,7 +68,7 @@ function pageHasInteraction(page) {
     return interactionPages.get(page);
 }
 
-function destination(entry, page, trigger, map) {
+function destination(entry, page, trigger, map, characterName = page?.image?.characterName) {
     if (!page || page.list.length < 2 || trigger < 0 || trigger > 2 || !Number.isInteger(trigger)) return null;
     const name = eventName(entry);
     const sprite = page.image?.characterName || '';
@@ -96,7 +117,7 @@ function destination(entry, page, trigger, map) {
         ...(trigger !== 0 ? { eventAction: page.priorityType === 1 ? 'bump' : 'step' } : {}) };
     if (battle && sprite && (trigger === 0 || page.priorityType === 1) &&
         (/^~/.test(sprite) || /enemy|patrol|guard|encounter/i.test(name)))
-        return { category: 'enemies', name: safeName || 'Enemy' };
+        return { category: 'enemies', name: FIELD_ENEMY_NAMES.get(characterName) || 'Enemy' };
     if (trigger !== 0) return null;
     // Chomps's action pages can open with another party member speaking.
     // The authored character sheet identifies the actor at the interaction.

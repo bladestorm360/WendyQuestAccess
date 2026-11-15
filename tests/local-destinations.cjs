@@ -31,6 +31,9 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     browser.category = 'all';
     assert.equal(browse(browser, snapshot, []).target.id, 'saved', 'local bookmarks use wrapped distance');
     const commonEvents = read('CommonEvents.json');
+    const enemyNames = new Set(read('Enemies.json').filter(Boolean).map(enemy => enemy.name));
+    const fieldEnemyNames = new Set();
+    let enemyPages = 0;
     const maps = read('MapInfos.json').filter(Boolean);
     assert.equal(maps.length, 239);
     let checked = 0;
@@ -130,6 +133,11 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 }
                 const names = [ordinary?.name, questDestinationLabel(entry, lease, ordinary)];
                 for (const name of names) assert(!unsafe.test(name || ''), `unsafe label at map ${id} event ${entry.id} page ${index}`);
+                if (ordinary?.category === 'enemies') {
+                    assert(enemyNames.has(ordinary.name), 'unmapped enemy graphic at ' + id + '/' + entry.id);
+                    fieldEnemyNames.add(ordinary.name);
+                    enemyPages++;
+                }
                 if (ordinary?.category === 'treasure') assert.match(ordinary.name, /^(Chest|Treasure)$/);
                 if (ordinary?.category === 'events') {
                     if (id === 27 && [27, 32].includes(entry.id) && index === 0)
@@ -139,6 +147,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
             }
         }
     }
+    assert.equal(fieldEnemyNames.size, 16);
+    console.log('Verified ' + enemyPages + ' field encounter pages use ' + fieldEnemyNames.size + ' game enemy names.');
     assert.equal(worldReturns, 430);
     assert.equal(icePages, 46);
     assert.deepEqual(cleanupPages, [66, 80]);

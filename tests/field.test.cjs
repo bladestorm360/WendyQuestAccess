@@ -207,10 +207,16 @@ async function main() {
     assert.equal(f.routeEpoch(), 0);
     reply(transferred);
     assert.equal(fieldSpeech().length, delivered, 'transfer rejects the old map result');
-    for (const [mapId, id, category, name] of [[181, 5, 'merchants', 'Kathryn'], [14, 1, 'enemies', 'Enemy1']]) {
+    for (const [mapId, id, category, name] of [[181, 5, 'merchants', 'Kathryn'], [14, 1, 'enemies', 'Lil Salty']]) {
         const entry = mapData(mapId).events[id];
         assert.deepEqual(destination(entry, entry.pages[0], entry.pages[0].trigger), { category, name });
     }
+    const patrol = mapData(14).events[1];
+    const patrolPage = patrol.pages[0];
+    assert.deepEqual(destination(patrol, patrolPage, patrolPage.trigger, 14, '~LILSALTYVAR1WORLD'),
+        { category: 'enemies', name: 'Lil Pink Salty' });
+    assert.deepEqual(destination(patrol, patrolPage, patrolPage.trigger, 14, '~unidentified'),
+        { category: 'enemies', name: 'Enemy' });
     profileSnapshot(flags);
     await verifyOpeningField(flags);
     await verifyIceHandback(flags);

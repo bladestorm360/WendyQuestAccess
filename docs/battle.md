@@ -140,6 +140,12 @@ The installed-method fixture ran the native normal, critical and frozen outcome 
 
 At final gameplay handoff, finish a basic attack and listen after the timing input closes. Use the battle log review binding to hear the final percentages again. Test a critical streak and a frozen miss once the game exposes them. Check for stale scores after pausing or leaving battle. Live speech onset and game-frame cost remain open.
 
+### Critical-hit streaks
+
+The attack damage multiplier reaches 2× at five consecutive critical hits. The saved longest streak continues counting past five and is available in save-slot Details with I. Five also qualifies for a Sacred Reward chest containing Music Pack 2. The chest counts toward the achievement for opening all Sacred Reward chests.
+
+For Steam build 26578620, the attack streak limit, multiplier and saved-record update are in BattleSceneArranger.js, in the methods for incrementing the critical streak and reading its damage bonus. Common event 110 sets the reward thresholds. Map 197 events 4 and 11 check the streak record and the all-chest achievement. Common event 207 handles the reward. [Save-slot review](../src/frontend/files.js)
+
 ## Floating battle results
 
 The mod reads the floating HP damage and recovery numbers, miss and block labels, FP amount, and visible damage and elemental modifiers. Basic attacks name the visible attacker. Other damage captions use the recipient’s native name when the game draws a number for them. The native effect can use Wendy as its engine subject and a companion as its visible performer. The mod carries only the verified companion from the animation through the effect result to the painted popup. The result clears its performer when reused. Ordinary ability lines are read from the native log. The two Rise and Shine lines carry the caster from the visible companion sprite. The game displays an unsigned FP number in the same color for both directions, so speech reports the shown amount. If Crispy Shield is active at victory, its native cleanup schedules a particle burst and a delayed sound. The dialogue observer appends “Crispy Shield ended” after the displayed rewards while that page is still active. Review recent outcomes with **R** or **View/Select** then **Y** on the default Xbox layout.

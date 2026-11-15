@@ -22,7 +22,7 @@ function eventTarget(root, mode, event, entry, page, spoilers = false, questMark
     if (target === undefined) target = localDestination(root, event, page);
     if (target === undefined) target = checkpointTarget(map, event._eventId, event._pageIndex, event._trigger)
         ? { name: 'Checkpoint', category: 'checkpoints' }
-        : caveDestination(map, event, entry, page) || destination(entry, page, event._trigger, map) || undefined;
+        : caveDestination(map, event, entry, page) || destination(entry, page, event._trigger, map, event._characterName) || undefined;
     if (!target) target = worldEventDescription(root, mode, event, page) ||
         (mode === 'walk' && !timedCave(map) && eventDescription(root, entry, page, event)) ||
         target;

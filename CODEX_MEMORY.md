@@ -165,3 +165,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Follow Chomps handback and Wendy's merchant labels](docs/navigation-audit.md#nuggedor-restaurant-and-follow-chomps) document the native market pages, the event-owned repeated variable write and offline coverage. [Assist Amulet and the hidden ending](docs/puzzles-and-secrets.md#daves-assist-amulet) distinguish the local statue branch from story conditions.
 
 [Concise target speech and standalone quest markers](docs/deployment.md#concise-targeting-and-standalone-quest-markers) tracks the focused plugin update and verification of the existing field Momentum HUD.
+
+[Field enemy names](docs/deployment.md#field-enemy-names) records the sprite mapping and verification. [Critical-hit streaks](docs/battle.md#critical-hit-streaks) records the game's battle cap, saved record and chest threshold.
