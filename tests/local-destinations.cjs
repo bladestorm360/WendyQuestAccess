@@ -129,6 +129,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                     assert.equal(ordinary.name, ({ 96: 'Letters', 125: 'Keg', 139: 'Stack of books',
                         147: 'Bed', 158: 'Letters' })[id]);
                 }
+                if (id === 136 && entry.id === 9) assert.deepEqual(ordinary, { name: 'Cooking pot', category: 'objects' });
                 if (id === 139 && [6, 12, 13].includes(entry.id))
                     assert.deepEqual(ordinary, { name: entry.id === 6 ? 'Book' : 'Stack of books', category: 'objects' });
                 if (id === 195 && entry.id === 4) assert.deepEqual(ordinary, { name: 'Clothing', category: 'objects' });

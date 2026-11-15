@@ -164,6 +164,42 @@ async function verifyAutowalk(c, load, verifyWorker) {
     assert.deepEqual(position(player), [x, y]);
     player._transferring = false;
 
+    // The reported prop is already one tile away. Arrival has to turn
+    // without another step or an automatic action-button event.
+    const kitchen = begin(136, 8, 4);
+    const pot = await route(kitchen, 9);
+    assert.equal(pot.record.name, 'Cooking pot');
+    assert.equal(pot.result.distance, 0);
+    assert.equal(pot.result.arrival.facing, 8);
+    kitchen.player.setDirection(2);
+    assert(walk.start(pot.job, pot.result, pot.record));
+    tick(kitchen.player);
+    assert.deepEqual(position(kitchen.player), [8, 4]);
+    assert.equal(kitchen.player.direction(), 8);
+    assert.equal(reports.at(-1).arrived, true);
+    assert.equal(reports.at(-1).record, null, 'the verified turn replaces manual facing directions');
+    const potEvent = kitchen.gameMap._events[9];
+    assert(!potEvent.isStarting());
+    kitchen.player.checkEventTriggerThere([0, 1, 2]);
+    assert(potEvent.isStarting(), 'native confirm targets the cooking pot after the turn');
+    potEvent._starting = false;
+
+    kitchen.player.setDirection(2);
+    assert(walk.start(pot.job, pot.result, pot.record));
+    const competingEvent = kitchen.gameMap._events[5];
+    competingEvent.setPosition(8, 4);
+    competingEvent._priorityType = 0;
+    tick(kitchen.player);
+    assert.equal(kitchen.player.direction(), 2, 'a new current-tile action invalidates the saved approach');
+    assert.equal(reports.at(-1).failed, true);
+    assert(!competingEvent.isStarting());
+
+    const point = { ...pot.job, target: undefined, point: true };
+    const noFacing = { ...pot.result, arrival: { x: 8, y: 4, facing: null } };
+    assert(walk.start(point, noFacing, { ...pot.record, facing: null }));
+    tick(kitchen.player);
+    assert.equal(kitchen.player.direction(), 2, 'point arrival retains current facing');
+
     const origin = begin(206, 9, 16);
     const door = await route(origin, 4);
     assert.equal(door.result.autowalkStop, 2);

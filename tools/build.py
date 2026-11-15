@@ -98,6 +98,7 @@ def bundle():
         './world/wall-audio': 'world/wall-audio.js',
         './world/footsteps': 'world/footsteps.js',
         './world/beacon': 'world/beacon.js',
+        './interaction-approach': 'world/interaction-approach.js',
         './world/soundscape': 'world/soundscape.js',
         './soundscape-presentation': 'world/soundscape-presentation.js',
         './soundscape-preferences': 'settings/soundscape-preferences.js',

@@ -94,6 +94,7 @@ const SCENE_TRANSFERS = {
 const INSPECTED_PROPS = {
     96: { 5: 'Letters' },
     125: { 16: 'Keg' },
+    136: { 9: 'Cooking pot' },
     139: { 4: 'Stack of books', 6: 'Book', 12: 'Stack of books', 13: 'Stack of books', 14: 'Stack of books' },
     147: { 24: 'Bed' },
     158: { 2: 'Letters' }

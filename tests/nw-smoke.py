@@ -67,8 +67,11 @@ def fixture(runtime, installed):
 <script src="run.js"></script>
 ''', encoding='utf8')
     objects = objects_notification((installed / OBJECTS_REL).read_bytes()).decode('utf8')
-    movement = ['function Game_Player() {}', 'function Game_Map() {}', 'function Game_Interpreter() {}']
-    for method in ('Game_Player.prototype.moveByInput', 'Game_Player.prototype.reserveTransfer',
+    movement = ['function Game_CharacterBase() {}', 'function Game_Player() {}',
+                'Object.setPrototypeOf(Game_Player.prototype, Game_CharacterBase.prototype)',
+                'function Game_Map() {}', 'function Game_Interpreter() {}']
+    for method in ('Game_CharacterBase.prototype.setDirection', 'Game_CharacterBase.prototype.isDirectionFixed',
+                   'Game_CharacterBase.prototype.resetStopCount', 'Game_Player.prototype.moveByInput', 'Game_Player.prototype.reserveTransfer',
                    'Game_Map.prototype.setupStartingMapEvent', 'Game_Interpreter.prototype.command201',
                    'Game_Interpreter.prototype.command205'):
         start = objects.index(method + ' = function(')
@@ -891,14 +894,17 @@ const interval = setInterval(() => {
             Object.setPrototypeOf($gamePlayer, Game_Player.prototype);
             Object.assign($gamePlayer, {
                 isMoving: () => false, canMove: () => true, getInputDirection: () => 0,
-                canStartLocalEvents: () => true, findEventsAt: () => [],
+                canStartLocalEvents: () => true,
+                findEventsAt: (x, y) => x === 2 && y === 0 ? [$gameMap._events[1]] : [],
+                canTriggerEvent: (event, triggers, normal) => normal && triggers.includes(event._trigger),
                 executeMove(direction) {
                     if (direction !== 6 || this._x !== 0) throw Error('Unexpected native movement dispatch');
                     this._realX = this._x = 1;
-                    this._direction = 6;
+                    this._direction = 2;
                     this._movementSuccess = true;
                 }
             });
+            $gameMap._events[1].list = () => $dataMap.events[1].pages[0].list;
             $gameTemp = { isDestinationValid: () => false };
             tap(String.fromCharCode(92), 'Backslash');
             Graphics.app.renderer.emit('postrender');
@@ -907,7 +913,8 @@ const interval = setInterval(() => {
             $gamePlayer.moveByInput();
             if ($gamePlayer._x !== 1 || !scene._wqaAutowalkActive) throw Error('The directions key did not follow its course');
             $gamePlayer.moveByInput();
-            if (scene._wqaAutowalkActive) throw Error('The route did not retire at arrival');
+            if (scene._wqaAutowalkActive || $gamePlayer._direction !== 6)
+                throw Error('The route did not turn toward the interaction and retire at arrival');
             const icon = $gamePlayer._interactIcon = { parent: scene, visible: true, worldVisible: true,
                 worldAlpha: 1, scale: { x: 1, y: 1 }, x: 20, y: 40 };
             icon.children = [{ parent: icon, worldVisible: true, worldAlpha: 1, texture: { valid: true } }];

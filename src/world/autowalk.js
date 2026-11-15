@@ -3,6 +3,7 @@
 const { DIRECTIONS, MAX_CELLS, MAX_EVENTS } = require('./geometry.cjs');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { questDestinationCurrent } = require('./quest-destinations');
+const { atApproach, atBoardingApproach } = require('./interaction-approach');
 
 const { activeMovingEnemy, pageHasInteraction } = require('./destinations');
 const { inactiveFloorScene } = require('./local-destinations');
@@ -47,12 +48,22 @@ function createAutowalk(root, ready, preferences, report) {
 
     function arrive(state, record) {
         const { facing, ...rest } = record;
-        // The route ends at the native approach. Keep an action or a
-        // necessary turn, with no suggestion that the event ran already.
-        const turn = facing && state.player._direction !== facing;
+        const { player, target, map, job, arrival } = state;
+        // Use the native turn only for the interaction the route verified.
+        // An event on the current tile, a nearer event, or a parked vehicle
+        // can take priority before the final input.
+        if (DIRECTIONS.includes(facing) && player._direction !== facing && job.mode === 'walk' &&
+            target && !rest.bump && !rest.activate && !rest.boundary) {
+            const current = job.vehicle ? atBoardingApproach(map, job.vehicle.type, target, arrival) :
+                atApproach(map, player, target, arrival);
+            if (!current) return changed(state, 'Autowalk stopped. The interaction approach changed. Request directions again.');
+            player.setDirection(facing);
+        }
+        const turn = facing && player._direction !== facing;
         const needsAction = rest.activate || rest.boundary || rest.prerequisite || rest.bump || rest.enter ||
             rest.conversation || rest.board || rest.land || rest.guideAction || rest.guide || rest.reenter;
-        const detail = turn || needsAction ? { ...rest, legs: [], facing, more: false, directionsOnly: true,
+        const detail = turn || needsAction ? { ...rest, legs: [], facing: turn || rest.bump ? facing : undefined,
+            more: false, directionsOnly: true,
             beaconOnly: !turn } : null;
         return end(state, detail, false, true);
     }
