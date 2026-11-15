@@ -199,8 +199,9 @@ const PORTRAITS = new Map([
         "Red-tinted glasses and a white coat frame a patterned blue and yellow shirt."
     ]],
     ["MechBorg", [
-        "A light-skinned man with swept red spikes, a sharp chin and orange goggles.",
-        "He wears a white coat over yellow cloth, with gray machinery behind his shoulder."
+        "A light-skinned man with swept-back red spikes, a pointed chin and orange-lensed goggles.",
+        "He wears a red-trimmed white lab coat over a mustard-yellow buttoned shirt.",
+        "A rounded gray metal casing behind his shoulder has two short orange-tipped tubes."
     ]],
     ["FrydusaSnakes", [
         "Several golden snakes rear from a red fry carton with little red hands.",
