@@ -437,3 +437,9 @@ November 15, 2026. The focused build changes the bundled plugin. The other 41 pa
 The map check scanned all 239 maps and verified 205 encounter pages using 16 game enemy names. The field fixture verifies a stock encounter, a changed live graphic and the generic fallback. The matching NW.js smoke test and isolated installer tests passed, including launcher exclusion, interruption recovery, reapply and removal. [Field labels](navigation.md#destination-controls-in-the-development-build)
 
 Installed to the closed Steam game and verified with the independent installer status check. All four save and configuration files retained their hashes. The previous verified build is available at C:/Games/Dev/WendyQuestAccess-analysis/wendy-field-enemy-names/rollback-latest. The new field speech was verified offline.
+
+## Formation-backed field enemy audit
+
+November 15, 2026. The installed Steam copies of the 239 maps, enemy database and formation database matched the verified stock data. The audit matched 16 distinct field graphics on 206 encounter pages against the enemy sheets referenced by 175 authored formations. Map 172 event 31 was the one visible encounter filed under Events. Its field sprite is a Heat Lamp. Formation 52 also contains a Lil Pink Salty. The native touch approach is preserved. The map fixture verifies its new label, the native contact route and removal when the completion page activates. Invisible ambush triggers keep their event role. [Field regression](../tests/local-destinations.cjs)
+
+Candidate plan SHA-256 `f27092632ffcea7e53dd76a55c6728f44f2b18dda91e85ac3281408e6a07793f`. Plugin SHA-256 `68aeade138cbd07986c0317435cc17689194ea323849d6a3869d72f955f53d19`. The focused bundle is the only changed payload file. Signed Microsoft Defender scan `8066551C-2A6B-4918-BE7F-062AAD600E14` finished at 11:17:15 PST with no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.311.0.

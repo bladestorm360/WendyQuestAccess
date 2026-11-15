@@ -167,3 +167,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Concise target speech and standalone quest markers](docs/deployment.md#concise-targeting-and-standalone-quest-markers) tracks the focused plugin update and verification of the existing field Momentum HUD.
 
 [Field enemy names](docs/deployment.md#field-enemy-names) records the sprite mapping and verification. [Critical-hit streaks](docs/battle.md#critical-hit-streaks) records the game's battle cap, saved record and chest threshold.
+
+[Formation-backed field enemy audit](docs/deployment.md#formation-backed-field-enemy-audit) verifies all 206 actionable named encounter pages, including the Lost Ruins Heat Lamp.

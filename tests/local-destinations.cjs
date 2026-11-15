@@ -31,7 +31,21 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     browser.category = 'all';
     assert.equal(browse(browser, snapshot, []).target.id, 'saved', 'local bookmarks use wrapped distance');
     const commonEvents = read('CommonEvents.json');
-    const enemyNames = new Set(read('Enemies.json').filter(Boolean).map(enemy => enemy.name));
+    // Match the stock formation members' battler graphics to the field
+    // keys. Variant sheets differ in case, separators and the World suffix.
+    const artKey = sprite => sprite.replace(/^~/, '').replace(/world$/i, '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+    const enemies = read('Enemies.json');
+    const formations = read('Troops.json').filter(Boolean);
+    const enemyArtNames = new Map();
+    for (const { members } of formations) {
+        for (const { enemyId } of members) {
+            const enemy = enemies[enemyId];
+            if (!enemy?.battlerName || !enemy.name) continue;
+            const key = artKey(enemy.battlerName);
+            assert.equal(enemyArtNames.get(key) ?? enemy.name, enemy.name, 'conflicting battler name for ' + key);
+            enemyArtNames.set(key, enemy.name);
+        }
+    }
     const fieldEnemyNames = new Set();
     let enemyPages = 0;
     const maps = read('MapInfos.json').filter(Boolean);
@@ -133,11 +147,13 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 }
                 const names = [ordinary?.name, questDestinationLabel(entry, lease, ordinary)];
                 for (const name of names) assert(!unsafe.test(name || ''), `unsafe label at map ${id} event ${entry.id} page ${index}`);
-                if (ordinary?.category === 'enemies') {
-                    assert(enemyNames.has(ordinary.name), 'unmapped enemy graphic at ' + id + '/' + entry.id);
+                const formationName = enemyArtNames.get(artKey(page.image.characterName));
+                if (formationName && page.list.some(command => command.code === 301)) {
+                    assert.equal(ordinary?.category, 'enemies', 'enemy classification at ' + id + '/' + entry.id);
+                    assert.equal(ordinary.name, formationName, 'wrong field graphic name at ' + id + '/' + entry.id);
                     fieldEnemyNames.add(ordinary.name);
                     enemyPages++;
-                }
+                } else assert.notEqual(ordinary?.category, 'enemies', 'unmapped enemy graphic at ' + id + '/' + entry.id);
                 if (ordinary?.category === 'treasure') assert.match(ordinary.name, /^(Chest|Treasure)$/);
                 if (ordinary?.category === 'events') {
                     if (id === 27 && [27, 32].includes(entry.id) && index === 0)
@@ -147,8 +163,10 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
             }
         }
     }
+    assert.equal(enemyPages, 206);
     assert.equal(fieldEnemyNames.size, 16);
-    console.log('Verified ' + enemyPages + ' field encounter pages use ' + fieldEnemyNames.size + ' game enemy names.');
+    console.log('Verified ' + enemyPages + ' field encounter pages and ' + fieldEnemyNames.size +
+        ' enemy graphics against ' + formations.length + ' native formations.');
     assert.equal(worldReturns, 430);
     assert.equal(icePages, 46);
     assert.deepEqual(cleanupPages, [66, 80]);
@@ -591,7 +609,10 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const ruinsAmbush = load(172);
     ruinsAmbush.player.setPosition(5, 5);
     assert.deepEqual(captureWorld(c).objects.filter(item => item.id === 31)
-        .map(({ name, category, eventAction }) => [name, category, eventAction]), [['Scene trigger', 'events', 'bump']]);
+        .map(({ name, category, eventAction }) => [name, category, eventAction]), [['Heat Lamp', 'enemies', 'bump']]);
+    const clearedAmbush = load(172, { self: ['172,31,A'] });
+    clearedAmbush.player.setPosition(5, 5);
+    assert(!captureWorld(c).objects.some(item => item.id === 31));
     const completed = load(113, { self: ['113,159,A', '113,160,A', '113,78,A'] });
     completed.player.setPosition(14, 30);
     assert(!captureWorld(c).objects.some(item => [78, 159, 160].includes(item.id)));
@@ -655,7 +676,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         [113, 63, 41, 39, 'exits'], [113, 64, 39, 39, 'exits'], [116, 8, 5, 6, 'exits'],
         [117, 11, 8, 12, 'exits'], [119, 3, 9, 11, 'exits'],
         [58, 37, 6, 4, 'exits', [462]], [58, 38, 6, 4, 'exits', [462]], [58, 39, 6, 4, 'exits', [462]],
-        [76, 64, 15, 1, 'events', [97]]
+        [76, 64, 15, 1, 'events', [97]], [172, 31, 5, 5, 'enemies']
     ]) {
         const f = load(map, { switches });
         const { gameMap, player, geometry } = f;

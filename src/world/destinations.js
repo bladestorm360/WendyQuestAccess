@@ -113,11 +113,20 @@ function destination(entry, page, trigger, map, characterName = page?.image?.cha
     if (transfer && /^(?:(?:go\s+)?to\s|enter\b|exit\b)|\b(?:exit|door|stairs)\b/i.test(name))
         return { category: 'exits', name: safeName || 'Exit',
             ...(trigger !== 0 && page.priorityType === 1 ? { eventAction: 'bump' } : {}) };
-    if (battle && (!sprite || /ambush/i.test(name))) return { category: 'events', name: 'Scene trigger',
-        ...(trigger !== 0 ? { eventAction: page.priorityType === 1 ? 'bump' : 'step' } : {}) };
-    if (battle && sprite && (trigger === 0 || page.priorityType === 1) &&
-        (/^~/.test(sprite) || /enemy|patrol|guard|encounter/i.test(name)))
-        return { category: 'enemies', name: FIELD_ENEMY_NAMES.get(characterName) || 'Enemy' };
+    if (battle) {
+        const ambush = /ambush/i.test(name);
+        const enemyName = FIELD_ENEMY_NAMES.get(characterName);
+        const normal = page.priorityType === 1;
+        // A visible enemy can have an ambush label in the editor. Keep its
+        // contact approach while publishing the identity of the field sprite.
+        if (sprite && (trigger === 0 || normal) && (enemyName ||
+            !ambush && (/^~/.test(sprite) || /enemy|patrol|guard|encounter/i.test(name)))) {
+            return { category: 'enemies', name: enemyName || 'Enemy',
+                ...(ambush && trigger !== 0 ? { eventAction: 'bump' } : {}) };
+        }
+        if (!sprite || ambush) return { category: 'events', name: 'Scene trigger',
+            ...(trigger !== 0 ? { eventAction: normal ? 'bump' : 'step' } : {}) };
+    }
     if (trigger !== 0) return null;
     // Chomps's action pages can open with another party member speaking.
     // The authored character sheet identifies the actor at the interaction.
