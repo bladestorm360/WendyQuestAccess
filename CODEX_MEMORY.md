@@ -219,3 +219,5 @@ The [Secret Cave update](docs/puzzles-and-secrets.md#cave-timing-cues) records l
 The [Secret Cave safe pockets and Autowalk checkpoint](docs/feature-checkpoint.md#secret-cave-safe-pockets-and-automatic-crossings) records the manual stop hold, deeper native guard footsteps, automatic crossing and chase paths, and offline and gameplay coverage.
 
 The [Secret Cave announced waits checkpoint](docs/feature-checkpoint.md#secret-cave-announced-waits-and-patrol-lane-recovery) records the opening lifetime fix, in-crossing reread, recovered logged tiles and deeper guard audio.
+
+The [silent cave stop and dash input checkpoint](docs/feature-checkpoint.md#silent-cave-stops-and-native-dash-input) records the silent endpoint, the existing timing fix, and native Shift handling for the patrol maps.

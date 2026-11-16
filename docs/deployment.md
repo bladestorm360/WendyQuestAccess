@@ -620,3 +620,13 @@ November 16, 2026. Installed and independently verified the update. Five mod pay
 - One verified rollback remains at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-waits/rollback-latest` with plan SHA-256 `e99e96652c2f1d84ec572610f4c9b285b274f73e75a77c35789413286a674d40`.
 
 Cleanup removed 26,646,916 bytes of disposable build, staging and test geometry and the 10,929,326-byte superseded rollback. Automatic review declined removal of the small release and recovery scripts and plan receipt, so those records remain. [Crossing evidence](feature-checkpoint.md#secret-cave-announced-waits-and-patrol-lane-recovery)
+
+### Silent Secret Cave crossing stops
+
+November 16, 2026. Installed and independently verified the silent-stop follow-up. The bundled plugin and speech formatter changed. All 16 native scripts and 241 geometry entries matched the prior plan. Four save and configuration hashes matched across the installation. The native movement suite, matching NW.js smoke, installer rehearsal, and exact-candidate Microsoft Defender scan passed. Defender engine 1.1.26100.4 and signatures 1.463.328.0 reported no threats.
+
+- Installed plan SHA-256 `104260e30cbb1ada9776bb51484d1c1a627e350914dda626e02037e91b57ce99`
+- Plugin SHA-256 `37a0dbb96a55d797625eb13b7efbadc09749df6f56b42e1ef089f1635635df62`
+- One verified rollback remains at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-silent-stop/rollback-latest` with plan SHA-256 `785ca48a44dab0794bb72493873496605da133dc7599c8035973c07f067ce868`.
+
+Cleanup removed 24,459,580 bytes of disposable outputs and the 10,958,509-byte superseded rollback. [Silent stop and dash verification](feature-checkpoint.md#silent-cave-stops-and-native-dash-input)

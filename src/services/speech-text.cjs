@@ -179,7 +179,8 @@ function formatSpeech(message) {
                     message.alternate ? 'Alternate opening. ' : ''}On the ping, go ${steps} ${heading}.`;
             }
             text += message.terminal ? ' The last step triggers the event.' :
-                message.stopAtPocket ? ' Switch directions when the ping moves. Keep moving until you hear safe pocket.' :
+                message.stopAtPocket ? (message.headings?.some(heading => heading !== message.headings[0]) ?
+                    ' Switch directions when the ping moves. Keep moving through the turns.' : '') :
                 ' Stop there and request directions again.';
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;

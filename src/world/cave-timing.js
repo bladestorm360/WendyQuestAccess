@@ -210,7 +210,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         state.traversal = null;
         state.scene._wqaCaveCueDue = 0;
         audio.retire(state.scene, 'cave');
-        report(text, true);
+        if (text) report(text, true);
     }
 
     function input(scene, direction) {
@@ -266,7 +266,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (now > traversal.by) {
             if (!state.repeat.stopAtPocket) return stop(state.scene);
             diagnostics?.(state.scene, 'caveTimingLost', traversal.index, 'crossingDeadline');
-            return finish(state, 'Timing missed. Request directions to a safe pocket.');
+            return finish(state, 'Timing missed. Request directions again.');
         }
         if (state.repeat.stopAtPocket && now === traversal.by) return schedule(state, traversal.by + 1);
         if (!pulse(state, traversal.steps[traversal.index], Math.min(now + CUE_LIFETIME, traversal.by + 1)))
@@ -280,7 +280,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (!live(state)) return stop(state.scene);
         if (state.pocketDue && now >= state.pocketDue) {
             diagnostics?.(state.scene, 'cavePocketReached', 0, 'settled');
-            return finish(state, 'Safe pocket. Stop and request directions.');
+            return finish(state);
         }
         if (state.manual) return playManual(state, now);
         if (state.traversal) return advancing(state, now);

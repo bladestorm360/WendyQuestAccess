@@ -461,7 +461,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                         'Cave timing audio is unavailable. Request directions again.' :
                         'This crossing uses Cave timing cues in Audio. Turn them on and request directions.');
                 const { legs, more, activate, facing } = result;
-                const endText = more ? 'Safe to stop. Request directions again.' : activate ?
+                const endText = more ? undefined : activate ?
                     'Move ' + PATROL_HEADINGS[activate] + ' to take ' + job.label + '.' :
                     'Face ' + PATROL_HEADINGS[facing] + ' and press the action button.';
                 if (!host.caveTiming.startManual(job.timing, job.line, job.x, job.y, result, endText))

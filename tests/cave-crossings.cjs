@@ -457,9 +457,10 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             }
                             assert.equal(at, expected.length, 'all continuous steps from ' + origin);
                             const pocket = [player.x, player.y];
+                            const lastReport = reports.length;
                             for (let i = 0; i < 82; i++) tick();
                             assert.deepEqual([player.x, player.y], pocket, 'held direction cannot leave the safe pocket');
-                            assert.equal(reports.at(-1), 'Safe pocket. Stop and request directions.');
+                            assert.equal(reports.length, lastReport, 'the stop does not announce the safe tile');
                             cueListener = null;
                             c.Input.dir4 = 0;
                             tick();
