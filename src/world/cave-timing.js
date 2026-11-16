@@ -4,7 +4,7 @@ const { timedCave, captureMotion, TIMING_CUE, STAMP_WIDTH, matchesMotionStamp } 
 const { CARDINAL, bearing } = require('./spatial-direction');
 const { DIRECTIONS } = require('./geometry.cjs');
 
-const { patrolPhaseMatches, MANUAL_HORIZON, REACTION_FRAMES } = require('./puzzles/patrol-line-playback');
+const { patrolPhaseMatches, MANUAL_HORIZON, REACTION_FRAMES, MANUAL_PAUSE_FRAMES } = require('./puzzles/patrol-line-playback');
 
 const CUE_LIFETIME = 8;
 const MANUAL_LEAD_IN = 120;
@@ -96,10 +96,11 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
 
     function startManual(captured, line, x, y, plan, endText) {
         const { scene, motion } = captured;
-        const { legs, starts, stamps } = plan;
+        const { legs, starts, stamps, firstPause } = plan;
         const span = MANUAL_HORIZON + 1;
         const due = Math.max(frame(), motion.frame + MANUAL_LEAD_IN);
-        if (!ready(scene) || !line || line.frame !== motion.frame || !Array.isArray(legs) ||
+        if (!ready(scene) || !line || line.frame !== motion.frame || ![0, MANUAL_PAUSE_FRAMES].includes(firstPause) ||
+            !Array.isArray(legs) ||
             !legs.length || legs.length > 8 || legs.some(({ direction, tiles }) =>
                 !CARDINAL[direction] || !Number.isInteger(tiles) || tiles < 1 || tiles > 12) ||
             Object.prototype.toString.call(starts) !== '[object Uint16Array]' || starts.length !== span * legs.length ||
@@ -107,7 +108,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
             stamps.length !== span * line.refs.length * STAMP_WIDTH || !starts[due - motion.frame]) return false;
         stop();
         owner = { ...captured, x, y, queued: false,
-            manual: { line, legs, starts, stamps, span, endText, index: 0, taken: 0, due, until: -1 } };
+            manual: { line, legs, starts, stamps, span, endText, firstPause, index: 0, taken: 0, due, until: -1 } };
         watch(scene);
         schedule(owner, due);
         return true;
@@ -188,7 +189,12 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
             stopCue(state, now, manual.index - 1);
             return schedule(state, manual.due);
         }
-        if (manual.taken) return manualStopped(state, 'lateStep');
+        if (manual.taken) {
+            if (now > manual.due) return manualStopped(state, 'lateStep');
+            if (!pulse(state, manual.legs[manual.index].direction, Math.min(now + CUE_LIFETIME, manual.due + 1)))
+                return manualStopped(state, 'audio');
+            return schedule(state, manual.due + 1);
+        }
         if (manual.index === manual.legs.length) return finish(state, manual.endText);
         const time = Math.max(now, manual.due) - manual.line.frame;
         const cue = time < manual.span ? manual.starts[manual.index * manual.span + time] : 0;
@@ -213,7 +219,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
     }
 
     function manualMoved(state, direction, now) {
-        const { manual, player, scene } = state;
+        const { manual } = state;
         const leg = manual.legs[manual.index];
         const inTime = manual.taken ? now === manual.due : now > manual.cued && now <= manual.until;
         if (!leg || direction !== leg.direction) return manualStopped(state, 'direction');
@@ -222,11 +228,12 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         state.x += CARDINAL[direction].x;
         state.y += CARDINAL[direction].y;
         manual.due = now + 256 / 2 ** manual.line.speed;
-        audio.retire(scene, 'cave');
-        if (++manual.taken < leg.tiles) return schedule(state, manual.due + 1);
+        if (++manual.taken < leg.tiles) return schedule(state, now);
         manual.taken = 0;
         manual.until = -1;
         manual.index++;
+        if (manual.index === 1 && manual.index < manual.legs.length) manual.due += manual.firstPause;
+        audio.retire(state.scene, 'cave');
         manual.release = true;
         schedule(state, now);
     }
@@ -323,12 +330,10 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         const grace = opening.escape ? turning ? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace :
             opening.headings && turning ? opening.turnGrace ?? TIMING_CUE.turnGrace : 0;
         traversal.by = now + tileFrames + grace;
-        if (turning) {
-            audio.retire(scene, 'cave');
-            // A tight turn is announced as the preceding step starts.
-            // The game completes that tile before accepting the new key.
-            schedule(state, opening.turnGrace === TIMING_CUE.earlyTurnGrace ? now : now + tileFrames - 1);
-        } else if (!scene._wqaCaveCueDue) schedule(state, now + 1);
+        if (turning) audio.retire(scene, 'cave');
+        // Every accepted step refreshes the upcoming heading. On a turn
+        // the game finishes this tile before accepting the new direction.
+        schedule(state, now);
     }
 
     return {

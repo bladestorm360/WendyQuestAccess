@@ -1,7 +1,7 @@
 'use strict';
 
 const { STAMP_WIDTH, matchesNativeMotionStamp } = require('./patrol-motion.cjs');
-const { lineDestination, lineActors, HORIZON, MAX_MOVES, MANUAL_HORIZON, REACTION_FRAMES } = require('./patrol-line-state.cjs');
+const { lineDestination, lineActors, HORIZON, MAX_MOVES, MANUAL_HORIZON, REACTION_FRAMES, MANUAL_PAUSE_FRAMES } = require('./patrol-line-state.cjs');
 
 function authoredRoute(route, authored) {
     // Saved game state can hold a deserialized copy of the same route.
@@ -66,4 +66,4 @@ function patrolPhaseMatches(state, map, stamps, sample) {
     return true;
 }
 
-module.exports = { capturePatrolLine, admitPatrolLine, patrolStepReady, patrolPhaseMatches, MANUAL_HORIZON, REACTION_FRAMES };
+module.exports = { capturePatrolLine, admitPatrolLine, patrolStepReady, patrolPhaseMatches, MANUAL_HORIZON, REACTION_FRAMES, MANUAL_PAUSE_FRAMES };

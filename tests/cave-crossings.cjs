@@ -8,7 +8,7 @@ const { distractionForGuard, captureMotion } = require('../src/world/puzzles/cav
 const { createCaveTiming } = require('../src/world/cave-timing');
 const { CUE } = require('../src/runtime/audio');
 const { bearing } = require('../src/world/spatial-direction');
-const { REACTION_FRAMES } = require('../src/world/puzzles/patrol-line-state.cjs');
+const { REACTION_FRAMES, MANUAL_PAUSE_FRAMES } = require('../src/world/puzzles/patrol-line-state.cjs');
 const { CHASE_LEGS, chaseHandoff } = require('../src/world/puzzles/cave-progression');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
@@ -374,6 +374,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
         const reports = [];
         const sounds = [];
         let cueListener = null;
+        let replayedReportedStop = false;
         const timing = createCaveTiming(c, owner => owner === scene, {
             cues: CUE, isPrepared: () => true, retire() {},
             play(_scene, _hrtf, cue, _gain, place, ready) {
@@ -500,13 +501,22 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             continue;
                         } else {
                             assert.equal(plan.status, 'patrolLineManual');
-                            assert.match(formatSpeech({ ...plan, kind: plan.status }), /Wait for a ping before each leg/);
+                            const spoken = formatSpeech({ ...plan, kind: plan.status });
+                            assert.match(spoken, /Wait for a ping before each leg/);
+                            if (target === 25 && player.x === 24 && player.y === 5) {
+                                replayedReportedStop = true;
+                                assert.equal(plan.firstPause, MANUAL_PAUSE_FRAMES);
+                                assert.deepEqual(plan.legs, [{ direction: 8, tiles: 1 }, { direction: 4, tiles: 4 },
+                                    { direction: 4, tiles: 4 }, { direction: 8, tiles: 1 }]);
+                                assert.match(spoken, /1 north, wait\. 4 west, wait\. 4 west, wait\. 1 north, stop\./);
+                            }
                             const captured = timing.capture(scene, request.motion, { id: target });
                             const track = capturePatrolLine(c, request.motion, target);
                             assert(timing.startManual(captured, track, player.x, player.y, plan, 'Reached the planned stop.'));
                             let index = 0;
                             let respondAt;
                             let releaseAt;
+                            let nextPingAfter = -1;
                             const begin = c.Graphics.frameCount;
                             cueListener = receipt => {
                                 assert(index < plan.legs.length);
@@ -515,9 +525,11 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                                     assert.equal(c.Input.dir4, plan.legs[index].direction);
                                     assert(player.isMoving(), 'the stop cue precedes the end of the leg');
                                     releaseAt = receipt.frame + 6;
+                                    nextPingAfter = receipt.frame + 16 + (index === 0 ? plan.firstPause : 0);
                                     index++;
                                     respondAt = undefined;
                                 } else if (receipt.cue === CUE.caveGo && !respondAt) {
+                                    assert(receipt.frame >= nextPingAfter, 'the landing includes a quiet pause before the next go ping');
                                     assert.deepEqual(receipt.place, bearing(8, plan.legs[index].direction));
                                     respondAt = receipt.frame + response;
                                 }
@@ -526,7 +538,14 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             while (timing.active(scene) && reports.length === reportCount && c.Graphics.frameCount - begin < 1701) {
                                 if (releaseAt === c.Graphics.frameCount + 1) c.Input.dir4 = 0;
                                 if (respondAt === c.Graphics.frameCount + 1) c.Input.dir4 = plan.legs[index].direction;
+                                const before = [player.x, player.y];
+                                const count = sounds.length;
+                                const legIndex = index;
                                 tick();
+                                if (player.x !== before[0] || player.y !== before[1]) {
+                                    assert.equal(sounds.length, count + 1, 'each accepted step emits a ping or a stop cue');
+                                    assert.equal(sounds.at(-1).cue, index === legIndex ? CUE.caveGo : CUE.wallBump);
+                                }
                             }
                             cueListener = null;
                             assert.equal(index, plan.legs.length, 'Manual legs at ' + [player.x, player.y] + '. ' + reports.at(-1));
@@ -561,6 +580,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
             const { run } = setup(199, 5, 17, 0, 12.25);
             const { player } = run;
             const position = [player.x, player.y];
+            assert(replayedReportedStop, "the reported barrel approach was replayed");
             const direction = DIRECTIONS.find(heading => player.canPass(...position, heading));
             assert(direction);
             const current = timing.capture(scene, captureMotion(c, c.Graphics), { id: 25 });

@@ -97,11 +97,11 @@ function lineCrossing(world, request, origin, unsafe, stops, coverage, cancelled
     // Walk pace works for the whole course, including the moving line.
     const stride = 256 / 2 ** motion.speed;
     if (manual) {
-        const { to, strokes } = pocket.link;
+        const { to, strokes, firstPause } = pocket.link;
         const starts = nextStrokes(safety, size, pocket.link, stride, cancelled);
         if (!starts) return null;
         const legs = strokes.map(({ heading, cells }) => ({ direction: DIRECTIONS[heading], tiles: cells.length - 1 }));
-        return { status: 'patrolLineManual', starts, stamps, legs, more: !goals[to],
+        return { status: 'patrolLineManual', starts, stamps, legs, firstPause, more: !goals[to],
             facing: !exit && goals[to], activate: exit && goals[to] };
     }
     const visited = new Int8Array(safety.length);

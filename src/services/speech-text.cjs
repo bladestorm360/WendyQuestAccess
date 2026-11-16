@@ -191,9 +191,9 @@ function formatSpeech(message) {
             if (!Array.isArray(legs) || !legs.length || legs.length > 8 ||
                 legs.some(({ direction, tiles }) => !HEADINGS[direction] || !Number.isInteger(tiles) ||
                     tiles < 1 || tiles > 12)) return '';
-            const directions = legs.map(({ direction, tiles }) => tiles + ' ' + HEADINGS[direction]);
-            text = 'Wait for a ping before each leg. Release movement at the thud. ' +
-                directions.join(', then ') + '.';
+            const directions = legs.map(({ direction, tiles }, index) => tiles + ' ' + HEADINGS[direction] +
+                (index + 1 < legs.length ? ', wait.' : ', stop.'));
+            text = 'Wait for a ping before each leg. Stop at each thud. ' + directions.join(' ');
             break;
         }
         case 'treasureReward': {

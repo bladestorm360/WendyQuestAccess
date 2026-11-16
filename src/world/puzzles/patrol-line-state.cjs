@@ -6,6 +6,7 @@ const HORIZON = 2300;
 const MAX_MOVES = 128;
 const MANUAL_HORIZON = 1700;
 const REACTION_FRAMES = 30;
+const MANUAL_PAUSE_FRAMES = 16;
 
 function lineDestination(map, event) {
     return map === ROOM && (event === 25 || event === 34 || event === 26);
@@ -20,4 +21,4 @@ function lineActors(patrols) {
     return line;
 }
 
-module.exports = { GUARDS, lineDestination, lineActors, HORIZON, MAX_MOVES, MANUAL_HORIZON, REACTION_FRAMES };
+module.exports = { GUARDS, lineDestination, lineActors, HORIZON, MAX_MOVES, MANUAL_HORIZON, REACTION_FRAMES, MANUAL_PAUSE_FRAMES };

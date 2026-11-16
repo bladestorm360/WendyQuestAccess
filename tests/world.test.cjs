@@ -1059,11 +1059,13 @@ async function verifyLiveCrossing() {
     const sounds = [];
     const reports = [];
     let sounding = false;
+    let lastCueFrame = -1;
     const timing = createCaveTiming(c, value => value === scene && scene._wqaFieldReady, {
         cues: CUE, isPrepared: () => true,
         play(_scene, _hrtf, cue, gain, bearing, ready) {
             assert(ready());
             sounds.push({ cue, gain, bearing: bearing.map(value => value || 0) });
+            lastCueFrame = c.Graphics.frameCount;
             sounding = true;
             return true;
         },
@@ -1136,17 +1138,17 @@ async function verifyLiveCrossing() {
     const repeated = sampleDelayed({ direction: 4, tiles: 1, refresh(state) { refreshing = state; return true; } });
     const first = scene._wqaCaveCueDue;
     advanceToCue(repeated.current);
-    assert.equal(scene._wqaCaveCueDue, first + 18);
+    assert.equal(scene._wqaCaveCueDue, first + 16);
     repeated.current.player.setDirection(2);
     advanceToCue(repeated.current);
     assert.equal(sounds.length, 3, 'two separately verified pulses on the same opening');
     assert.deepEqual(sounds.slice(1).map(sound => sound.bearing), [[-1, 0, 0], [-1, 0, 0]]);
-    assert.equal(scene._wqaCaveCueDue, first + 36);
+    assert.equal(scene._wqaCaveCueDue, first + 32);
     advanceToCue(repeated.current);
     assert.equal(sounds.length, 3, 'expired openings stop the pulse');
     assert(refreshing, 'keep tracking the crossing without another directions key');
     timing.refreshResult(refreshing, null, null);
-    assert.equal(scene._wqaCaveCueDue, first + 54);
+    assert.equal(scene._wqaCaveCueDue, first + 48);
     timing.stop(scene);
 
     // Replay the painted guide as the player follows all seven accepted
@@ -1163,8 +1165,10 @@ async function verifyLiveCrossing() {
     assert(timing.start(captured, 6, 30, plan.opening, { direction: 4, tiles: 7, refresh: () => false }));
     const before = sounds.length;
     advanceToCue(crossing);
-    for (const heading of plan.opening.headings) {
+    for (const [index, heading] of plan.opening.headings.entries()) {
+        const pulses = sounds.length;
         c.Graphics.frameCount++;
+        const stepFrame = c.Graphics.frameCount;
         crossing.gameMap.updateEvents();
         c.Game_CharacterBase.prototype.moveStraight.call(crossing.player, DIRECTIONS[heading]);
         timing.cancelPlan(scene, true);
@@ -1179,6 +1183,10 @@ async function verifyLiveCrossing() {
                 renderer.emit('postrender');
             }
         }
+        if (index + 1 < plan.opening.headings.length) {
+            assert.equal(sounds.length, pulses + 1, 'every native step refreshes the next heading');
+            assert.equal(lastCueFrame, stepFrame);
+        } else assert.equal(sounds.length, pulses, 'the destination retires the crossing ping');
     }
     const cues = sounds.slice(before).map(sound => sound.bearing.join(','));
     const changes = cues.filter((cue, index) => index === 0 || cues[index - 1] !== cue);

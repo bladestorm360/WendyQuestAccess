@@ -677,3 +677,18 @@ November 16, 2026. The Steam installation now uses the cave guide verified again
 - The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-retail-pace/rollback-latest with plan SHA-256 c7236bd23e1e2a8b0c236fc7754446539c7107e9743622db42c8d02c2892347c. The prior source revision is a21c367582cf1386f637a43ddef3bbfe13652369.
 
 Readback verified 16 native scripts, 45 payload files and 241 geometry entries. Four save and configuration hashes matched across installation. Cleanup removed 24,824,166 bytes of build, staging and test output and the 10,963,694-byte superseded recovery. The exact scan receipt and the four lines from the live speed comparison remain in the C: analysis workspace. [Cave route and verification scope](feature-checkpoint.md#retail-walking-speed-and-cave-routing)
+
+### Cave ping cadence and explicit pauses
+
+November 16, 2026. The focused build changed the plugin, speech formatter and four patrol workers. It reused the verified native and geometry hashes. The world suite, matching NW.js smoke and installer rehearsal passed. The bounded replay reported 0.11 ms for a sampled cave capture and 0.12 ms for postrender cue recheck and enqueue. The NW fixture observed a warm SDL submission after 47.0 ms using 40 ms polling and silent output. These fixture timings leave audible gameplay timing to be confirmed. Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.328.0 found no threats in the exact candidate.
+
+- Installed plan SHA-256 `07cdf5ce031203935928cfe80afb9fe11609124fd6c40613dc276b3763d8950e`
+- Plugin SHA-256 `95a022c4ddf1bd899e8373d8dc91a5daa36cd5d696c955bcf837d89682f3984a`
+- Speech formatter SHA-256 `93cfa1b81831efd3b95dfe4a0ebfe73c285fe9697d499d8706531b4afd712ffe`
+- Patrol motion worker SHA-256 `df3312b6fa7c0baf555b513e6046ee48aa7d045350477a078e39a6112b515218`
+- Patrol line state worker SHA-256 `946e290563cb03ac3fbac0466c2171ca2294884c2c803d8c44ab49ace171bd86`
+- Patrol line manual worker SHA-256 `04efc155451f38ea5d1479f7b02854d08fd7e6ef7386501ea797facaac809ff1`
+- Patrol line worker SHA-256 `e4e9150c51207db691b088e9c771246d9abe942d9dc3d90e40087bf14fac8627`
+- The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-cadence/rollback-latest with plan `604c2f72b6f8e61be7d5600902c0bd70fb30911e488b5589fc835b309f74ad36`. The prior source revision is `7e1a3ce6bfe57caf5fb489c963cfb414521b0d60`.
+
+Readback verified 16 native scripts, 45 payload files and 241 geometry entries. Four save and configuration hashes matched across installation. Cleanup removed 24,468,765 bytes of staging and test output and the 10,968,375-byte superseded recovery. [Cave replay and gameplay check](feature-checkpoint.md#cave-ping-cadence-and-explicit-pauses)

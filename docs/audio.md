@@ -14,7 +14,7 @@ The preview status reports the output mode selected for the cue. A request that 
 
 ## Manual pings for the moving guard line
 
-Manual navigation in the second patrol room uses the ordinary directional cave ping. The first ping starts a continuous crossing, with each turn signaled by a change in direction. Timed legs each have their own start ping. A centered thud sounds when Wendy starts the last accepted step of a crossing or leg. Release movement on the thud while she finishes that step. The guide checks guard phase before emitting a ping and when each native step is accepted. It uses the actual movement speed and stops guidance if the player leaves the announced sequence or the native field gate closes. [Cave guide](puzzles-and-secrets.md#secret-cave-room-handoffs)
+Manual navigation in the second patrol room uses the ordinary directional cave ping. While Wendy waits, the cue repeats at normal walking cadence during a verified opening. Each accepted step refreshes the ping toward the next tile, including turns. Timed legs each have their own start ping. A centered thud sounds when Wendy starts the last accepted step of a crossing or leg. Release movement on the thud while she finishes that step. The guide checks guard phase before emitting a ping and when each native step is accepted. It uses the actual movement speed and stops guidance if the player leaves the announced sequence or the native field gate closes. [Cave guide](puzzles-and-secrets.md#secret-cave-room-handoffs)
 
 ## Wall feedback and footsteps
 
