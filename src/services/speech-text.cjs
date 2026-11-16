@@ -85,7 +85,8 @@ function formatSpeech(message) {
                 parts.push((message.totalPrice ? 'Total ' : 'Price ') + message.price + (currency ? ' ' + currency : ''));
             }
             if (message.equipped === true) parts.push('equipped');
-            if (message.enabled === false) parts.push('unavailable');
+            if (message.locked === true) parts.push('locked');
+            else if (message.enabled === false) parts.push('unavailable');
             if (message.indexed && message.position > 0 && message.position <= message.total &&
                 Number.isInteger(message.total) && message.total <= 256) parts.push(`${message.position} of ${message.total}`);
             text = parts.filter(Boolean).join(', ');

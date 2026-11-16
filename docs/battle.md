@@ -218,7 +218,11 @@ The native result queue links lethal HP damage to the matching popup. The collap
 
 Facing and pressing Interact on an adjacent roaming enemy can start its existing encounter before contact. The native forward action check accepts normal-priority touch events. The 203 moving encounter pages use a scripted battle setup, which is also used on contact. Random overworld encounters use a separate initiative roll. The reviewed moving encounters add no initiative change for pressing Interact. [Encounter and trigger audit](navigation-audit.md#transfers-encounters-and-movement)
 
-In the Special menu, **I** reads the highlighted ability's displayed description. **Shift+I** remains the explicit sprite review. The active command group and rendered details determine which text is available. [Focus owner](../src/battle/focus.js)
+In Wendy's Special menu, **I** reads the highlighted ability's displayed help. Guard has an empty native description, so **I** says “No description available.” Clapback, Pigtail Whip and Where's The Beef have native help text. **Shift+I** describes the active sprite. Move through the locked rows with the same battle-menu directions. Native focus includes those rows. Speech uses the rendered level sprite, and **I** repeats its level. The hidden ability text and cost are excluded until the game renders the unlocked row. Wendy's three native thresholds are levels 5, 10 and 15. [Focus owner](../src/battle/focus.js)
+
+### Where's The Beef battle animation
+
+Wendy’s ultimate shows “Here’s,” “The,” and “Beef!” in the artwork of three successive caption groups. The battle animation dispatch supplies the actual sprite when the native coroutine attaches the overlay. The mod reads the current rendered frame against the fixed atlas layout and queues each word when its caption first appears. It stops observing after the final word, sprite removal or a closed presentation gate. The Ice Cream Machine uses existing native log rows. [Frame observer](../src/battle/skill-effects.js) · [Packaged playback fixture](../tests/nw-smoke.py)
 
 ### Baconator and Frostyna weapon artwork
 

@@ -58,27 +58,15 @@ function atlasPinAt(root, x, y) {
         root.$gameVariables.value(120) === y;
 }
 
-function islandRevealed(root) {
-    const switches = root.$gameSwitches;
-    if (switches?.value?.(619) === true || root.$gameSelfSwitches?.value?.([113, 90, 'A']) === true) return true;
-    const x = root.$gameVariables?.value?.(109);
-    if ((switches?.value?.(268) === true || switches?.value?.(629) === true) &&
-        (x === 48 || x === 48.5) && root.$gameVariables.value(110) === 4) return true;
-    // A player can find the dock and step ashore before hearing the hint.
-    const player = root.$gamePlayer;
-    return root.$gameMap?._mapId === 113 && (player?._vehicleType === 'walk' || player?._vehicleType === '') &&
-        player._x >= 45 && player._x <= 51 && player._y >= 2 && player._y <= 8;
-}
-
 function worldEntranceRevealed(root, id, spoilers, questMarker = false) {
     if (spoilers) return true;
-    if ([13, 51, 90, 94].includes(id)) return islandRevealed(root);
+    // Secret Island uses its native travel and landing rules without a discovery filter.
+    if ([13, 51, 90, 94].includes(id)) return true;
     const marker = RUIN_MARKERS.get(id);
     if (marker) return marker === 98 ? root.$gameSwitches?.value?.(159) === true :
         root.$gameSelfSwitches?.value?.([113, marker, 'A']) === true;
     if (questMarker) return true;
-    // A missing quest producer leaves ordinary names available. The island
-    // and ruins have their own native discovery evidence above.
+    // A missing quest producer leaves ordinary names available.
     if (!root.$gameParty?._quests && typeof root.$gameParty?.getNav !== 'function') return true;
     const on = key => root.$gameSwitches?.value?.(key) === true;
     if (id === FLOAT_FORT_ENTRANCE) return on(38);
@@ -135,7 +123,8 @@ function worldDestination(root, mode, event, entry, page) {
         if (land) {
             if (id === FLOAT_FORT_ENTRANCE && transferOptions(map, entry, page, root.$dataCommonEvents)
                 .some(edge => edge.map === 26)) return { name: 'Float Fort', category: 'exits', eventAction: 'step' };
-            if (id === 13 && transfersTo(list[1], 206)) return { name: 'Secret Island', category: 'exits' };
+            if (id === 13 && transfersTo(list[1], 206))
+                return { name: 'Secret Island', category: 'exits', handoffs: [90] };
             const floor = FLOOR_EXITS[id];
             if (floor && transferOptions(map, entry, page, root.$dataCommonEvents).some(edge => edge.map === floor[1]))
                 return id === 19 ? { name: floor[0], category: 'exits', eventAction: 'step' } :

@@ -1629,6 +1629,39 @@ const interval = setInterval(() => {
             endingStep = 86;
         } else if (endingStep === 86 && fs.existsSync(receipt + '.battle-clapback')) {
             const scene = SceneManager._scene;
+            const { actor } = scene._testClapback;
+            const bitmap = { isReady: () => true };
+            const sprite = scene._testBeef = { parent: scene, bitmap, texture: { valid: true },
+                _frame: { x: 0, y: 0, width: 352, height: 96 }, worldVisible: true, worldAlpha: 0,
+                worldTransform: { tx: 608, ty: 119 } };
+            sprite.animator = { _sprite: sprite, bitmap,
+                _animationData: { fileName: 'ParticleEffects/WendyWhereIsBeef_Overlay' } };
+            WendyQuestAccessBeefOverlayReady(actor, sprite);
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 181;
+        } else if (endingStep === 181) {
+            if (fs.existsSync(receipt + '.battle-beef-words')) throw Error('Attack text spoke before paint');
+            const sprite = SceneManager._scene._testBeef;
+            sprite.worldAlpha = 1;
+            Graphics.app.renderer.emit('postrender');
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 182;
+        } else if (endingStep === 182 && fs.existsSync(receipt + '.battle-beef-words')) {
+            const sprite = SceneManager._scene._testBeef;
+            Object.assign(sprite._frame, { x: 704, y: 96 });
+            Graphics.app.renderer.emit('postrender');
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 183;
+        } else if (endingStep === 183 && fs.readFileSync(receipt + '.battle-beef-words', 'utf8').includes('The.')) {
+            const sprite = SceneManager._scene._testBeef;
+            Object.assign(sprite._frame, { x: 1408, y: 192 });
+            Graphics.app.renderer.emit('postrender');
+            Object.assign(sprite._frame, { x: 0, y: 288 });
+            Graphics.app.renderer.emit('postrender');
+            Graphics.app.renderer.emit('postrender');
+            endingStep = 184;
+        } else if (endingStep === 184 && fs.readFileSync(receipt + '.battle-beef-words', 'utf8').includes('Beef!!!')) {
+            const scene = SceneManager._scene;
             const { actor, saved } = scene._testClapback;
             actor._actor._actorId = saved.id;
             actor.parent = saved.parent;
@@ -2025,6 +2058,17 @@ parentPort.on('message', message => {
     if (message.kind === 'battleLog' && message.lines?.[0] === 'Wendy prepares to counterattack.') {
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
             fs.writeFileSync(receipt + '.battle-clapback', formatSpeech(message));
+        parentPort.postMessage('ack');
+        return;
+    }
+    if (message.kind === 'battleLog' && ["Here's.", 'The.', 'Beef!!!'].includes(message.lines?.[0])) {
+        const file = receipt + '.battle-beef-words';
+        const previous = fs.existsSync(file);
+        if (!!message.append !== previous ||
+            (previous && String(message.epoch) !== fs.readFileSync(file + '-epoch', 'utf8')))
+            throw Error('Word did not use its overlay speech context');
+        fs.writeFileSync(file + '-epoch', String(message.epoch));
+        fs.appendFileSync(file, (previous ? ' ' : '') + formatSpeech(message));
         parentPort.postMessage('ack');
         return;
     }
@@ -2536,6 +2580,7 @@ def main():
             'battle-bag-details': 'Synthetic item effect',
             'battle-bag-wendy-status': 'Synthetic hero. HP 8 of 14. FP 3 of 5. Level 7',
             'battle-clapback': 'Wendy prepares to counterattack.',
+            'battle-beef-words': "Here's. The. Beef!!!",
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:

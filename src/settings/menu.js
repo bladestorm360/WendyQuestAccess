@@ -264,7 +264,7 @@ function createSettingsMenu(root, host) {
                 'Confirm to start the timing meter. Confirm again for power, then for accuracy.',
                 'Turn on Battle timing assist under Audio for one note when a perfect window opens. Press Confirm at the note.',
                 'Use Read details ' + gestureName(keys.details) + ' to describe selected enemies and read their displayed HP and conditions.',
-                'At battle commands, Read details describes the active fighter. Hold Shift with that key to describe a companion when their ability is highlighted.',
+                'At battle commands, Read details describes the active fighter. In Special, move through the rows to hear locked levels. Read details repeats a level or reads the selected ability’s help. Hold Shift with that key to describe the fighter or companion.',
                 'Read Wendy’s status ' + gestureName(keys.wendyStatus) + '.'
             ],
             Controller: [

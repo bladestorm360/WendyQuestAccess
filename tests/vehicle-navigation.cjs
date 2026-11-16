@@ -134,12 +134,11 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     c.$gameSelfSwitches.setValue([113, 107, 'A'], true);
     const revealed = captureWorld(c).objects;
     assert(revealed.some(target => target.id === 108 && target.shoreMap === 171));
-    assert(!revealed.some(target => target.id === 110 || target.id === 51 || target.id === 71));
-    c.$gameSwitches.setValue(509, true);
-    assert(!captureWorld(c).objects.some(target => target.id === 51), 'an unlocated mention is insufficient');
-    c.$gameSwitches.setValue(619, true);
-    assert(captureWorld(c).objects.some(target => target.id === 51));
-    c.$gameSwitches.setValue(619, false);
+    assert(!revealed.some(target => target.id === 110 || target.id === 71));
+    assert.equal(revealed.find(target => target.id === 51)?.name, 'Secret Island boat landing');
+    c.$gameSwitches.setValue(224, true);
+    assert(!captureWorld(c).objects.some(target => target.id === 51), 'native landing interlock still applies');
+    c.$gameSwitches.setValue(224, false);
     c.$gameSelfSwitches.setValue([113, 107, 'A'], false);
     c.$gameParty._quests = previousQuests;
     const landing = directions(coast, 51);
@@ -170,6 +169,27 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     coast.source._list = null;
     coast.source._eventId = undefined;
     assert.equal(c.$gameSwitches.value(221), false);
+    assert.equal(captureWorld(c).objects.find(target => target.id === 13)?.name, 'Secret Island');
+    // This route goes north of the former discovery rectangle. Recheck the
+    // current destination at the exact tile where it used to disappear.
+    player.setPosition(47, 2);
+    const start = captureWorld(c);
+    const islandRoute = { x: start.x, y: start.y, event: 13, field: true };
+    assert.equal(solveRoute(coast.geometry, start.live, islandRoute).legs[0].direction, 8);
+    player.moveStraight(8);
+    settle(player);
+    player.updateNonmoving(true, false);
+    assert.deepEqual([player._x, player._y], [47, 1]);
+    const next = captureWorld(c);
+    const entrance = next.objects.find(target => target.id === 13 && target.category === 'exits');
+    assert.equal(entrance?.name, 'Secret Island');
+    assert.equal(next.objects.find(target => target.id === 90)?.name, 'Discovery marker');
+    const step = { x: 47, y: 1, event: 13, field: true, handoffs: entrance.handoffs };
+    assert.equal(solveRoute(coast.geometry, next.live, step).boundaryEvent, 90);
+    const reachable = findReachable(coast.geometry, next.live, {
+        x: 47, y: 1, candidates: [{ event: 13, handoffs: entrance.handoffs }]
+    });
+    assert.equal(reachable.available[0], 2, 'the reachable filter retains the entrance through its native marker');
     const discovery = directions(coast, 13, 'interrupted');
     const ruins = discovery.view.objects.filter(item => /^Lost Ruins \d+$/.test(item.name));
     assert.equal(ruins.length, 21);
@@ -410,6 +430,9 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         const player = east.player;
         c.$gamePlayer = town.player = player;
         player.setPosition(47, 27);
+        const townList = captureWorld(c, true, undefined, owner).objects;
+        assert(!townList.some(item => item.name.startsWith('Float Fort')));
+        assert(townList.some(item => item.category === 'exits' && item.name === 'West exit to world map'));
         ask('directions');
         const townPacket = packets[0];
         assert([14, 18, 19].includes(townPacket?.request.event));

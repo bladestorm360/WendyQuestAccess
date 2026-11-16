@@ -262,7 +262,9 @@ if sys.argv[2:] == ['targets']:
 
 
 methods = [sprite_method(battle, 'Sprite_BattleOption', name) for name in
-           ('hasFocus', 'focusGained', 'focusLost', 'getIsActive', 'canActivate', 'onClick', 'update')]
+           ('hasFocus', 'focusGained', 'focusLost', 'getIsActive', 'canActivate', 'onClick', 'update', 'setLockedText')]
+methods.extend(sprite_method(battle, 'Sprite_BattleScreenParticipant', name) for name in
+               ('battleOptionsActive', 'trySelectNextBattleOption'))
 methods.extend(native_text_methods())
 start = manager.index('BattleManager.update = function(')
 end = manager.index('\n};', start) + 3

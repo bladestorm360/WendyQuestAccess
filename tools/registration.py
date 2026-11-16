@@ -812,7 +812,8 @@ def battle_notification(original):
     # sprite advanced. Observe that exact option before native OK dispatch.
     command_ready = (b'(!this._wqaBattleCommandSeen||this._wqaBattleCommandEnabled!=='
                      b'(this._prerequisitesMet===true&&!this._isLocked))&&this._animationPositionTarget===1&&'
-                     b'this._nameSprite?._dirty===false&&SceneManager._scene?._wqaBattleStarted&&'
+                     b'(this._isLocked?this._levelLockedText:this._nameSprite)?._dirty===false&&'
+                     b'SceneManager._scene?._wqaBattleStarted&&'
                      b'BattleManager._phase==="input"&&BattleManager._wqaDialogueBusy===false&&'
                      b'SceneManager._scene._fadeDuration===0&&SceneManager._scene._fadeOpacity===0&&'
                      b'!SceneManager._nextScene&&!SceneManager._exiting&&!SceneManager._wqaNativeAutosaves&&'
@@ -962,6 +963,9 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
     attack_source = (b'wqaAction===this._action&&globalThis.WendyQuestAccessAttackSource?.('
                      b'_0x5a64fd,wqaPerformer,_0x15034e,wqaAction),')
     return insert(original, BATTLE_SHA, {
+        # Preserve the exact overlay returned after the native coroutine attaches it.
+        57087: b'const wqaBeefOverlay=',
+        57246: b'globalThis.WendyQuestAccessBeefOverlayReady?.(_0x3e461b,wqaBeefOverlay);',
         # The same effect also plays on actual counters. Mark only the native
         # skill animation dispatch, then pass its own newly attached particle.
         27379: b',true',

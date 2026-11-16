@@ -405,7 +405,17 @@ async function verifyEnemyBlockedBeacon() {
     assert.equal(adjacent.distance, 0);
     assert.equal(solveRoute(geometry, { ...world, events: [{ ...blocked, movingEnemy: false }] }, request).status, 'unreachable');
     geometry.cells.fill(15);
-    assert.equal(solveRoute(geometry, world, request).status, 'ready', 'an open detour takes priority');
+    assert.equal(solveRoute(geometry, world, request).status, 'ready', 'an open detour remains available outside dungeons');
+    const dungeon = { ...world, stableEncounters: true };
+    assert.deepEqual(solveRoute(geometry, dungeon, request), result, 'a dungeon route stops at the enemy despite the open detour');
+    const encounterCleared = solveRoute(geometry, { ...dungeon, events: [] }, { ...request, x: 1 });
+    assert.deepEqual(encounterCleared.legs, [{ direction: 6, tiles: 3 }], 'the original direction continues after combat');
+    const exit = { id: 480, x: 4, y: 0, normal: false, trigger: 1, action: true };
+    const remote = solveRoute(geometry, { ...dungeon, events: [blocked, exit] },
+        { x: 0, y: 0, field: true, entrances: [{ event: exit.id, rank: 1 }] });
+    assert.equal(remote.entrance, exit.id);
+    assert.equal(remote.needsEncounter, true);
+    assert.deepEqual(remote.legs, result.legs);
     geometry.cells.fill(0, 5);
 
     const map = c.$gameMap;
@@ -487,7 +497,11 @@ async function verifyColdBrewProgress() {
     const live = () => captureWorld(c, true, undefined, undefined, [], true).live;
     player.setPosition(22, 23);
     const first = { x: 22, y: 23, event: 10, field: true };
-    assert.deepEqual(solveRoute(geometry, live(), first).legs[0], { direction: 2, tiles: 1 });
+    assert.deepEqual(solveRoute(geometry, { ...live(), stableEncounters: false }, first).legs[0],
+        { direction: 2, tiles: 1 }, 'the original route took the south detour');
+    const initial = solveRoute(geometry, live(), first);
+    assert.equal(initial.status, 'enemyBlocked');
+    assert.equal(initial.boundary, 4, 'the dungeon route heads west to the encounter instead');
     assert(player.canPass(22, 23, 2));
     player.setPosition(22, 24);
     const enemy = gameMap.event(14);
@@ -495,7 +509,10 @@ async function verifyColdBrewProgress() {
     assert(enemy.canPass(21, 23, 2));
     enemy._y = 24;
     const after = { ...first, y: 24 };
-    assert.equal(solveRoute(geometry, live(), after).legs[0].direction, 8, 'the fresh detour walks back');
+    assert.equal(solveRoute(geometry, { ...live(), stableEncounters: false }, after).legs[0].direction, 8,
+        'the old enemy detour would have reversed the reported direction');
+    assert.equal(solveRoute(geometry, live(), after).status, 'enemyBlocked',
+        'a fresh request stops at the encounter without needing movement history');
     const continued = { ...after, followedDirection: 2 };
     const blocked = solveRoute(geometry, live(), continued);
     assert.deepEqual(blocked, { status: 'enemyBlocked', enemy: 14, boundary: 4, legs: [], distance: 0,

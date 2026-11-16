@@ -145,18 +145,20 @@ function routeThroughIce(geometry, live, request, cancelled, terrain = []) {
 function routeThroughTerrain(geometry, live, request, controls, cancelled, remoteAccess) {
     const plan = world => routeThroughControl(geometry, world, request, controls, cancelled) ||
         (!request.refresh && routeThroughIce(geometry, world, request, cancelled));
-    const direct = remoteAccess ? routeThroughControl(geometry, live, request, controls, cancelled, remoteAccess) : plan(live);
-    if (direct || cancelled()) return direct;
-    if (live.mode !== 'walk' || request.refresh || request.entrances || request.vehicle || request.area || request.motion ||
-        (!controls?.length && !live.events.some(event => event.meltable && !event.erased))) return null;
+    const canProject = live.mode === 'walk' && !request.refresh && !request.entrances && !request.vehicle &&
+        !request.area && !request.motion && (controls?.length || live.events.some(event => event.meltable && !event.erased));
+    const preferProjection = canProject && live.stableEncounters && !remoteAccess;
+    const direct = remoteAccess ? routeThroughControl(geometry, live, request, controls, cancelled, remoteAccess)
+        : preferProjection ? null : plan(live);
+    if (direct || !canProject || cancelled()) return direct;
     // Ice and a moving encounter can block different parts of the same
     // route. Use the relaxed world only to prove continuation. Verify the
     // first step on the unchanged snapshot before giving any instructions.
     const obstacles = new Set(encounterObstacles(live.events, request.event));
-    if (!obstacles.size) return null;
+    if (!obstacles.size) return preferProjection ? plan(live) : null;
     const candidate = plan({ ...live, events: live.events.filter(event => !obstacles.has(event)) });
-    if (!candidate || candidate.status === 'cancelled') return candidate;
-    if (!['controlRoute', 'iceRoute'].includes(candidate.status)) return null;
+    if (candidate?.status === 'cancelled') return candidate;
+    if (!candidate || !['controlRoute', 'iceRoute'].includes(candidate.status)) return preferProjection ? plan(live) : null;
     if (candidate.step) {
         const first = solveRoute(geometry, live, { x: request.x, y: request.y, event: candidate.event,
             field: true, stopBeforeEvent: true }, cancelled);

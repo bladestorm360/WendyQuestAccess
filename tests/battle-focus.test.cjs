@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
+const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
 const { createBattleFocus } = require('../src/battle/focus');
 const { nativeTextHost } = require('./native-text-host.cjs');
@@ -20,6 +21,7 @@ let activated = 0;
 let errors = 0;
 const c = vm.createContext({
     ...nativeTextHost(), Sprite_BattleOption: function () {}, Sprite_UIButton: function () {},
+    Sprite_BattleScreenParticipant: function () {},
     a2_0x990531() { throw Error('Unresolved battle property'); },
     a18_0x52f0af() { throw Error('Unresolved text property'); },
     SceneManager: { _scene: scene }, Graphics: { app: { stage: scene, renderer } },
@@ -32,7 +34,7 @@ const c = vm.createContext({
 
 c.Sprite_UIButton.prototype.update = function () {
     if (!paint) return;
-    for (const child of [this._nameSprite, this._subTextSprite, this._costTextSprite]) child?.update();
+    for (const child of [this._nameSprite, this._subTextSprite, this._costTextSprite, this._levelLockedText]) child?.update();
 };
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 
@@ -249,6 +251,53 @@ c.BattleManager.update(true);
 assert.equal(observer.controlOwner(scene), null);
 assert.equal(active.size, 0);
 assert.equal(messages.filter(text => text.startsWith('Enemy formation')).length, 1);
-console.log('Verified native battle command focus, paint, review, unavailable and accepted input, and phase retirement.');
+// Native Guard has an empty description and no Momentum cost in Wendy's Special menu.
+c.BattleManager._phase = 'input';
+scene._spriteset._subActorSprite = null;
+wendy._battleOptionsActive = 1;
+wendy._mainSprite._frame.x = 0;
+skill._followTarget = wendy;
+skill._subTextSprite = skill._costTextSprite = undefined;
+skill.focusGained();
+skill.update();
+renderer.emit('postrender');
+const guard = observer.controlOwner(scene);
+assert(guard);
+assert(observer.command(guard, 'details'));
+assert.equal(messages.at(-1), 'No description available.');
+assert(observer.command(guard, 'battleAppearance'));
+assert.match(messages.at(-1), /spatulas/);
+const specials = c.Sprite_BattleScreenParticipant.prototype;
+wendy.battleOptionsActive = specials.battleOptionsActive;
+wendy.battleOptionsActiveLookup = [];
+const load = name => JSON.parse(readFileSync(path.join(process.argv[2], 'package.nw/data', name + '.json'), 'utf8'));
+const actorClass = load('Classes')[load('Actors')[1].classId];
+const levels = [36, 37, 38].map(id => actorClass.learnings.find(learn => learn.skillId === id).level);
+assert.deepEqual(levels, [5, 10, 15]);
+const locked = levels.map(level => {
+    const option = command('Hidden ability name', true);
+    option._followTarget = wendy;
+    option._isLocked = true;
+    option._subTextSprite = text(option, 'Hidden help');
+    option._costTextSprite = text(option, 'x2');
+    option.AssertLockedSprite = () => { option._levelLockedText = text(option, ''); };
+    option.setLockedText(level);
+    assert.equal(option.canActivate(), false);
+    return option;
+});
+wendy.battleOptions[1] = [skill, ...locked];
+for (const option of locked) option.update();
+for (const [index, option] of locked.entries()) {
+    assert(specials.trySelectNextBattleOption.call(wendy, 1, 1), 'native focus includes locked rows');
+    assert(option.hasFocus());
+    option.update();
+    renderer.emit('postrender');
+    const level = 'Level ' + levels[index];
+    const heading = index === 0 ? 'Wendy, Battle commands, ' : '';
+    assert.equal(messages.at(-1), heading + level + ', locked, ' + (index + 2) + ' of 4');
+    assert(observer.command(observer.controlOwner(scene), 'details'));
+    assert.equal(messages.at(-1), level);
+}
+console.log('Verified native battle focus, Guard details, locked Special navigation and levels, accepted input and phase retirement.');
 console.log('Throttled first command update through synthetic render and focus receipt', firstFocus.toFixed(2), 'ms.');
 console.log('Throttled 600 stable frames', nativeFrames.toFixed(2), 'ms native,', modFrames.toFixed(2), 'ms enabled.');

@@ -13,6 +13,15 @@ const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave
 const { GATE_SWITCHES, BREAKFAST_MAPS } = require('./terrain-control-labels.cjs');
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
+// Authored combat routes through ruins, caves, mines and their approach maps.
+// The secret-cave stealth puzzle uses its separate motion solver.
+const DUNGEON_ROUTES = new Set([
+    15, 16, 19, 27, 36, 48, 52, 62, 87,
+    28, 32, 44, 50, 51, 53, 55,
+    93, 97, 104, 105,
+    165, 166, 167, 169, 171, 172, 173, 175, 176, 177, 179, 180
+]);
+
 function eventTarget(root, mode, event, entry, page, spoilers = false, questMarker = false) {
     const map = root.$gameMap._mapId;
     if ((!spoilers && concealedDestination(map, event)) || !pageHasInteraction(page) ||
@@ -170,10 +179,6 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         if (next) objects.push({ ...next, category: 'quests', questExit: true, eventAction: 'step',
             handoffs: transitions });
     }
-    if (!routesOnly && scene && mode === 'walk' && id === 25 && root.$gameSwitches?.value?.(38) === true) {
-        const west = nearestWestChillcrestExit(objects, player._y);
-        if (west) objects.push({ ...west, id: 'float-fort', event: west.id, name: 'Float Fort via west exit', floatFort: true });
-    }
     if (!routesOnly && scene && mode === 'walk' && BREAKFAST_MAPS.includes(id) &&
         !objects.some(item => item.category === 'quests')) {
         const objective = root.$gameParty?.getNav?.();
@@ -229,6 +234,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
     return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles,
         tileset: map._tilesetId, aircraft: aircraftAt(map),
         npcPassage: mode === 'walk' ? npcPassage(map) : undefined,
+        stableEncounters: mode === 'walk' && DUNGEON_ROUTES.has(id),
         ...(GATE_SWITCHES[id] ? { terrainMap: id, terrainSwitch: GATE_SWITCHES[id],
             terrainGate: root.$gameSwitches?.value?.(GATE_SWITCHES[id]) } : {}),
         ...(id === 55 ? { pullStage: root.$gameVariables?.value?.(4) } : {}),

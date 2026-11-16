@@ -769,25 +769,12 @@ function encounterObstacles(events, target) {
         !event.erased && event.id !== target && !event.rectangle && !Number.isInteger(event.tileFlag));
 }
 
-function solveRoute(geometry, snapshot, request, cancelled = () => false) {
-    if (cancelled()) return { status: 'cancelled' };
-    const world = composeWorld(geometry, snapshot, cancelled);
-    if (!world) return { status: 'cancelled' };
-    const result = solveWorldRoute(world, request, cancelled);
-    if (world.mode === 'walk' && request.field === true && ['unreachable', 'approachBlocked'].includes(result.status)) {
-        const prerequisite = npcPassageRoute(geometry, snapshot, world, request, cancelled);
-        if (prerequisite) return prerequisite;
-    }
-    const reversing = result.status === 'ready' && DIRECTIONS.includes(request.followedDirection) &&
-        result.legs[0]?.direction === 10 - request.followedDirection;
-    if (!(reversing || ['unreachable', 'approachBlocked'].includes(result.status)) || request.field !== true ||
-        world.mode !== 'walk' || request.area || request.entrances !== undefined || request.vehicle) return result;
-
-    // Only relax verified moving encounter tiles in a second worker solve.
-    // Keep static geometry, rectangles and floor events in both searches.
+function encounterRoute(geometry, snapshot, world, request, cancelled, reversing, stable) {
+    // Keep all other colliders and floor triggers in the planning copy.
+    // Live collision still determines how far the player can safely walk.
     const enemies = encounterObstacles(world.events, request.event);
     if (cancelled()) return { status: 'cancelled' };
-    if (!enemies.length) return result;
+    if (!enemies.length) return null;
     const occupied = new Map(enemies.map(event => [indexOf(world, event.x, event.y), event.id]));
     const excluded = new Set(enemies);
     const relaxed = composeWorld(geometry, { ...snapshot,
@@ -795,15 +782,18 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     if (!relaxed) return { status: 'cancelled' };
     const possible = solveWorldRoute(relaxed, request, cancelled);
     if (!['ready', 'interrupted'].includes(possible.status) || possible.reenter)
-        return possible.status === 'cancelled' ? possible : result;
+        return possible.status === 'cancelled' ? possible : null;
     // If Wendy already followed this route and an enemy now crosses it, a
     // fresh detour can undo that progress on every request. Offer the safe
     // prefix to the blocker if the relaxed route really continues forward.
     if (reversing && (possible.legs[0]?.direction ?? possible.boundary) === 10 - request.followedDirection)
-        return result;
+        return null;
     const legs = [];
     let cell = indexOf(world, request.x, request.y);
     let distance = 0;
+    const blocked = (enemy, boundary) => ({ status: 'enemyBlocked', enemy, boundary, legs, distance,
+        arrival: { x: cell % world.width, y: Math.floor(cell / world.width), facing: null },
+        ...(possible.entrance && { entrance: possible.entrance, approach: possible.approach, needsEncounter: true }) });
     for (const leg of possible.legs) {
         const heading = DIRECTIONS.indexOf(leg.direction);
         let walked = 0;
@@ -812,10 +802,9 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
             const next = step(world, cell, heading);
             if (next < 0) {
                 const enemy = occupied.get(offset(world, cell, heading));
-                if (!enemy) return result;
+                if (!enemy) return null;
                 if (walked) legs.push({ ...leg, tiles: walked });
-                return { status: 'enemyBlocked', enemy, boundary: leg.direction, legs, distance,
-                    arrival: { x: cell % world.width, y: Math.floor(cell / world.width), facing: null } };
+                return blocked(enemy, leg.direction);
             }
             cell = next;
             walked++;
@@ -829,10 +818,40 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
         const heading = DIRECTIONS.indexOf(possible.boundary);
         if (step(world, cell, heading) >= 0) return possible;
         const enemy = occupied.get(offset(world, cell, heading));
-        if (enemy) return { status: 'enemyBlocked', enemy, boundary: possible.boundary, legs, distance,
-            arrival: { x: possible.arrival.x, y: possible.arrival.y, facing: null } };
+        return enemy ? blocked(enemy, possible.boundary) : null;
     }
-    return result;
+    if (!stable) return null;
+    const heading = DIRECTIONS.indexOf(possible.arrival.facing);
+    const enemy = heading >= 0 && occupied.get(offset(world, cell, heading));
+    if (enemy && (possible.entrance || request.event)) {
+        const tiles = interactionTiles(world, cancelled, !!request.bumpDirections);
+        if (cancelled()) return { status: 'cancelled' };
+        const interaction = request.bumpDirections ? bumpEvent : buttonEvent;
+        if (interaction(world, tiles, cell, heading) === enemy)
+            return blocked(enemy, possible.arrival.facing);
+    }
+    return possible;
+}
+
+function solveRoute(geometry, snapshot, request, cancelled = () => false) {
+    if (cancelled()) return { status: 'cancelled' };
+    const world = composeWorld(geometry, snapshot, cancelled);
+    if (!world) return { status: 'cancelled' };
+    const onFoot = world.mode === 'walk' && request.field === true && !request.area && !request.vehicle;
+    const stable = onFoot && snapshot.stableEncounters === true;
+    const preferred = stable && encounterRoute(geometry, snapshot, world, request, cancelled, false, true);
+    if (preferred) return preferred;
+    const result = solveWorldRoute(world, request, cancelled);
+    const inaccessible = ['unreachable', 'approachBlocked'].includes(result.status);
+    if (world.mode === 'walk' && request.field === true && inaccessible) {
+        const prerequisite = npcPassageRoute(geometry, snapshot, world, request, cancelled);
+        if (prerequisite) return prerequisite;
+    }
+    if (!onFoot || stable || request.entrances !== undefined) return result;
+    const reversing = result.status === 'ready' && DIRECTIONS.includes(request.followedDirection) &&
+        result.legs[0]?.direction === 10 - request.followedDirection;
+    return reversing || inaccessible
+        ? encounterRoute(geometry, snapshot, world, request, cancelled, reversing, false) || result : result;
 }
 
 module.exports = { solveRoute, solveWorldRoute, encounterObstacles, findReachable, walkingLanding, routeGoals, inside };

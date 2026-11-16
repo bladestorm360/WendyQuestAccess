@@ -8,7 +8,7 @@ const { readBookmarks } = require('../src/world/bookmark-records');
 const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { mapPlace } = require('../src/world/map-banner');
-const { browse, createDestinationBrowser } = require('../src/world/destinations');
+const { activeMovingEnemy, browse, createDestinationBrowser } = require('../src/world/destinations');
 
 async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read) {
     const browser = createDestinationBrowser();
@@ -549,6 +549,14 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     for (const [map, id, x, y, progress, index] of [[51, 2, 5, 10, 0, 7], [53, 3, 7, 10, 1, 118],
         [53, 4, 7, 10, 1, 95], [55, 4, 8, 11, 2, 66]]) {
         const fixture = load(map, { variables: { 4: progress } });
+        if (map === 55) {
+            fixture.player.setPosition(x, y);
+            const result = solveRoute(fixture.geometry, captureWorld(c).live, { x, y, event: id, field: true });
+            assert.equal(result.status, 'enemyBlocked', 'the dungeon path to the pull handle stops before its encounter');
+            const enemy = fixture.gameMap.event(result.enemy);
+            assert(activeMovingEnemy(c, enemy));
+            Object.assign(enemy, { _erased: true, _through: true, _trigger: null, _pageIndex: -1 });
+        }
         const source = select(fixture, id, [x, y], 'Pull handle', 'objects');
         let result;
         c.$gameVariables.setValue = (...values) => { result = values; };

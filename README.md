@@ -34,7 +34,7 @@ Confirm to start the timing meter. Confirm again for power, then for accuracy. *
 - **Maps and diagrams** describe the open World Atlas, Cavern Map, Ruins Map or map board. The Atlas includes your position, the quest pin, the current objective and nearby landmarks when shown.
 - **Inventory and Equipment** read the selected item’s description and any displayed equipment comparison.
 - **Battle Bag** reads the selected item’s description and effects.
-- **Battle commands** describe the active fighter’s appearance and visible conditions, and read the command’s help and cost where shown. In **Special**, **I** reads the highlighted ability. **Shift+I** describes the fighter or companion.
+- **Battle commands** describe the active fighter’s appearance and visible conditions, and read the command’s help and cost where shown. In **Special**, move down through the rows to hear any locked ability's required level. **I** repeats the shown level or reads the highlighted ability's help. **Shift+I** describes the fighter or companion.
 - **Battle targets** describe the selected enemies and read their shown HP percentages and conditions.
 - **Shops** read the item description, owned count, gold balance and equipment comparison where shown. While choosing a quantity, **I** also repeats the amount and total price.
 - **Pause menu Save** reviews the latest manual save result when Save is selected.

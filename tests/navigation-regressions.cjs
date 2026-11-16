@@ -136,6 +136,17 @@ async function verifyNavigationAuditFixes(c, load, verifyRoute, verifyWorker, re
         const route = { x, y, event, field: true, bumpDirections: target?.eventAction === 'bump' ? 15 : undefined,
             stopBeforeEvent: target?.eventAction === 'step' };
         assert(['unreachable', 'approachBlocked'].includes(solveRoute(fixture.geometry, view.live, route).status));
+        if (map === 55 && event === 1) {
+            await verifyWorker(fixture, route, view.live, result => {
+                assert.equal(result.status, 'enemyBlocked');
+                assert.deepEqual(result.terrain, { status: 'controlRoute', event: control });
+                verifyRoute(fixture, { x, y, targetX: result.arrival.x, targetY: result.arrival.y },
+                    { ...result, status: 'ready' });
+                const enemy = fixture.gameMap.event(result.enemy);
+                Object.assign(enemy, { _erased: true, _through: true, _trigger: null, _pageIndex: -1 });
+            });
+            view.live = captureWorld(c, true, undefined, undefined, [], true).live;
+        }
         await verifyWorker(fixture, route, view.live, result => {
             assert.equal(result.status, status, 'map ' + map);
             assert.equal(result.event, control);
@@ -218,13 +229,27 @@ async function verifyNavigationAuditFixes(c, load, verifyRoute, verifyWorker, re
     ]) {
         const { fixture, view } = at(id, x, y, state);
         const transfer = regionalTransfer(fixture, 86);
-        await verifyWorker(fixture, { x, y, field: true, transfer }, view.live, result => {
-            assert.equal(result.status, status, 'regional route on ' + id);
-            assert.equal(result.entrance, entrance);
-            if (boundary) assert.equal(result.boundaryEvent, boundary);
-            verifyRoute(fixture, { x, y, targetX: result.arrival.x, targetY: result.arrival.y },
-                { ...result, status: 'ready', arrival: { ...result.arrival, facing: null } });
-        });
+        let live = view.live;
+        for (let cleared = 0; ; cleared++) {
+            let blocker;
+            await verifyWorker(fixture, { x, y, field: true, transfer }, live, result => {
+                verifyRoute(fixture, { x, y, targetX: result.arrival.x, targetY: result.arrival.y },
+                    { ...result, status: 'ready', arrival: { ...result.arrival, facing: null } });
+                assert.equal(result.entrance, entrance);
+                if (id === 87 && status !== 'enemyBlocked' && result.status === 'enemyBlocked') {
+                    assert.equal(result.needsEncounter, true);
+                    blocker = fixture.gameMap.event(result.enemy);
+                    assert(live.events.some(event => event.id === result.enemy && event.movingEnemy));
+                    return;
+                }
+                assert.equal(result.status, status, 'regional route on ' + id);
+                if (boundary) assert.equal(result.boundaryEvent, boundary);
+            });
+            if (!blocker) break;
+            assert(cleared < 8, 'verified handoff after bounded encounter removals');
+            Object.assign(blocker, { _erased: true, _through: true, _trigger: null, _pageIndex: -1 });
+            live = captureWorld(c, true, undefined, undefined, [], true).live;
+        }
     }
     const returnSite = at(113, 26, 39, { switches: [97, 522] });
     for (const [id, x, y] of startingPoints) {

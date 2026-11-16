@@ -634,6 +634,10 @@ function boot(root, nodeRequire, nodeProcess) {
         try { skillEffects?.clapback(actor, sprite); } catch { skillEffects?.leave(root.SceneManager._scene); }
     };
 
+    root.WendyQuestAccessBeefOverlayReady = function (actor, sprite) {
+        try { skillEffects?.beefOverlay(actor, sprite); } catch { skillEffects?.leave(root.SceneManager._scene); }
+    };
+
     root.WendyQuestAccessQuestPaint = function (window) {
         try { return quests?.paint(window); } catch { return null; }
     };

@@ -108,7 +108,7 @@ function transferRoute(base, map, live, request, transfer, cancelled) {
     const discoveries = Array.isArray(transfer.discoveries) && transfer.discoveries.length <= 24
         ? transfer.discoveries : undefined;
     const result = solveRoute(base, live, { ...request, entrances, groundEntrances, discoveries }, cancelled);
-    if (regional && live.mode === 'walk' && ['ready', 'unreachable', 'unavailable'].includes(result.status)) {
+    if (regional && live.mode === 'walk' && ['ready', 'enemyBlocked', 'unreachable', 'unavailable'].includes(result.status)) {
         // An immediately reachable return to the last shore can be a worse
         // route than the next verified encounter or floor handoff ahead.
         const rank = entrances.find(edge => edge.event === result.entrance && edge.approach === result.approach)?.rank ?? Infinity;

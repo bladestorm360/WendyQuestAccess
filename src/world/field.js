@@ -776,10 +776,6 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return remoteDirections(job, snapshot, { map: target.shoreMap, name: target.name },
                 { shore: { event: target.id, map: target.shoreMap, name: target.name }, trail: [] });
         }
-        if (target.floatFort) {
-            terrainJourney.begin('floatFort', snapshot.map, target, 113);
-            return resumeTerrainJourney(job, snapshot);
-        }
         if (snapshot.map === 113 && snapshot.mode === 'walk' && target.id === FLOAT_FORT_ENTRANCE &&
             root.$gameSwitches?.value?.(38) === false)
             return status(job, 'The road to Float Fort opens after you obtain the Frosty Stone.');

@@ -193,3 +193,7 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Current Steam deployment](docs/deployment.md#airship-landing-and-sunrise-bay) verifies the airship and Sunrise Bay batch and records the preceding recovery copy.
 
 [NPC passages and the Brekky Byway barrels](docs/navigation-audit.md#npcs-blocking-passages) records verified blocker placement and the ordered bridge and ice checks. [Food-themed terrain](docs/navigation.md#food-themed-terrain-and-current-bridge-art) records the map art audit and live bridge state. [Companion weapon artwork](docs/battle.md#baconator-and-frostyna-weapon-artwork) records the battle and portrait observations.
+
+[Enemy food and gear audit](docs/battle.md#visual-descriptions-while-targeting) records the 32 native artwork checks and the on-demand readout.
+
+[Dungeon encounters and Secret Island](docs/navigation-audit.md#dungeon-encounters-and-secret-islands-overworld-approach) records the route change, the hidden-at-the-dock regression and the Float Fort handoff. [Battle animation and Special](docs/battle.md#wheres-the-beef-battle-animation) records visible captions and lock levels.

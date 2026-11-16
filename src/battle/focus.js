@@ -75,9 +75,15 @@ function createBattleFocus(root, host, notifications, preferences, onReady) {
 
     function enabled(option) { return option._prerequisitesMet === true && !option._isLocked; }
 
+    function optionLabel(option) {
+        // Locked cards display the level sprite in place of the skill name.
+        return drawnText(option, option._isLocked ? option._levelLockedText : option._nameSprite, 96);
+    }
+
     function live(page) {
         return ready(page.scene) && optionGroup(page.scene, page.option) === page.group &&
-            drawnText(page.option, page.option._nameSprite, 96) === page.name && enabled(page.option) === page.enabled;
+            optionLabel(page.option) === page.name && enabled(page.option) === page.enabled &&
+            !!page.option._isLocked === page.locked;
     }
 
     function show(page, record) {
@@ -85,31 +91,32 @@ function createBattleFocus(root, host, notifications, preferences, onReady) {
         page.epoch = notifications.open(record, () => current === page && live(page));
     }
 
-    function details(page) {
+    function details(page, empty = 'No details here.') {
         return page.lines.length ? { kind: 'menuDetails', lines: page.lines } :
-            { kind: 'menuReview', name: 'No details here.' };
+            { kind: 'menuReview', name: empty };
     }
 
     function publish(scene, option) {
         if (!ready(scene)) return false;
         const group = optionGroup(scene, option);
-        const name = drawnText(option, option._nameSprite, 96);
+        const name = optionLabel(option);
         if (!group || !name) return false;
-        const subtext = drawnText(option, option._subTextSprite, 384);
-        const cost = drawnText(option, option._costTextSprite, 32);
-        const lines = reviewLines([...subtext.split(/\r?\n/, 7), cost && 'Cost ' + cost]);
+        const locked = !!option._isLocked;
+        const subtext = locked ? '' : drawnText(option, option._subTextSprite, 384);
+        const cost = locked ? '' : drawnText(option, option._costTextSprite, 32);
+        const lines = locked ? [name] : reviewLines([...subtext.split(/\r?\n/, 7), cost && 'Cost ' + cost]);
         if (current) retire(current.scene, current.option);
-        const page = current = { kind: 'battle', scene, option, group, name, enabled: enabled(option), lines,
+        const page = current = { kind: 'battle', scene, option, group, name, enabled: enabled(option), locked, lines,
             position: 0, epoch: 0, hasReview: lines.length > 0 };
         option._wqaBattleCommandSeen = true;
         option._wqaBattleCommandEnabled = page.enabled;
         scene._wqaControllerReady = scene._wqaBattleFocusActive = scene._wqaPresentation = true;
-        const choices = group.filter(item => item && drawnText(item, item._nameSprite, 96));
+        const choices = group.filter(item => item && optionLabel(item));
         const settings = preferences();
         const screen = spokenGroup?.group === group ? '' : 'Battle commands';
         spokenGroup = { scene, group };
         const actor = screen && portraitActor(scene, option._followTarget)?.name;
-        const focus = { kind: 'menuFocus', name, screen, actor, enabled: page.enabled,
+        const focus = { kind: 'menuFocus', name, screen, actor, enabled: page.enabled, locked,
             position: choices.indexOf(option) + 1, total: choices.length, indexed: settings.indexing };
         const opening = spokenFormations.has(scene) ? null : formation(scene);
         if (opening) {
@@ -117,7 +124,7 @@ function createBattleFocus(root, host, notifications, preferences, onReady) {
             show(page, opening);
             notifications.focus(page.epoch, { ...focus, append: true });
         } else show(page, focus);
-        if (lines.length && settings.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
+        if (lines.length && !locked && settings.autodetail) notifications.focus(page.epoch, { ...details(page), append: true });
         onReady?.(scene);
         return true;
     }
@@ -155,9 +162,10 @@ function createBattleFocus(root, host, notifications, preferences, onReady) {
                 const sprite = page.option._followTarget;
                 const companion = sprite === page.scene._spriteset?._subActorSprite;
                 // Wendy's native Special button opens command group one.
-                if (action === 'details' && page.lines.length && (companion || sprite._battleOptionsActive === 1))
-                    show(page, details(page));
-                else {
+                const special = !companion && sprite._battleOptionsActive === 1;
+                if (action === 'details' && (page.locked || special || (companion && page.lines.length))) {
+                    show(page, details(page, special ? 'No description available.' : undefined));
+                } else {
                     const appearance = partyAppearance(page.scene, sprite);
                     if (action === 'battleAppearance' && !appearance) return false;
                     show(page, appearance || details(page));
