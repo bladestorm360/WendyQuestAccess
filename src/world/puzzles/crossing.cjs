@@ -320,7 +320,7 @@ function studyCrossing(world, origin, motion, candidate, cancelled) {
         if (i + 1 < headings.length) {
             const turning = headings[i] !== headings[i + 1];
             if (candidate.escape) latest += turning ? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace;
-            else if (turning) latest += TIMING_CUE.turnGrace;
+            else if (turning) latest += candidate.turnGrace ?? TIMING_CUE.turnGrace;
         }
         ranges.push({ cell, from, until: latest, camera });
     }
@@ -511,7 +511,7 @@ function openingFor(world, motion, player, choices, cancelled) {
             }
             return { direction: DIRECTIONS[candidate.heading], tiles: candidate.count, headings: candidate.headings, escape: candidate.escape, terminal: candidate.terminal,
                 alternate: candidate.heading !== choices[0].heading, pace: candidate.pace,
-                from, through, stamps };
+                ...(candidate.turnGrace === undefined ? {} : { turnGrace: candidate.turnGrace }), from, through, stamps };
         }
         if (advancePatrols(waiting) !== 'settled') break;
     }
@@ -538,7 +538,8 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     const stops = crossingStops(world.player);
     const { patrolGuidance, timingDirection, timingPace: pace } = request;
     const pocket = request.timingPocket === true;
-    if (pace !== undefined && pace !== 'walk' && pace !== 'dash') return { status: 'unavailable' };
+    if (pace !== undefined && pace !== 'walk' && (pace !== 'dash' || !motion.dash))
+        return { status: 'unavailable' };
     const fixedHeading = DIRECTIONS.indexOf(timingDirection);
     const unsafe = patrolGuidance && (fixedHeading < 0 || request.timingHeadings) && !motion.barrier &&
         patrolCoverage(world.patrol, motion.patrols, cancelled);
@@ -656,7 +657,7 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     const exposed = unsafe?.[origin] === 1;
     const unsafeLanding = patrolGuidance && fixedHeading < 0 && unsafe?.[crossing.cell] && !crossing.terminal;
     if (unsafeLanding && !exposed) return { status: 'unsafeCrossing', ...selected };
-    const paced = motion.dash && crossing?.headings && !exposed;
+    const paced = crossing?.headings && !exposed;
     if (request.timingCue === true) {
         const choices = crossing ? unsafeLanding ? [] : [crossing] : candidates.filter(candidate => candidate.count === 1);
         if (exposed) {
@@ -675,16 +676,27 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
             if (opening) return { status: 'timedCue', opening, ...selected };
         }
         if (paced && (fixedHeading < 0 || pace) && !cancelled()) {
-            // Isolate the pace only when one constant native speed can
-            // qualify the whole crossing. Rechecks keep the spoken pace.
+            // The longer forecast can qualify a narrow opening for one
+            // constant speed. On retail Wendy Quest only walking is available.
             const options = [];
-            for (const choice of pace ? [pace] : ['walk', 'dash']) {
+            const paces = pace ? [pace] : motion.dash ? ['walk', 'dash'] : ['walk'];
+            for (const choice of paces) {
                 const candidate = { ...crossing, pace: choice };
                 const singleSpeed = { ...motion, dash: false, speed: motion.speed + (choice === 'dash' ? 1 : 0) };
                 if (studyCrossing(world, origin, singleSpeed, candidate, cancelled)) options.push(candidate);
             }
             const opening = options.length && openingFor(world, forecast, player, options, cancelled);
             if (opening) return { status: 'timedCue', opening, ...selected };
+            if (!motion.dash && (!pace || pace === 'walk') && !cancelled()) {
+                // Allow an earlier turn ping when the guard can close the
+                // lane before a longer pause would finish. Reserve the next
+                // direction during interpolation of the previous tile.
+                const early = { ...crossing, pace: 'walk', turnGrace: TIMING_CUE.earlyTurnGrace };
+                if (studyCrossing(world, origin, motion, early, cancelled)) {
+                    const opening = openingFor(world, forecast, player, [early], cancelled);
+                    if (opening) return { status: 'timedCue', opening, stopAtPocket: true, ...selected };
+                }
+            }
         }
         if (cancelled()) return { status: 'cancelled' };
     }

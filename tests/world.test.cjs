@@ -232,7 +232,7 @@ function verifyWallFeedback() {
             for (const record of output.values()) record.until = until;
             return output.size > 0;
         },
-        play(_scene, _hrtf, cue, gain, bearing, ready, _complete, source, pitch, until) {
+        play(_scene, _hrtf, cue, gain, bearing, ready, _complete, source, pitch = 1, until) {
             assert(ready());
             const record = { cue, gain, bearing, source, pitch, until, ready };
             calls.push(record);
@@ -261,18 +261,6 @@ function verifyWallFeedback() {
     c.Graphics._wqaFootstepsEnabled = true;
     scene._wqaFieldReady = true;
     const { gameMap, player } = load(19);
-    const tracedSteps = [];
-    scene._wqaDashTrace = true;
-    c.WendyQuestAccessDashTraceStarted = owner => {
-        assert.equal(owner, scene);
-        assert(player.isMoving());
-        tracedSteps.push(['start', !!player._dashing]);
-    };
-    c.WendyQuestAccessDashTraceLanded = owner => {
-        assert.equal(owner, scene);
-        assert(!player.isMoving());
-        tracedSteps.push(['land', !!player._dashing]);
-    };
     const place = (x, y, dir = 2) => Object.assign(player, { _x: x, _y: y, _realX: x, _realY: y,
         _direction: dir, _moveSpeed: 4, _followers: { areGathering: () => false, updateMove() {} } });
     const press = (direction, duringTile) => {
@@ -315,11 +303,11 @@ function verifyWallFeedback() {
     assert.deepEqual(north.bearing, [0, 0, 1]);
     assert.equal(north.until, 4500);
     now = 1850;
-    assert.equal(press(6, () => { shift = false; }), 8);
+    assert.equal(press(6, () => { shift = false; }), 16);
     assert.equal(output.get(CUE.wallNorth), north, 'same wall extends without restarting');
     assert.equal(north.until, 5350);
     const contacts = calls.filter(call => call.source === 'footstep');
-    assert.deepEqual(contacts.map(call => [call.bearing[0], call.pitch]), [[-0.25, 1], [0.25, 1.2]]);
+    assert.deepEqual(contacts.map(call => [call.bearing[0], call.pitch]), [[-0.25, 1], [0.25, 1]]);
     assert(contacts[1].ready(), 'a completed pip remains admitted on the following movement update');
     now = 1950;
     assert(!contacts[1].ready(), 'do not play a step late after an audio stall');
@@ -328,10 +316,6 @@ function verifyWallFeedback() {
     assert.equal(north.until, 5350, 'blocked movement does not extend wall playback');
     assert.equal(output.get(CUE.wallNorth), north, 'facing the same wall does not restart its loop');
     assert.equal(calls.filter(call => call.source === 'footstep').length, 2);
-    assert.deepEqual(tracedSteps, [['start', false], ['land', false], ['start', true], ['land', true]]);
-    scene._wqaDashTrace = false;
-    delete c.WendyQuestAccessDashTraceStarted;
-    delete c.WendyQuestAccessDashTraceLanded;
     now = 5349;
     wall.expire(scene);
     assert(output.size > 0);
@@ -421,7 +405,7 @@ function verifyWallFeedback() {
     scene._wqaFieldReady = false;
     c.Graphics._wqaWallEnabled = false;
     c.Graphics._wqaFootstepsEnabled = false;
-    console.log('Verified native walking, dash footstep cadence and mid-tile Shift changes, wall fade and confirmed wall bumps.');
+    console.log('Verified native walking and consistent footstep cadence with either Shift state, wall fade and confirmed wall bumps.');
 }
 
 async function verifyEnemyBlockedBeacon() {
@@ -949,7 +933,6 @@ async function verifyPatrolGuidance() {
         for (let check = 0; check < 90; check++) {
             const origin = [cave.player.x, cave.player.y];
             const current = { ...request, ...motionRequest(cave, actors), timingCue: true };
-            current.motion.dash = true;
             const next = previewCrossing(cave.geometry, snapshot(cave), current);
             let directions = [];
             let wait = 0;
@@ -981,7 +964,6 @@ async function verifyPatrolGuidance() {
     const initial = load(196);
     const initialActors = configureMotion(initial, 6, 30, 0, 24);
     const roomRequest = { ...motionRequest(initial, initialActors), event: 20, field: true, patrolGuidance: true, timingCue: true };
-    roomRequest.motion.dash = true;
     const roomPlan = previewCrossing(initial.geometry, snapshot(initial), roomRequest);
     assert.equal(roomPlan.status, 'timedCue');
     assert.deepEqual(roomPlan.opening.headings, [1, 3, 3, 3, 3, 3, 2]);
@@ -989,11 +971,11 @@ async function verifyPatrolGuidance() {
     assert.equal(formatSpeech({ kind: 'timedCue', direction: 4, headings: roomPlan.opening.headings, waiting: true }),
         'Wait on this tile. On the ping, go 1 west, then 5 north, then 1 east. Stop there and request directions again.');
     for (const delay of [roomPlan.opening.from, roomPlan.opening.through - 30]) {
-        for (const [mask, stepFrames] of [[0, 16], [127, 8]]) {
+        for (const mask of [0, 127]) {
             for (const pause of [0, 18]) {
                 const replay = load(196);
                 const guards = configureMotion(replay, 6, 30, 0, 24);
-                const frames = delay + 7 * stepFrames + 2 * pause + 45;
+                const frames = delay + 7 * 16 + 2 * pause + 45;
                 assert.equal(verifyMotion(replay, guards, frames, roomPlan.opening.headings, delay, mask, pause), frames);
                 assert.deepEqual([replay.player.x, replay.player.y], [6, 25]);
             }
@@ -1012,7 +994,6 @@ async function verifyPatrolGuidance() {
     let refugeRequest;
     for (let n = 0; n < 25; n++) {
         refugeRequest = { ...motionRequest(north, northGuards), event: 20, field: true, patrolGuidance: true, timingCue: true };
-        refugeRequest.motion.dash = true;
         refuge = previewCrossing(north.geometry, snapshot(north), refugeRequest);
         assert.equal(refuge.opening?.tiles ?? refuge.tiles, 4, 'cross to the side refuge in four tiles');
         if (refuge.status === 'timedCue') break;
@@ -1055,7 +1036,7 @@ async function verifyLiveCrossing() {
     assert.equal(captureMotion(c, c.Graphics), null, 'native entry and lighting pages keep timing closed');
     for (const id of [1, 3, 23, 24]) cave.gameMap._events[id]._erased = true;
     const motion = captureMotion(c, c.Graphics);
-    assert(motion?.dash && motion.patrols.length === actors.length);
+    assert(motion?.dash === false && motion.patrols.length === actors.length);
     const request = { x: 5, y: 30, event: 21, motion };
     const data = snapshot(cave);
     const detour = previewCrossing(cave.geometry, data, request);

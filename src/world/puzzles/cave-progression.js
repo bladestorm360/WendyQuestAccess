@@ -17,7 +17,7 @@ const CHASES = { 3: [4, 4], 8: [9, 3], 10: [11, 3], 12: [13, 3], 14: [24, 3],
     15: [26, 3], 16: [27, 3], 17: [28, 3], 18: [29, 3] };
 const CHASE_FLOORS = new Map(Object.values(CHASES));
 // Native chase triggers launch a scripted route behind Wendy. Give the
-// manually verified dash to the next trigger before stepping into it.
+// verified continuous walk to the next trigger before stepping into it.
 const CHASE_LEGS = {
     4: [[8, 5], [4, 4], [8, 2]],
     9: [[8, 6], [6, 1], [8, 6], [6, 4]],
@@ -35,7 +35,7 @@ const HEADINGS = { 2: 'south', 4: 'west', 6: 'east', 8: 'north' };
 function chaseDirections(eventId) {
     const legs = CHASE_LEGS[eventId];
     if (!legs) return '';
-    return 'Dash ' + legs.map(([heading, tiles]) => tiles + ' ' + HEADINGS[heading]).join(', then ') +
+    return 'Walk ' + legs.map(([heading, tiles]) => tiles + ' ' + HEADINGS[heading]).join(', then ') +
         (eventId === 29 ? ' to the next room.' : ' to the next chase trigger.');
 }
 
@@ -115,7 +115,7 @@ function activeDistraction(map, data, id) {
 function chaseContinuation(root, action) {
     const { event, list, chase } = action;
     const map = root.$gameMap;
-    if (map?._mapId !== 201 || chase === undefined || !event._erased || root.$dataMap.disableDashing ||
+    if (map?._mapId !== 201 || chase === undefined || !event._erased ||
         root.$gamePlayer._moveSpeed !== 4 || !ownsRoute(map, list, chase)) return null;
     const id = event._eventId;
     const next = CHASE_SEQUENCE[CHASE_SEQUENCE.indexOf(id) + 1];

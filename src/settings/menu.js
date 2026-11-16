@@ -240,7 +240,7 @@ function createSettingsMenu(root, host) {
                 'Review previous and next lines with ' + gestureName(keys.reviewPrevious) + ' and ' +
                     gestureName(keys.reviewNext) + '. First and last with ' + gestureName(keys.reviewFirst) + ' and ' +
                     gestureName(keys.reviewLast) + '.',
-                'Use Read details on the field for the full quest tracker. Shift with an arrow stays available for movement on the field. In dialogue, Read details describes the speaker or the item icon on an acquisition message.',
+                'Use Read details on the field for the full quest tracker. Movement keys stay available on the field. In dialogue, Read details describes the speaker or the item icon on an acquisition message.',
                 'Use Read details for the displayed World Atlas, cavern and ruins maps, and ending and credit cards.',
                 'Use Read details for inventory, Battle Bag and shop items, equipment comparisons, purchase quantities, the last manual save result, and coupon responses.',
                 'Under Audio, enable Cutscene descriptions for an independent voice during selected story animations. Adjust its speed and volume there.'
@@ -257,7 +257,7 @@ function createSettingsMenu(root, host) {
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
                 'Turn on Spoiler mode under Navigation to find marked optional secrets before discovering them in the game.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
-                'Hold Shift while moving to dash where the game allows it. Release Shift for cave crossings that call for walking.',
+                'Use normal walking speed for cave crossings. Follow the directional pings and release movement at the thud.',
                 'Toggle the beacon ' + binding('beaconToggle') + '. Toggle wall sounds ' + binding('wallToggle') +
                     '. Stop current navigation ' + binding('beaconStop') + '. Toggle footstep sounds under Audio.'
             ],
@@ -754,7 +754,6 @@ function createSettingsMenu(root, host) {
     }
 
     function keydown(event) {
-        host.dashTraceKey?.(event, true);
         const physical = event.code || event.key;
         if (held.has(physical)) {
             event.preventDefault();
@@ -842,7 +841,6 @@ function createSettingsMenu(root, host) {
     root.addEventListener('keydown', keydown, true);
     // Native keyup may still need to retire a key pressed before the menu.
     root.addEventListener('keyup', event => {
-        host.dashTraceKey?.(event, false);
         if (!down.size && !held.size) return;
         const physical = event.code || event.key;
         down.delete(physical);

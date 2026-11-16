@@ -88,7 +88,7 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
         }
         const outcome = progress.settle(scene);
         assert.equal(outcome.arrived, false);
-        assert.match(outcome.outcome, /^A mech started chasing you\. Dash /);
+        assert.match(outcome.outcome, /^A mech started chasing you\. Walk /);
         assert.equal(progress.settle(scene), null);
     }
     for (const [id, gate, routes] of [[5, 582, [25]], [10, 583, [6]], [19, 584, [8, 25, 45]]]) {

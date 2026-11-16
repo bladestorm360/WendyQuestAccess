@@ -665,3 +665,15 @@ November 16, 2026. The local Steam diagnostic build updated the plugin bundle an
 - The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-dash-trace/rollback-latest with plan SHA-256 `e94c544f1e91bbca8173a9d44469ce7244dcf460472c1d02d9e4720ff07f0b18`.
 
 Installed readback verified 16 native scripts, 45 payload files and 241 geometry entries. Four save and configuration hashes matched across installation. Cleanup removed 24,469,635 bytes of build and test output and the 10,964,620-byte superseded rollback. The recorder runs in the game session when a supported cave room is active and writes to the installed WendyQuestAccess-field.log. The live renderer PID and first comparison are pending the owner’s next session. [Verification scope](feature-checkpoint.md#live-keyboard-dash-trace)
+
+### Retail walking speed and cave routing
+
+November 16, 2026. The Steam installation now uses the cave guide verified against the active retail movement methods. The two temporary native trace transforms were restored to their pre-trace hashes. The exact installer rehearsal, installed-method world suite and matching NW.js smoke checks passed. Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.328.0 found no threats in the exact candidate.
+
+- Installed plan SHA-256 `604c2f72b6f8e61be7d5600902c0bd70fb30911e488b5589fc835b309f74ad36`
+- Plugin SHA-256 `67a666fc939b7bc2c2b45c40d46ef74f68ae910b64a1ccda4817343163a9c802`
+- Crossing worker SHA-256 `86a7d4f709e7dbdc404a88689e2b38cf5ddc2f1a363ea456dc1a2dba2ff0fefe`
+- Patrol motion worker SHA-256 `4224332a42a41aa9c135f6ce431ade93fb722b2d97ce364ee94ecd88547e4475`
+- The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-retail-pace/rollback-latest with plan SHA-256 c7236bd23e1e2a8b0c236fc7754446539c7107e9743622db42c8d02c2892347c. The prior source revision is a21c367582cf1386f637a43ddef3bbfe13652369.
+
+Readback verified 16 native scripts, 45 payload files and 241 geometry entries. Four save and configuration hashes matched across installation. Cleanup removed 24,824,166 bytes of build, staging and test output and the 10,963,694-byte superseded recovery. The exact scan receipt and the four lines from the live speed comparison remain in the C: analysis workspace. [Cave route and verification scope](feature-checkpoint.md#retail-walking-speed-and-cave-routing)

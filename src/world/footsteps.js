@@ -4,7 +4,6 @@ const { travelMode } = require('./vehicle-navigation');
 const { patrolDestination } = require('./puzzles/cave');
 
 const FEET = [[-0.25, -1, 0.15], [0.25, -1, 0.15]];
-const DASH_PITCH = 1.2;
 const STEP_FRESH_MS = 100;
 
 function createFootsteps(root, fieldReady, audio, preferences, now = () => performance.now()) {
@@ -100,15 +99,11 @@ function createFootsteps(root, fieldReady, audio, preferences, now = () => perfo
             const current = owner;
             const map = root.$gameMap;
             scene._wqaPresentation = true;
-            // The native dash flag stays fixed during interpolation. Sample
-            // it at tile contact so a Shift change mid-tile affects the next
-            // step's sound only when the game has changed speed.
-            const pitch = player.isDashing() ? DASH_PITCH : 1;
             const expires = now() + STEP_FRESH_MS;
             if (audio.play(scene, hrtf, audio.cues.footstep, footstepVolume / 100, FEET[current.side],
                 () => now() < expires && owner === current && root.$gameMap === map &&
                     root.$gamePlayer === player && ready(scene),
-                null, 'footstep', pitch)) current.side ^= 1;
+                null, 'footstep')) current.side ^= 1;
         }
     };
 }

@@ -226,4 +226,6 @@ The [footstep cadence checkpoint](docs/feature-checkpoint.md#wendys-footstep-cad
 
 The [dash input and manual cave cues checkpoint](docs/feature-checkpoint.md#dash-input-and-manual-cave-stop-cues) records the field quest binding conflict, native keyboard replay, and manual release cues. [Current Steam deployment and recovery](docs/deployment.md#dash-input-and-manual-cave-stop-cues) records the verified install and rollback.
 
-The [live keyboard dash trace](docs/feature-checkpoint.md#live-keyboard-dash-trace) records the observed Shift modifier, native action and completed step timing in the first two Exclamation Point Cave rooms. The installed build is ready for the owner’s next keyboard comparison.
+The [live keyboard dash trace](docs/feature-checkpoint.md#live-keyboard-dash-trace) records the observed Shift modifier, native action and completed step timing in the first two Exclamation Point Cave rooms. The owner’s comparison was recorded and the later retail walking-speed update retired the recorder.
+
+The [retail walking speed checkpoint](docs/feature-checkpoint.md#retail-walking-speed-and-cave-routing) records the live Shift comparison, active MapScene speed override and the verified walking routes. It supersedes the earlier dash assumptions and ends the temporary diagnostic capture. [Current Steam deployment and recovery](docs/deployment.md#retail-walking-speed-and-cave-routing) records installed hashes, the scan and the single rollback.

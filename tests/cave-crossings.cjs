@@ -35,10 +35,9 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
         return { run, guards };
     }
 
-    async function follow(run, guards, event, observe = () => {}) {
+    async function follow(run, guards, event, observe = () => {}, floorTriggers = []) {
         for (let attempt = 0; attempt < 100; attempt++) {
             const request = { ...motionRequest(run, guards), event, field: true, patrolGuidance: true, timingCue: true };
-            request.motion.dash = true;
             const live = liveState();
             const result = previewCrossing(run.geometry, live, request);
             await observe(result, request, live);
@@ -55,19 +54,34 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                 steps = [];
                 delay = TIMING_CUE.interval;
             }
-            move(run, guards, steps, delay, opening?.pace === 'dash');
+            if (opening?.turnGrace === TIMING_CUE.earlyTurnGrace) delay += TIMING_CUE.lead;
+            // The simulated movement below skips event dispatch. Stop at the first
+            // equivalent line trigger so the fixture can exercise the native handoff.
+            let x = request.x;
+            let y = request.y;
+            let trigger;
+            const handoff = floorTriggers.length ? steps.findIndex(heading => {
+                x = run.gameMap.roundXWithDirection(x, DIRECTIONS[heading]);
+                y = run.gameMap.roundYWithDirection(y, DIRECTIONS[heading]);
+                trigger = floorTriggers.find(id => run.gameMap._events[id].pos(x, y));
+                return trigger !== undefined;
+            }) : -1;
+            if (handoff !== -1) steps = steps.slice(0, handoff + 1);
+            move(run, guards, steps, delay, opening?.turnGrace ?? 0);
+            if (trigger !== undefined) return { trigger };
         }
         assert.fail(`Patrol route stalled on map ${run.id} at ${run.player.x},${run.player.y}`);
     }
 
-    function move(run, guards, steps, delay = 0, dash = false) {
-        const frames = delay + steps.length * (dash ? 8 : 16);
-        assert.equal(verifyMotion(run, guards, frames, steps, delay, dash ? (1 << steps.length) - 1 : 0), frames,
+    function move(run, guards, steps, delay = 0, turnPause = 0) {
+        const turns = steps.filter((heading, index) => index > 0 && heading !== steps[index - 1]).length;
+        const frames = delay + steps.length * 16 + turns * turnPause;
+        assert.equal(verifyMotion(run, guards, frames, steps, delay, 0, turnPause), frames,
             `Guard contact in map ${run.id} at ${run.player.x},${run.player.y}`);
     }
 
-    function activate(run, guards, id, direction, dash = false) {
-        if (direction) move(run, guards, [DIRECTIONS.indexOf(direction)], 0, dash);
+    function activate(run, guards, id, direction) {
+        if (direction) move(run, guards, [DIRECTIONS.indexOf(direction)]);
         const event = run.gameMap._events[id];
         assert.deepEqual([run.player.x, run.player.y], [event.x, event.y]);
         run.player.checkEventTriggerHere([1]);
@@ -100,24 +114,32 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
     assert.deepEqual((await follow(west.run, west.guards, 20)).arrival, { x: 22, y: 7, facing: null });
     c.$gameVariables.setValue = oldSetValue;
 
-    const line = setup(199, 1, 33, 0, 28.25);
-    const paces = new Set();
-    const observePace = async (result, request, live) => {
-        const { opening } = result;
-        if (!opening?.pace || paces.has(opening.pace)) return;
-        paces.add(opening.pace);
-        assert.match(formatSpeech({ kind: 'timedCue', ...opening }), new RegExp('On the ping, ' + opening.pace));
-        await verifyWorker(line.run, request, live, packet => assert.deepEqual(packet, result));
-    };
-    await follow(line.run, line.guards, 24, observePace);
-    assert.deepEqual(paces, new Set(['walk', 'dash']));
-    const trigger = activate(line.run, line.guards, 24);
-    line.run.gameMap._events[22].setPosition(0, 0);
-    for (const command of trigger.list())
-        if (command.code === 205) line.run.gameMap._events[command.parameters[0]].forceMoveRoute(command.parameters[1]);
-    erase(trigger);
-    const exit = await follow(line.run, line.guards, 26);
-    assert.deepEqual(exit.arrival, { x: 35, y: 16, facing: null });
+    for (const target of [24, 22]) {
+        const line = setup(199, 1, 33, 0, 28.25);
+        let lineCrossings = 0;
+        let shortTurn = false;
+        const approach = await follow(line.run, line.guards, target, async (result, request, live) => {
+            if (!result.opening) return;
+            assert.notEqual(result.opening.pace, 'dash');
+            lineCrossings++;
+            if (request.x === 18 && request.y === 22) {
+                assert.equal(result.opening.turnGrace, TIMING_CUE.earlyTurnGrace);
+                assert.equal(result.stopAtPocket, true);
+                shortTurn = true;
+            }
+            await verifyWorker(line.run, request, live, packet => assert.deepEqual(packet, result));
+        }, [22, 24]);
+        assert(lineCrossings && shortTurn);
+        assert.equal(approach.trigger, 24);
+        const trigger = activate(line.run, line.guards, approach.trigger);
+        line.run.gameMap._events[22].setPosition(0, 0);
+        for (const command of trigger.list())
+            if (command.code === 205) line.run.gameMap._events[command.parameters[0]].forceMoveRoute(command.parameters[1]);
+        erase(trigger);
+        const exit = await follow(line.run, line.guards, 26);
+        assert.deepEqual(exit.arrival, { x: 35, y: 16, facing: null });
+    }
+    console.log('Verified both selected patrol-line routes reach the native west trigger from the south entry.');
 
     await verifyLineLoot();
     await verifyManualLine();
@@ -144,20 +166,20 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
     const chase = setup(201, 6, 44, 0, 39.25);
     const first = await follow(chase.run, chase.guards, 2);
     assert.equal(first.boundaryEvent, 4);
-    assert.match(chaseHandoff(c, 4), /Dash 5 north, then 4 west, then 2 north/);
+    assert.match(chaseHandoff(c, 4), /Walk 5 north, then 4 west, then 2 north/);
     const triggers = [4, 9, 11, 13, 24, 26, 27, 28, 29, 2];
     let nativeStep = first.boundary;
     for (let i = 0; i < triggers.length - 1; i++) {
-        const event = activate(chase.run, chase.guards, triggers[i], nativeStep, true);
+        const event = activate(chase.run, chase.guards, triggers[i], nativeStep);
         const command = event.list().find(item => item.code === 205);
         chase.run.gameMap._events[command.parameters[0]].forceMoveRoute(command.parameters[1]);
         erase(event);
         const steps = expand(CHASE_LEGS[triggers[i]].map(([direction, tiles]) => ({ direction, tiles })));
-        // Read each next stretch ahead of time and cross it at Dash pace.
+        // Read each next stretch ahead of time and walk it continuously.
         nativeStep = DIRECTIONS[steps.pop()];
-        move(chase.run, chase.guards, steps, 0, true);
+        move(chase.run, chase.guards, steps);
     }
-    activate(chase.run, chase.guards, 2, nativeStep, true);
+    activate(chase.run, chase.guards, 2, nativeStep);
     console.log('Verified western refuges, patrol-line exit, distraction prerequisites and nine native chase handoffs.');
 
     function verifyRefugeRecovery() {
@@ -237,7 +259,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
             const gate = opts.gate && (() => (gateResult = opts.gate()));
             scene._wqaCaveReview = true;
             assert(auto.start(job, { distance: steps.length, course: Uint8Array.from(steps),
-                arrival: { x, y, facing: opts.facing ?? null }, pace: opts.pace, gate },
+                arrival: { x, y, facing: opts.facing ?? null }, gate },
             { kind: 'routeDirections', legs: [], facing: opts.facing }));
             assert(!scene._wqaCaveReview, 'the automatic native step does not invalidate its own field job');
             const begin = c.Graphics.frameCount;
@@ -273,7 +295,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                 assert(steps.length, plan.status);
                 const gate = plan.opening && timing.automaticGate(timing.capture(scene, motion, { id: 20 }, true), plan.opening);
                 if (plan.opening) { assert(gate); crossings++; }
-                walk(run, tick, 20, steps, { pace: plan.opening?.pace || 'walk', gate, floor,
+                walk(run, tick, 20, steps, { gate, floor,
                     job: { caveFloor: floor, caveAction: event => event._eventId === floor } });
                 if (floor) {
                     const event = run.gameMap._events[floor];
@@ -310,7 +332,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
             const path = expand(first.legs || []);
             path.push(DIRECTIONS.indexOf(first.boundary));
             let action;
-            walk(chase.run, chaseTick, 2, path, { floor: 4, pace: 'walk',
+            walk(chase.run, chaseTick, 2, path, { floor: 4,
                 job: { caveFloor: 4, caveAction: event => !!(action = acceptedAction(c, scene, event)) } });
             for (const id of [4, 9, 11, 13, 24, 26, 27, 28, 29]) {
                 assert.equal(action.event._eventId, id);
@@ -322,7 +344,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                 const next = chaseContinuation(c, action);
                 assert(next);
                 chaseTick(); // accept the next stage after the native handoff
-                walk(chase.run, chaseTick, 2, expand(next.legs), { floor: next.next, pace: 'dash',
+                walk(chase.run, chaseTick, 2, expand(next.legs), { floor: next.next,
                     job: { caveFloor: next.next, caveAction: event => !!(action = acceptedAction(c, scene, event)) } });
             }
             assert.equal(action.event._eventId, 2);

@@ -50,7 +50,7 @@ function admitPatrolLine(result, capture, frame) {
 
 function patrolStepReady(state, player, map, data, index, now, x, y) {
     const move = state.moves[index];
-    if (state.tilemap !== data || player._moveSpeed !== state.speed || player._dashing ||
+    if (state.tilemap !== data || player.realMoveSpeed() !== state.speed ||
         x !== move.x || y !== move.y || now !== state.frame + move.frame) return false;
     return patrolPhaseMatches(state, map, state.stamps, index);
 }

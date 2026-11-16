@@ -40,7 +40,7 @@ function createAutowalk(root, ready, preferences, report) {
         stop();
         active = { scene, job, map, player, target, targetX: target?._x, targetY: target?._y, page: target?._pageIndex,
             trigger: target?._trigger, x: job.x, y: job.y, index: 0, course, line, arrival, record,
-            manualEntry: result.autowalkStop, pending: null, dirty: false, gate: result.gate, pace: result.pace };
+            manualEntry: result.autowalkStop, pending: null, dirty: false, gate: result.gate };
         scene._wqaAutowalkActive = scene._wqaPresentation = true;
         if (job.caveWalk) scene._wqaCaveReview = false;
         return true;
@@ -141,8 +141,6 @@ function createAutowalk(root, ready, preferences, report) {
             }
             state.gate = null;
         }
-        // Override dash only while issuing a checked cave step.
-        if (state.pace || line) player._dashing = state.pace === 'dash';
         const now = line && root.Graphics.frameCount;
         const move = line && line.moves[index];
         if (line && now < line.frame + move.frame) return 0;

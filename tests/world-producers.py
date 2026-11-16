@@ -13,6 +13,11 @@ decode = fixture['load_decoder']()
 from registration import CORE_REL, MAP_REL, OBJECTS_REL, core_notification, map_notification, objects_notification
 
 
+def retail_dash_override(custom):
+    return between(custom, "Game_Player['prototype']['isDashing']=function(",
+                   "},Game_Player['prototype']['startMapEvent']") + '};'
+
+
 def methods(installed):
     stock = objects_notification((installed / OBJECTS_REL).read_bytes()).decode('utf8')
     output = []
@@ -70,6 +75,7 @@ def methods(installed):
                  'Tilemap.isWaterfallTile', 'Tilemap.isWallSideTile'):
         output.append(between(core, f'\n{name} = function(', '\n};') + '\n};')
     custom, _ = decode(map_notification((installed / MAP_REL).read_bytes()).decode('utf8'))
+    output.append(retail_dash_override(custom))
     for start, end in (
         ("Game_Map['prototype']['isBoatPassable']", "},Game_Map['prototype']['isShipPassable']"),
         ("Game_Map['prototype']['isShipPassable']", "},Game_Map['prototype']['isAirshipLandOk']"),

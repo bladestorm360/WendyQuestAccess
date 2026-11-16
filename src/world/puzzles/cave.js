@@ -142,7 +142,9 @@ function captureMotion(root, graphics) {
         if (!actor) return null;
         patrols.push(actor);
     }
-    return { frame, speed, dash: data.disableDashing === false, view, patrols, barrier };
+    // The retail MapScene plugin disables effective dashing even when
+    // the map flag permits it and native input sets _dashing.
+    return { frame, speed, dash: false, view, patrols, barrier };
 }
 
 function offsetLabel(delta, negative, positive) {

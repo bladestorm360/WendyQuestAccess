@@ -23,7 +23,7 @@ ARCHIVE_HASH = '1731a5ed81139a63a5d1d7e7c521b5f08add023ffe4b719d06796a1ba77dc8a3
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from registration import CORE_REL, OBJECTS_REL, PIXI_REL, PIXI_SHA, SYSTEM_REL, SYSTEM_SHA, objects_notification
+from registration import CORE_REL, MAP_REL, OBJECTS_REL, map_notification, PIXI_REL, PIXI_SHA, SYSTEM_REL, SYSTEM_SHA, objects_notification
 
 
 def sha(path):
@@ -75,13 +75,16 @@ def fixture(runtime, installed):
                    'Game_CharacterBase.prototype.moveStraight', 'Game_CharacterBase.prototype.setDirection', 'Game_CharacterBase.prototype.isDirectionFixed',
                    'Game_CharacterBase.prototype.resetStopCount', 'Game_CharacterBase.prototype.updateMove',
                    'Game_CharacterBase.prototype.realMoveSpeed', 'Game_CharacterBase.prototype.distancePerFrame',
-                   'Game_CharacterBase.prototype.isMoving', 'Game_Player.prototype.isDashing',
+                   'Game_CharacterBase.prototype.isMoving', 'Game_CharacterBase.prototype.isDashing',
                    'Game_Player.prototype.moveByInput', 'Game_Player.prototype.reserveTransfer',
                    'Game_Map.prototype.setupStartingMapEvent', 'Game_Interpreter.prototype.command201',
                    'Game_Interpreter.prototype.command205'):
         start = objects.index(method + ' = function(')
         end = objects.index('\n};', start) + 3
         movement.append(objects[start:end])
+    world_producers = runpy.run_path(str(ROOT / 'tests/world-producers.py'))
+    custom_map, _ = world_producers['decode'](map_notification((installed / MAP_REL).read_bytes()).decode('utf8'))
+    movement.append(world_producers['retail_dash_override'](custom_map))
     dash_input = runpy.run_path(str(ROOT / 'tests/input-producers.py'))['input_methods'](installed)
     core = (installed / CORE_REL).read_text(encoding='utf8')
     movement.extend(['function fixtureDashKeyboard() {', 'const a14_0x1f92c6 = null;',
@@ -1081,7 +1084,7 @@ const interval = setInterval(() => {
             player._realX = player._x;
             player._realY = player._y;
             player._x++;
-            const updates = player._dashing ? 8 : 16;
+            const updates = 16;
             for (let i = 0; i < updates; i++) {
                 Graphics.frameCount++;
                 player.updateMove();
@@ -1090,7 +1093,7 @@ const interval = setInterval(() => {
             footstepContact++;
             return;
         }
-        if (!fs.existsSync(receipt + '.dash-footstep')) return;
+        if (!fs.existsSync(receipt + '.shift-footstep')) return;
         dialogueShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         if (timingScene._wqaCaveTimingActive) throw Error('Native scene entry retained the cave timing cue');
@@ -1251,7 +1254,9 @@ const interval = setInterval(() => {
                         ['ArrowRight', 39, 'right'], ['ArrowDown', 40, 'down']]) {
                         key('keydown', name, name, false, { keyCode: code, shiftKey: true });
                         if (!Input.isPressed(native)) throw Error('The field quest tracker consumed Shift+' + name);
-                        if (tileUpdates() !== 8) throw Error('The native dash action failed for ' + shiftCode);
+                        const updates = tileUpdates();
+                        if (!player._dashing || player.isDashing() || updates !== 16)
+                            throw Error('The retail speed override failed for ' + shiftCode);
                         key('keyup', name, name, false, { keyCode: code, shiftKey: true });
                     }
                     key('keyup', 'Shift', shiftCode, false, { keyCode: 16 });
@@ -2525,8 +2530,9 @@ parentPort.postMessage = packet => {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.guard-footstep'), String(packet.status));
     }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 19 && (active.lane === 11 || active.lane === 12)) {
-        const gait = active.pitch === 1.2 ? 'dash' : active.pitch === 1 ? 'walk' : null;
-        if (gait) fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.' + gait + '-footstep'), String(packet.status));
+        const receipt = path.join(__dirname, '..', 'receipt.json.');
+        const gait = fs.existsSync(receipt + 'walk-footstep') ? 'shift' : 'walk';
+        if (active.pitch === 1) fs.writeFileSync(receipt + gait + '-footstep', String(packet.status));
     }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 15 && active.right === 0 && active.forward === 1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.battle-cue'),
@@ -2670,8 +2676,8 @@ def main():
         if not receipt.with_suffix('.json.field-quest-dash').is_file():
             raise RuntimeError('The visible field tracker was never tested against both Shift keys')
         if any(receipt.with_suffix('.json.' + gait + '-footstep').read_text(encoding='utf8') != '1'
-               for gait in ('walk', 'dash')):
-            raise RuntimeError('Native walk and dash contacts did not publish their own stereo PCM')
+               for gait in ('walk', 'shift')):
+            raise RuntimeError('Native contacts with and without Shift did not publish the same pitch through stereo PCM')
         if receipt.with_suffix('.json.soundscape').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW ambient object cue did not publish stereo PCM to SDL')
         if not receipt.with_suffix('.json.muted-preview').is_file():

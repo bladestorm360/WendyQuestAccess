@@ -7,7 +7,7 @@ const MAX_ROUTE_COMMANDS = 128;
 const STAMP_FIELDS = ['id', 'x', 'y', 'rx', 'ry', 'speed', 'frequency', 'direction', 'stop', 'wait', 'jump', 'index',
     'forced', 'originalIndex', 'autonomous', 'locked', 'fixed', 'through', 'normal', 'hazard'];
 const STAMP_WIDTH = STAMP_FIELDS.length;
-const TIMING_CUE = Object.freeze({ wait: 120, minSpan: 45, paceSpan: 39, paceWait: 320, maxSpan: 60, lead: 30, interval: 18, turnGrace: 18, escapeTurnGrace: 30, escapeStepGrace: 2 });
+const TIMING_CUE = Object.freeze({ wait: 120, minSpan: 45, paceSpan: 39, paceWait: 320, maxSpan: 60, lead: 30, interval: 18, turnGrace: 18, earlyTurnGrace: 6, escapeTurnGrace: 30, escapeStepGrace: 2 });
 
 function writeMotionStamp(stamp, offset, patrols) {
     for (const actor of patrols) for (const key of STAMP_FIELDS) stamp[offset++] = Number(actor[key]);
