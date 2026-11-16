@@ -307,7 +307,7 @@ def main():
     puzzles = OUT / 'wendyquest-access' / 'puzzles'
     puzzles.mkdir(exist_ok=True)
     for name in ('crossing.cjs', 'motion-world.cjs', 'patrol-motion.cjs', 'patrol-line.cjs', 'patrol-line-state.cjs',
-                 'salt-route.cjs', 'salt-state.cjs'):
+                 'patrol-line-manual.cjs', 'salt-route.cjs', 'salt-state.cjs'):
         shutil.copyfile(ROOT / 'src' / 'world' / 'puzzles' / name, puzzles / name)
     print('Development payload staged at', OUT)
 

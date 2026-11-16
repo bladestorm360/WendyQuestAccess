@@ -1,7 +1,7 @@
 'use strict';
 
 const { STAMP_WIDTH, matchesNativeMotionStamp } = require('./patrol-motion.cjs');
-const { lineDestination, lineActors, HORIZON, MAX_MOVES } = require('./patrol-line-state.cjs');
+const { lineDestination, lineActors, HORIZON, MAX_MOVES, MANUAL_HORIZON, REACTION_FRAMES } = require('./patrol-line-state.cjs');
 
 function authoredRoute(route, authored) {
     // Saved game state can hold a deserialized copy of the same route.
@@ -52,14 +52,18 @@ function patrolStepReady(state, player, map, data, index, now, x, y) {
     const move = state.moves[index];
     if (state.tilemap !== data || player._moveSpeed !== state.speed || player._dashing ||
         x !== move.x || y !== move.y || now !== state.frame + move.frame) return false;
-    let offset = index * state.refs.length * STAMP_WIDTH;
+    return patrolPhaseMatches(state, map, state.stamps, index);
+}
+
+function patrolPhaseMatches(state, map, stamps, sample) {
+    let offset = sample * state.refs.length * STAMP_WIDTH;
     for (const { actor, route, original, page } of state.refs) {
         if (map._events[actor._eventId] !== actor || actor._erased || actor._pageIndex !== page ||
             actor._moveRoute !== route || actor._originalMoveRoute !== original ||
-            !matchesNativeMotionStamp(state.stamps, offset, actor)) return false;
+            !matchesNativeMotionStamp(stamps, offset, actor)) return false;
         offset += STAMP_WIDTH;
     }
     return true;
 }
 
-module.exports = { capturePatrolLine, admitPatrolLine, patrolStepReady };
+module.exports = { capturePatrolLine, admitPatrolLine, patrolStepReady, patrolPhaseMatches, MANUAL_HORIZON, REACTION_FRAMES };

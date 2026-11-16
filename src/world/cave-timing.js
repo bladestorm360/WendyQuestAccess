@@ -4,7 +4,10 @@ const { timedCave, captureMotion, TIMING_CUE, STAMP_WIDTH, matchesMotionStamp } 
 const { CARDINAL, bearing } = require('./spatial-direction');
 const { DIRECTIONS } = require('./geometry.cjs');
 
+const { patrolPhaseMatches, MANUAL_HORIZON, REACTION_FRAMES } = require('./puzzles/patrol-line-playback');
+
 const CUE_LIFETIME = 8;
+const MANUAL_LEAD_IN = 120;
 
 function createCaveTiming(root, fieldReady, audio, preferences, report) {
     let owner = null;
@@ -87,6 +90,25 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
         return true;
     }
 
+    function startManual(captured, line, x, y, plan, endText) {
+        const { scene, motion } = captured;
+        const { legs, starts, stamps } = plan;
+        const span = MANUAL_HORIZON + 1;
+        const due = Math.max(frame(), motion.frame + MANUAL_LEAD_IN);
+        if (!ready(scene) || !line || line.frame !== motion.frame || !Array.isArray(legs) ||
+            !legs.length || legs.length > 8 || legs.some(({ direction, tiles }) =>
+                !CARDINAL[direction] || !Number.isInteger(tiles) || tiles < 1 || tiles > 12) ||
+            Object.prototype.toString.call(starts) !== '[object Uint16Array]' || starts.length !== span * legs.length ||
+            Object.prototype.toString.call(stamps) !== '[object Float64Array]' ||
+            stamps.length !== span * line.refs.length * STAMP_WIDTH || !starts[due - motion.frame]) return false;
+        stop();
+        owner = { ...captured, x, y, queued: false,
+            manual: { line, legs, starts, stamps, span, endText, index: 0, taken: 0, due, until: -1 } };
+        watch(scene);
+        schedule(owner, due);
+        return true;
+    }
+
     function refreshResult(state, captured, opening) {
         if (state.traversal || !live(state)) return;
         state.waiting = false;
@@ -99,7 +121,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
 
     function live(state) {
         const { scene, map, player, event } = state;
-        return owner === state && ready(scene, !!state.traversal) && map === root.$gameMap && player === root.$gamePlayer &&
+        return owner === state && ready(scene, !!(state.traversal || state.manual)) && map === root.$gameMap && player === root.$gamePlayer &&
             player._x === state.x && player._y === state.y && (!event || (map._events[event._eventId] === event &&
                 !event._erased && event._pageIndex === state.page && event._x === state.tx && event._y === state.ty));
     }
@@ -131,6 +153,69 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
             }, 'cave');
     }
 
+    function manualStopped(state) {
+        if (stop(state.scene)) report('Guard timing changed. Request directions again.');
+    }
+
+    function manualPose(state, now) {
+        const { player, map, manual } = state;
+        const { line, stamps } = manual;
+        return line.tilemap === root.$dataMap && player._moveSpeed === line.speed &&
+            patrolPhaseMatches(line, map, stamps, now - line.frame);
+    }
+
+    function playManual(state, now) {
+        const { manual, scene } = state;
+        if (manual.release) {
+            manual.release = false;
+            const { hrtf, caveVolume } = preferences();
+            // A centered impact marks the last accepted step of the leg.
+            // The next directional ping begins only after the tile settles.
+            audio.play(scene, hrtf, audio.cues.wallBump, caveVolume / 100, [0, 0, 1],
+                () => live(state) && frame() < now + CUE_LIFETIME, null, 'cave');
+            schedule(state, manual.due);
+            return;
+        }
+        if (manual.taken) return manualStopped(state);
+        if (manual.index === manual.legs.length) {
+            stop(scene);
+            return report(manual.endText);
+        }
+        const time = Math.max(now, manual.due) - manual.line.frame;
+        const cue = time < manual.span ? manual.starts[manual.index * manual.span + time] : 0;
+        if (!cue) {
+            // One emitted ping can still be actionable even if there is
+            // no later place to emit another full reaction window.
+            if (now <= manual.until) return schedule(state, manual.until + 1);
+            return manualStopped(state);
+        }
+        const next = cue + manual.line.frame;
+        if (next > now) return schedule(state, next);
+        if (!manualPose(state, now)) return manualStopped(state);
+        if (!pulse(state, manual.legs[manual.index].direction, now + CUE_LIFETIME)) return manualStopped(state);
+        manual.cued = now;
+        manual.until = now + REACTION_FRAMES;
+        schedule(state, now + TIMING_CUE.interval);
+    }
+
+    function manualMoved(state, direction, now) {
+        const { manual, player, scene } = state;
+        const leg = manual.legs[manual.index];
+        const inTime = manual.taken ? now === manual.due : now > manual.cued && now <= manual.until;
+        if (!leg || direction !== leg.direction || !inTime || player._dashing || !manualPose(state, now))
+            return manualStopped(state);
+        state.x += CARDINAL[direction].x;
+        state.y += CARDINAL[direction].y;
+        manual.due = now + 256 / 2 ** manual.line.speed;
+        audio.retire(scene, 'cave');
+        if (++manual.taken < leg.tiles) return schedule(state, manual.due + 1);
+        manual.taken = 0;
+        manual.until = -1;
+        manual.index++;
+        manual.release = true;
+        schedule(state, now);
+    }
+
     function advancing(state, now) {
         const { traversal } = state;
         if (now > traversal.by) return stop(state.scene);
@@ -143,6 +228,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
         if (owner !== state) return;
         const now = frame();
         if (!live(state)) return stop(state.scene);
+        if (state.manual) return playManual(state, now);
         if (state.traversal) return advancing(state, now);
         if (!state.opening || !verifiedAt(state, now)) {
             if (state.repeat) {
@@ -171,6 +257,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
         // Follow the checked sequence through accepted movement only.
         if (!live(state)) return stop(scene);
         const now = frame();
+        if (state.manual) return manualMoved(state, direction, now);
         const opening = state.opening;
         if (!state.traversal) {
             if (!state.repeat || !opening || !(now <= state.startUntil) ||
@@ -203,9 +290,9 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
     }
 
     return {
-        warm, capture, start, refreshResult, stop, moved,
+        warm, capture, start, startManual, refreshResult, stop, moved,
         cancelPlan(scene, stepping = false) {
-            if (owner?.scene === scene && !(stepping && owner.traversal)) stop(scene);
+            if (owner?.scene === scene && !(stepping && (owner.traversal || owner.manual))) stop(scene);
         },
         active: scene => owner?.scene === scene || preparation?.scene === scene,
         pose(scene) { if (owner?.scene === scene && !live(owner)) stop(scene); },

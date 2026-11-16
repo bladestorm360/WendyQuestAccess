@@ -23,6 +23,7 @@ const { createCaveGuide, timedCave, warningApproach, captureMotion, distractionF
 const { capturePatrolLine } = require('./puzzles/patrol-line-playback');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
+const PATROL_HEADINGS = { 2: 'south', 4: 'west', 6: 'east', 8: 'north' };
 
 function routeBoundary(root, eventId, spoilers, edge, mode = 'walk') {
     const map = root.$gameMap;
@@ -427,15 +428,32 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 return status(job, 'The entrance changed. Request directions again.');
             if (result?.status === 'patrolLine') {
                 const { activate } = result;
-                const record = { kind: 'routeDirections', legs: [], facing: result.arrival.facing,
+                const record = { kind: 'routeDirections', name: job.label, legs: [], facing: result.arrival.facing,
                     activate, takeExit: !!activate, exit: activate ? job.label : undefined, guideAction: !activate };
                 if (!autowalk.start(job, result, record))
                     return status(job, 'Guard timing changed. Request directions again.');
                 job.scene._wqaRouteActive = false;
                 return present(job, { kind: 'fieldStatus', name: 'Walking.' }, true);
             }
-            if (job.line && ['unsafeCrossing', 'timedWait'].includes(result?.status) && !preferences().autowalk)
-                return status(job, 'For this guard line, turn on Autowalk in Navigation, then request directions.');
+            if (result?.status === 'patrolLineApproach') {
+                const { legs, more, facing, activate } = result;
+                return present(job, { kind: 'routeDirections', name: job.label, legs, facing, more, activate,
+                    takeExit: !!activate, exit: activate ? job.label : undefined, guideAction: !more && !activate });
+            }
+            if (result?.status === 'patrolLineManual') {
+                if (!job.timing)
+                    return status(job, host.graphics._wqaCaveTimingEnabled ?
+                        'Cave timing audio is unavailable. Request directions again.' :
+                        'This crossing uses Cave timing cues in Audio. Turn them on and request directions.');
+                const { legs, more, activate, facing } = result;
+                const endText = more ? 'Safe to stop. Request directions again.' : activate ?
+                    'Move ' + PATROL_HEADINGS[activate] + ' to take ' + job.label + '.' :
+                    'Face ' + PATROL_HEADINGS[facing] + ' and press the action button.';
+                if (!host.caveTiming.startManual(job.timing, job.line, job.x, job.y, result, endText))
+                    return status(job, 'Guard timing changed. Request directions again.');
+                job.scene._wqaRouteActive = false;
+                return present(job, { kind: 'patrolLineManual', legs });
+            }
             if (result?.status === 'timedCue' || result?.status === 'timedWait') {
                 const opening = result.opening;
                 const direction = opening?.direction ?? result.direction;
@@ -726,7 +744,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         job.nearestLanding = target.nearestLanding === true;
         job.autowalk = job.action !== 'puzzleGuide' && !job.journey && !timedCave(snapshot.map) && preferences().autowalk;
         job.motionFrame = motion?.frame;
-        job.line = (job.target !== 26 || snapshot.y <= 6) && capturePatrolLine(root, motion, job.target);
+        job.line = capturePatrolLine(root, motion, job.target);
+        const lineNavigation = job.line && (preferences().autowalk ?
+            (job.target !== 26 || snapshot.y <= 6) : 'manual');
         if (motion) {
             host.caveTiming?.warm(job.scene);
             job.timing = host.caveTiming?.capture(job.scene, motion, target);
@@ -740,7 +760,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
             surface: snapshot.mode !== 'walk', patrolGuidance: !!motion,
             beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk, timingCue: !!job.timing,
-            lineNavigation: !!job.line && preferences().autowalk === true });
+            lineNavigation });
     }
 
     function terrainTransferRequest(job, map, breakfast = false, point, trail) {

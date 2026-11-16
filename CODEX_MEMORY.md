@@ -213,3 +213,5 @@ The [Secret Cave update](docs/puzzles-and-secrets.md#cave-timing-cues) records l
 [Current Steam deployment](docs/deployment.md#five-safe-tiles-from-the-first-room-refuge) records the two-file fix for the five safe north tiles after the first room's side refuge. [Native replay and dash verification](docs/feature-checkpoint.md#first-room-refuge-to-the-next-crossing) records the first checkpoint replay and the outstanding physical input check.
 
 [Current Steam deployment](docs/deployment.md#patrol-line-loot-and-completed-footsteps) records accessible routes to both guard-line pickups and back to the exit, footsteps at native interpolation completion and the verified single rollback. [Controls and the manual exit handoff](docs/puzzles-and-secrets.md#secret-cave-room-handoffs) explain the Autowalk option.
+
+[Current Steam deployment](docs/deployment.md#manual-guard-line-routes) records the barrel, chest and exit routes with normal directional input and optional Autowalk. [Cue and playback evidence](docs/feature-checkpoint.md#manual-routes-for-the-second-patrol-room) records the two pickup orders, timing-window boundaries and remaining audible checks.

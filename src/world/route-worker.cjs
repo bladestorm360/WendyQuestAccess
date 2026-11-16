@@ -165,7 +165,8 @@ parentPort.on('message', message => {
             else if (request.transfer !== undefined)
                 result = transferRoute(base, map, live, request, request.transfer, cancelled);
             else if (request.motion) {
-                const lineNavigation = request.lineNavigation === true && lineDestination(map, request.event);
+                const lineNavigation = lineDestination(map, request.event) &&
+                    (request.lineNavigation === true || request.lineNavigation === 'manual') && request.lineNavigation;
                 result = previewCrossing(base, live, { ...request, lineNavigation }, cancelled);
             } else result = solveRoute(base, live, request, cancelled);
             if (map === 19 && live.salt && !request.refresh &&
@@ -218,5 +219,7 @@ parentPort.on('message', message => {
     }
     if (cancelled() || !result) result = { status: 'cancelled' };
     const data = result.available || result.course || result.stamps || result.opening?.stamps;
-    parentPort.postMessage({ epoch, sequence, map, result }, data ? [data.buffer] : []);
+    const transfers = data ? [data.buffer] : [];
+    if (result.starts) transfers.push(result.starts.buffer);
+    parentPort.postMessage({ epoch, sequence, map, result }, transfers);
 });

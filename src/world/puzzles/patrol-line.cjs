@@ -5,7 +5,8 @@ const { routeGoals } = require('../routes.cjs');
 const { startMotion, advancePatrols } = require('./motion-world.cjs');
 const { STAMP_WIDTH, writeMotionStamp } = require('./patrol-motion.cjs');
 
-const { GUARDS, lineActors, HORIZON, MAX_MOVES } = require('./patrol-line-state.cjs');
+const { GUARDS, lineActors, HORIZON, MAX_MOVES, MANUAL_HORIZON } = require('./patrol-line-state.cjs');
+const { routePockets, nextStrokes } = require('./patrol-line-manual.cjs');
 
 const LAST_ROW = 20;
 const SETUP_FRAMES = 48;
@@ -40,6 +41,15 @@ function lineCrossing(world, request, origin, unsafe, stops, coverage, cancelled
     const goals = exit ? floorApproaches(grid, request.event, size) : routeGoals(grid, request, cancelled);
     if (!goals || !goals.subarray(0, size).some((value, cell) => value && !unsafe[cell] && !stops[cell])) return null;
 
+    const manual = request.lineNavigation === 'manual';
+    const pocket = manual && routePockets(grid, size, origin, unsafe, stops, goals, cancelled);
+    if (manual && !pocket) return null;
+    if (pocket?.legs) {
+        const facing = goals[pocket.goal];
+        return { status: 'patrolLineApproach', legs: pocket.legs, more: pocket.goal < 0,
+            facing: !exit && facing, activate: exit && facing };
+    }
+
     const links = new Int16Array(size * 4).fill(-1);
     for (let cell = 0; cell < size; cell++) {
         if (stops[cell]) continue;
@@ -52,10 +62,12 @@ function lineCrossing(world, request, origin, unsafe, stops, coverage, cancelled
     // Reserve a tile for its entire native interpolation. Guard updates
     // precede moveByInput, so each sample includes attempted contact as
     // well as the logical positions at that update's start and end.
-    const safety = new Uint16Array(size * (HORIZON + 1));
+    const horizon = manual ? MANUAL_HORIZON : HORIZON;
+    const safety = new Uint16Array(size * (horizon + 1));
+    const stamps = manual ? new Float64Array((horizon + 1) * guards.length * STAMP_WIDTH) : null;
     const time = startMotion(world, guards, { x: -1, y: -1 }, motion.view);
     const contact = new Uint8Array(size);
-    for (let frame = 1; frame <= HORIZON; frame++) {
+    for (let frame = 1; frame <= horizon; frame++) {
         if (cancelled()) return null;
         contact.fill(0);
         for (const guard of time.patrols) contact[indexOf(grid, guard.x, guard.y)] = 1;
@@ -65,8 +77,9 @@ function lineCrossing(world, request, origin, unsafe, stops, coverage, cancelled
         const row = frame * size;
         for (let cell = 0; cell < size; cell++)
             if (contact[cell]) safety[row + cell] = frame;
+        if (stamps) writeMotionStamp(stamps, frame * guards.length * STAMP_WIDTH, time.patrols);
     }
-    for (let frame = HORIZON - 1; frame >= 1; frame--) {
+    for (let frame = horizon - 1; frame >= 1; frame--) {
         if ((frame & 31) === 0 && cancelled()) return null;
         const row = frame * size;
         for (let cell = 0; cell < size; cell++)
@@ -77,6 +90,14 @@ function lineCrossing(world, request, origin, unsafe, stops, coverage, cancelled
     // front is sometimes necessary even though the static route is clear.
     // Walk pace works for the whole course, including the moving line.
     const stride = 256 / 2 ** motion.speed;
+    if (manual) {
+        const { to, strokes } = pocket.link;
+        const starts = nextStrokes(safety, size, pocket.link, stride, cancelled);
+        if (!starts) return null;
+        const legs = strokes.map(({ heading, cells }) => ({ direction: DIRECTIONS[heading], tiles: cells.length - 1 }));
+        return { status: 'patrolLineManual', starts, stamps, legs, more: !goals[to],
+            facing: !exit && goals[to], activate: exit && goals[to] };
+    }
     const visited = new Int8Array(safety.length);
     const stepsTaken = new Uint8Array(safety.length).fill(255);
     visited[SETUP_FRAMES * size + origin] = -1;

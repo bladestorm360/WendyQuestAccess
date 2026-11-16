@@ -179,6 +179,16 @@ function formatSpeech(message) {
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;
         }
+        case 'patrolLineManual': {
+            const { legs } = message;
+            if (!Array.isArray(legs) || !legs.length || legs.length > 8 ||
+                legs.some(({ direction, tiles }) => !HEADINGS[direction] || !Number.isInteger(tiles) ||
+                    tiles < 1 || tiles > 12)) return '';
+            const directions = legs.map(({ direction, tiles }) => tiles + ' ' + HEADINGS[direction]);
+            text = 'Walk one leg on each directional ping. Release on the thud. ' +
+                directions.join(', then ') + '.';
+            break;
+        }
         case 'treasureReward': {
             const name = label(message);
             const amount = message.amount;

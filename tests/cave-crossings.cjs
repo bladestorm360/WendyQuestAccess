@@ -1,9 +1,14 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
 const { DIRECTIONS } = require('../src/world/geometry.cjs');
 const { captureWorld } = require('../src/world/snapshot');
-const { distractionForGuard } = require('../src/world/puzzles/cave');
+const { distractionForGuard, captureMotion } = require('../src/world/puzzles/cave');
+const { createCaveTiming } = require('../src/world/cave-timing');
+const { CUE } = require('../src/runtime/audio');
+const { bearing } = require('../src/world/spatial-direction');
+const { REACTION_FRAMES } = require('../src/world/puzzles/patrol-line-state.cjs');
 const { CHASE_LEGS, chaseHandoff } = require('../src/world/puzzles/cave-progression');
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
@@ -115,6 +120,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
     assert.deepEqual(exit.arrival, { x: 35, y: 16, facing: null });
 
     await verifyLineLoot();
+    await verifyManualLine();
 
     const distraction = setup(200, 23, 26, 15.25, 21.25);
     const firstBlocker = await follow(distraction.run, distraction.guards, 15);
@@ -151,6 +157,135 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
     }
     activate(chase.run, chase.guards, 2, nativeStep, true);
     console.log('Verified western refuges, patrol-line exit, distraction prerequisites and nine native chase handoffs.');
+
+    async function verifyManualLine() {
+        const saved = { Input: c.Input, $gameTemp: c.$gameTemp, $gameMessage: c.$gameMessage,
+            WendyQuestAccessCaveTimingMoved: c.WendyQuestAccessCaveTimingMoved,
+            WendyQuestAccessFieldMove: c.WendyQuestAccessFieldMove };
+        const savedApp = c.Graphics.app;
+        const scene = c.SceneManager._scene;
+        const renderer = new EventEmitter();
+        c.Graphics.app = { renderer };
+        c.Input = { dir4: 0 };
+        c.$gameTemp = { isDestinationValid: () => false, clearDestination() {} };
+        c.$gameMessage = { isBusy: () => false };
+        const reports = [];
+        const sounds = [];
+        let cueListener = null;
+        const timing = createCaveTiming(c, owner => owner === scene, {
+            cues: CUE, isPrepared: () => true, retire() {},
+            play(_scene, _hrtf, cue, _gain, place, ready) {
+                assert(ready());
+                sounds.push({ cue, place, frame: c.Graphics.frameCount });
+                cueListener?.(sounds.at(-1));
+                return true;
+            }
+        }, () => ({ enabled: true, caveTiming: true, caveVolume: 60, hrtf: false }), text => reports.push(text));
+        c.WendyQuestAccessCaveTimingMoved = timing.moved;
+        c.WendyQuestAccessFieldMove = () => assert(!scene._wqaAutowalkActive);
+        scene._wqaFieldReady = true;
+
+        try {
+            for (const [trigger, phase, response, targets] of [
+                [24, 0, 1, [25, 34, 26]], [22, 372, REACTION_FRAMES, [34, 25, 26]]
+            ]) {
+                const { run, guards } = setup(199, 5, 17, 0, 12.25);
+                const { gameMap, player } = run;
+                const event = gameMap._events[trigger];
+                gameMap._events[trigger === 22 ? 24 : 22].setPosition(0, 0);
+                for (const command of event.list())
+                    if (command.code === 205) gameMap._events[command.parameters[0]].forceMoveRoute(command.parameters[1]);
+                erase(event);
+                delete player.direction;
+                Object.assign(player._followers, { areGathering: () => false, updateMove() {} });
+                c.Graphics.frameCount = 0;
+                for (let i = 0; i < phase; i++) tick();
+
+                function tick() {
+                    c.Graphics.frameCount++;
+                    gameMap.updateEvents();
+                    assert(!guards.some(guard => guard.isStarting()), 'no native guard contact in manual navigation');
+                    const beforeX = player.scrolledX();
+                    const beforeY = player.scrolledY();
+                    player.moveByInput();
+                    if (player.isMoving()) player.updateMove();
+                    player.updateScroll(beforeX, beforeY);
+                    if (scene._wqaCaveCueDue && c.Graphics.frameCount >= scene._wqaCaveCueDue) timing.update(scene);
+                    renderer.emit('postrender');
+                }
+
+                for (const target of targets) {
+                    const nativeTarget = gameMap._events[target];
+                    let arrived = false;
+                    for (let attempt = 0; attempt < 16; attempt++) {
+                        const request = { ...motionRequest(run, guards), event: target, field: true,
+                            patrolGuidance: true, lineNavigation: 'manual', motion: captureMotion(c, c.Graphics) };
+                        const live = liveState();
+                        const plan = previewCrossing(run.geometry, live, request);
+                        if (!attempt) await verifyWorker(run, request, live, packet => assert.deepEqual(packet, plan));
+                        if (plan.status === 'patrolLineApproach') {
+                            assert(plan.legs.length);
+                            const steps = expand(plan.legs);
+                            move(run, guards, steps);
+                            c.Graphics.frameCount += steps.length * 16;
+                        } else {
+                            assert.equal(plan.status, 'patrolLineManual');
+                            assert.match(formatSpeech({ ...plan, kind: plan.status }), /Walk one leg on each directional ping/);
+                            const captured = timing.capture(scene, request.motion, { id: target });
+                            const track = capturePatrolLine(c, request.motion, target);
+                            assert(timing.startManual(captured, track, player.x, player.y, plan, 'Reached the planned stop.'));
+                            let index = 0;
+                            let respondAt;
+                            const begin = c.Graphics.frameCount;
+                            cueListener = receipt => {
+                                assert(index < plan.legs.length);
+                                if (receipt.cue === CUE.wallBump) {
+                                    assert.deepEqual(receipt.place, [0, 0, 1]);
+                                    assert.equal(c.Input.dir4, plan.legs[index].direction);
+                                    index++;
+                                    respondAt = undefined;
+                                    c.Input.dir4 = 0;
+                                } else if (receipt.cue === CUE.caveGo && !respondAt) {
+                                    assert.equal(c.Input.dir4, 0);
+                                    assert.deepEqual(receipt.place, bearing(8, plan.legs[index].direction));
+                                    respondAt = receipt.frame + response;
+                                }
+                            };
+                            while (timing.active(scene) && c.Graphics.frameCount - begin < 1701) {
+                                if (respondAt === c.Graphics.frameCount + 1) c.Input.dir4 = plan.legs[index].direction;
+                                tick();
+                            }
+                            cueListener = null;
+                            assert.equal(index, plan.legs.length, 'Manual legs at ' + [player.x, player.y] + '. ' + reports.at(-1));
+                            assert.equal(reports.at(-1), 'Reached the planned stop.');
+                        }
+                        if (plan.more) continue;
+                        if (target === 26) {
+                            assert.equal(plan.activate, 6);
+                            c.Input.dir4 = plan.activate;
+                            tick();
+                            c.Input.dir4 = 0;
+                            while (player.isMoving()) tick();
+                            player.checkEventTriggerHere([1]);
+                        } else {
+                            player.setDirection(plan.facing);
+                            player.checkEventTriggerThere([0]);
+                        }
+                        assert(nativeTarget.isStarting());
+                        nativeTarget._starting = false;
+                        arrived = true;
+                        break;
+                    }
+                    assert(arrived, 'manual route reaches every target');
+                }
+            }
+        } finally {
+            timing.stop(scene);
+            c.Graphics.app = savedApp;
+            Object.assign(c, saved);
+        }
+        console.log('Verified manual barrel, chest and exit in both orders, with early and late directional-ping responses.');
+    }
 
     async function verifyLineLoot() {
         const saved = { Input: c.Input, $gameTemp: c.$gameTemp, $gameMessage: c.$gameMessage,

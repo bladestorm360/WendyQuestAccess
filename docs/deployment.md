@@ -587,3 +587,14 @@ November 16, 2026. The Steam installer replaced six mod payload files and added 
 - One rollback is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-loot/rollback-latest` with plan SHA-256 `b8cbcb93a051bce6b9fd20665c7cbc7f799c4c906006461a1216f760d5764e9d`. Cleanup removed 25,169,579 bytes of final disposable outputs and 21,781,605 bytes across two superseded rollbacks.
 
 The earlier automatic review rejected a mixed cleanup request because it classified the included rollback directory as protected recovery data. The owner authorized its deletion explicitly. Both deletions subsequently passed as individual operations after identifying the superseded hash and verifying the newer retained backup, live installation and unchanged recovery structure. [Native tests and remaining live checks](feature-checkpoint.md#patrol-line-loot-and-native-footstep-completion)
+
+## Manual guard-line routes
+
+November 16, 2026. Installed the manual barrel, chest and exit routes for the second patrol room. Six mod payload files changed or were added. All 16 native scripts and 241 geometry entries match the preceding plan. The exact candidate passed the world fixture, matching NW.js smoke, and the isolated installer with launcher lease, rollback and unknown-file protection. Independent local verification passed with 45 payload files and four unchanged save and configuration hashes.
+
+- Installed plan SHA-256 `2f6ce235116bd83247bcbdaf4dfc45abb5e671f5a919e39bb1cde8f60210c4cb`
+- Plugin SHA-256 `d749bb155c74816765e4b3c895350be0b3b181dab7e1815775b520b45ac0473d`
+- Signed Microsoft Defender CLI scanned the exact prepared files at 09:48 PST with exit zero and no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.328.0.
+- Exactly one rollback remains at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-manual/rollback-latest` with plan SHA-256 `d3950475d7573c0143844b458f808b857e2057c1a661480a1a70ecdabd7ab507`. Cleanup removed 24,421,115 bytes of final disposable output and the superseded 10,898,166-byte rollback.
+
+[Native replays and live verification limits](feature-checkpoint.md#manual-routes-for-the-second-patrol-room) · [Manual and automatic controls](puzzles-and-secrets.md#secret-cave-room-handoffs)
