@@ -443,6 +443,10 @@ def objects_notification(original):
         189047: b'if(this._direction!==d){' + beacon_actor(player_only=True) +
                 b'if(SceneManager._scene?._wqaCaveCueUntil&&this===$gamePlayer)'
                 b'globalThis.WendyQuestAccessCaveTimingPose?.(SceneManager._scene);}\n        ',
+        # Native interpolation has reached the reserved tile. updateMove
+        # runs on moving characters, separately from jumping or relocation.
+        191826: b'\n        if(this===$gamePlayer&&Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady)'
+                b'globalThis.WendyQuestAccessFootstep?.(SceneManager._scene,this);',
         194431: b'\n    if(this._tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
         194681: b'\n    if(this._tileId!==tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
         195557: beacon_actor(b'd') + b'if(SceneManager._scene?._wqaCaveTimingActive&&this===$gamePlayer)'

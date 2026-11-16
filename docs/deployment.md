@@ -576,3 +576,14 @@ November 16, 2026. The Steam installer replaced the crossing worker and speech f
 Cleanup removed 24,365,500 bytes of disposable build and test output. Automatic review blocked removal of the superseded rollback copy because it is recovery data. Both recovery copies are retained.
 
 [Offline native replay and input scope](feature-checkpoint.md#first-room-refuge-to-the-next-crossing)
+
+## Patrol-line loot and completed footsteps
+
+November 16, 2026. The Steam installer replaced six mod payload files and added the completed-step observer to the pinned native objects script. Fifteen other native scripts and all 241 geometry entries matched the preceding plan. The exact candidate passed the world replay, matching NW.js smoke and installer rehearsal, including interruption restoration and unknown-file protection. The independent installation check verified 44 payload files and all four existing save and configuration hashes matched.
+
+- Installed plan SHA-256 `d3950475d7573c0143844b458f808b857e2057c1a661480a1a70ecdabd7ab507`
+- Plugin SHA-256 `52cd5fec5f7895f76cafee20b03f6f4e34c92d76a4a141c5552abf4c8fafeb7d`
+- The signed Microsoft Defender CLI scanned the exact prepared files at 09:06 PST with exit zero and no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.328.0.
+- One rollback is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-loot/rollback-latest` with plan SHA-256 `b8cbcb93a051bce6b9fd20665c7cbc7f799c4c906006461a1216f760d5764e9d`. Cleanup removed 25,169,579 bytes of final disposable outputs and 21,781,605 bytes across two superseded rollbacks.
+
+The earlier automatic review rejected a mixed cleanup request because it classified the included rollback directory as protected recovery data. The owner authorized its deletion explicitly. Both deletions subsequently passed as individual operations after identifying the superseded hash and verifying the newer retained backup, live installation and unchanged recovery structure. [Native tests and remaining live checks](feature-checkpoint.md#patrol-line-loot-and-native-footstep-completion)

@@ -18,6 +18,27 @@ function matchesMotionStamp(stamp, offset, patrols) {
     return true;
 }
 
+// A scheduled step compares values directly with the native patrols.
+// Keep this order aligned with STAMP_FIELDS without copying their routes.
+function matchesNativeMotionStamp(stamp, start, event) {
+    let at = start;
+    return stamp[at++] === event._eventId &&
+        stamp[at++] === event._x && stamp[at++] === event._y &&
+        stamp[at++] === event._realX && stamp[at++] === event._realY &&
+        stamp[at++] === event._moveSpeed && stamp[at++] === event._moveFrequency &&
+        stamp[at++] === event._direction && stamp[at++] === event._stopCount &&
+        stamp[at++] === event._waitCount && stamp[at++] === event._jumpCount &&
+        stamp[at++] === event._moveRouteIndex &&
+        stamp[at++] === Number(event._moveRouteForcing === true) &&
+        stamp[at++] === event._originalMoveRouteIndex &&
+        stamp[at++] === Number(event._moveType === 3) &&
+        stamp[at++] === Number(event._locked === true) &&
+        stamp[at++] === Number(event._directionFix === true) &&
+        stamp[at++] === Number(event._through === true) &&
+        stamp[at++] === Number(event._priorityType === 1) &&
+        stamp[at] === Number(event._trigger === 2 && event._priorityType === 1);
+}
+
 function copyRoute(route) {
     if (!Array.isArray(route?.list) || !route.list.length || route.list.length > MAX_ROUTE_COMMANDS) return null;
     const commands = [];
@@ -148,4 +169,4 @@ function tickPatrol(actor, player, view, tryStep, inView = nearScreen) {
 }
 
 module.exports = { copyPatrol, tickPatrol, advancePosition, mayAdvanceAutonomousRoute, TIMING_CUE,
-    STAMP_WIDTH, writeMotionStamp, matchesMotionStamp };
+    STAMP_WIDTH, writeMotionStamp, matchesMotionStamp, matchesNativeMotionStamp };

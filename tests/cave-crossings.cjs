@@ -8,6 +8,9 @@ const { CHASE_LEGS, chaseHandoff } = require('../src/world/puzzles/cave-progress
 const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { TIMING_CUE } = require('../src/world/puzzles/patrol-motion.cjs');
+const { createAutowalk } = require('../src/world/autowalk');
+const { capturePatrolLine } = require('../src/world/puzzles/patrol-line-playback');
+
 
 async function verifyCaveCrossings(c, load, configureMotion, motionRequest, verifyMotion, verifyWorker) {
     const liveState = () => captureWorld(c, true, undefined, undefined, [], true).live;
@@ -111,6 +114,8 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
     const exit = await follow(line.run, line.guards, 26);
     assert.deepEqual(exit.arrival, { x: 35, y: 16, facing: null });
 
+    await verifyLineLoot();
+
     const distraction = setup(200, 23, 26, 15.25, 21.25);
     const firstBlocker = await follow(distraction.run, distraction.guards, 15);
     assert.deepEqual(firstBlocker, { status: 'patrolBlocked', guard: 4 });
@@ -146,6 +151,109 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
     }
     activate(chase.run, chase.guards, 2, nativeStep, true);
     console.log('Verified western refuges, patrol-line exit, distraction prerequisites and nine native chase handoffs.');
+
+    async function verifyLineLoot() {
+        const saved = { Input: c.Input, $gameTemp: c.$gameTemp, $gameMessage: c.$gameMessage,
+            WendyQuestAccessFieldMove: c.WendyQuestAccessFieldMove,
+            WendyQuestAccessAutowalkInput: c.WendyQuestAccessAutowalkInput };
+        const scene = c.SceneManager._scene;
+        const prefs = { autowalk: true };
+        const reports = [];
+        let testedPause = false;
+        const auto = createAutowalk(c, () => true, () => prefs,
+            (_scene, record, failed, arrived) => reports.push({ record, failed, arrived }));
+        c.Input = { dir4: 0 };
+        c.$gameTemp = { isDestinationValid: () => false, clearDestination() {} };
+        c.$gameMessage = { isBusy: () => false };
+        c.WendyQuestAccessFieldMove = auto.moved;
+        c.WendyQuestAccessAutowalkInput = auto.input;
+        scene._wqaFieldReady = true;
+        try {
+            for (const [trigger, phase, targets] of [[24, 0, [25, 34, 26]], [22, 372, [34, 25, 26]]]) {
+                const { run, guards } = setup(199, 5, 17, 0, 12.25);
+                const { gameMap, player } = run;
+                const event = gameMap._events[trigger];
+                gameMap._events[trigger === 22 ? 24 : 22].setPosition(0, 0);
+                for (const command of event.list()) {
+                    if (command.code !== 205) continue;
+                    const [id, route] = command.parameters;
+                    gameMap._events[id].forceMoveRoute(phase ? JSON.parse(JSON.stringify(route)) : route);
+                }
+                erase(event);
+                delete player.direction;
+                Object.assign(player._followers, { areGathering: () => false, updateMove() {} });
+                c.Graphics.frameCount = 0;
+                for (let i = 0; i < phase; i++) tick();
+                const point = () => [player.x, player.y];
+                function tick() {
+                    c.Graphics.frameCount++;
+                    gameMap.updateEvents();
+                    assert(!guards.some(guard => guard.isStarting()), 'the native patrols never touch Wendy');
+                    const beforeX = player.scrolledX();
+                    const beforeY = player.scrolledY();
+                    player.moveByInput();
+                    if (player.isMoving()) player.updateMove();
+                    player.updateScroll(beforeX, beforeY);
+                }
+                for (const target of targets) {
+                    const live = liveState();
+                    const req = { ...motionRequest(run, guards), event: target, field: true, patrolGuidance: true,
+                        lineNavigation: true };
+                    req.motion.frame = c.Graphics.frameCount;
+                    const track = capturePatrolLine(c, req.motion, target);
+                    assert(track, 'capture is tied to the authored trigger and route');
+                    let result;
+                    await verifyWorker(run, req, live, packet => { result = packet; });
+                    assert.equal(result.status, 'patrolLine');
+                    testedPause ||= result.moves.some((move, i) => i && move.frame > result.moves[i - 1].frame + 16);
+                    const job = { scene, mode: 'walk', target, x: player.x, y: player.y, line: track };
+                    const record = { kind: 'routeDirections', legs: [], activate: result.activate,
+                        facing: result.arrival.facing, guideAction: target !== 26 };
+                    for (let i = 0; i < 12; i++) tick(); // worker replies after the patrols have advanced
+                    assert(auto.start(job, result, record));
+                    if (phase === 0 && target === 25) {
+                        const guard = track.refs[0].actor;
+                        const original = guard._originalMoveRoute;
+                        guard._originalMoveRoute = {};
+                        while (c.Graphics.frameCount < result.moves[0].frame) tick();
+                        assert(!auto.active(scene), 'a changed patrol prevents the first native step');
+                        assert.deepEqual(point(), [5, 17]);
+                        assert(reports.at(-1).failed);
+                        guard._originalMoveRoute = original;
+                        req.motion = { ...motionRequest(run, guards).motion, frame: c.Graphics.frameCount };
+                        job.line = capturePatrolLine(c, req.motion, target);
+                        result = previewCrossing(run.geometry, liveState(), req);
+                        assert(auto.start(job, result, record));
+                    }
+                    const start = c.Graphics.frameCount;
+                    while (auto.active(scene) && c.Graphics.frameCount - start < 2301) tick();
+                    assert.deepEqual(point(), [result.arrival.x, result.arrival.y]);
+                    assert(reports.at(-1).arrived);
+                    const nativeTarget = gameMap._events[target];
+                    if (target === 26) {
+                        assert.equal(result.activate, 6);
+                        assert.deepEqual(point(), [34, 16]);
+                        const boundary = record.activate;
+                        c.Input.dir4 = boundary;
+                        while (player.x !== nativeTarget.x) tick();
+                        c.Input.dir4 = 0;
+                        while (player.isMoving()) tick();
+                        player.checkEventTriggerHere([1]);
+                    } else {
+                        assert.equal(player._direction, result.arrival.facing);
+                        player.checkEventTriggerThere([0]);
+                    }
+                    assert(nativeTarget.isStarting(), 'the planned handoff accepts the original native event');
+                    nativeTarget._starting = false;
+                }
+            }
+        } finally {
+            auto.stop(scene);
+            Object.assign(c, saved);
+        }
+        assert(testedPause, 'the routes include waiting between native moves');
+        console.log('Verified both loot orders, both guard triggers, timed pauses, native interaction and exit handoff.');
+    }
 }
 
 module.exports = { verifyCaveCrossings };

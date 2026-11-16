@@ -248,16 +248,15 @@ function verifyWallFeedback() {
     const fieldReady = owner => owner === scene && scene._wqaFieldReady && !scene._wqaSettingsActive;
     const wall = createWallAudio(c, fieldReady, audio, () => options, () => now);
     const footsteps = createFootsteps(c, fieldReady, audio, () => options);
-    c.WendyQuestAccessFieldMove = (scene, motion, success) => {
-        wall.move(scene, motion, success);
-        footsteps.move(scene, motion, success);
-    };
+    c.WendyQuestAccessFieldMove = (scene, motion, success) => wall.move(scene, motion, success);
+    c.WendyQuestAccessFootstep = (owner, player) => footsteps.landed(owner, player);
     c.WendyQuestAccessFieldEvent = owner => { wall.interrupt(owner); footsteps.leave(owner); };
     c.Input = { dir4: 0 };
     c.$gameTemp = { clearDestination() {}, isDestinationValid: () => false };
     c.$gameMessage = { isBusy: () => false };
     c.Graphics.frameCount = 100;
     c.Graphics._wqaWallEnabled = true;
+    c.Graphics._wqaFootstepsEnabled = true;
     scene._wqaFieldReady = true;
     const { gameMap, player } = load(19);
     const place = (x, y, dir = 2) => Object.assign(player, { _x: x, _y: y, _realX: x, _realY: y,
@@ -265,9 +264,20 @@ function verifyWallFeedback() {
     const press = direction => {
         c.Graphics.frameCount++;
         c.Input.dir4 = direction;
+        const before = calls.filter(call => call.source === 'footstep').length;
         player.moveByInput();
-        for (let i = 0; i < 64 && player.isMoving(); i++) player.updateMove();
+        const stepped = player.isMoving();
+        assert.equal(calls.filter(call => call.source === 'footstep').length, before);
+        let updates = 0;
+        while (updates < 64 && player.isMoving()) {
+            player.updateMove();
+            updates++;
+            if (player.isMoving()) assert.equal(calls.filter(call => call.source === 'footstep').length, before);
+        }
         assert(!player.isMoving(), 'native step settles within the fixture bound');
+        assert.equal(calls.filter(call => call.source === 'footstep').length,
+            before + (stepped && options.footsteps ? 1 : 0));
+        return updates;
     };
     const next = (x, y, d) => [gameMap.roundXWithDirection(x, d), gameMap.roundYWithDirection(y, d)];
     let edge;
@@ -283,12 +293,14 @@ function verifyWallFeedback() {
     }
     assert(edge);
     place(...edge, 6);
-    press(6);
+    assert.equal(press(6), 16);
     const north = output.get(CUE.wallNorth);
     assert.deepEqual(north.bearing, [0, 0, 1]);
     assert.equal(north.until, 4500);
     now = 1850;
-    press(6);
+    player._dashing = true;
+    assert.equal(press(6), 8);
+    player._dashing = false;
     assert.equal(output.get(CUE.wallNorth), north, 'same wall extends without restarting');
     assert.equal(north.until, 5350);
     assert.deepEqual(calls.filter(call => call.source === 'footstep').map(call => call.bearing[0]), [-0.25, 0.25]);

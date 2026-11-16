@@ -211,3 +211,5 @@ The [Secret Cave update](docs/puzzles-and-secrets.md#cave-timing-cues) records l
 [Current Steam deployment](docs/deployment.md#secret-cave-crossing-audit) records the west-lane and other crossing fixes, including the exact paced pings, distraction prerequisites and chase handoffs. [Native replay scope](docs/feature-checkpoint.md#secret-cave-crossing-audit) records the confirmed room exits and remaining gameplay checks.
 
 [Current Steam deployment](docs/deployment.md#five-safe-tiles-from-the-first-room-refuge) records the two-file fix for the five safe north tiles after the first room's side refuge. [Native replay and dash verification](docs/feature-checkpoint.md#first-room-refuge-to-the-next-crossing) records the first checkpoint replay and the outstanding physical input check.
+
+[Current Steam deployment](docs/deployment.md#patrol-line-loot-and-completed-footsteps) records accessible routes to both guard-line pickups and back to the exit, footsteps at native interpolation completion and the verified single rollback. [Controls and the manual exit handoff](docs/puzzles-and-secrets.md#secret-cave-room-handoffs) explain the Autowalk option.

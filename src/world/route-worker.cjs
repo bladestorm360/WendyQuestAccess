@@ -8,6 +8,7 @@ const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, CELL_BITS } = require('./geome
 const { solveRoute, findReachable } = require('./routes.cjs');
 const { MAX_CATALOG_BYTES, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
+const { lineDestination } = require('./puzzles/patrol-line-state.cjs');
 const { routeThroughTerrain } = require('./terrain-controls.cjs');
 const { solveSaltRoute } = require('./puzzles/salt-route.cjs');
 
@@ -163,7 +164,10 @@ parentPort.on('message', message => {
             if (request.candidates !== undefined) result = findReachable(base, live, request, cancelled);
             else if (request.transfer !== undefined)
                 result = transferRoute(base, map, live, request, request.transfer, cancelled);
-            else result = request.motion ? previewCrossing(base, live, request, cancelled) : solveRoute(base, live, request, cancelled);
+            else if (request.motion) {
+                const lineNavigation = request.lineNavigation === true && lineDestination(map, request.event);
+                result = previewCrossing(base, live, { ...request, lineNavigation }, cancelled);
+            } else result = solveRoute(base, live, request, cancelled);
             if (map === 19 && live.salt && !request.refresh &&
                 ['unreachable', 'approachBlocked'].includes(result.status)) {
                 result = solveSaltRoute(base, live, request, manifest.maps[map].salt, cancelled) || result;
@@ -213,6 +217,6 @@ parentPort.on('message', message => {
         result = { status: 'unavailable' };
     }
     if (cancelled() || !result) result = { status: 'cancelled' };
-    const data = result.available || result.course || result.opening?.stamps;
+    const data = result.available || result.course || result.stamps || result.opening?.stamps;
     parentPort.postMessage({ epoch, sequence, map, result }, data ? [data.buffer] : []);
 });

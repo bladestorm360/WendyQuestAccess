@@ -812,7 +812,7 @@ function boot(root, nodeRequire, nodeProcess) {
         quests?.suspend(scene);
         soundscape?.invalidate(scene);
         if (scene?._wqaTerrainWork || !steppedActor) wall?.leave(scene);
-        if (!steppedActor || steppedActor === root.$gamePlayer) footsteps?.leave(scene);
+        if (!steppedActor) footsteps?.leave(scene);
         // The accepted cardinal step already advanced the cave guide.
         // Match its predicted tile here; other field changes revoke the cue.
         if (steppedActor && steppedActor === root.$gamePlayer) caveTiming?.pose(scene);
@@ -851,7 +851,9 @@ function boot(root, nodeRequire, nodeProcess) {
         try { field?.autowalk.moved(scene, direction, succeeded); } catch { field?.autowalk.stop(scene); }
         try { beacon?.moved(scene, direction, succeeded); } catch { beacon?.stop(scene); }
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
-        try { footsteps?.move(scene, direction, succeeded); } catch { footsteps?.leave(scene); }
+    };
+    root.WendyQuestAccessFootstep = function (scene, player) {
+        try { footsteps?.landed(scene, player); } catch { footsteps?.leave(scene); }
     };
     root.WendyQuestAccessFieldEvent = function (scene, event) {
         field?.iceEventStarted(scene, event);

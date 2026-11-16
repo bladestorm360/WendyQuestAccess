@@ -5,6 +5,8 @@ const { routeGoals, inside, solveWorldRoute } = require('../routes.cjs');
 const { motionWorld, startMotion, advancePatrols, advancePlayer } = require('./motion-world.cjs');
 const { TIMING_CUE, STAMP_WIDTH, writeMotionStamp, mayAdvanceAutonomousRoute, tickPatrol } = require('./patrol-motion.cjs');
 
+const { lineCrossing } = require('./patrol-line.cjs');
+
 const START_WINDOW = 60;
 const MIN_START_WINDOW = TIMING_CUE.minSpan;
 const MAX_STEPS = 3;
@@ -510,6 +512,11 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     const unsafe = patrolGuidance && (fixedHeading < 0 || request.timingHeadings) && !motion.barrier &&
         patrolCoverage(world.patrol, motion.patrols, cancelled);
     if (cancelled()) return { status: 'cancelled' };
+    if (request.lineNavigation && !motion.barrier && fixedHeading < 0) {
+        const course = lineCrossing(world, request, origin, unsafe, stops, patrolCoverage, cancelled);
+        if (course) return course;
+        if (cancelled()) return { status: 'cancelled' };
+    }
     for (const option of alternatives) {
         const goals = routeGoals(world.player, option, cancelled);
         if (cancelled()) return { status: 'cancelled' };

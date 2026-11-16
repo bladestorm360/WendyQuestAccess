@@ -8,6 +8,8 @@ const { atApproach, atBoardingApproach } = require('./interaction-approach');
 const { activeMovingEnemy, pageHasInteraction } = require('./destinations');
 const { inactiveFloorScene } = require('./local-destinations');
 
+const { admitPatrolLine, patrolStepReady } = require('./puzzles/patrol-line-playback');
+
 const TOUCH_TRIGGERS = [1, 2];
 
 function createAutowalk(root, ready, preferences, report) {
@@ -26,15 +28,18 @@ function createAutowalk(root, ready, preferences, report) {
         const map = root.$gameMap;
         const player = root.$gamePlayer;
         const { course, arrival } = result;
+        const line = result.status === 'patrolLine' && admitPatrolLine(result, job.line, root.Graphics.frameCount);
+        if (result.status === 'patrolLine' && !line) return false;
         const target = targetAt(map, job);
         if (!preferences().autowalk || !ready(scene) || map.isAnyEventStarting?.() ||
             player._x !== job.x || player._y !== job.y || !Array.isArray(map._events) || map._events.length > MAX_EVENTS + 1 ||
             (!target && !job.nearestLanding && !job.point) || target?._erased ||
-            Object.prototype.toString.call(course) !== '[object Uint8Array]' || course.length !== result.distance ||
-            course.length >= MAX_CELLS || !Number.isInteger(arrival?.x) || !Number.isInteger(arrival?.y)) return false;
+            (!line && (Object.prototype.toString.call(course) !== '[object Uint8Array]' ||
+                course.length !== result.distance || course.length >= MAX_CELLS)) ||
+            !Number.isInteger(arrival?.x) || !Number.isInteger(arrival?.y)) return false;
         stop();
         active = { scene, job, map, player, target, targetX: target?._x, targetY: target?._y, page: target?._pageIndex,
-            trigger: target?._trigger, x: job.x, y: job.y, index: 0, course, arrival, record,
+            trigger: target?._trigger, x: job.x, y: job.y, index: 0, course, line, arrival, record,
             manualEntry: result.autowalkStop, pending: null, dirty: false };
         scene._wqaAutowalkActive = scene._wqaPresentation = true;
         return true;
@@ -101,17 +106,23 @@ function createAutowalk(root, ready, preferences, report) {
             return 0;
         }
         if (!preferences().autowalk || state.dirty || state.pending || !valid(state)) return changed(state);
-        const { map, index, course, arrival, record, job } = state;
-        if (index === course.length) {
+        const { map, index, course, line, arrival, record, job } = state;
+        const length = line ? line.moves.length : course.length;
+        if (index === length) {
             if (player._x !== arrival.x || player._y !== arrival.y ||
                 (record.land && !canLand(map, arrival.x, arrival.y))) return changed(state);
             if (record.enemyBlocked && !job.enemyCurrent?.()) return changed(state);
             if (record.enemyBlocked) return end(state, { ...record, legs: [], more: false, directionsOnly: true });
             return arrive(state, record);
         }
-        const step = DIRECTIONS[course[index] & 3];
+        const now = line && root.Graphics.frameCount;
+        const move = line && line.moves[index];
+        if (line && now < line.frame + move.frame) return 0;
+        const step = DIRECTIONS[line ? move.heading : course[index] & 3];
         const x = map.roundXWithDirection(player._x, step);
         const y = map.roundYWithDirection(player._y, step);
+        if (line && !patrolStepReady(line, player, map, root.$dataMap, index, now, x, y))
+            return changed(state, 'Autowalk stopped. Guard timing changed. Request directions again.');
         if (!player.canPass(player._x, player._y, step)) {
             if (job.mode === 'walk' && player.findEventsAt(x, y).some(event => activeMovingEnemy(root, event)))
                 return end(state, { kind: 'fieldStatus', name: 'Autowalk stopped. Blocked by an enemy.' });
@@ -128,13 +139,13 @@ function createAutowalk(root, ready, preferences, report) {
                     return end(state, { kind: 'routeDirections', name: 'Autowalk paused', legs: [],
                         boundary: step, boundaryName: 'Map cleanup', manualHandoff: true }, true);
                 }
-                if (floor === state.target && index === course.length - 1) {
+                if (floor === state.target && index === length - 1) {
                     return arrive(state, { ...record, activate: step });
                 }
                 return end(state, { kind: 'routeDirections', name: 'Autowalk stopped', legs: [], boundary: step }, true);
             }
         }
-        if (state.manualEntry && index === course.length - 1) return changed(state);
+        if (state.manualEntry && index === length - 1) return changed(state);
         state.pending = { direction: step, x, y };
         return step;
     }
