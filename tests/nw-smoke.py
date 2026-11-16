@@ -70,7 +70,7 @@ def fixture(runtime, installed):
     movement = ['function Game_CharacterBase() {}', 'function Game_Player() {}',
                 'Object.setPrototypeOf(Game_Player.prototype, Game_CharacterBase.prototype)',
                 'function Game_Map() {}', 'function Game_Interpreter() {}']
-    for method in ('Game_CharacterBase.prototype.setDirection', 'Game_CharacterBase.prototype.isDirectionFixed',
+    for method in ('Game_CharacterBase.prototype.moveStraight', 'Game_CharacterBase.prototype.setDirection', 'Game_CharacterBase.prototype.isDirectionFixed',
                    'Game_CharacterBase.prototype.resetStopCount', 'Game_Player.prototype.moveByInput', 'Game_Player.prototype.reserveTransfer',
                    'Game_Map.prototype.setupStartingMapEvent', 'Game_Interpreter.prototype.command201',
                    'Game_Interpreter.prototype.command205'):
@@ -1011,7 +1011,27 @@ const interval = setInterval(() => {
             Graphics.app.renderer.emit('postrender');
         }
         if (!require('fs').existsSync(receipt + '.cave-cue')) return;
-        require('fs').writeFileSync(receipt + '.cave-cue-ms', String(performance.now() - caveCueStarted));
+        const fs = require('fs');
+        if (!fs.existsSync(receipt + '.cave-stepped')) {
+            fs.writeFileSync(receipt + '.cave-cue-ms', String(performance.now() - caveCueStarted));
+            const player = Object.assign($gamePlayer, {
+                canPass: () => true, setMovementSuccess: () => {}, isMovementSucceeded: () => true,
+                reverseDir: direction => 10 - direction, increaseSteps() {}
+            });
+            Object.setPrototypeOf(player, Game_CharacterBase.prototype);
+            $gameMap.xWithDirection = $gameMap.roundXWithDirection = x => x;
+            $gameMap.yWithDirection = $gameMap.roundYWithDirection = (y, direction) => y + (direction === 2 ? 1 : -1);
+            Graphics.frameCount += 4;
+            Game_CharacterBase.prototype.moveStraight.call(player, 2);
+            if (player._y !== 27 || !timingScene._wqaCaveTimingActive || timingScene._wqaCaveReview)
+                throw Error('The native field-change notification stopped the active cave crossing');
+            fs.writeFileSync(receipt + '.cave-stepped', '');
+            Graphics.frameCount = timingScene._wqaCaveCueDue;
+            WendyQuestAccessCaveTimingUpdate(timingScene);
+            Graphics.app.renderer.emit('postrender');
+            return;
+        }
+        if (!fs.existsSync(receipt + '.cave-follow')) return;
         dialogueShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         if (timingScene._wqaCaveTimingActive) throw Error('Native scene entry retained the cave timing cue');
@@ -2396,7 +2416,9 @@ parentPort.postMessage = packet => {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.wall-bump'), String(packet.status));
     }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 6 && active.forward === -1) {
-        fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.cave-cue'), String(packet.status));
+        const receipt = path.join(__dirname, '..', 'receipt.json');
+        const phase = fs.existsSync(receipt + '.cave-stepped') ? '.cave-follow' : '.cave-cue';
+        fs.writeFileSync(receipt + phase, String(packet.status));
     }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 15 && active.right === 0 && active.forward === 1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.battle-cue'),
@@ -2517,7 +2539,7 @@ def main():
             raise RuntimeError('NW autowalk narration or explicit stop failed')
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
             raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
-        if timed['kind'] != 'timedCue' or timed.get('speech') != '2 tiles south on the ping.':
+        if timed['kind'] != 'timedCue' or timed.get('speech') != 'On the ping, go 2 tiles south. Stop there and request directions again.':
             raise RuntimeError(f'NW fixture did not publish the verified crossing length: {data}')
         cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
@@ -2533,8 +2555,9 @@ def main():
         battle_cue = json.loads(receipt.with_suffix('.json.battle-cue').read_text(encoding='utf8'))
         if battle_cue['status'] != 1 or abs(battle_cue['pitch'] - 1) > 0.00001:
             raise RuntimeError('NW battle timing cue did not submit stereo PCM to SDL')
-        if receipt.with_suffix('.json.cave-cue').read_text(encoding='utf8') != '1':
-            raise RuntimeError('NW cave cue did not publish stereo PCM to SDL')
+        if any(receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != '1'
+               for name in ('cave-cue', 'cave-follow')):
+            raise RuntimeError('NW cave cue did not publish stereo PCM to SDL before and after the native step')
         if receipt.with_suffix('.json.soundscape').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW ambient object cue did not publish stereo PCM to SDL')
         if not receipt.with_suffix('.json.muted-preview').is_file():
@@ -2694,7 +2717,7 @@ def main():
         print(f'Throttled warm wall preview status observed after {wall_ms:.1f} ms with 40 ms polling.')
         print(f'Verified a live stereo route beacon, off-course refresh and retirement in field settings. '
               f'Throttled warm native submission observed after {beacon_ms:.1f} ms with 40 ms polling.')
-        print(f'Verified native cave cue submission and retirement at cave exit. '
+        print(f'Verified native cave cue submission before and after a stock step, and retirement at cave exit. '
               f'Throttled warm submission observed after {cave_cue_ms:.1f} ms with 40 ms polling.')
 
 

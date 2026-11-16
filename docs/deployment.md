@@ -540,3 +540,14 @@ November 16, 2026. The verified Steam installation changed the plugin, speech fo
 - Prior plan `099563c93404161354345122069019c9c451d5bf160910fbae65b6c84e3396bf` is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-idle-cave-pings/rollback-latest`. Cleanup removed 35,189,991 bytes of generated outputs and superseded recovery.
 
 Check idle narration with **Cutscene descriptions** enabled by leaving Wendy standing on a field map. In the first Secret Cave patrol room, request directions and listen for each crossing leg on the appropriate side. The north corridor crossing stops at a refuge. Request directions again from the refuge. [Offline results](feature-checkpoint.md#idle-narration-and-per-leg-cave-pings)
+
+## Cave cue handoff after the first step
+
+November 16, 2026. The focused Steam update replaces the bundled plugin and speech formatter. All 16 native scripts, 40 other payload files and 241 geometry entries matched the preceding plan. The installer rehearsal, independent status and all four save and configuration hashes passed. The matching NW.js and native world checks covered the stock movement handoff and the first crossing north from the side refuge.
+
+- Installed plan SHA-256 `0c7ff5b5116ef9c25fae002784cde41898b5aca18d4b1f3608851490c175ca61`
+- Plugin SHA-256 `d69161cbedb906c545ae0ad5084e374b224acca8860e897ff1a1ace86f4a5287`
+- Signed Microsoft Defender scan `1F9578F9-17A5-461F-B51C-9F3EA0F762AD` completed at 07:20:24 PST with no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.328.0.
+- Prior plan `2e0a9221eb34115068b112e6341332d757044ae2c822979e52c74ccc6c4ac393` is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-handoff/rollback-latest`. Cleanup removed 36,009,580 bytes of generated outputs and superseded recovery.
+
+From the first room’s side refuge the guide says to go one tile north on the ping, stop and request directions again. The later west-lane crossing is still unverified. [Offline checks](feature-checkpoint.md#cave-cue-handoff-after-the-first-step)

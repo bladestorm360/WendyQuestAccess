@@ -950,7 +950,7 @@ async function verifyPatrolGuidance() {
     assert.deepEqual(roomPlan.opening.headings, [1, 3, 3, 3, 3, 3, 2]);
     await verifyWorker(initial, roomRequest, snapshot(initial), result => assert.deepEqual(result, roomPlan));
     assert.equal(formatSpeech({ kind: 'timedCue', direction: 4, headings: roomPlan.opening.headings, waiting: true }),
-        'Wait on this tile. On the ping, 1 west, then 5 north, then 1 east. Keep moving through the crossing.');
+        'Wait on this tile. On the ping, go 1 west, then 5 north, then 1 east. Stop there and request directions again.');
     for (const delay of [roomPlan.opening.from, roomPlan.opening.through - 30]) {
         for (const [mask, stepFrames] of [[0, 16], [127, 8]]) {
             for (const pause of [0, 18]) {
@@ -987,6 +987,18 @@ async function verifyPatrolGuidance() {
     const refugeFrames = refuge.opening.from + 4 * 16 + 18 + 120;
     assert.equal(verifyMotion(north, northGuards, refugeFrames, refuge.opening.headings, refuge.opening.from, 0, 18), refugeFrames);
     assert.deepEqual([north.player.x, north.player.y], [16, 21]);
+    const onward = { ...refugeRequest, ...motionRequest(north, northGuards) };
+    const next = previewCrossing(north.geometry, snapshot(north), onward);
+    assert.equal(next.status, 'timedCue');
+    const step = next.opening;
+    assert.deepEqual([step.direction, step.tiles, step.headings], [8, 1, [3]]);
+    assert.equal(formatSpeech({ ...step, kind: 'timedCue' }),
+        'On the ping, go 1 tile north. Stop there and request directions again.');
+    await verifyWorker(north, onward, snapshot(north), result => assert.deepEqual(result, next));
+    const onwardFrames = step.from + 16 + 120;
+    assert.equal(verifyMotion(north, northGuards, onwardFrames, step.headings, step.from), onwardFrames);
+    assert.deepEqual([north.player.x, north.player.y], [16, 20]);
+    console.log('Verified the exact one-tile crossing north from the side refuge and a safe stop.');
 
     const cave = load(196);
     const actors = configureMotion(cave, 6, 30, 0, 20);

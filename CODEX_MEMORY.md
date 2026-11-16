@@ -205,3 +205,5 @@ The [Secret Cave update](docs/puzzles-and-secrets.md#cave-timing-cues) records l
 [Current Steam deployment](docs/deployment.md#compass-cave-pings-and-continuous-crossings) records the compass cues and the verified continuous crossing. [Boss HP bars](docs/battle.md#boss-hp-bars) records the shared native gauge and target renderer verification.
 
 [Current Steam deployment](docs/deployment.md#idle-narration-and-per-leg-cave-pings) verifies the idle narration and per-leg cave cues. [Offline evidence](docs/feature-checkpoint.md#idle-narration-and-per-leg-cave-pings) records cold idle, the west–north–east replay and the refuge that replaces the eleven-step crossing.
+
+[Current Steam deployment](docs/deployment.md#cave-cue-handoff-after-the-first-step) verifies the stock movement cue handoff and exact stopping directions. [Offline replay](docs/feature-checkpoint.md#cave-cue-handoff-after-the-first-step) records the refuge step and the later west-lane timing limit.

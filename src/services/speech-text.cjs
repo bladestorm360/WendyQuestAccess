@@ -165,15 +165,16 @@ function formatSpeech(message) {
                     if (last?.direction === direction) last.tiles++;
                     else legs.push({ direction, tiles: 1 });
                 }
-                text = (message.waiting ? 'Wait on this tile. ' : '') + 'On the ping, ' +
-                    legs.map(leg => leg.tiles + ' ' + leg.direction).join(', then ') +
-                    '. Keep moving through the crossing.';
-                break;
+                text = (message.waiting ? 'Wait on this tile. ' : '') + 'On the ping, go ' +
+                    (legs.length === 1 ? `${legs[0].tiles} ${legs[0].tiles === 1 ? 'tile' : 'tiles'} ${legs[0].direction}` :
+                        legs.map(leg => leg.tiles + ' ' + leg.direction).join(', then ')) + '.';
+            } else {
+                const steps = Number.isInteger(message.tiles) && message.tiles >= 2 && message.tiles <= 3 ?
+                    message.tiles + ' tiles' : '1 tile';
+                text = `${message.escape ? 'Leave the patrol lane. ' : message.waiting ? 'Wait on this tile. ' :
+                    message.alternate ? 'Alternate opening. ' : ''}On the ping, go ${steps} ${heading}.`;
             }
-            const steps = Number.isInteger(message.tiles) && message.tiles >= 2 && message.tiles <= 3 ?
-                message.tiles + ' tiles' : 'One tile';
-            text = `${message.escape ? 'Leave the patrol lane. ' : message.waiting ? 'Wait for the guard to move. ' :
-                message.alternate ? 'Alternate opening. ' : ''}${steps} ${heading}${message.terminal ? ' to an event' : ''} on the ping.`;
+            text += message.terminal ? ' The last step triggers the event.' : ' Stop there and request directions again.';
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;
         }

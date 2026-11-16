@@ -813,7 +813,10 @@ function boot(root, nodeRequire, nodeProcess) {
         soundscape?.invalidate(scene);
         if (scene?._wqaTerrainWork || !steppedActor) wall?.leave(scene);
         if (!steppedActor || steppedActor === root.$gamePlayer) footsteps?.leave(scene);
-        caveTiming?.stop(scene);
+        // The accepted cardinal step already advanced the cave guide.
+        // Match its predicted tile here; other field changes revoke the cue.
+        if (steppedActor && steppedActor === root.$gamePlayer) caveTiming?.pose(scene);
+        else caveTiming?.stop(scene);
         if (scene?._wqaTerrainWork) beacon?.stop(scene);
         else if (!steppedActor) beacon?.invalidate(scene);
         field?.changed(scene, steppedActor);
