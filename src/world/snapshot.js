@@ -9,7 +9,7 @@ const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit
 const { collectQuestDestinations, questDestinationLabel, questPageHasAction } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { transferOptions } = require('./transfer-events.cjs');
-const { checkpointTarget, caveDestination, timedCave } = require('./puzzles/cave');
+const { checkpointTarget, caveDestination, patrolDestination, timedCave } = require('./puzzles/cave');
 const { GATE_SWITCHES, BREAKFAST_MAPS } = require('./terrain-control-labels.cjs');
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
@@ -24,6 +24,8 @@ const DUNGEON_ROUTES = new Set([
 
 function eventTarget(root, mode, event, entry, page, spoilers = false, questMarker = false) {
     const map = root.$gameMap._mapId;
+    const patrol = mode === 'walk' && patrolDestination(map, event, page);
+    if (patrol) return patrol;
     if ((!spoilers && concealedDestination(map, event)) || !pageHasInteraction(page) ||
         inactiveFloorScene(root, event, page) || excludedDestination(entry, page) ||
         (map === 113 && !worldEntranceRevealed(root, event._eventId, spoilers, questMarker))) return null;

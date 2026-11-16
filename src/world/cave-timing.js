@@ -57,22 +57,43 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
             }) };
     }
 
-    function start(captured, x, y, opening) {
-        const { scene, motion } = captured;
+    function admit(captured, opening) {
+        const { motion } = captured;
         const span = opening?.through - opening?.from;
         const samples = span - TIMING_CUE.lead + 1;
-        if (!ready(scene) || !CARDINAL[opening?.direction] || !Number.isInteger(opening.from) ||
+        if (!CARDINAL[opening?.direction] || !Number.isInteger(opening.from) ||
             opening.from < 0 || opening.from > TIMING_CUE.wait || !Number.isInteger(span) ||
             span < TIMING_CUE.minSpan || span > TIMING_CUE.maxSpan ||
             Object.prototype.toString.call(opening.stamps) !== '[object Float64Array]' ||
             opening.stamps.length !== captured.refs.length * STAMP_WIDTH * samples) return false;
         const due = motion.frame + opening.from;
-        if (frame() >= due + samples) return false;
+        return frame() < due + samples ? { opening, due, samples } : null;
+    }
+
+    function schedule(state, due) {
+        state.scene._wqaCaveCueDue = Math.max(1, due);
+    }
+
+    function start(captured, x, y, opening, repeat) {
+        const { scene } = captured;
+        if (!ready(scene) || repeat && (!CARDINAL[repeat.direction] || typeof repeat.refresh !== 'function')) return false;
+        const admitted = admit(captured, opening);
+        if (!admitted && !repeat) return false;
         stop();
-        owner = { ...captured, x, y, opening, due, samples, queued: false };
+        owner = { ...captured, ...admitted, x, y, repeat, queued: false };
         watch(scene);
-        scene._wqaCaveCueDue = Math.max(1, due);
+        schedule(owner, admitted?.due ?? frame() + TIMING_CUE.interval);
         return true;
+    }
+
+    function refreshResult(state, captured, opening) {
+        if (!live(state)) return;
+        state.waiting = false;
+        const admitted = captured && opening?.direction === state.repeat.direction &&
+            opening.tiles === state.repeat.tiles && admit(captured, opening);
+        if (admitted) Object.assign(state, captured, admitted);
+        else state.opening = null;
+        schedule(state, Math.max(frame(), state.nextPing || 0, admitted?.due ?? frame() + TIMING_CUE.interval));
     }
 
     function live(state) {
@@ -104,7 +125,13 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
         if (owner !== state) return;
         const now = frame();
         if (!live(state)) return stop(state.scene);
-        if (!verifiedAt(state, now)) {
+        if (!state.opening || !verifiedAt(state, now)) {
+            if (state.repeat) {
+                state.opening = null;
+                state.waiting = state.repeat.refresh(state);
+                if (!state.waiting) schedule(state, now + TIMING_CUE.interval);
+                return;
+            }
             stop(state.scene);
             return report('Patrol timing changed. Request directions again.');
         }
@@ -117,22 +144,27 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
             () => live(state) && frame() < until && state.player._direction === facing, status => {
                 if (status < 0 && stop(state.scene)) report('Timing audio is unavailable. Request directions again.');
             }, 'cave')) return stop(state.scene);
-        if (owner === state) state.scene._wqaCaveCueUntil = until;
+        if (owner !== state) return;
+        if (state.repeat) {
+            state.nextPing = now + TIMING_CUE.interval;
+            schedule(state, state.nextPing);
+        } else state.scene._wqaCaveCueUntil = until;
     }
 
     return {
-        warm, capture, start, stop,
+        warm, capture, start, refreshResult, stop,
         cancelPlan(scene) { if (owner?.scene === scene) stop(scene); },
         active: scene => owner?.scene === scene || preparation?.scene === scene,
         pose(scene) { if (owner?.scene === scene && owner.facing !== undefined) stop(scene); },
         update(scene) {
             const state = owner;
-            if (!state || state.scene !== scene || state.queued) return;
+            if (!state || state.scene !== scene || state.queued || state.waiting) return;
             const renderer = root.Graphics.app?.renderer;
             if (typeof renderer?.once !== 'function') return stop(scene);
             state.queued = true;
             scene._wqaCaveCueDue = 0;
             renderer.once('postrender', () => {
+                state.queued = false;
                 try { play(state); } catch { if (owner === state) stop(scene); }
             });
         }

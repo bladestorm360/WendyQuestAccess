@@ -129,6 +129,27 @@ for (const id of ['frostyna-idea', 'frostyna-prison-blast', 'frostyna-reaction',
     assert(f.played[0].paused);
 }
 
+for (const [m, e, p, i, a, , visual] of cues['idea-dave-statue'].beats) {
+    const f = fixture(m, e, p);
+    const { candidate, sprite } = f.actor(a);
+    candidate._characterName = sprite._characterName = '';
+    sprite.texture.valid = false;
+    f.interpreter._index = i;
+    f.narration.accepted(f.scene, f.interpreter, candidate, undefined, visual);
+    f.frame();
+    assert.equal(f.played.length, 0);
+    f.balloon(visual, candidate, sprite);
+    const balloon = f.spriteset._balloonSprites[0];
+    balloon.worldTransform = { tx: -20, ty: 100 };
+    f.frame();
+    assert.equal(f.played.length, 0);
+    balloon.worldTransform.tx = 100;
+    f.frame(false);
+    assert.equal(f.played.length, 0);
+    f.renderer.emit('postrender');
+    assert.equal(f.played[0]?.id, 'idea-dave-statue');
+}
+
 const fight = fixture(63, 5, 1);
 const { candidate: collapsed } = fight.actor(16);
 const frygor = fight.actor(6);

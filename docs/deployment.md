@@ -505,3 +505,15 @@ The world, battle command and target fixtures passed with the stock development 
 In Cracked Cove, request directions to the checkpoint while the Search and Rescue Officer is in the passage. Expect the directions to his tile and “Blocked by Search and Rescue Officer.” Talk to him with Baconator in the party, then request directions again to the same destination. At Brekky Byway, Shift+M reads the current bacon bridge art. On the world map, leave Spoiler mode off and sail to the Secret Island boat landing. Follow the Secret Island route after dismounting and continue after the discovery marker. In battle, highlight Axoflopl or OrEggAmi and press I. In Special, move through the locked rows and press I to repeat the displayed requirement. The ultimate announces the three captions after they render. [Route cases](navigation-audit.md#npcs-blocking-passages) · [Battle Details](battle.md#visual-descriptions-while-targeting)
 
 Installed from source checkpoint f44bd2035b5b81a46cbae77f18509b9694da262b after the Steam launcher closed. The independent status and hashes verified 16 native scripts, 42 payload files and 241 geometry entries. All four save and configuration hashes matched before and after. The previous Steam release is retained at C:/Games/Dev/WendyQuestAccess-analysis/wendy-npc-gates/rollback-latest. Cleanup removed 42,988,640 bytes of generated staging, fixtures, disposable logs and the superseded recovery copy.
+
+## Secret Cave patrol tracking and Dave narration
+
+The focused update is installed in Steam. It changes the plugin, crossing worker, patrol timing contract, speech formatter and narration pack. The verified install includes 16 native scripts, 42 payload files and 241 geometry files. All four save and configuration files matched their pre-install hashes. The installer fixture verified interruption rollback, reapply and removal. The prior verified plan is retained as the recovery copy.
+
+- Installed plan SHA-256 `4dab3652aa010da47b7e89b734fce61fb19cdc62e1a0f2e017fb571efca054d9`
+- Plugin SHA-256 `437fefeda67821ee093b10c266314332ef6d3d2923044dbe56042aedb3e032d7`
+- Narration pack SHA-256 `d88c255dc2e5319eadfd3424ff76f851c1f8d1a66f9948acf7c1b3eff57e266f`
+- The exact release stage passed Microsoft Defender scan `13DBA742-5E73-44D7-A272-254B929D6794` on November 16, 2026 with definition `1.463.328.0`.
+- The rollback plan is `6bb5c3cc7fdbf8b24e9cfe413a274bc99071cc038c93fe42f3647d80f30b2e73` at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-barrel/rollback-latest`.
+
+[Native patrol checks and player controls](puzzles-and-secrets.md#cave-timing-cues) · [Cutscene clips](cutscene-description.md#playback-and-verification)

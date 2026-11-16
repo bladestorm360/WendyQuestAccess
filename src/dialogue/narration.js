@@ -201,16 +201,21 @@ function createNarration(root, host, preferences) {
         const { actor, sprite, switched, visual } = state;
         const spriteset = scene._spriteset;
         const parent = spriteset?._tilemap;
-        if (!parent || actor._erased || !actor._characterName || sprite._characterName !== actor._characterName ||
-            actor._transparent || !renderedSprite(sprite, parent)) return false;
-        const pose = sprite.worldTransform;
-        if (!pose || pose.tx < 0 || pose.tx > host.graphics.width || pose.ty < 0 ||
-            pose.ty > host.graphics.height + 16) return false;
+        if (!parent || actor._erased || actor._transparent || sprite.parent !== parent ||
+            sprite._characterName !== actor._characterName) return false;
+        // Dave's authored light bulbs use blank map anchors. For those cues
+        // the actual rendered balloon owns visibility, including its pose.
+        const blankAnchor = visual === 9 && actor._characterName === '' && !actor._tileId;
+        const onScreen = (pose, allowance = 0) => pose && pose.tx >= 0 && pose.tx <= host.graphics.width &&
+            pose.ty >= 0 && pose.ty <= host.graphics.height + allowance;
+        if (!blankAnchor && (!actor._characterName || !renderedSprite(sprite, parent) ||
+            !onScreen(sprite.worldTransform, 16))) return false;
         if (visual > 0) {
             const balloons = spriteset._balloonSprites;
             return Array.isArray(balloons) && balloons.length <= 32 && balloons.some(balloon =>
                 balloon.targetObject === actor && balloon._target === sprite && balloon._balloonId === visual &&
-                balloon._duration > 0 && renderedSprite(balloon, spriteset._effectsContainer));
+                balloon._duration > 0 && renderedSprite(balloon, spriteset._effectsContainer) &&
+                (!blankAnchor || onScreen(balloon.worldTransform)));
         }
         if (visual === -1) return root.$gameScreen._flashColor?.[3] > 0;
         if (visual !== undefined) return true;

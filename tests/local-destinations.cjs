@@ -156,6 +156,10 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                     assert.equal(ordinary.name, formationName, 'wrong field graphic name at ' + id + '/' + entry.id);
                     fieldEnemyNames.add(ordinary.name);
                     enemyPages++;
+                } else if (ordinary?.patrol) {
+                    assert.equal(ordinary.name, 'Mech Guard');
+                    assert.equal(page.list[0].code, 117);
+                    assert.equal(page.list[0].parameters[0], 102);
                 } else assert.notEqual(ordinary?.category, 'enemies', 'unmapped enemy graphic at ' + id + '/' + entry.id);
                 if (ordinary?.category === 'treasure') assert.match(ordinary.name, /^(Chest|Treasure)$/);
                 if (ordinary?.category === 'events') {

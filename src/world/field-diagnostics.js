@@ -79,7 +79,9 @@ function createFieldDiagnostics(root, host, nodeRequire, nodeProcess) {
             followedDirection: request?.followedDirection, approach: result?.entrance ?? result?.event,
             blocker: result?.npc ?? result?.enemy ?? result?.boundaryEvent,
             distance: result?.distance, legs: result?.legs?.slice(0, 8).map(leg => [leg.direction, leg.tiles]),
-            arrival: result?.arrival, boundary: result?.boundary, reenter: result?.reenter, more: result?.more
+            arrival: result?.arrival, boundary: result?.boundary, reenter: result?.reenter, more: result?.more,
+            patrolStep: result?.opening?.direction ?? result?.direction, patrolTiles: result?.opening?.tiles ?? result?.tiles,
+            patrolOpening: result?.opening && [result.opening.from, result.opening.through]
         });
     }
 

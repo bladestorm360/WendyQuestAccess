@@ -972,7 +972,7 @@ const interval = setInterval(() => {
         tilemap.disableTempParent(parent);
         const patrol = { _eventId: 4, _x: 5, _realX: 4.5, _y: 24, _realY: 24, _pageIndex: 0, _trigger: 2,
             _priorityType: 1, _moveType: 0, _moveSpeed: 4, _moveFrequency: 5, _direction: 6,
-            _stopCount: 0, _waitCount: 0, _jumpCount: 0, _moveRouteIndex: 0, _moveRoute: { list: [{ code: 0 }] },
+            _stopCount: 0, _waitCount: 0, _jumpCount: 0, _moveRouteIndex: 0, _moveRoute: { list: [{ code: 25 }, { code: 0 }] },
             getMapSprite: () => sprite };
         sprite._character = patrol;
         const control = { _eventId: 2, _x: 6, _realX: 6, _y: 29, _realY: 29, _pageIndex: 0, _trigger: 0,
@@ -1000,16 +1000,12 @@ const interval = setInterval(() => {
         tap(String.fromCharCode(92), 'Backslash');
         Graphics.app.renderer.emit('postrender');
         require('fs').writeFileSync(receipt + '.timed-submit-ms', String(performance.now() - started));
-        // Let the first receipt arrive after the fixture's useful window.
-        // This stationary patrol's native stop counter advances once per update.
-        Graphics.frameCount += 40;
-        $gameMap._events[4]._stopCount += 40;
     }
     if (caveRoute && !dialogueShown) Graphics.app.renderer.emit('postrender');
     if (!dialogueShown && require('fs').existsSync(receipt + '.timed')) {
         const timingScene = SceneManager._scene;
         if (!caveCueStarted) {
-            if (timingScene._wqaCaveCueDue !== Graphics.frameCount) throw Error('The late cave forecast was not replaced');
+            if (timingScene._wqaCaveCueDue !== Graphics.frameCount) throw Error('Cave forecast did not arm');
             caveCueStarted = performance.now();
             WendyQuestAccessCaveTimingUpdate(timingScene);
             Graphics.app.renderer.emit('postrender');
@@ -2494,8 +2490,8 @@ def main():
             raise RuntimeError('NW autowalk narration or explicit stop failed')
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
             raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
-        if timed['kind'] != 'timedCue' or timed.get('speech') != 'One tile south on the tone.':
-            raise RuntimeError(f'NW fixture did not publish the one-step timing cue: {data}')
+        if timed['kind'] != 'timedCue' or timed.get('speech') != '2 tiles south on the tone.':
+            raise RuntimeError(f'NW fixture did not publish the verified crossing length: {data}')
         cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
         audio_ms = float(receipt.with_suffix('.json.audio-init-ms').read_text(encoding='utf8'))
@@ -2669,7 +2665,7 @@ def main():
         print(f'Throttled warm wall preview status observed after {wall_ms:.1f} ms with 40 ms polling.')
         print(f'Verified a live stereo route beacon, off-course refresh and retirement in field settings. '
               f'Throttled warm native submission observed after {beacon_ms:.1f} ms with 40 ms polling.')
-        print(f'Verified late forecast replacement, native cue submission and retirement at cave exit. '
+        print(f'Verified native cave cue submission and retirement at cave exit. '
               f'Throttled warm submission observed after {cave_cue_ms:.1f} ms with 40 ms polling.')
 
 

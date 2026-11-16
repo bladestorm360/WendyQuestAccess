@@ -130,7 +130,8 @@ function formatSpeech(message) {
             }
             if (message.handoff === true) offsets.push('route stops at a floor event');
             if (message.outOfReach === true) offsets.push('out of reach');
-            text = name && [category, name, ...offsets].filter(Boolean).join(', ');
+            text = message.patrolBearing === true ? offsets.join(', ') || 'Very close.' :
+                name && [category, name, ...offsets].filter(Boolean).join(', ');
             break;
         }
         case 'timedDirections': {
@@ -141,10 +142,23 @@ function formatSpeech(message) {
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;
         }
+        case 'patrolApproach':
+        case 'patrolWait': {
+            const heading = HEADINGS[message.direction];
+            if (!heading) return '';
+            const steps = message.tiles;
+            text = message.kind === 'patrolWait' ? `Wait for the guard to move. Crossing is ${heading}. Timing audio is unavailable.` :
+                Number.isInteger(steps) && steps > 0 && steps <= 3 ?
+                    `${steps} ${heading}${message.terminal ? ' to the event' : ', then check directions'}.` : '';
+            if (text && message.guide) text += ' ' + label({ name: message.guide });
+            break;
+        }
         case 'timedCue': {
             const heading = HEADINGS[message.direction];
             if (!heading) return '';
-            text = `${message.alternate ? 'Alternate opening. ' : ''}One tile ${heading}${message.terminal ? ' to an event' : ''} on the tone.`;
+            const steps = Number.isInteger(message.tiles) && message.tiles >= 2 && message.tiles <= 3 ?
+                message.tiles + ' tiles' : 'One tile';
+            text = `${message.waiting ? 'Wait for the guard to move. ' : message.alternate ? 'Alternate opening. ' : ''}${steps} ${heading}${message.terminal ? ' to an event' : ''} on the tone.`;
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;
         }

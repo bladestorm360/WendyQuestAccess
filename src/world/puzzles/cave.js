@@ -22,6 +22,14 @@ function checkpointTarget(map, id, page, trigger) {
     return page === 0 && trigger === 1 && ROOMS[map]?.checkpoints.includes(id);
 }
 
+function patrolDestination(map, event, page) {
+    const first = page?.list?.[0];
+    if (!ROOMS[map]?.patrols.includes(event._eventId) || event._erased || event._pageIndex !== 0 ||
+        event._trigger !== 2 || event._priorityType !== 1 || event._through || event._transparent ||
+        !event._characterName || first?.code !== 117 || first.parameters?.[0] !== CAPTURE_EVENT) return null;
+    return { name: 'Mech Guard', category: 'enemies', patrol: true };
+}
+
 function separatedFromApproach(event) {
     const route = event._moveRoute;
     if (event._moveRouteForcing || !route?.repeat || !Array.isArray(route.list) || route.list.length > 40) return false;
@@ -357,5 +365,5 @@ function createCaveGuide(root, graphics) {
     };
 }
 
-module.exports = { createCaveGuide, timedCave, checkpointTarget, caveDestination, warningApproach, captureMotion,
+module.exports = { createCaveGuide, timedCave, checkpointTarget, caveDestination, patrolDestination, warningApproach, captureMotion,
     TIMING_CUE, STAMP_WIDTH, matchesMotionStamp };

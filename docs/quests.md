@@ -55,3 +55,7 @@ The installed-method fixture follows a marked chest and its spent page, then che
 At final gameplay handoff, cycle to **Quests** after accepting a quest with a marker. Request directions and use the ordinary game control at the destination. After progressing the objective, reread the category and request directions again. Expect the current marker or an unavailable selection when the old marker has gone. The current-map browser checks reachable approaches. Cross-map routes remain in the world checkpoint. [Navigation and remaining scope](navigation.md#reachable-destinations-on-the-current-map)
 
 Standalone quest markers are listed under **Quests** while the game displays them. An interactable object or character can also appear under its own category.
+
+## Breakfast Stone tracker on Secret Island
+
+The game’s global tracker can carry **Find the Breakfast Stone — Find the Exit** onto Secret Island. The native objective completes at the south exit from Caffeine Caverns to Bacon Beach (Map 087, event 73). Entering Secret Island or taking another cavern exit leaves the current stage active. Details reads the game’s rendered tracker. [Quest tracker observer](../src/menus/quest-tracker.js)

@@ -19,7 +19,7 @@ const { createTerrainJourney, BRIDGE_REASON, CRYSTAL_REASON, PULL_REASON, STONE_
 const { saltControlName } = require('./puzzles/salt-state.cjs');
 const { mapPlace } = require('./map-banner');
 const { mapDescription } = require('./map-descriptions');
-const { createCaveGuide, timedCave, warningApproach, captureMotion, TIMING_CUE } = require('./puzzles/cave');
+const { createCaveGuide, timedCave, warningApproach, captureMotion } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
 
@@ -190,6 +190,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     function retire(scene) {
         if (!owner || owner.scene !== scene) return;
         if (admission) Atomics.store(admission, 0, 0);
+        host.caveTiming?.cancelPlan?.(scene);
         active = null;
         scene._wqaRouteActive = false;
         scene._wqaInteractionDeferred = false;
@@ -342,6 +343,12 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (navigationRequest(active) && !active.performed && ready(active.scene)) afterRender();
             return;
         }
+        if (job.caveRefresh) {
+            const { state, captured } = job.caveRefresh;
+            host.caveTiming.refreshResult(state, captured, packet.result?.opening);
+            if (navigationRequest(active) && !active.performed && ready(active.scene)) afterRender();
+            return;
+        }
         if (active === job && ready(job.scene) && root.$gameMap._mapId === job.map &&
             travelMode(root.$gameMap, root.$gamePlayer) === job.mode) {
             const player = root.$gamePlayer;
@@ -417,30 +424,23 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 return status(job, [job.guide, 'No verified route to an exit from here.'].filter(Boolean).join(' '));
             if (job.remote && result?.status === 'ready' && !admitRemoteRoute(job, result))
                 return status(job, 'The entrance changed. Request directions again.');
-            if (result?.status === 'timedCue') {
-                if (!job.cueRetried && host.graphics.frameCount > job.motionFrame + result.opening?.through - TIMING_CUE.lead) {
-                    // One fresh native sample after a cold/late worker result.
-                    // The previous snapshot and expired opening are retired.
-                    job.cueRetried = true;
-                    job.performed = false;
-                    return afterRender();
-                }
-                if (!job.timing || !host.caveTiming.start(job.timing, job.x, job.y, result.opening))
-                    return status(job, 'Patrol timing changed. Request directions again.');
-                job.scene._wqaPreviewUntil = job.motionFrame + result.opening.through - 22;
-                return present(job, { kind: 'timedCue', direction: result.opening.direction, terminal: result.opening.terminal,
-                    alternate: result.opening.alternate, guide: job.guide });
+            if (result?.status === 'timedCue' || result?.status === 'timedWait') {
+                const opening = result.opening;
+                const direction = opening?.direction ?? result.direction;
+                const tiles = opening?.tiles ?? result.tiles;
+                const hold = opening?.hold ?? result.hold;
+                const target = result.guideEvent === undefined ? job.destination :
+                    job.guideOptions?.find(item => item.target.id === result.guideEvent)?.target;
+                const repeat = { direction, tiles, refresh: state => refreshCaveTiming(job, state, target, direction, tiles, hold) };
+                if (job.timing && host.caveTiming.start(job.timing, job.x, job.y, opening, repeat))
+                    return present(job, { kind: 'timedCue', direction, tiles,
+                        terminal: opening?.terminal ?? result.terminal,
+                        waiting: !opening || job.motionFrame + opening.from > host.graphics.frameCount, guide: job.guide });
+                return present(job, { kind: 'patrolWait', direction, guide: job.guide });
             }
-            if (result?.status === 'timed') {
-                const age = host.graphics.frameCount - job.motionFrame;
-                if (!Number.isInteger(age) || age < 0 || !Number.isInteger(result.startWindow) ||
-                    result.startWindow > 60 || result.startWindow - age < 30)
-                    return status(job, 'Patrol timing changed. Request directions again');
-                job.scene._wqaPreviewUntil = job.motionFrame + result.startWindow;
-                return present(job, { kind: 'timedDirections', direction: result.direction, tiles: result.tiles,
-                    terminal: result.terminal === true, alternate: result.alternate === true, guide: job.guide });
-            }
-            if (result?.status === 'timedWait') status(job, [job.guide, 'Wait for an opening and request directions again.'].filter(Boolean).join(' '));
+            if (result?.status === 'patrolApproach')
+                return present(job, { kind: 'patrolApproach', direction: result.direction, tiles: result.tiles,
+                    terminal: result.terminal, guide: job.guide });
             else if (result?.status === 'ready') {
                 if (job.readyGuide) job.guide = job.readyGuide;
                 if (result.land && !canLand(root.$gameMap, result.arrival.x, result.arrival.y))
@@ -456,7 +456,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     } else if (result.land) transfers.armAirship(job.scene, selection, result.arrival);
                 }
                 if (result.land && job.remote) transfers.armAirship(job.scene, job.remote.selection, result.arrival);
-                if (!result.reenter && host.beacon?.enabled()) {
+                if (!job.request.motion && !result.reenter && host.beacon?.enabled()) {
                     // Transfer and landing handoffs own a previously verified
                     // exact approach. Keep that approach fixed during refresh.
                     const fixed = !!(job.remote || job.landingBookmark || result.land);
@@ -566,7 +566,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     localHandoffName(job.map, result.boundaryEvent);
                 const { exit, boundaryName } = routeBoundary(root, result.boundaryEvent, preferences().spoilers === true,
                     undefined, job.mode);
-                startBeaconApproach(job, result, result.boundaryEvent);
+                if (!job.request.motion) startBeaconApproach(job, result, result.boundaryEvent);
                 // The east and south world-map approaches are in a separate
                 // walking component. Carry the selection through the town
                 // only when both the west exit and the fort are open.
@@ -618,6 +618,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     inFlight = null;
                     if (dropped?.beaconState)
                         host.beacon.refreshResult(dropped.beaconState, dropped.revision, dropped.x, dropped.y, null);
+                    if (dropped?.caveRefresh) host.caveTiming.stop(dropped.scene);
                     if (dropped && active === dropped) {
                         dropped.performed = true;
                         dropped.scene._wqaQuestNavigation = false;
@@ -648,6 +649,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             job.filter = null;
             job.performed = true;
             if (job.beaconState) host.beacon.refreshResult(job.beaconState, job.revision, job.x, job.y, null);
+            else if (job.caveRefresh) host.caveTiming.stop(job.scene);
             else status(job, filtering ? 'Reachable destinations unavailable' : 'Directions service unavailable');
         }
     }
@@ -705,7 +707,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         submit(job, snapshot, { ...destination, terrainTransfer, guideOptions, followedDirection,
             stopBeforeEvent: job.eventAction === 'step',
             limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
-            surface: snapshot.mode !== 'walk',
+            surface: snapshot.mode !== 'walk', patrolGuidance: !!motion,
             beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk, timingCue: !!job.timing });
     }
 
@@ -769,7 +771,11 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return submit(job, snapshot, { field: true, limit: 8, beacon: host.beacon?.enabled() === true,
                 transfer: terrainTransferRequest(job, STONE_ISLAND) });
         }
-        if (job.action !== 'directions') return present(job, { kind: 'fieldTarget', name: target.name, category,
+        // Guards are moving hazards. Directions reads their current bearing
+        // without making contact with them a route goal.
+        if (job.action !== 'directions' || target.patrol) return present(job, { kind: 'fieldTarget',
+            name: job.action === 'directions' && target.patrol ? '' : target.name, category,
+            patrolBearing: job.action === 'directions' && target.patrol,
             dx: target.x - snapshot.x, dy: target.y - snapshot.y, outOfReach: target.outOfReach, handoff: target.handoff });
         if (target.shoreMap) {
             job.destination = target;
@@ -781,6 +787,19 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return status(job, 'The road to Float Fort opens after you obtain the Frosty Stone.');
         if (!timedCave(snapshot.map)) return route(job, snapshot, target);
         return timedRoute(job, snapshot, target);
+    }
+
+    function refreshCaveTiming(command, state, target, direction, tiles, hold) {
+        const { scene } = command;
+        if (active !== command || inFlight || !target || sequence >= 0x7ffffffe || !ready(scene)) return false;
+        const motion = captureMotion(root, host.graphics);
+        const captured = motion && host.caveTiming.capture(scene, motion, target);
+        const snapshot = captured && captureWorld(root, true, undefined, undefined, [], true);
+        if (!snapshot) return false;
+        const job = { scene, sequence: ++sequence, caveRefresh: { state, captured } };
+        submit(job, snapshot, { ...destinationRequest(target), field: true, motion, patrolGuidance: true,
+            timingCue: true, timingDirection: direction, timingTiles: tiles, timingHold: hold });
+        return inFlight === job;
     }
 
     function timedRoute(job, snapshot, target) {

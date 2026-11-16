@@ -199,3 +199,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Dungeon encounters and Secret Island](docs/navigation-audit.md#dungeon-encounters-and-secret-islands-overworld-approach) records the route change, the hidden-at-the-dock regression and the Float Fort handoff. [Battle animation and Special](docs/battle.md#wheres-the-beef-battle-animation) records visible captions and lock levels.
 
 The final build is installed and independently verified. [Current Steam deployment and recovery](docs/deployment.md#npc-passages-and-food-artwork)
+
+The [Secret Cave update](docs/puzzles-and-secrets.md#cave-timing-cues) records live guard browsing, safe approaches, repeating crossing audio and both full barrel replays. [Dave balloon playback](docs/cutscene-description.md#playback-and-verification) records the renderer-owned cue. [Breakfast Stone tracking](docs/quests.md#breakfast-stone-tracker-on-secret-island) records the native exit objective. [Current Steam deployment and recovery](docs/deployment.md#secret-cave-patrol-tracking-and-dave-narration) records the installed candidate.

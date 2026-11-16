@@ -879,6 +879,69 @@ async function verifyCrossingPreview() {
     assert.deepEqual([at.status, at.direction, at.tiles, at.terminal], ['timed', 8, 1, true]);
 }
 
+async function verifyPatrolGuidance() {
+    for (const [id, count] of [[196, 10], [199, 17], [200, 5], [201, 9]]) {
+        const cave = load(id);
+        const actors = configureMotion(cave, 9, 38, 0, 28);
+        const entries = captureWorld(c, false).objects.filter(item => item.patrol);
+        assert.equal(entries.length, count);
+        assert(entries.every(item => item.category === 'enemies' && item.name === 'Mech Guard'));
+        actors[0]._x++;
+        assert.equal(captureWorld(c, false).objects.find(item => item.id === actors[0]._eventId)?.x, actors[0]._x);
+        actors[0]._erased = true;
+        assert(!captureWorld(c, false).objects.some(item => item.id === actors[0]._eventId && item.patrol));
+    }
+    for (const y of [38, 36]) {
+        const cave = load(196);
+        const actors = configureMotion(cave, 9, y, 0, 28);
+        const request = { ...motionRequest(cave, actors), event: 9, field: true, patrolGuidance: true };
+        const plan = previewCrossing(cave.geometry, snapshot(cave), request);
+        assert(['ready', 'patrolApproach', 'timedWait'].includes(plan.status), JSON.stringify(plan));
+        assert.notEqual(plan.status, 'timed', 'do not speak a short-lived preview as a command');
+        await verifyWorker(cave, request, snapshot(cave), result => assert.deepEqual(result, plan));
+        assert.deepEqual([plan.status, plan.direction, plan.tiles], ['patrolApproach', 8, 3]);
+        let arrived = false;
+        for (let check = 0; check < 90; check++) {
+            const origin = [cave.player.x, cave.player.y];
+            const current = { ...request, ...motionRequest(cave, actors), timingCue: true };
+            current.motion.dash = true;
+            const next = previewCrossing(cave.geometry, snapshot(cave), current);
+            let directions = [];
+            let wait = 0;
+            if (next.status === 'ready') {
+                if (!next.distance) {
+                    assert(cave.player.isMoving() === false);
+                    assert.equal(Math.abs(cave.player.x - 2) + Math.abs(cave.player.y - 38), 1);
+                    arrived = true;
+                    break;
+                }
+                directions = next.legs.flatMap(leg => Array(leg.tiles).fill(DIRECTIONS.indexOf(leg.direction)));
+            } else if (next.status === 'patrolApproach') {
+                directions = Array(next.tiles).fill(DIRECTIONS.indexOf(next.direction));
+            } else if (next.status === 'timedCue') {
+                directions = Array(next.opening.tiles).fill(DIRECTIONS.indexOf(next.opening.direction));
+                wait = next.opening.from;
+            } else {
+                assert.equal(next.status, 'timedWait', JSON.stringify(next));
+                wait = 18;
+            }
+            const frames = wait + 16 * directions.length;
+            assert.equal(verifyMotion(cave, actors, frames, directions, wait), frames,
+                'barrel route contacts a guard from ' + origin + ' on ' + next.status + ' at check ' + check);
+        }
+        assert(arrived, 'the verified step-by-step route reaches the barrel from row ' + y);
+    }
+    console.log('Verified complete barrel approaches from both reported tiles without guard contact.');
+
+    const cave = load(196);
+    const actors = configureMotion(cave, 6, 30, 0, 20);
+    for (let n = 0; n < 15; n++) cave.gameMap.updateEvents();
+    const request = { ...motionRequest(cave, actors), targetX: 5, targetY: 30, area: [5, 30, 6, 30],
+        patrolGuidance: true, timingCue: true, timingDirection: 4 };
+    const waiting = previewCrossing(cave.geometry, snapshot(cave), request);
+    assert.deepEqual([waiting.status, waiting.direction], ['timedWait', 4]);
+}
+
 async function verifyLiveCrossing() {
     const cave = load(196);
     const actors = configureMotion(cave, 5, 30, 0, 20);
@@ -925,7 +988,7 @@ async function verifyLiveCrossing() {
     c.WendyQuestAccessFieldEvent = owner => timing.stop(owner);
     scene._wqaFieldReady = true;
 
-    function sampleDelayed() {
+    function sampleDelayed(repeat) {
         const current = load(196);
         configureMotion(current, 6, 30, 0, 20);
         for (const id of [1, 3, 23, 24]) current.gameMap._events[id]._erased = true;
@@ -940,7 +1003,7 @@ async function verifyLiveCrossing() {
         assert.equal(result.status, 'timedCue');
         assert.deepEqual([result.opening.direction, result.opening.from], [4, 81]);
         assert(result.opening.through >= 126 && result.opening.through <= 141);
-        assert(timing.start(captured, 6, 30, result.opening));
+        assert(timing.start(captured, 6, 30, result.opening, repeat));
         return { current, captureMs, deadline: motion.frame + result.opening.through - 30 };
     }
 
@@ -978,6 +1041,20 @@ async function verifyLiveCrossing() {
     advanceToCue(expired.current);
     assert.equal(sounds.length, 1);
     assert(!timing.active(scene));
+    let refreshing;
+    const repeated = sampleDelayed({ direction: 4, tiles: 1, refresh(state) { refreshing = state; return true; } });
+    const first = scene._wqaCaveCueDue;
+    advanceToCue(repeated.current);
+    assert.equal(scene._wqaCaveCueDue, first + 18);
+    advanceToCue(repeated.current);
+    assert.equal(sounds.length, 3, 'two separately verified pulses on the same opening');
+    assert.equal(scene._wqaCaveCueDue, first + 36);
+    advanceToCue(repeated.current);
+    assert.equal(sounds.length, 3, 'expired openings stop the pulse');
+    assert(refreshing, 'keep tracking the crossing without another directions key');
+    timing.refreshResult(refreshing, null, null);
+    assert.equal(scene._wqaCaveCueDue, first + 54);
+    timing.stop(scene);
     scene._wqaFieldReady = false;
 
     const distraction = load(200, { switches: [581] });
@@ -1366,6 +1443,7 @@ async function main() {
     await verifyAutowalk(c, load, verifyWorker);
     verifySoundscape(c, load);
     await verifyCrossingPreview();
+    await verifyPatrolGuidance();
     await verifyLiveCrossing();
     await verifyWarningApproach();
     const entry = read('Map199.json').events[26].pages.flatMap(page => page.list).find(command =>
