@@ -154,13 +154,13 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         const { hrtf, caveVolume } = preferences();
         return source && audio.play(state.scene, hrtf, audio.cues.caveGo, caveVolume / 100, source,
             () => live(state) && frame() < until, status => {
-                if (status < 0 && stop(state.scene)) report('Timing audio is unavailable. Request directions again.');
+                if (status < 0 && owner === state) stop(state.scene);
             }, 'cave');
     }
 
     function manualStopped(state, reason = 'window') {
         diagnostics?.(state.scene, 'caveTimingLost', state.manual.index, reason);
-        if (stop(state.scene)) report('Guard timing changed. Request directions again.');
+        stop(state.scene);
     }
 
     function manualPose(state, now) {
@@ -176,9 +176,11 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         // The native move has reserved the last tile. Play while Wendy
         // approaches it so movement can be released before the next step.
         audio.retire(scene, 'cave');
-        const queued = audio.play(scene, hrtf, audio.cues.wallBump, caveVolume / 100, [0, 0, 1],
+        // Keep the original impact sample, with extra gain and a lower
+        // pitch to make the stop distinct from background bumps and steps.
+        const queued = audio.play(scene, hrtf, audio.cues.wallBump, Math.min(1, caveVolume * 0.016), [0, 0, 1],
             () => live(state) && frame() < now + CUE_LIFETIME,
-            status => diagnostics?.(scene, 'caveStopCue', leg, status), 'caveStop');
+            status => diagnostics?.(scene, 'caveStopCue', leg, status), 'caveStop', 0.8);
         if (!queued) diagnostics?.(scene, 'caveStopCue', leg, 'notQueued');
     }
 
@@ -241,11 +243,11 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
     function advancing(state, now) {
         const { traversal } = state;
         if (now > traversal.by) {
-            if (!state.repeat.stopAtPocket) return stop(state.scene);
             diagnostics?.(state.scene, 'caveTimingLost', traversal.index, 'crossingDeadline');
-            return finish(state, 'Timing missed. Request directions again.');
+            // Let the native patrol and capture sequence continue silently.
+            return stop(state.scene);
         }
-        if (state.repeat.stopAtPocket && now === traversal.by) return schedule(state, traversal.by + 1);
+        if (now === traversal.by) return schedule(state, traversal.by + 1);
         if (!pulse(state, traversal.steps[traversal.index], Math.min(now + CUE_LIFETIME, traversal.by + 1)))
             return stop(state.scene);
         if (owner === state) schedule(state, Math.min(now + TIMING_CUE.interval, traversal.by + 1));
@@ -278,8 +280,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
                 if (!state.waiting) schedule(state, now + TIMING_CUE.interval);
                 return;
             }
-            stop(state.scene);
-            return report('Patrol timing changed. Request directions again.');
+            return stop(state.scene);
         }
         const until = Math.min(now + CUE_LIFETIME, state.motion.frame + state.opening.through - 22);
         if (!pulse(state, state.opening.direction, until)) return stop(state.scene);
@@ -302,21 +303,22 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (state.manual) return manualMoved(state, direction, now);
         const opening = state.opening;
         if (!state.traversal) {
-            if (!state.repeat || !opening || !(now > state.cued && now <= state.startUntil) ||
+            if (!opening || !(now > state.cued && now <= state.startUntil) ||
                 direction !== opening.direction || !Number.isInteger(opening.tiles) ||
-                opening.tiles < (state.repeat.stopAtPocket ? 1 : 2) || opening.tiles > 12) return stop(scene);
+                opening.tiles < 1 || opening.tiles > 12) return stop(scene);
             const steps = opening.headings ? opening.headings.map(heading => DIRECTIONS[heading]) :
                 Array(opening.tiles).fill(opening.direction);
             if (steps.length !== opening.tiles || steps[0] !== direction ||
                 steps.some(step => !CARDINAL[step])) return stop(scene);
             state.traversal = { steps, index: 0, by: state.startUntil };
             state.waiting = false;
-            if (state.repeat.stopAtPocket) diagnostics?.(scene, 'caveCrossing', 0, 'started');
+            scene._wqaCaveCueUntil = 0;
+            diagnostics?.(scene, 'caveCrossing', 0, 'started');
         }
         const { traversal, player } = state;
         if (direction !== traversal.steps[traversal.index] || now > traversal.by) return stop(scene);
         const next = traversal.steps[++traversal.index];
-        if (next === undefined && !state.repeat.stopAtPocket) return stop(scene);
+        if (next === undefined && opening.terminal) return stop(scene);
         const speed = player.realMoveSpeed();
         if (speed !== state.motion.speed) return stop(scene);
         const tileFrames = 256 / 2 ** speed;
@@ -340,7 +342,11 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         warm, capture, start, startManual, refreshResult, stop, moved,
         repeatDirections(scene) {
             const state = owner;
-            if (state?.scene !== scene || !state.repeat?.stopAtPocket || !state.traversal || !live(state)) return false;
+            if (state?.scene !== scene || !live(state)) return false;
+            // Rechecking in the patrol lane must not replace the verified
+            // sequence or talk over the next ping in a timed (possibly same-direction) wait.
+            if (state.manual && (state.manual.index || state.manual.taken)) return true;
+            if (!state.repeat?.stopAtPocket || !state.traversal) return false;
             const { steps, index } = state.traversal;
             const legs = [];
             for (let at = index; at < steps.length; at++) {

@@ -80,6 +80,20 @@ assert.equal(impact.cue, CUE.wallBump);
 worker.emit('message', { epoch: impact.epoch, status: 2 });
 audio.retire(scene, 'bump');
 
+// A cave stop goes first and a colliding bump cannot replace it.
+assert(audio.play(scene, true, CUE.caveGo, 0.5, [1, 0, 0], () => true, null, 'cave'));
+assert(audio.play(scene, true, CUE.wallBump, 0.9, [0, 0, 1], () => ready, null, 'caveStop', 0.8));
+assert.equal(audio.play(scene, true, CUE.wallBump, 0.5, [1, 0, 0], () => true, null, 'bump'), false);
+run();
+const caveStop = messages.at(-1);
+assert.deepEqual([caveStop.lane, caveStop.cue, caveStop.gain, caveStop.pitch], [2, CUE.wallBump, 0.9, 0.8]);
+worker.emit('message', { epoch: caveStop.epoch, status: 2 });
+assert.equal(Atomics.load(word, 2), caveStop.epoch);
+run();
+assert.equal(messages.at(-1).cue, CUE.caveGo);
+worker.emit('message', { epoch: messages.at(-1).epoch, status: 2 });
+audio.retire(scene);
+
 audio.play(scene, true, CUE.wallBump, 0.5, [0, 0, 1], () => ready, null, 'wall');
 run();
 const wall = messages.at(-1);

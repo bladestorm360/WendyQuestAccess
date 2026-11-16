@@ -725,13 +725,16 @@ async function verifySaltGuide() {
     assert.equal(key('g', { shiftKey: true }), false);
 }
 
-async function verifyCaveGuide() {
+async function verifyCaveGuide(recoveryOnly = false) {
     const data = mapData(196);
-    const common = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', 'CommonEvents.json'), 'utf8'));
+    const dataPath = path.join(process.argv[2], 'package.nw', 'data');
+    const common = JSON.parse(fs.readFileSync(path.join(dataPath, 'CommonEvents.json'), 'utf8'));
+    const tilesets = JSON.parse(fs.readFileSync(path.join(dataPath, 'Tilesets.json'), 'utf8'));
 
     function selectRoom(f, room, scene, id, x, y) {
         const { c } = f;
-        c.$gameMap._mapId = id;
+        c.$dataTilesets = tilesets;
+        Object.assign(c.$gameMap, { _mapId: id, _tilesetId: room.tilesetId, _tileEvents: [], _vehicles: [] });
         c.$gameMap._events = room.events.map(entry => {
             if (!entry) return null;
             const page = entry.pages[0];
@@ -791,7 +794,7 @@ async function verifyCaveGuide() {
         f.tick();
     }
 
-    {
+    if (!recoveryOnly) {
         const room = mapData(206);
         const f = await enter(room, 206);
         const { c, scene } = f;
@@ -837,9 +840,18 @@ async function verifyCaveGuide() {
         installInterpreterConstructor(c);
         selectRoom(f, data, scene, 196, 10, 43);
         renderer.screen = { width: 320, height: 200 };
-        assert.match(review(f), /Warning sign selected/);
+        if (recoveryOnly) {
+            review(f);
+            assert(scene._wqaCaveGuideActive, 'the initial guide opts into checkpoint recovery');
+            const prior = f.routePackets.at(-1);
+            if (prior) {
+                f.routeReply({ sequence: prior.sequence, epoch: prior.epoch, map: prior.map,
+                    result: { status: 'unreachable' } });
+                f.frame();
+            }
+        } else assert.match(review(f), /Warning sign selected/);
         const interpreter = map._interpreter;
-        if (scenario.checkpoint === 0) {
+        if (!recoveryOnly && scenario.checkpoint === 0) {
             const player = c.$gamePlayer;
             const patrol = map._events[4];
             c.$dataTilesets = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', 'Tilesets.json'), 'utf8'));
@@ -946,11 +958,29 @@ async function verifyCaveGuide() {
         const landed = await moveToReservedMap(f, scenario.wrongLanding ? 1 : 0);
         assert(!tapPuzzleKey(f, 'g', { shiftKey: true }), 'fade owns the field during recovery');
         interpreter._list = null;
+        const beforeRecovery = f.records.length;
+        const beforeRoutes = f.routePackets.length;
         settle(f, landed);
-        const result = review(f);
+        f.frame();
+        const restarted = !scenario.stop && !scenario.wrongLanding;
+        assert.equal(landed._wqaCaveGuideActive === true, restarted);
+        assert.equal(f.routePackets.length > beforeRoutes ||
+            f.records.slice(beforeRecovery).some(record => /Returned .*after capture|Returned after capture/.test(formatSpeech(record))), restarted,
+            'only a verified respawn automatically queues fresh guidance: ' + JSON.stringify({
+                scenario, fieldReady: landed._wqaFieldReady, queued: landed._wqaCaveReview,
+                speech: f.records.slice(beforeRecovery).map(formatSpeech)
+            }));
         assert(!c.Graphics._wqaCaveRecoveryPending);
-        if (scenario.stop || scenario.wrongLanding) assert.doesNotMatch(result, /after capture/);
-        else assert.match(result, scenario.checkpoint ? /Returned to a checkpoint after capture/ : /Returned after capture/);
+        if (!recoveryOnly) {
+            const result = review(f);
+            if (scenario.stop || scenario.wrongLanding) assert.doesNotMatch(result, /after capture/);
+            else assert.match(result, scenario.checkpoint ? /Returned to a checkpoint after capture/ : /Returned after capture/);
+        }
+    }
+
+    if (recoveryOnly) {
+        console.log('Verified automatic guide restart after four native checkpoint branches and retirement on stop or wrong landing.');
+        return;
     }
 
     for (const [id, sourceId, pageIndex, patrolId, expected] of [
@@ -1431,7 +1461,7 @@ if (require.main === module) {
     const run = process.argv.includes('--endings') ? async () => {
         await verifyEndingDialogue();
         await verifyCredits();
-    } : process.argv.includes('--speakers') ? verifySpeakerDetails : main;
+    } : process.argv.includes('--speakers') ? verifySpeakerDetails : process.argv.includes('--cave-recovery') ? () => verifyCaveGuide(true) : main;
     run().catch(error => { console.error(error); process.exitCode = 1; });
 }
 

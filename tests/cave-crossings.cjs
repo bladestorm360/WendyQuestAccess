@@ -503,7 +503,8 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             assert.equal(plan.status, 'patrolLineManual');
                             const spoken = formatSpeech({ ...plan, kind: plan.status });
                             assert.match(spoken, /Wait for a ping before each leg/);
-                            if (target === 25 && player.x === 24 && player.y === 5) {
+                            const barrelApproach = target === 25 && player.x === 24 && player.y === 5;
+                            if (barrelApproach) {
                                 replayedReportedStop = true;
                                 assert.equal(plan.firstPause, MANUAL_PAUSE_FRAMES);
                                 assert.deepEqual(plan.legs, [{ direction: 8, tiles: 1 }, { direction: 4, tiles: 4 },
@@ -517,6 +518,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             let respondAt;
                             let releaseAt;
                             let nextPingAfter = -1;
+                            let recheckAt = -1;
                             const begin = c.Graphics.frameCount;
                             cueListener = receipt => {
                                 assert(index < plan.legs.length);
@@ -526,6 +528,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                                     assert(player.isMoving(), 'the stop cue precedes the end of the leg');
                                     releaseAt = receipt.frame + 6;
                                     nextPingAfter = receipt.frame + 16 + (index === 0 ? plan.firstPause : 0);
+                                    if (barrelApproach && index === 1) recheckAt = nextPingAfter - 1;
                                     index++;
                                     respondAt = undefined;
                                 } else if (receipt.cue === CUE.caveGo && !respondAt) {
@@ -542,6 +545,10 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                                 const count = sounds.length;
                                 const legIndex = index;
                                 tick();
+                                if (c.Graphics.frameCount === recheckAt) {
+                                    assert(timing.repeatDirections(scene), 'rechecking the second wait leaves its next ping armed');
+                                    assert.equal(reports.length, reportCount, 'the recheck is silent in the lane');
+                                }
                                 if (player.x !== before[0] || player.y !== before[1]) {
                                     assert.equal(sounds.length, count + 1, 'each accepted step emits a ping or a stop cue');
                                     assert.equal(sounds.at(-1).cue, index === legIndex ? CUE.caveGo : CUE.wallBump);

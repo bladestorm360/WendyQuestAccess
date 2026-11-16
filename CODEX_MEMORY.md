@@ -231,3 +231,5 @@ The [live keyboard dash trace](docs/feature-checkpoint.md#live-keyboard-dash-tra
 The [retail walking speed checkpoint](docs/feature-checkpoint.md#retail-walking-speed-and-cave-routing) records the live Shift comparison, active MapScene speed override and the verified walking routes. It supersedes the earlier dash assumptions and ends the temporary diagnostic capture. [Current Steam deployment and recovery](docs/deployment.md#retail-walking-speed-and-cave-routing) records installed hashes, the scan and the single rollback.
 
 The [cave ping cadence and explicit pauses checkpoint](docs/feature-checkpoint.md#cave-ping-cadence-and-explicit-pauses) records the barrel approach from the live log, step pings, forecasted stop timing and replay.
+
+The [silent cave misses, stop sound and checkpoint handoff](docs/feature-checkpoint.md#silent-cave-misses-stop-sound-and-checkpoint-handoff) records the second barrel pause, audio priority, post-capture restart and exact offline verification.

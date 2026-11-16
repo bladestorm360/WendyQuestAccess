@@ -692,3 +692,13 @@ November 16, 2026. The focused build changed the plugin, speech formatter and fo
 - The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-cadence/rollback-latest with plan `604c2f72b6f8e61be7d5600902c0bd70fb30911e488b5589fc835b309f74ad36`. The prior source revision is `7e1a3ce6bfe57caf5fb489c963cfb414521b0d60`.
 
 Readback verified 16 native scripts, 45 payload files and 241 geometry entries. Four save and configuration hashes matched across installation. Cleanup removed 24,468,765 bytes of staging and test output and the 10,968,375-byte superseded recovery. [Cave replay and gameplay check](feature-checkpoint.md#cave-ping-cadence-and-explicit-pauses)
+
+### Silent cave misses, stop sound and checkpoint handoff
+
+November 16, 2026. The focused rebuild changed the plugin bundle. The verified gameplay workers, native scripts and geometry were reused. The world replay, focused capture handoff fixture, audio priority unit fixture, matching NW.js smoke and installer rehearsal passed. The world fixture sampled 0.11 ms for cave capture and 0.13 ms for cue recheck and enqueue. The matching NW.js fixture observed native cue submission after 32.3 ms with silent output and 40 ms polling. Physical audibility remains a gameplay check.
+
+- Installed plan SHA-256 `eb9ee4a09ae7d83677234e43011c6dc0fecea8ee0cd0f606b3d3eeace423f7c2`
+- Plugin SHA-256 `c801350a704f0c50cfc536f654e32ecf097a97aeda52035fe80495a1eab72ded`
+- The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-quiet/rollback-latest with plan `07cdf5ce031203935928cfe80afb9fe11609124fd6c40613dc276b3763d8950e` and source revision `40a7030fa1a7878be3e93db2963309196709df76`.
+
+Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.328.0 found no threats in the exact candidate. Installation verified 16 native scripts, 45 payload files, 241 geometry entries and four unchanged save and configuration hashes. Cleanup removed 24,468,480 bytes of generated build and test output and the 10,964,172-byte superseded recovery. [Cave verification](feature-checkpoint.md#silent-cave-misses-stop-sound-and-checkpoint-handoff)

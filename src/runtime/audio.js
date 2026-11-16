@@ -75,7 +75,7 @@ function createAudio(host) {
         // Play timing cues before other field feedback so the last step's
         // stop cue can sound while that step is underway.
         const stop = pending[IMPACT];
-        const request = pending[0] || (stop?.source === 'caveStop' ? stop : null) || step || pending.find(Boolean);
+        const request = (stop?.source === 'caveStop' ? stop : null) || pending[0] || step || pending.find(Boolean);
         if (!request || inFlight || failed) return;
         pending[request.lane] = null;
         if (!request.ready()) {
@@ -111,6 +111,8 @@ function createAudio(host) {
 
     function play(scene, hrtf, cue, gain, bearing, ready, complete, source = 'preview', pitch = 1, wallUntil = 0, voice) {
         if (!ready()) return false;
+        const stop = active[IMPACT];
+        if (source === 'bump' && stop?.source === 'caveStop' && stop.scene === scene && stop.ready()) return false;
         const primary = active[0];
         if (source === 'soundscape' && primary && primary.source !== 'soundscape') return false;
         if (source === 'beacon' && primary?.scene === scene && primary.source === 'wall') return false;

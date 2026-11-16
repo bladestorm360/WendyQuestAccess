@@ -466,6 +466,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     'Face ' + PATROL_HEADINGS[facing] + ' and press the action button.';
                 if (!host.caveTiming.startManual(job.timing, job.line, job.x, job.y, result, endText))
                     return status(job, 'Guard timing changed. Request directions again.');
+                cave.trackTiming(job.scene);
                 job.scene._wqaRouteActive = false;
                 return present(job, { kind: 'patrolLineManual', legs });
             }
@@ -488,11 +489,13 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const repeat = opening?.escape && !stopAtPocket ? undefined : { direction, tiles, pace, stopAtPocket,
                     refresh: opening?.escape ? null :
                         state => refreshCaveTiming(job, state, target, direction, tiles, headings, pace, stopAtPocket) };
-                if (job.timing && host.caveTiming.start(job.timing, job.x, job.y, opening, repeat))
+                if (job.timing && host.caveTiming.start(job.timing, job.x, job.y, opening, repeat)) {
+                    cave.trackTiming(job.scene);
                     return present(job, { kind: 'timedCue', direction, tiles, headings, pace,
                         terminal: opening?.terminal ?? result.terminal, escape: opening?.escape,
                         stopAtPocket: result.stopAtPocket,
                         waiting: !opening || job.motionFrame + opening.from > host.graphics.frameCount, guide: job.guide });
+                }
                 return present(job, { kind: 'patrolWait', direction, guide: job.guide });
             }
             if (result?.status === 'patrolBlocked') {
@@ -1412,7 +1415,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             const bookmark = arrived && !arrived.shore && savedBookmark(arrived);
             if (bookmark && travelMode(root.$gameMap, root.$gamePlayer) === bookmark.mode)
                 activateBookmark(scene, bookmark, root.$gameMap._mapId !== bookmark.map, arrived.trail);
-            cave.recover(scene);
+            if (cave.recover(scene) && (!active || active.scene !== scene))
+                command('puzzleGuide');
             const outcome = cave.settleProgress(scene);
             if (outcome && !active) command('status', outcome);
         },

@@ -243,7 +243,7 @@ function createCaveGuide(root, graphics) {
     function visit(scene) {
         let state = visits.get(scene);
         if (!state) {
-            state = { active: false, sign: false, captured: false, outcome: '' };
+            state = { active: false, timing: false, sign: false, captured: false, outcome: '' };
             visits.set(scene, state);
         }
         return state;
@@ -269,7 +269,7 @@ function createCaveGuide(root, graphics) {
             state.captured = true;
             state.outcome = 'The patrol caught you.';
             progress.cancel();
-            if (state.active) {
+            if (state.active || state.timing) {
                 // Use the pinned native branch only to recognize its later
                 // visible landing. The checkpoint variable is never reported.
                 const command = common[LANDING_COMMANDS[root.$gameVariables?.value(90)]];
@@ -305,6 +305,7 @@ function createCaveGuide(root, graphics) {
         });
         const state = activate(scene);
         state.outcome = checkpoint ? 'Returned to a checkpoint after capture.' : 'Returned after capture.';
+        return true;
     }
 
     function choicesFor(roomId, state, x, y) {
@@ -370,6 +371,9 @@ function createCaveGuide(root, graphics) {
 
     return {
         available, presented, recover, review,
+        trackTiming(scene) {
+            if (available(scene)) visit(scene).timing = true;
+        },
         accepted(scene, event) { if (available(scene) && visits.get(scene)?.active) progress.accepted(scene, event); },
         settleProgress(scene) {
             const result = progress.settle(scene);
@@ -384,8 +388,8 @@ function createCaveGuide(root, graphics) {
             const waiting = pending.delete(root.$gameMap);
             const progression = progress.cancel();
             if (waiting) graphics._wqaCaveRecoveryPending = false;
-            if (!state?.active) return waiting || progression;
-            state.active = false;
+            if (!state?.active && !state?.timing) return waiting || progression;
+            state.active = state.timing = false;
             scene._wqaCaveGuideActive = false;
             return true;
         }
