@@ -201,3 +201,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 The final build is installed and independently verified. [Current Steam deployment and recovery](docs/deployment.md#npc-passages-and-food-artwork)
 
 The [Secret Cave update](docs/puzzles-and-secrets.md#cave-timing-cues) records live guard browsing, safe approaches, repeating crossing audio and both full barrel replays. [Dave balloon playback](docs/cutscene-description.md#playback-and-verification) records the renderer-owned cue. [Breakfast Stone tracking](docs/quests.md#breakfast-stone-tracker-on-secret-island) records the native exit objective. [Current Steam deployment and recovery](docs/deployment.md#secret-cave-patrol-tracking-and-dave-narration) records the installed candidate.
+
+[Current Steam deployment](docs/deployment.md#compass-cave-pings-and-continuous-crossings) records the compass cues and the verified continuous crossing. [Boss HP bars](docs/battle.md#boss-hp-bars) records the shared native gauge and target renderer verification.

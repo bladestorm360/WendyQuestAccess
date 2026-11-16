@@ -517,3 +517,15 @@ The focused update is installed in Steam. It changes the plugin, crossing worker
 - The rollback plan is `6bb5c3cc7fdbf8b24e9cfe413a274bc99071cc038c93fe42f3647d80f30b2e73` at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-barrel/rollback-latest`.
 
 [Native patrol checks and player controls](puzzles-and-secrets.md#cave-timing-cues) · [Cutscene clips](cutscene-description.md#playback-and-verification)
+
+## Compass cave pings and continuous crossings
+
+The focused update is installed in Steam. It replaces the plugin, Windows audio addon, crossing worker, patrol world model and speech formatter. Native game scripts, geometry and all four save and configuration files matched the previous installation checks. The installer fixture verified staging, the launcher lease, rollback, reapply and removal. The boss review found that boss sprites use the existing HP gauge and needed no payload change.
+
+- Installed plan SHA-256 `099563c93404161354345122069019c9c451d5bf160910fbae65b6c84e3396bf`
+- Plugin SHA-256 `926f153f1207ae934f8fb2cf55763a4c8858cf7f42a2200fe7050ff7c67d4ac9`
+- Audio addon SHA-256 `3f72352e146521824eb869940a3036779bf47ecadd3c02de58f88f755ac34e90`
+- Microsoft Defender scan `564ABFCD-79E4-4C9A-A806-25FBC2DB2380` passed for the exact stage on November 16, 2026 with definition `1.463.328.0`.
+- The rollback plan is `4dab3652aa010da47b7e89b734fce61fb19cdc62e1a0f2e017fb571efca054d9` at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-direction/rollback-latest`.
+
+[Continuous crossing and playback checks](feature-checkpoint.md#compass-cave-pings-and-continuous-crossings) · [Boss HP producer](battle.md#boss-hp-bars)

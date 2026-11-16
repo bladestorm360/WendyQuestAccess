@@ -92,6 +92,16 @@ int wmain(int argc, wchar_t** argv) {
     assert(stereo_cue(go, Cue::cave_go, {0, 0, 1}, 0.7, ready));
     assert(stereo_cue(behind_go, Cue::cave_go, {0, 0, -1}, 0.7, ready));
     assert(crossings(behind_go, 0) < crossings(go, 0));
+    assert(energy(go, 0) == energy(go, 1) && energy(behind_go, 0) == energy(behind_go, 1));
+    Stereo west_go{}, east_go{}, hrtf_south_go{};
+    assert(stereo_cue(west_go, Cue::cave_go, {-1, 0, 0}, 0.7, ready));
+    assert(stereo_cue(east_go, Cue::cave_go, {1, 0, 0}, 0.7, ready));
+    assert(energy(west_go, 0) > 0 && energy(west_go, 1) == 0);
+    assert(energy(east_go, 1) > 0 && energy(east_go, 0) == 0);
+    assert(hrtf_rate_scale(Cue::cave_go, {0, 0, 1}, 1.0) == 1.0);
+    assert(hrtf_rate_scale(Cue::cave_go, {0, 0, -1}, 1.0) == route_rear_pitch);
+    assert(hrtf.render(hrtf_south_go, Cue::cave_go, {0, 0, -1}, 0.7, ready,
+        hrtf_rate_scale(Cue::cave_go, {0, 0, -1}, 1.0)));
 
     std::array<Stereo, 7> entity_cues{};
     for (size_t i = 0; i < entity_cues.size(); ++i) {
@@ -193,8 +203,8 @@ int wmain(int argc, wchar_t** argv) {
         return count;
     };
     assert(navigation_clip(Cue::beacon_pulse).size() == 1323);
-    assert(sample_frames(Cue::beacon_pulse, beacon_rear_pitch) > sample_frames(Cue::beacon_pulse, 1.0));
-    assert(crossings(Cue::beacon_pulse, 192, 1824, beacon_rear_pitch) <
+    assert(sample_frames(Cue::beacon_pulse, route_rear_pitch) > sample_frames(Cue::beacon_pulse, 1.0));
+    assert(crossings(Cue::beacon_pulse, 192, 1824, route_rear_pitch) <
         crossings(Cue::beacon_pulse, 192, 1824));
     const int first_note = crossings(Cue::beacon_arrival, 192, 1248);
     const int second_note = crossings(Cue::beacon_arrival, 1632, 2688);

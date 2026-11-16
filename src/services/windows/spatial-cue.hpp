@@ -13,7 +13,7 @@ constexpr int rate = 48000;
 constexpr int cue_frames = 4320;
 constexpr int render_frames = cue_frames + 256;
 constexpr double rear_pitch = 0.72;
-constexpr double beacon_rear_pitch = 0.88;
+constexpr double route_rear_pitch = 0.88;
 constexpr double tau = 6.283185307179586;
 enum class Cue : int {
     preview, wall_bump, wall_brush, beacon_pulse, beacon_turn, beacon_arrival, cave_go,
@@ -134,6 +134,15 @@ inline double cue_sample(Cue cue, int frame, double pitch) {
     return envelope * (0.52 * std::sin(phase) + 0.17 * std::sin(2 * phase));
 }
 
+// Route pings carry a subtle southward pitch cue in both output modes.
+constexpr bool route_ping(Cue cue) {
+    return cue == Cue::beacon_pulse || cue == Cue::cave_go;
+}
+
+inline double hrtf_rate_scale(Cue cue, Bearing bearing, double scale) {
+    return route_ping(cue) && bearing.forward < 0.0 ? scale * route_rear_pitch : scale;
+}
+
 inline std::int16_t sample16(double value) {
     return static_cast<std::int16_t>(std::lround(std::clamp(value, -1.0, 1.0) * 32767.0));
 }
@@ -145,7 +154,7 @@ bool stereo_cue(Stereo& output, Cue cue, Bearing bearing, double gain, Ready rea
     const auto left = gain * std::sqrt(std::max(0.0, (1.0 - pan) * 0.5));
     const auto right = gain * std::sqrt(std::max(0.0, (1.0 + pan) * 0.5));
     const auto pitch = rate_scale * (bearing.forward < 0.0 ?
-        (cue == Cue::beacon_pulse ? beacon_rear_pitch : rear_pitch) : 1.0);
+        (route_ping(cue) ? route_rear_pitch : rear_pitch) : 1.0);
     const int frames = sample_frames(cue, pitch);
     output.assign(2 * (frames + (wall_loop(cue) ? 0 : render_frames - cue_frames)), 0);
     for (int i = 0; i < frames; ++i) {

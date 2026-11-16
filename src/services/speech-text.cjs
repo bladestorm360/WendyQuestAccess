@@ -156,9 +156,24 @@ function formatSpeech(message) {
         case 'timedCue': {
             const heading = HEADINGS[message.direction];
             if (!heading) return '';
+            if (Array.isArray(message.headings) && message.headings.length && message.headings.length <= 12) {
+                const legs = [];
+                for (const index of message.headings) {
+                    const direction = HEADINGS[[2, 4, 6, 8][index]];
+                    if (!direction) return '';
+                    const last = legs[legs.length - 1];
+                    if (last?.direction === direction) last.tiles++;
+                    else legs.push({ direction, tiles: 1 });
+                }
+                text = (message.waiting ? 'Wait on this tile. ' : '') + 'On the tone, ' +
+                    legs.map(leg => leg.tiles + ' ' + leg.direction).join(', then ') +
+                    '. Keep moving through the crossing.';
+                break;
+            }
             const steps = Number.isInteger(message.tiles) && message.tiles >= 2 && message.tiles <= 3 ?
                 message.tiles + ' tiles' : 'One tile';
-            text = `${message.waiting ? 'Wait for the guard to move. ' : message.alternate ? 'Alternate opening. ' : ''}${steps} ${heading}${message.terminal ? ' to an event' : ''} on the tone.`;
+            text = `${message.escape ? 'Leave the patrol lane. ' : message.waiting ? 'Wait for the guard to move. ' :
+                message.alternate ? 'Alternate opening. ' : ''}${steps} ${heading}${message.terminal ? ' to an event' : ''} on the tone.`;
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;
         }

@@ -428,16 +428,19 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const opening = result.opening;
                 const direction = opening?.direction ?? result.direction;
                 const tiles = opening?.tiles ?? result.tiles;
-                const hold = opening?.hold ?? result.hold;
+                const headings = opening?.headings ?? result.headings;
                 const target = result.guideEvent === undefined ? job.destination :
                     job.guideOptions?.find(item => item.target.id === result.guideEvent)?.target;
-                const repeat = { direction, tiles, refresh: state => refreshCaveTiming(job, state, target, direction, tiles, hold) };
+                const repeat = opening?.escape ? undefined :
+                    { direction, tiles, refresh: state => refreshCaveTiming(job, state, target, direction, tiles, headings) };
                 if (job.timing && host.caveTiming.start(job.timing, job.x, job.y, opening, repeat))
-                    return present(job, { kind: 'timedCue', direction, tiles,
-                        terminal: opening?.terminal ?? result.terminal,
+                    return present(job, { kind: 'timedCue', direction, tiles, headings,
+                        terminal: opening?.terminal ?? result.terminal, escape: opening?.escape,
                         waiting: !opening || job.motionFrame + opening.from > host.graphics.frameCount, guide: job.guide });
                 return present(job, { kind: 'patrolWait', direction, guide: job.guide });
             }
+            if (result?.status === 'unsafeCrossing') return status(job, result.exposed ?
+                'You are in a patrol lane. No clear move verified.' : 'No crossing to a safe stopping point is verified here.');
             if (result?.status === 'patrolApproach')
                 return present(job, { kind: 'patrolApproach', direction: result.direction, tiles: result.tiles,
                     terminal: result.terminal, guide: job.guide });
@@ -789,7 +792,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return timedRoute(job, snapshot, target);
     }
 
-    function refreshCaveTiming(command, state, target, direction, tiles, hold) {
+    function refreshCaveTiming(command, state, target, direction, tiles, headings) {
         const { scene } = command;
         if (active !== command || inFlight || !target || sequence >= 0x7ffffffe || !ready(scene)) return false;
         const motion = captureMotion(root, host.graphics);
@@ -798,7 +801,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (!snapshot) return false;
         const job = { scene, sequence: ++sequence, caveRefresh: { state, captured } };
         submit(job, snapshot, { ...destinationRequest(target), field: true, motion, patrolGuidance: true,
-            timingCue: true, timingDirection: direction, timingTiles: tiles, timingHold: hold });
+            timingCue: true, timingDirection: direction, timingTiles: tiles, timingHeadings: headings });
         return inFlight === job;
     }
 

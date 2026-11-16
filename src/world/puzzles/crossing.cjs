@@ -8,7 +8,8 @@ const { TIMING_CUE, STAMP_WIDTH, writeMotionStamp } = require('./patrol-motion.c
 const START_WINDOW = 60;
 const MIN_START_WINDOW = TIMING_CUE.minSpan;
 const MAX_STEPS = 3;
-const PATROL_LANDING_HOLD = 90;
+const MAX_CROSSING_STEPS = 12;
+const TURN_GRACE_FRAMES = 18;
 
 function patrolCoverage(world, patrols, cancelled) {
     const unsafe = new Uint8Array(world.cells.length);
@@ -167,10 +168,121 @@ function crossingCandidates(world, origin, distances, stops) {
     return candidates.sort((a, b) => a.score - b.score || a.heading - b.heading || b.count - a.count);
 }
 
+function crossingToSafeTile(world, origin, distances, unsafe, stops, first, area) {
+    const headings = [];
+    let cell = origin;
+    while (headings.length < MAX_CROSSING_STEPS) {
+        const heading = headings.length === 0 ? first : DIRECTIONS.findIndex((_, direction) => {
+            const next = step(world, cell, direction);
+            return next >= 0 && distances[next] === distances[cell] - 1 &&
+                (!area || inside(world, next, area));
+        });
+        if (heading < 0) return null;
+        cell = step(world, cell, heading);
+        if (cell < 0) return null;
+        headings.push(heading);
+        if (!unsafe[cell] || stops[cell])
+            return { heading: headings[0], count: headings.length, cell, headings, terminal: stops[cell] === 1 };
+    }
+    return null;
+}
+
+function studyCrossing(world, origin, motion, candidate, cancelled) {
+    const headings = candidate.headings;
+    const cellSet = new Set([origin]);
+    let cell = origin;
+    for (const heading of headings) {
+        cell = step(world.player, cell, heading);
+        if (cell < 0) return false;
+        cellSet.add(cell);
+    }
+
+    // Only guards able to exchange collision with this crossing can
+    // affect it. Include their neighbors until that set stops growing.
+    const coverage = motion.patrols.map(actor => patrolCoverage(world.patrol, [actor], cancelled));
+    if (coverage.some(mask => !mask)) return false;
+    const relevant = new Set();
+    const covered = new Uint8Array(world.patrol.cells.length);
+    for (const cell of cellSet) covered[cell] = 1;
+    for (let pass = 0; pass < coverage.length; pass++) {
+        const previous = relevant.size;
+        for (let i = 0; i < coverage.length; i++) {
+            if (relevant.has(i) || !coverage[i].some((bit, at) => bit && covered[at])) continue;
+            relevant.add(i);
+            for (let at = 0; at < covered.length; at++) covered[at] |= coverage[i][at];
+        }
+        if (relevant.size === previous || cancelled()) break;
+    }
+
+    const { view, speed, dash } = motion;
+    const delta = headings.reduce((amount, heading) => { amount[heading]++; return amount; }, [0, 0, 0, 0]);
+    const camera = [view.x - delta[1], view.y - delta[3], view.x + delta[2], view.y + delta[0]];
+    const ranges = [{ cell: origin, from: 0, until: 0 }];
+    let earliest = 0;
+    let latest = 0;
+    cell = origin;
+    const walking = 256 / 2 ** speed;
+    const fastest = dash ? walking / 2 : walking;
+    for (let i = 0; i < headings.length; i++) {
+        cell = step(world.player, cell, headings[i]);
+        const from = earliest;
+        earliest += fastest;
+        latest += walking + (i < headings.length - 1 && headings[i] !== headings[i + 1] ? TURN_GRACE_FRAMES : 0);
+        ranges.push({ cell, from, until: latest });
+    }
+    const independent = new Set();
+    for (const index of relevant) {
+        if (![...relevant].some(other => other !== index &&
+            coverage[index].some((bit, cell) => bit && coverage[other][cell])))
+            independent.add(motion.patrols[index].id);
+    }
+    candidate.study = { ids: new Set([...relevant].map(index => motion.patrols[index].id)), independent, camera, ranges, latest };
+    return true;
+}
+
+function clearEntireCrossing(world, waiting, candidate, cancelled) {
+    const { ids, independent, camera, ranges, latest } = candidate.study;
+    const player = { ...waiting.player, x: -1, y: -1 };
+    const state = startMotion(world, waiting.patrols.filter(actor => ids.has(actor.id)), player, waiting.view);
+    for (let tick = 0; tick <= latest; tick++) {
+        if (cancelled()) return false;
+        for (let index = state.patrols.length - 1; index >= 0; index--) {
+            const actor = state.patrols[index];
+            if (!actor.autonomous) continue;
+            // Prove that every possible camera position gives the same
+            // native near-screen admission during this crossing.
+            const left = actor.rx + 0.5 - 1.5 * state.view.width;
+            const right = actor.rx + 0.5 + 0.5 * state.view.width;
+            const top = actor.ry + 0.5 - 1.5 * state.view.height;
+            const bottom = actor.ry + 0.5 + 0.5 * state.view.height;
+            const [x0, y0, x1, y1] = camera;
+            const always = x0 >= left && x1 <= right && y0 >= top && y1 <= bottom;
+            const never = x1 < left || x0 > right || y1 < top || y0 > bottom;
+            if (!always && !never) {
+                // An isolated guard may freeze offscreen. If even its
+                // fastest possible movement cannot reach any remaining
+                // position in time, either camera outcome is harmless.
+                const stride = 256 / 2 ** actor.speed;
+                if (!independent.has(actor.id) || !ranges.every(range => {
+                    if (tick > range.until) return true;
+                    const distance = Math.abs(range.cell % world.player.width - actor.x) +
+                        Math.abs(Math.floor(range.cell / world.player.width) - actor.y);
+                    return distance > 1 + Math.floor((range.until - tick) / stride);
+                })) return false;
+                state.patrols.splice(index, 1);
+            }
+        }
+        const occupied = cell => ranges.some(range => cell === range.cell && tick >= range.from && tick <= range.until);
+        if (advancePatrols(state, occupied) !== 'settled' ||
+            ranges.some(range => state.normal[range.cell] && tick >= range.from && tick <= range.until)) return false;
+    }
+    return true;
+}
+
 function simulatePrefix(state, candidate, speed, dashMask, cancelled) {
     const { heading, count, terminal } = candidate;
     let moved = 0;
-    let hold = Math.max(256 / 2 ** speed, candidate.hold || 0);
+    let hold = 256 / 2 ** speed;
     // The slowest accepted native speed takes at most 32 updates per tile.
     const limit = count * 32 + hold + 1;
     for (let tick = 0; tick < limit; tick++) {
@@ -187,6 +299,7 @@ function simulatePrefix(state, candidate, speed, dashMask, cancelled) {
 }
 
 function safeStart(world, waiting, motion, candidate, cancelled) {
+    if (candidate.study) return clearEntireCrossing(world, waiting, candidate, cancelled);
     const profiles = motion.dash === true ? 1 << candidate.count : 1;
     for (let mask = 0; mask < profiles; mask++) {
         const run = startMotion(world, waiting.patrols, waiting.player, waiting.view);
@@ -212,7 +325,7 @@ function openingFor(world, motion, player, choices, cancelled) {
     const stride = motion.patrols.length * STAMP_WIDTH;
     const ringLength = TIMING_CUE.maxSpan + 1;
     const history = new Float64Array(stride * ringLength);
-    const wait = motion.cueSample ? TIMING_CUE.interval : TIMING_CUE.wait;
+    const wait = motion.exposed ? 0 : motion.cueSample ? TIMING_CUE.interval : TIMING_CUE.wait;
     for (let delay = 0; delay <= wait + MIN_START_WINDOW; delay++) {
         if (cancelled()) return null;
         writeMotionStamp(history, (delay % ringLength) * stride, waiting.patrols);
@@ -236,7 +349,7 @@ function openingFor(world, motion, player, choices, cancelled) {
                 const begin = ((from + frame) % ringLength) * stride;
                 stamps.set(history.subarray(begin, begin + stride), frame * stride);
             }
-            return { direction: DIRECTIONS[candidate.heading], tiles: candidate.count, hold: candidate.hold, terminal: candidate.terminal,
+            return { direction: DIRECTIONS[candidate.heading], tiles: candidate.count, headings: candidate.headings, escape: candidate.escape, terminal: candidate.terminal,
                 alternate: candidate.heading !== choices[0].heading, from, through, stamps };
         }
         if (advancePatrols(waiting) !== 'settled') break;
@@ -260,10 +373,11 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     let selected;
     let candidates;
     let safeCrossing;
+    let entire;
     const stops = crossingStops(world.player);
     const { patrolGuidance, timingDirection } = request;
     const fixedHeading = DIRECTIONS.indexOf(timingDirection);
-    const unsafe = patrolGuidance && fixedHeading < 0 && !motion.barrier &&
+    const unsafe = patrolGuidance && (fixedHeading < 0 || request.timingHeadings) && !motion.barrier &&
         patrolCoverage(world.patrol, motion.patrols, cancelled);
     if (cancelled()) return { status: 'cancelled' };
     for (const option of alternatives) {
@@ -285,14 +399,19 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
             // Revalidate the exact spoken crossing even if it took a
             // longer approach to leave the patrol lane in one movement.
             const count = request.timingTiles || 1;
-            if (count < 1 || count > MAX_STEPS || !Number.isInteger(count)) return { status: 'unavailable' };
+            const headings = request.timingHeadings;
+            if (!Number.isInteger(count) || count < 1 || count > (headings ? MAX_CROSSING_STEPS : MAX_STEPS) ||
+                (headings && (!Array.isArray(headings) || headings.length !== count || headings[0] !== fixedHeading ||
+                    !headings.every(heading => Number.isInteger(heading) && heading >= 0 && heading < DIRECTIONS.length))))
+                return { status: 'unavailable' };
             let cell = origin;
             for (let n = 0; n < count; n++) {
-                cell = step(world.player, cell, fixedHeading);
+                cell = step(world.player, cell, headings ? headings[n] : fixedHeading);
                 if (cell < 0 || (n < count - 1 && stops[cell])) return { status: 'unavailable' };
             }
-            candidates = [{ heading: fixedHeading, count, cell, terminal: stops[cell] === 1,
-                hold: request.timingHold === PATROL_LANDING_HOLD ? PATROL_LANDING_HOLD : 0 }];
+            candidates = [{ heading: fixedHeading, count, cell, headings, terminal: stops[cell] === 1 }];
+            if (headings && (!unsafe || unsafe[cell] || !studyCrossing(world, origin, motion, candidates[0], cancelled)))
+                return { status: 'unavailable' };
         } else if (unsafe) {
             const linked = safeCrossingCandidates(world.player, goals, origin, unsafe, stops, area, cancelled);
             if (cancelled()) return { status: 'cancelled' };
@@ -314,23 +433,40 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
             if (tiles) return { status: 'patrolApproach', direction: DIRECTIONS[heading], tiles,
                 terminal: tiles === count && candidates[0].terminal, ...guide };
         }
+        if (unsafe && fixedHeading < 0 && !safeCrossing && unsafe[candidates[0].cell]) {
+            const complete = crossingToSafeTile(world.player, origin, distances, unsafe, stops, candidates[0].heading, area);
+            if (complete && studyCrossing(world, origin, motion, complete, cancelled)) entire = complete;
+        }
         break;
     }
     if (!selected) return { status: 'unreachable' };
     const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
-    const crossing = patrolGuidance && (fixedHeading >= 0 ? candidates[0] : safeCrossing ||
+    const crossing = patrolGuidance && (fixedHeading >= 0 ? candidates[0] : safeCrossing || entire ||
         (unsafe && candidates.find(candidate => !unsafe[candidate.cell] || candidate.terminal)) ||
         candidates[0]);
-    if (crossing && fixedHeading < 0 && unsafe?.[crossing.cell] && !crossing.terminal)
-        crossing.hold = PATROL_LANDING_HOLD;
+    const exposed = unsafe?.[origin] === 1;
+    const unsafeLanding = patrolGuidance && fixedHeading < 0 && unsafe?.[crossing.cell] && !crossing.terminal;
+    if (unsafeLanding && !exposed) return { status: 'unsafeCrossing', ...selected };
     if (request.timingCue === true) {
-        const choices = crossing ? [crossing] : candidates.filter(candidate => candidate.count === 1);
-        const opening = openingFor(world, { ...motion, cueSample: fixedHeading >= 0 }, player, choices, cancelled);
+        const choices = crossing ? unsafeLanding ? [] : [crossing] : candidates.filter(candidate => candidate.count === 1);
+        if (exposed) {
+            // If Wendy is already in the lane, prioritize a nearby safe
+            // tile over waiting there for the next turn of the patrol.
+            for (let heading = 0; heading < DIRECTIONS.length; heading++) {
+                const cell = step(world.player, origin, heading);
+                if (cell >= 0 && !unsafe[cell] && !stops[cell] &&
+                    !choices.some(choice => choice.heading === heading && choice.count === 1))
+                    choices.push({ heading, count: 1, cell, escape: true });
+            }
+        }
+        const opening = choices.length && openingFor(world, { ...motion, cueSample: fixedHeading >= 0, exposed },
+            player, choices, cancelled);
         if (cancelled()) return { status: 'cancelled' };
         if (opening) return { status: 'timedCue', opening, ...selected };
     }
+    if (exposed) return { status: 'unsafeCrossing', exposed, ...selected };
     if (patrolGuidance) return { status: 'timedWait', direction: DIRECTIONS[crossing.heading],
-        tiles: crossing.count, hold: crossing.hold, terminal: crossing.terminal, ...selected };
+        tiles: crossing.count, headings: crossing.headings, terminal: crossing.terminal, ...selected };
     for (const candidate of candidates) {
         const startWindow = checkedStartWindow(world, motion, player, candidate, cancelled);
         if (cancelled()) return { status: 'cancelled' };

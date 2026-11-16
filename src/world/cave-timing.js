@@ -135,13 +135,12 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
             stop(state.scene);
             return report('Patrol timing changed. Request directions again.');
         }
-        const facing = state.player._direction;
-        const source = bearing(facing, state.opening.direction);
+        // Match the spoken compass directions and the route beacon.
+        const source = bearing(8, state.opening.direction);
         const { hrtf, caveVolume } = preferences();
         const until = Math.min(now + CUE_LIFETIME, state.motion.frame + state.opening.through - 22);
-        state.facing = facing;
         if (!source || !audio.play(state.scene, hrtf, audio.cues.caveGo, caveVolume / 100, source,
-            () => live(state) && frame() < until && state.player._direction === facing, status => {
+            () => live(state) && frame() < until, status => {
                 if (status < 0 && stop(state.scene)) report('Timing audio is unavailable. Request directions again.');
             }, 'cave')) return stop(state.scene);
         if (owner !== state) return;
@@ -155,7 +154,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
         warm, capture, start, refreshResult, stop,
         cancelPlan(scene) { if (owner?.scene === scene) stop(scene); },
         active: scene => owner?.scene === scene || preparation?.scene === scene,
-        pose(scene) { if (owner?.scene === scene && owner.facing !== undefined) stop(scene); },
+        pose(scene) { if (owner?.scene === scene && !live(owner)) stop(scene); },
         update(scene) {
             const state = owner;
             if (!state || state.scene !== scene || state.queued || state.waiting) return;

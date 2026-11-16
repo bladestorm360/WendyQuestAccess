@@ -749,7 +749,7 @@ function configureMotion(fixture, x, y, displayX = 0, displayY = 0) {
     return actors;
 }
 
-function verifyMotion(fixture, actors, frames, directions = [], startAt = 0, dashMask = 0) {
+function verifyMotion(fixture, actors, frames, directions = [], startAt = 0, dashMask = 0, turnPause = 0) {
     const { geometry, gameMap, player } = fixture;
     const patrols = actors.map(copyPatrol);
     assert(patrols.every(Boolean));
@@ -759,8 +759,16 @@ function verifyMotion(fixture, actors, frames, directions = [], startAt = 0, das
     const state = startMotion(world, patrols, { x: player.x, y: player.y, rx: player._realX, ry: player._realY,
         speed: player._moveSpeed, jump: 0 }, view);
     let next = 0;
+    let turnAt = -1;
     for (let tick = 0; tick < frames; tick++) {
-        const heading = tick >= startAt && !player.isMoving() && next < directions.length ? directions[next++] : null;
+        let heading = null;
+        if (tick >= startAt && !player.isMoving() && next < directions.length) {
+            if (turnAt < 0) turnAt = tick + (next > 0 && directions[next] !== directions[next - 1] ? turnPause : 0);
+            if (tick >= turnAt) {
+                heading = directions[next++];
+                turnAt = -1;
+            }
+        }
         const result = advancePatrols(state);
         assert.notEqual(result, 'boundary', `unsupported route in Map ${fixture.id}, tick ${tick}`);
         gameMap.updateEvents();
@@ -919,7 +927,7 @@ async function verifyPatrolGuidance() {
             } else if (next.status === 'patrolApproach') {
                 directions = Array(next.tiles).fill(DIRECTIONS.indexOf(next.direction));
             } else if (next.status === 'timedCue') {
-                directions = Array(next.opening.tiles).fill(DIRECTIONS.indexOf(next.opening.direction));
+                directions = next.opening.headings || Array(next.opening.tiles).fill(DIRECTIONS.indexOf(next.opening.direction));
                 wait = next.opening.from;
             } else {
                 assert.equal(next.status, 'timedWait', JSON.stringify(next));
@@ -932,6 +940,34 @@ async function verifyPatrolGuidance() {
         assert(arrived, 'the verified step-by-step route reaches the barrel from row ' + y);
     }
     console.log('Verified complete barrel approaches from both reported tiles without guard contact.');
+
+    const initial = load(196);
+    const initialActors = configureMotion(initial, 6, 30, 0, 24);
+    const roomRequest = { ...motionRequest(initial, initialActors), event: 20, field: true, patrolGuidance: true, timingCue: true };
+    roomRequest.motion.dash = true;
+    const roomPlan = previewCrossing(initial.geometry, snapshot(initial), roomRequest);
+    assert.equal(roomPlan.status, 'timedCue');
+    assert.deepEqual(roomPlan.opening.headings, [1, 3, 3, 3, 3, 3, 2]);
+    await verifyWorker(initial, roomRequest, snapshot(initial), result => assert.deepEqual(result, roomPlan));
+    assert.equal(formatSpeech({ kind: 'timedCue', direction: 4, headings: roomPlan.opening.headings, waiting: true }),
+        'Wait on this tile. On the tone, 1 west, then 5 north, then 1 east. Keep moving through the crossing.');
+    for (const delay of [roomPlan.opening.from, roomPlan.opening.through - 30]) {
+        for (const [mask, stepFrames] of [[0, 16], [127, 8]]) {
+            for (const pause of [0, 18]) {
+                const replay = load(196);
+                const guards = configureMotion(replay, 6, 30, 0, 24);
+                const frames = delay + 7 * stepFrames + 2 * pause + 45;
+                assert.equal(verifyMotion(replay, guards, frames, roomPlan.opening.headings, delay, mask, pause), frames);
+                assert.deepEqual([replay.player.x, replay.player.y], [6, 25]);
+            }
+        }
+    }
+    const fromLane = load(196);
+    const nearby = configureMotion(fromLane, 5, 30, 0, 24);
+    for (let n = 0; n < 68; n++) fromLane.gameMap.updateEvents();
+    const lanePlan = previewCrossing(fromLane.geometry, snapshot(fromLane),
+        { ...motionRequest(fromLane, nearby), event: 20, field: true, patrolGuidance: true, timingCue: true });
+    assert.notEqual(lanePlan.status, 'timedWait', 'an exposed starting tile is never offered as a waiting point');
 
     const cave = load(196);
     const actors = configureMotion(cave, 6, 30, 0, 20);
@@ -977,7 +1013,7 @@ async function verifyLiveCrossing() {
         cues: CUE, isPrepared: () => true,
         play(_scene, _hrtf, cue, gain, bearing, ready) {
             assert(ready());
-            sounds.push({ cue, gain, bearing });
+            sounds.push({ cue, gain, bearing: bearing.map(value => value || 0) });
             sounding = true;
             return true;
         },
@@ -1023,7 +1059,8 @@ async function verifyLiveCrossing() {
     assert.equal(scene._wqaCaveCueDue, 481);
     assert.equal(sounds.length, 0);
     const issueMs = advanceToCue(delayed.current);
-    assert.deepEqual(sounds[0], { cue: CUE.caveGo, gain: 0.55, bearing: [0, 0, -1] });
+    assert.equal(delayed.current.player._direction, 6);
+    assert.deepEqual(sounds[0], { cue: CUE.caveGo, gain: 0.55, bearing: [-1, 0, 0] });
     assert.equal(scene._wqaCaveCueUntil, 489);
     const checkpoint = delayed.current.gameMap._events[21];
     checkpoint.lock = () => assert.equal(sounding, false, 'event acceptance revokes timing audio before locking');
@@ -1046,8 +1083,10 @@ async function verifyLiveCrossing() {
     const first = scene._wqaCaveCueDue;
     advanceToCue(repeated.current);
     assert.equal(scene._wqaCaveCueDue, first + 18);
+    repeated.current.player.setDirection(2);
     advanceToCue(repeated.current);
     assert.equal(sounds.length, 3, 'two separately verified pulses on the same opening');
+    assert.deepEqual(sounds.slice(1).map(sound => sound.bearing), [[-1, 0, 0], [-1, 0, 0]]);
     assert.equal(scene._wqaCaveCueDue, first + 36);
     advanceToCue(repeated.current);
     assert.equal(sounds.length, 3, 'expired openings stop the pulse');

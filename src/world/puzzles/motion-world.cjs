@@ -32,7 +32,7 @@ function startMotion(world, patrols, player, view) {
     return state;
 }
 
-function advancePatrols(state) {
+function advancePatrols(state, watch) {
     const { world: { patrol: world }, player } = state;
     const playerCell = indexOf(world, player.x, player.y);
     function tryStep(actor, heading) {
@@ -41,7 +41,7 @@ function advancePatrols(state) {
         const next = offset(world, cell, heading);
         if (next < 0) return null;
         if (!actor.through) {
-            if (actor.hazard && next === playerCell) return 'contact';
+            if ((actor.hazard && next === playerCell) || (watch && actor.normal && watch(next))) return 'contact';
             if ((actor.normal && next === playerCell) || state.bodies[next] || step(world, cell, heading) < 0) return null;
         }
         return { x: next % world.width, y: Math.floor(next / world.width) };
