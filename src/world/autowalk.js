@@ -40,14 +40,23 @@ function createAutowalk(root, ready, preferences, report) {
         stop();
         active = { scene, job, map, player, target, targetX: target?._x, targetY: target?._y, page: target?._pageIndex,
             trigger: target?._trigger, x: job.x, y: job.y, index: 0, course, line, arrival, record,
-            manualEntry: result.autowalkStop, pending: null, dirty: false };
+            manualEntry: result.autowalkStop, pending: null, dirty: false, gate: result.gate, pace: result.pace };
         scene._wqaAutowalkActive = scene._wqaPresentation = true;
+        if (job.caveWalk) scene._wqaCaveReview = false;
+        return true;
+    }
+
+    function wait(job, delay) {
+        if (!ready(job.scene)) return false;
+        stop();
+        active = { scene: job.scene, player: root.$gamePlayer, job, due: root.Graphics.frameCount + delay };
+        job.scene._wqaAutowalkActive = job.scene._wqaPresentation = true;
         return true;
     }
 
     function end(state, record, failed = false, arrived = false) {
         stop(state.scene);
-        report(state.scene, record, failed, arrived);
+        report(state.scene, record, failed, arrived, state.job);
         return 0;
     }
 
@@ -63,6 +72,12 @@ function createAutowalk(root, ready, preferences, report) {
                 atApproach(map, player, target, arrival);
             if (!current) return changed(state, 'Autowalk stopped. The interaction approach changed. Request directions again.');
             player.setDirection(facing);
+        }
+        if (job.caveCrystal && atApproach(map, player, target, arrival) && job.caveAction?.(target)) {
+            stop(state.scene);
+            if (facing === null) player.checkEventTriggerHere([0]);
+            else player.checkEventTriggerThere([0]);
+            return 0;
         }
         if (rest.npcBlocker)
             return end(state, { kind: 'fieldStatus', name: 'Blocked by ' + rest.npcBlocker + '.' });
@@ -97,15 +112,16 @@ function createAutowalk(root, ready, preferences, report) {
             stop(scene);
             // Manual input ends automatic movement. The beacon can still
             // follow the player's accepted step toward the same destination.
-            report(scene, null);
+            report(scene, null, false, false, state.job);
             return direction;
         }
-        if (!ready(scene) || state.map.isAnyEventStarting?.()) {
-            stop(scene);
-            report(scene, null, true);
-            return 0;
+        if (!ready(scene) || state.map?.isAnyEventStarting?.() || !preferences().autowalk)
+            return end(state, null, true);
+        if (state.due) {
+            if (root.Graphics.frameCount < state.due) return 0;
+            return end(state, null, false, true);
         }
-        if (!preferences().autowalk || state.dirty || state.pending || !valid(state)) return changed(state);
+        if (state.dirty || state.pending || !valid(state)) return changed(state);
         const { map, index, course, line, arrival, record, job } = state;
         const length = line ? line.moves.length : course.length;
         if (index === length) {
@@ -115,6 +131,18 @@ function createAutowalk(root, ready, preferences, report) {
             if (record.enemyBlocked) return end(state, { ...record, legs: [], more: false, directionsOnly: true });
             return arrive(state, record);
         }
+        if (state.gate) {
+            const allowed = state.gate();
+            if (!allowed) return 0;
+            if (allowed < 0) {
+                // A stale forecast leaves Wendy in the starting pocket.
+                job.caveContinue = true;
+                return end(state, null, false, true);
+            }
+            state.gate = null;
+        }
+        // Override dash only while issuing a checked cave step.
+        if (state.pace || line) player._dashing = state.pace === 'dash';
         const now = line && root.Graphics.frameCount;
         const move = line && line.moves[index];
         if (line && now < line.frame + move.frame) return 0;
@@ -132,6 +160,11 @@ function createAutowalk(root, ready, preferences, report) {
             const floor = player.findEventsAt(x, y).find(event =>
                 player.canTriggerEvent(event, TOUCH_TRIGGERS, false) && event.list()?.length > 1);
             if (floor) {
+                if (index === length - 1 && floor._eventId === job.caveFloor && job.caveAction?.(floor)) {
+                    if (job.caveArrives) end(state, null, false, true);
+                    else stop(scene);
+                    return step;
+                }
                 const page = root.$dataMap?.events?.[floor._eventId]?.pages?.[floor._pageIndex];
                 // Even an invisible cleanup page starts the native interpreter.
                 // Hand the step back to the player before the native event gate.
@@ -162,7 +195,7 @@ function createAutowalk(root, ready, preferences, report) {
         state.pending = null;
     }
 
-    return { start, stop, input, moved, active: scene => active?.scene === scene,
+    return { start, wait, stop, input, moved, active: scene => active?.scene === scene,
         dirty(scene) { if (active?.scene === scene) active.dirty = true; } };
 }
 

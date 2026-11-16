@@ -121,6 +121,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
 
     await verifyLineLoot();
     await verifyManualLine();
+    verifyAutomaticChains();
 
     const distraction = setup(200, 23, 26, 15.25, 21.25);
     const firstBlocker = await follow(distraction.run, distraction.guards, 15);
@@ -158,9 +159,158 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
     activate(chase.run, chase.guards, 2, nativeStep, true);
     console.log('Verified western refuges, patrol-line exit, distraction prerequisites and nine native chase handoffs.');
 
+    function verifyAutomaticChains() {
+        const scene = c.SceneManager._scene;
+        const saved = { Input: c.Input, $gameTemp: c.$gameTemp, $gameMessage: c.$gameMessage,
+            WendyQuestAccessFieldMove: c.WendyQuestAccessFieldMove,
+            WendyQuestAccessAutowalkInput: c.WendyQuestAccessAutowalkInput };
+        const reports = [];
+        const auto = createAutowalk(c, value => value === scene, () => ({ autowalk: true }),
+            (_scene, record, failed, arrived) => reports.push({ record, failed, arrived }));
+        const playerVariable = c.$gameVariables.value;
+        const switchValue = c.$gameSwitches.value;
+        const timing = createCaveTiming(c, value => value === scene, null, null);
+        c.Input = { dir4: 0 };
+        c.$gameTemp = { isDestinationValid: () => false, clearDestination() {} };
+        c.$gameMessage = { isBusy: () => false };
+        scene._wqaFieldReady = true;
+        c.WendyQuestAccessFieldMove = auto.moved;
+        c.WendyQuestAccessAutowalkInput = auto.input;
+
+        function attach(run, guards) {
+            const { gameMap, player } = run;
+            delete player.direction;
+            Object.assign(player._followers, { areGathering: () => false, updateMove() {} });
+            c.Graphics.frameCount = 0;
+            return () => {
+                c.Graphics.frameCount++;
+                gameMap.updateEvents();
+                assert(!guards.some(guard => guard.isStarting()), 'native guard contact in Autowalk');
+                const beforeX = player.scrolledX();
+                const beforeY = player.scrolledY();
+                player.moveByInput();
+                if (player.isMoving()) player.updateMove();
+                player.updateScroll(beforeX, beforeY);
+            };
+        }
+
+        function walk(run, tick, target, steps, opts = {}) {
+            const { gameMap, player } = run;
+            let x = player.x, y = player.y;
+            for (const heading of steps) {
+                x = gameMap.roundXWithDirection(x, DIRECTIONS[heading]);
+                y = gameMap.roundYWithDirection(y, DIRECTIONS[heading]);
+            }
+            const job = { scene, mode: 'walk', target, x: player.x, y: player.y, ...opts.job,
+                caveWalk: { destination: target } };
+            let gateResult;
+            const gate = opts.gate && (() => (gateResult = opts.gate()));
+            scene._wqaCaveReview = true;
+            assert(auto.start(job, { distance: steps.length, course: Uint8Array.from(steps),
+                arrival: { x, y, facing: opts.facing ?? null }, pace: opts.pace, gate },
+            { kind: 'routeDirections', legs: [], facing: opts.facing }));
+            assert(!scene._wqaCaveReview, 'the automatic native step does not invalidate its own field job');
+            const begin = c.Graphics.frameCount;
+            do { tick(); } while ((auto.active(scene) || player.isMoving()) && c.Graphics.frameCount - begin < 640);
+            assert.deepEqual([player.x, player.y], [x, y],
+                'Autowalk completed the verified stretch from ' + [job.x, job.y] + ' ' +
+                JSON.stringify({ steps, report: reports.at(-1), gate: gateResult }));
+
+            if (opts.floor) player.checkEventTriggerHere([1]);
+        }
+
+        try {
+            const westAuto = setup(196, 15, 24, 7.75, 19.25);
+            const { run, guards } = westAuto;
+            const tick = attach(run, guards);
+            let crossings = 0;
+            let checkpoint = 0;
+            c.$gameVariables.value = () => checkpoint;
+            for (let segment = 0; segment < 75; segment++) {
+                const motion = captureMotion(c, c.Graphics);
+                const plan = previewCrossing(run.geometry, liveState(), { ...motionRequest(run, guards), motion,
+                    field: true, patrolGuidance: true, timingCue: true, autowalk: true, event: 20 });
+                let steps = plan.opening?.headings || expand(plan.legs || (plan.opening ? [plan.opening] : plan.tiles ? [plan] : []));
+                if (!steps.length && plan.status === 'timedWait') {
+                    for (let i = 0; i < 18; i++) tick();
+                    continue;
+                }
+                const exit = run.gameMap._events[20];
+                const floor = plan.boundaryEvent || (plan.opening?.terminal || plan.terminal ||
+                    plan.arrival?.x === exit.x && plan.arrival?.y === exit.y ? 20 : undefined);
+                if (plan.boundaryEvent) steps = [...steps, DIRECTIONS.indexOf(plan.boundary)];
+                if (plan.status === 'ready' && !plan.distance) break;
+                assert(steps.length, plan.status);
+                const gate = plan.opening && timing.automaticGate(timing.capture(scene, motion, { id: 20 }, true), plan.opening);
+                if (plan.opening) { assert(gate); crossings++; }
+                walk(run, tick, 20, steps, { pace: plan.opening?.pace || 'walk', gate, floor,
+                    job: { caveFloor: floor, caveAction: event => event._eventId === floor } });
+                if (floor) {
+                    const event = run.gameMap._events[floor];
+                    assert(event.isStarting());
+                    event._starting = false;
+                    if (floor === 20) break;
+                    assert.equal(floor, 21);
+                    checkpoint = 1;
+                }
+            }
+            assert.equal(checkpoint, 1);
+            assert(crossings >= 2);
+            assert.deepEqual([run.player.x, run.player.y], [22, 7]);
+
+            const distraction = setup(200, 16, 29, 15.25, 21.25);
+            const crystalTick = attach(distraction.run, distraction.guards);
+            const crystal = distraction.run.gameMap._events[5];
+            c.$gameSwitches.value = () => false;
+            const { acceptedAction, chaseContinuation } = require('../src/world/puzzles/cave-progression');
+            let crystalAction;
+            walk(distraction.run, crystalTick, 5, [], { facing: 4,
+                job: { caveCrystal: true, caveAction: event => !!(crystalAction = acceptedAction(c, scene, event)) } });
+            assert.equal(crystalAction?.event, crystal);
+            assert(crystal.isStarting());
+            crystal._starting = false;
+            const command = crystal.list()[25];
+            distraction.run.gameMap._events[command.parameters[0]].forceMoveRoute(command.parameters[1]);
+            assert.equal(distractionForGuard(c, 9).id, 10);
+
+            const chase = setup(201, 6, 44, 0, 39.25);
+            const chaseTick = attach(chase.run, chase.guards);
+            const first = previewCrossing(chase.run.geometry, liveState(), { ...motionRequest(chase.run, chase.guards),
+                field: true, patrolGuidance: true, timingCue: true, event: 2 });
+            const path = expand(first.legs || []);
+            path.push(DIRECTIONS.indexOf(first.boundary));
+            let action;
+            walk(chase.run, chaseTick, 2, path, { floor: 4, pace: 'walk',
+                job: { caveFloor: 4, caveAction: event => !!(action = acceptedAction(c, scene, event)) } });
+            for (const id of [4, 9, 11, 13, 24, 26, 27, 28, 29]) {
+                assert.equal(action.event._eventId, id);
+                assert(action.event.isStarting());
+                const command = action.list[action.chase];
+                chase.run.gameMap._events[command.parameters[0]].forceMoveRoute(command.parameters[1]);
+                action.event._starting = false;
+                erase(action.event);
+                const next = chaseContinuation(c, action);
+                assert(next);
+                chaseTick(); // accept the next stage after the native handoff
+                walk(chase.run, chaseTick, 2, expand(next.legs), { floor: next.next, pace: 'dash',
+                    job: { caveFloor: next.next, caveAction: event => !!(action = acceptedAction(c, scene, event)) } });
+            }
+            assert.equal(action.event._eventId, 2);
+            assert(action.event.isStarting());
+            assert(!reports.some(report => report.failed));
+        } finally {
+            auto.stop(scene);
+            Object.assign(c, saved);
+            c.$gameVariables.value = playerVariable;
+            c.$gameSwitches.value = switchValue;
+        }
+        console.log('Verified native Autowalk through the first room checkpoint, timed crossings, crystal interaction and nine chase legs.');
+    }
+
     async function verifyManualLine() {
         const saved = { Input: c.Input, $gameTemp: c.$gameTemp, $gameMessage: c.$gameMessage,
             WendyQuestAccessCaveTimingMoved: c.WendyQuestAccessCaveTimingMoved,
+            WendyQuestAccessCaveTimingInput: c.WendyQuestAccessCaveTimingInput,
             WendyQuestAccessFieldMove: c.WendyQuestAccessFieldMove };
         const savedApp = c.Graphics.app;
         const scene = c.SceneManager._scene;
@@ -180,8 +330,12 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                 cueListener?.(sounds.at(-1));
                 return true;
             }
-        }, () => ({ enabled: true, caveTiming: true, caveVolume: 60, hrtf: false }), text => reports.push(text));
+        }, () => ({ enabled: true, caveTiming: true, caveVolume: 60, hrtf: false }), (text, keepCaveTiming) => {
+            timing.cancelPlan(scene, keepCaveTiming);
+            reports.push(text);
+        });
         c.WendyQuestAccessCaveTimingMoved = timing.moved;
+        c.WendyQuestAccessCaveTimingInput = timing.input;
         c.WendyQuestAccessFieldMove = () => assert(!scene._wqaAutowalkActive);
         scene._wqaFieldReady = true;
 
@@ -199,6 +353,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                 delete player.direction;
                 Object.assign(player._followers, { areGathering: () => false, updateMove() {} });
                 c.Graphics.frameCount = 0;
+                let refresh = null;
                 for (let i = 0; i < phase; i++) tick();
 
                 function tick() {
@@ -212,6 +367,11 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                     player.updateScroll(beforeX, beforeY);
                     if (scene._wqaCaveCueDue && c.Graphics.frameCount >= scene._wqaCaveCueDue) timing.update(scene);
                     renderer.emit('postrender');
+                    if (refresh) {
+                        const runRefresh = refresh;
+                        refresh = null;
+                        runRefresh();
+                    }
                 }
 
                 for (const target of targets) {
@@ -219,7 +379,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                     let arrived = false;
                     for (let attempt = 0; attempt < 16; attempt++) {
                         const request = { ...motionRequest(run, guards), event: target, field: true,
-                            patrolGuidance: true, lineNavigation: 'manual', motion: captureMotion(c, c.Graphics) };
+                            patrolGuidance: true, timingCue: true, lineNavigation: 'manual', motion: captureMotion(c, c.Graphics) };
                         const live = liveState();
                         const plan = previewCrossing(run.geometry, live, request);
                         if (!attempt) await verifyWorker(run, request, live, packet => assert.deepEqual(packet, plan));
@@ -228,9 +388,48 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             const steps = expand(plan.legs);
                             move(run, guards, steps);
                             c.Graphics.frameCount += steps.length * 16;
+                        } else if (plan.stopAtPocket) {
+                            const { direction, tiles, headings, pace } = plan.opening || plan;
+                            const origin = [player.x, player.y];
+                            const expected = headings.map(heading => DIRECTIONS[heading]);
+                            const captured = timing.capture(scene, request.motion, { id: target });
+                            assert(timing.start(captured, ...origin, plan.opening, {
+                                direction, tiles, pace, stopAtPocket: true,
+                                refresh(state) {
+                                    refresh = () => {
+                                        const motion = captureMotion(c, c.Graphics);
+                                        const revised = previewCrossing(run.geometry, liveState(), { ...request, motion,
+                                            timingDirection: direction, timingTiles: tiles, timingHeadings: headings, timingPace: pace });
+                                        timing.refreshResult(state, timing.capture(scene, motion, { id: target }), revised.opening);
+                                    };
+                                    return true;
+                                }
+                            }));
+                            const begin = c.Graphics.frameCount;
+                            let at = 0;
+                            let respondAt = Infinity;
+                            cueListener = receipt => {
+                                assert.notEqual(receipt.cue, CUE.wallBump, 'no exposed stop cue in the continuous crossing');
+                                if (!at && respondAt === Infinity) respondAt = receipt.frame + 1;
+                            };
+                            while (at < expected.length && c.Graphics.frameCount - begin < 1600) {
+                                if (c.Graphics.frameCount + 1 >= respondAt && !player.isMoving()) c.Input.dir4 = expected[at];
+                                const before = [player.x, player.y];
+                                tick();
+                                if (player.x !== before[0] || player.y !== before[1]) at++;
+                            }
+                            assert.equal(at, expected.length, 'all continuous steps from ' + origin);
+                            const pocket = [player.x, player.y];
+                            for (let i = 0; i < 82; i++) tick();
+                            assert.deepEqual([player.x, player.y], pocket, 'held direction cannot leave the safe pocket');
+                            assert.equal(reports.at(-1), 'Safe to stop. Request directions again.');
+                            cueListener = null;
+                            c.Input.dir4 = 0;
+                            tick();
+                            continue;
                         } else {
                             assert.equal(plan.status, 'patrolLineManual');
-                            assert.match(formatSpeech({ ...plan, kind: plan.status }), /Walk one leg on each directional ping/);
+                            assert.match(formatSpeech({ ...plan, kind: plan.status }), /The guide holds movement at the planned pauses/);
                             const captured = timing.capture(scene, request.motion, { id: target });
                             const track = capturePatrolLine(c, request.motion, target);
                             assert(timing.startManual(captured, track, player.x, player.y, plan, 'Reached the planned stop.'));
@@ -244,20 +443,24 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                                     assert.equal(c.Input.dir4, plan.legs[index].direction);
                                     index++;
                                     respondAt = undefined;
-                                    c.Input.dir4 = 0;
                                 } else if (receipt.cue === CUE.caveGo && !respondAt) {
-                                    assert.equal(c.Input.dir4, 0);
                                     assert.deepEqual(receipt.place, bearing(8, plan.legs[index].direction));
                                     respondAt = receipt.frame + response;
                                 }
                             };
-                            while (timing.active(scene) && c.Graphics.frameCount - begin < 1701) {
+                            const reportCount = reports.length;
+                            while (timing.active(scene) && reports.length === reportCount && c.Graphics.frameCount - begin < 1701) {
                                 if (respondAt === c.Graphics.frameCount + 1) c.Input.dir4 = plan.legs[index].direction;
                                 tick();
                             }
                             cueListener = null;
                             assert.equal(index, plan.legs.length, 'Manual legs at ' + [player.x, player.y] + '. ' + reports.at(-1));
                             assert.equal(reports.at(-1), 'Reached the planned stop.');
+                            const pocket = [player.x, player.y];
+                            for (let i = 0; i < 80; i++) tick();
+                            assert.deepEqual([player.x, player.y], pocket);
+                            c.Input.dir4 = 0;
+                            tick();
                         }
                         if (plan.more) continue;
                         if (target === 26) {

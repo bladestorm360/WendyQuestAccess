@@ -514,6 +514,20 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     if (cancelled()) return { status: 'cancelled' };
     if (request.lineNavigation && !motion.barrier && fixedHeading < 0) {
         const course = lineCrossing(world, request, origin, unsafe, stops, patrolCoverage, cancelled);
+        if (course?.status === 'patrolLineCrossing') {
+            const { headings, to } = course;
+            const direction = DIRECTIONS[headings[0]];
+            const candidate = { heading: headings[0], headings, count: headings.length, cell: to, pace: 'walk' };
+            const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
+            // Certify the entire exposed stretch and the actual turns.
+            // The regular cave cue keeps playing until the safe pocket.
+            if (request.timingCue && studyCrossing(world, origin, { ...motion, dash: false }, candidate, cancelled)) {
+                const opening = openingFor(world, motion, player, [candidate], cancelled);
+                if (opening) return { status: 'timedCue', opening, stopAtPocket: true };
+            }
+            if (cancelled()) return { status: 'cancelled' };
+            return { status: 'timedWait', direction, tiles: headings.length, headings, pace: 'walk', stopAtPocket: true };
+        }
         if (course) return course;
         if (cancelled()) return { status: 'cancelled' };
     }

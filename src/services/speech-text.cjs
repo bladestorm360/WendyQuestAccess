@@ -175,7 +175,9 @@ function formatSpeech(message) {
                 text = `${message.escape ? 'Leave the patrol lane. ' : message.waiting ? 'Wait on this tile. ' :
                     message.alternate ? 'Alternate opening. ' : ''}On the ping, go ${steps} ${heading}.`;
             }
-            text += message.terminal ? ' The last step triggers the event.' : ' Stop there and request directions again.';
+            text += message.terminal ? ' The last step triggers the event.' :
+                message.stopAtPocket ? ' The guide stops you in the safe pocket. Request directions there.' :
+                ' Stop there and request directions again.';
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;
         }
@@ -185,7 +187,7 @@ function formatSpeech(message) {
                 legs.some(({ direction, tiles }) => !HEADINGS[direction] || !Number.isInteger(tiles) ||
                     tiles < 1 || tiles > 12)) return '';
             const directions = legs.map(({ direction, tiles }) => tiles + ' ' + HEADINGS[direction]);
-            text = 'Walk one leg on each directional ping. Release on the thud. ' +
+            text = 'Walk on each directional ping. The guide holds movement at the planned pauses. ' +
                 directions.join(', then ') + '.';
             break;
         }

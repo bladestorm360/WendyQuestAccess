@@ -431,7 +431,7 @@ def objects_notification(original):
         # Sunny Fryshire continuously reapplies the same tileset. Keep the
         # native refresh, and retire routes only when the actual ID changes.
         178811: b'\n    if(this._tilesetId!==tilesetId){' + ROUTE_DIRTY + b'}\n    ',
-        180829: b'if(this===$gameMap&&SceneManager._scene?._wqaCaveGuideActive&&SceneManager._scene._wqaFieldReady&&'
+        180829: b'if(this===$gameMap&&(SceneManager._scene?._wqaCaveGuideActive||Graphics._wqaCaveAutoPending)&&SceneManager._scene?._wqaFieldReady&&'
                 b'!SceneManager._nextScene&&Graphics.app?.stage===SceneManager._scene&&!$gamePlayer._transferring)'
                 b'globalThis.WendyQuestAccessCaveEventAccepted?.(SceneManager._scene,event);\n            '
                 b'if(this===$gameMap&&SceneManager._scene?._wqaBookmarkEntrance&&!SceneManager._nextScene&&'
@@ -446,7 +446,10 @@ def objects_notification(original):
         # Native interpolation has reached the reserved tile. updateMove
         # runs on moving characters, separately from jumping or relocation.
         191826: b'\n        if(this===$gamePlayer&&Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady)'
-                b'globalThis.WendyQuestAccessFootstep?.(SceneManager._scene,this);',
+                b'globalThis.WendyQuestAccessFootstep?.(SceneManager._scene,this);'
+                b'else if(Graphics._wqaCaveTimingEnabled&&this._trigger===2&&this._mapId===$gameMap?._mapId&&'
+                b'SceneManager._scene?._wqaFieldReady)'
+                b'globalThis.WendyQuestAccessGuardFootstep?.(SceneManager._scene,this);',
         194431: b'\n    if(this._tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
         194681: b'\n    if(this._tileId!==tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
         195557: beacon_actor(b'd') + b'if(SceneManager._scene?._wqaCaveTimingActive&&this===$gamePlayer)'
@@ -473,7 +476,9 @@ def objects_notification(original):
                 + MAP_LEAVING + b'\n        ',  # Native landing after isLandOk
         222789: b'if(this===$gamePlayer&&SceneManager._scene?._wqaAutowalkActive)'
                 b'direction=globalThis.WendyQuestAccessAutowalkInput?.(SceneManager._scene,this,direction,'
-                b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',
+                b'direction>0||$gameTemp.isDestinationValid())??direction;\n        '
+                b'if(this===$gamePlayer&&SceneManager._scene?._wqaCaveTimingActive)'
+                b'direction=globalThis.WendyQuestAccessCaveTimingInput?.(SceneManager._scene,direction)??direction;\n        ',
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
                 b'(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||SceneManager._scene._wqaAutowalkActive))'
                 b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',
@@ -723,7 +728,8 @@ def map_notification(original):
             (!this._wqaInteractionActive && !this._wqaInteractionDeferred && !this._wqaAutowalkActive && wqaIcon && wqaIcon !== this._wqaInteractionSeen &&
             wqaIcon.scale.x > 0 && wqaIcon.children[0]?.texture?.valid))
             globalThis.WendyQuestAccessInteractionUpdate?.(this, wqaIcon);
-        if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaBookmarkTransferPending) &&
+        if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaCaveAutoPending ||
+            Graphics._wqaBookmarkTransferPending) &&
             !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||
             (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||

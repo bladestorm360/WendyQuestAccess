@@ -171,7 +171,8 @@ function boot(root, nodeRequire, nodeProcess) {
         dialogue = createDialogueObserver(host, notifications);
         narration = createNarration(root, host, () => audioPreferences);
         credits = createCredits(root, host, notifications, host.speechPreferences);
-        const { denied: fieldKeyDenied, routed: fieldRouteResult } = createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
+        const { denied: fieldKeyDenied, routed: fieldRouteResult, caveTiming: caveTimingResult } =
+            createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
         field = createField(root, host, notifications, fieldRouteResult);
         mapBanner = createMapBannerObserver(root, host, notifications, field.ready);
         interaction = createInteractionPrompt(root, host, field.interactionReady, notifications, field.appendInteraction);
@@ -185,7 +186,7 @@ function boot(root, nodeRequire, nodeProcess) {
         beacon = host.beacon = createBeacon(root, field.ready, audio, () => audioPreferences, field.report, {
             submit: field.refreshBeacon, cancel: field.cancelBeaconRefresh
         });
-        caveTiming = host.caveTiming = createCaveTiming(root, field.ready, audio, () => audioPreferences, field.report);
+        caveTiming = host.caveTiming = createCaveTiming(root, field.ready, audio, () => audioPreferences, field.report, caveTimingResult);
         soundscape = createSoundscape(root, field.ready, audio, () => audioPreferences, host.navigationPreferences);
         function readyScene() {
             const scene = host.manager._scene;
@@ -309,8 +310,10 @@ function boot(root, nodeRequire, nodeProcess) {
                 if (master || value.footsteps !== audioPreferences.footsteps ||
                     value.footstepVolume !== audioPreferences.footstepVolume) footsteps.leave();
                 if (master || value.beacon !== audioPreferences.beacon || value.beaconVolume !== audioPreferences.beaconVolume) beacon.stop();
-                if (master || value.caveTiming !== audioPreferences.caveTiming || value.caveVolume !== audioPreferences.caveVolume)
+                if (master || value.caveTiming !== audioPreferences.caveTiming || value.caveVolume !== audioPreferences.caveVolume) {
                     caveTiming.stop();
+                    footsteps.leaveGuards();
+                }
                 if (master || value.soundscape !== audioPreferences.soundscape) soundscape.leave();
                 if (master || value.battleTiming !== audioPreferences.battleTiming ||
                     value.battleTimingVolume !== audioPreferences.battleTimingVolume) battleCues.retire();
@@ -732,6 +735,7 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessFieldReady = function (scene) {
         if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaCaveProgressPending &&
+            !root.Graphics._wqaCaveAutoPending &&
             !root.Graphics._wqaBookmarkTransferPending && !root.Graphics._wqaWallEnabled &&
             !root.Graphics._wqaFootstepsEnabled && !root.Graphics._wqaCaveTimingEnabled) ||
             fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
@@ -855,6 +859,9 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessFootstep = function (scene, player) {
         try { footsteps?.landed(scene, player); } catch { footsteps?.leave(scene); }
     };
+    root.WendyQuestAccessGuardFootstep = function (scene, guard) {
+        try { footsteps?.guardLanded(scene, guard); } catch { footsteps?.leaveGuards(scene); }
+    };
     root.WendyQuestAccessFieldEvent = function (scene, event) {
         field?.iceEventStarted(scene, event);
         interaction?.leave(scene);
@@ -889,6 +896,10 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessCaveTimingStop = function (scene) { caveTiming?.stop(scene); };
     root.WendyQuestAccessCaveTimingMoved = function (scene, direction) {
         try { caveTiming?.moved(scene, direction); } catch { caveTiming?.stop(scene); }
+    };
+    root.WendyQuestAccessCaveTimingInput = function (scene, direction) {
+        try { return caveTiming?.input(scene, direction) ?? direction; }
+        catch { caveTiming?.stop(scene); return direction; }
     };
     root.WendyQuestAccessCaveTimingPose = function (scene) { caveTiming?.pose(scene); };
     root.WendyQuestAccessSoundscapeUpdate = function (scene) {

@@ -4,20 +4,20 @@ const { DIRECTIONS, indexOf, offset, step } = require('../geometry.cjs');
 const { MANUAL_HORIZON, REACTION_FRAMES } = require('./patrol-line-state.cjs');
 
 // Routes between standing pockets in Map 199. Each pair is a straight
-// stroke in engine direction order [south, west, east, north]. Stops on
-// the upper and west tracks allow the guard ahead to finish its pause.
+// leg in engine direction order [south, west, east, north]. The lower
+// links are continuous. The upper and west tracks have timed pauses.
 const POCKET_LINKS = [
-    [7, 17, [[3, 1], [2, 8], [3, 1]]],
-    [17, 15, [[0, 1], [2, 8], [3, 1]]],
-    [25, 15, [[0, 1], [2, 4]]],
-    [24, 5, [[3, 1], [1, 4], [1, 4], [3, 1]]],
-    [16, 3, [[0, 1], [1, 1], [1, 6], [1, 5], [0, 2], [1, 1]]],
-    [3, 6, [[2, 1], [0, 6], [0, 4], [2, 1], [0, 1]]]
+    [7, 17, true, [[3, 1], [2, 8], [3, 1]]],
+    [17, 15, true, [[0, 1], [2, 8], [3, 1]]],
+    [25, 15, true, [[0, 1], [2, 4]]],
+    [24, 5, false, [[3, 1], [1, 4], [1, 4], [3, 1]]],
+    [16, 3, false, [[0, 1], [1, 1], [1, 6], [1, 5], [0, 2], [1, 1]]],
+    [3, 6, false, [[2, 1], [0, 6], [0, 4], [2, 1], [0, 1]]]
 ];
 
 function routePockets(grid, size, origin, unsafe, stops, goals, cancelled) {
     const links = [];
-    for (const [x, y, legs] of POCKET_LINKS) {
+    for (const [x, y, continuous, legs] of POCKET_LINKS) {
         const from = indexOf(grid, x, y);
         if (from < 0 || from >= size || unsafe[from] || stops[from]) continue;
         let cell = from;
@@ -32,7 +32,7 @@ function routePockets(grid, size, origin, unsafe, stops, goals, cancelled) {
             if (cell < 0) break;
             strokes.push({ heading, cells });
         }
-        if (cell >= 0 && !unsafe[cell]) links.push({ from, to: cell, strokes });
+        if (cell >= 0 && !unsafe[cell]) links.push({ from, to: cell, strokes, continuous });
     }
 
     // Reverse search from usable interaction tiles. Edges either stay

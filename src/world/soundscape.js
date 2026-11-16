@@ -1,5 +1,7 @@
 'use strict';
 
+const { timedCave } = require('./puzzles/cave');
+
 const { MAX_EVENTS } = require('./geometry.cjs');
 const { eventTarget } = require('./snapshot');
 const { travelMode } = require('./vehicle-navigation');
@@ -181,7 +183,7 @@ function createSoundscape(root, fieldReady, audio, preferences, navigationPrefer
             owner.player !== root.$gamePlayer) {
             leave();
             owner = { scene, renderer, map: root.$gameMap, data: root.$dataMap, player: root.$gamePlayer,
-                heard: new Map(), samples: Array(audio.soundscapeVoices).fill(null), preparing: false };
+                heard: new Map(), samples: Array(audio.soundscapeVoices - (timedCave(root.$gameMap._mapId) ? 2 : 0)).fill(null), preparing: false };
             scene._wqaSoundscapeActive = scene._wqaPresentation = true;
         }
         const current = owner;

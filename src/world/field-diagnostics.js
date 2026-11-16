@@ -86,7 +86,12 @@ function createFieldDiagnostics(root, host, nodeRequire, nodeProcess) {
         });
     }
 
-    return { denied, routed };
+    function caveTiming(scene, action, leg, result) {
+        const player = root.$gamePlayer;
+        write(scene, { action, map: root.$gameMap?._mapId, from: [player?._x, player?._y], leg, result });
+    }
+
+    return { denied, routed, caveTiming };
 }
 
 module.exports = { createFieldDiagnostics };

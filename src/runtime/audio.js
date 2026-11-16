@@ -113,8 +113,9 @@ function createAudio(host) {
             complete?.(-1);
             return false;
         }
-        const movement = source === 'footstep' && cue === CUE.footstep || source === 'bump' && cue === CUE.wallBump;
-        const ambient = source === 'soundscape' && Number.isInteger(voice) && voice >= 0 && voice < SOUNDSCAPE_VOICES;
+        const movement = source === 'footstep' && cue === CUE.footstep ||
+            (source === 'bump' || source === 'caveStop') && cue === CUE.wallBump;
+        const ambient = (source === 'soundscape' || source === 'guardStep') && Number.isInteger(voice) && voice >= 0 && voice < SOUNDSCAPE_VOICES;
         const lane = wallUntil ? WALL_LANES[cue] : movement ? FOOTSTEP : ambient ? SOUNDSCAPE_START + voice : 0;
         if (lane === undefined) return false;
         if (lane === 0 && source !== 'soundscape' && cue !== CUE.prepare) retire(scene, 'soundscape');

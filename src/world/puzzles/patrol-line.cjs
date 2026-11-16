@@ -50,6 +50,12 @@ function lineCrossing(world, request, origin, unsafe, stops, coverage, cancelled
             facing: !exit && facing, activate: exit && facing };
     }
 
+    if (pocket?.link?.continuous) {
+        const { to, strokes } = pocket.link;
+        const headings = strokes.flatMap(({ heading, cells }) => Array(cells.length - 1).fill(heading));
+        return { status: 'patrolLineCrossing', headings, to };
+    }
+
     const links = new Int16Array(size * 4).fill(-1);
     for (let cell = 0; cell < size; cell++) {
         if (stops[cell]) continue;

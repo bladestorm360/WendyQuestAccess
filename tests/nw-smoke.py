@@ -71,7 +71,8 @@ def fixture(runtime, installed):
                 'Object.setPrototypeOf(Game_Player.prototype, Game_CharacterBase.prototype)',
                 'function Game_Map() {}', 'function Game_Interpreter() {}']
     for method in ('Game_CharacterBase.prototype.moveStraight', 'Game_CharacterBase.prototype.setDirection', 'Game_CharacterBase.prototype.isDirectionFixed',
-                   'Game_CharacterBase.prototype.resetStopCount', 'Game_Player.prototype.moveByInput', 'Game_Player.prototype.reserveTransfer',
+                   'Game_CharacterBase.prototype.resetStopCount', 'Game_CharacterBase.prototype.updateMove',
+                   'Game_Player.prototype.moveByInput', 'Game_Player.prototype.reserveTransfer',
                    'Game_Map.prototype.setupStartingMapEvent', 'Game_Interpreter.prototype.command201',
                    'Game_Interpreter.prototype.command205'):
         start = objects.index(method + ' = function(')
@@ -996,8 +997,15 @@ const interval = setInterval(() => {
     }
     if (!caveRoute && require('fs').existsSync(receipt + '.cave')) {
         caveRoute = true;
+        // Guidance still provides manual cues while the directions shortcut
+        // belongs to Autowalk. Give this synthetic room its guide target.
+        $gameMap._events[20] = $gameMap._events[2];
+        $gameMap._events[2] = null;
+        $gameMap._events[20]._eventId = 20;
+        $dataMap.events[20] = $dataMap.events[2];
+        $dataMap.events[2] = null;
         const started = performance.now();
-        tap(String.fromCharCode(92), 'Backslash');
+        tap('U', 'KeyU', { shiftKey: true });
         Graphics.app.renderer.emit('postrender');
         require('fs').writeFileSync(receipt + '.timed-submit-ms', String(performance.now() - started));
     }
@@ -1032,6 +1040,20 @@ const interval = setInterval(() => {
             return;
         }
         if (!fs.existsSync(receipt + '.cave-follow')) return;
+        if (!fs.existsSync(receipt + '.guard-stepped')) {
+            const guard = Object.assign($gameMap._events[4], { _mapId: 196, _characterName: 'Mech Guard',
+                page: () => ({ list: [{ code: 117, parameters: [102] }] }),
+                distancePerFrame: () => 0.0625, refreshBushDepth() {},
+                isMoving() { return this._x !== this._realX || this._y !== this._realY; } });
+            Object.setPrototypeOf(guard, Game_CharacterBase.prototype);
+            guard._realX = guard._x - 0.0625;
+            guard.updateMove();
+            if (guard._realX !== guard._x) throw Error('Guard step did not settle at the native tile');
+            Graphics.app.renderer.emit('postrender');
+            fs.writeFileSync(receipt + '.guard-stepped', '');
+            return;
+        }
+        if (!fs.existsSync(receipt + '.guard-footstep')) return;
         dialogueShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         if (timingScene._wqaCaveTimingActive) throw Error('Native scene entry retained the cave timing cue');
@@ -2420,6 +2442,10 @@ parentPort.postMessage = packet => {
         const phase = fs.existsSync(receipt + '.cave-stepped') ? '.cave-follow' : '.cave-cue';
         fs.writeFileSync(receipt + phase, String(packet.status));
     }
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 19 && active.lane === 9 &&
+        active.pitch === 0.75 && active.right < 0) {
+        fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.guard-footstep'), String(packet.status));
+    }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 15 && active.right === 0 && active.forward === 1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.battle-cue'),
             JSON.stringify({ status: packet.status, pitch: active.pitch, at: Date.now() }));
@@ -2539,7 +2565,8 @@ def main():
             raise RuntimeError('NW autowalk narration or explicit stop failed')
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
             raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
-        if timed['kind'] != 'timedCue' or timed.get('speech') != 'On the ping, go 2 tiles south. Stop there and request directions again.':
+        if timed['kind'] != 'timedCue' or timed.get('speech') != ('On the ping, go 2 tiles south. Stop there and request directions again. '
+                                                            'Continue toward the next patrol room.'):
             raise RuntimeError(f'NW fixture did not publish the verified crossing length: {data}')
         cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
@@ -2556,7 +2583,7 @@ def main():
         if battle_cue['status'] != 1 or abs(battle_cue['pitch'] - 1) > 0.00001:
             raise RuntimeError('NW battle timing cue did not submit stereo PCM to SDL')
         if any(receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != '1'
-               for name in ('cave-cue', 'cave-follow')):
+               for name in ('cave-cue', 'cave-follow', 'guard-footstep')):
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL before and after the native step')
         if receipt.with_suffix('.json.soundscape').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW ambient object cue did not publish stereo PCM to SDL')

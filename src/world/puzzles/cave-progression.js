@@ -29,6 +29,7 @@ const CHASE_LEGS = {
     28: [[2, 3], [6, 1], [2, 5], [6, 3]],
     29: [[8, 13], [4, 8], [8, 8]]
 };
+const CHASE_SEQUENCE = Object.keys(CHASE_LEGS).map(Number).concat(2);
 const HEADINGS = { 2: 'south', 4: 'west', 6: 'east', 8: 'north' };
 
 function chaseDirections(eventId) {
@@ -111,6 +112,18 @@ function activeDistraction(map, data, id) {
     return !!page && CRYSTALS[id]?.[1].some(index => ownsRoute(map, page.list, index));
 }
 
+function chaseContinuation(root, action) {
+    const { event, list, chase } = action;
+    const map = root.$gameMap;
+    if (map?._mapId !== 201 || chase === undefined || !event._erased || root.$dataMap.disableDashing ||
+        root.$gamePlayer._moveSpeed !== 4 || !ownsRoute(map, list, chase)) return null;
+    const id = event._eventId;
+    const next = CHASE_SEQUENCE[CHASE_SEQUENCE.indexOf(id) + 1];
+    const legs = CHASE_LEGS[id];
+    if (!next || !legs || root.$gamePlayer._x !== event._x || root.$gamePlayer._y !== event._y) return null;
+    return { next, legs: legs.map(([direction, tiles]) => ({ direction, tiles })) };
+}
+
 function localOutcome(root, action) {
     const { event, list, line, chase, crystal } = action;
     const map = root.$gameMap;
@@ -177,4 +190,5 @@ function createCaveProgress(root, graphics) {
     };
 }
 
-module.exports = { CHASE_LEGS, chaseHandoff, CHASES, CRYSTALS, activeDistraction, corridorMap, caveDestination, createCaveProgress };
+module.exports = { CHASE_LEGS, chaseHandoff, CHASES, CRYSTALS, activeDistraction, corridorMap, caveDestination,
+    createCaveProgress, acceptedAction, chaseContinuation };

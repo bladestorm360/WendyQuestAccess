@@ -1,11 +1,67 @@
 'use strict';
 
 const { travelMode } = require('./vehicle-navigation');
+const { patrolDestination } = require('./puzzles/cave');
 
 const FEET = [[-0.25, -1, 0.15], [0.25, -1, 0.15]];
 
 function createFootsteps(root, fieldReady, audio, preferences) {
     let owner = null;
+    let guards = null;
+
+    function guardReady(scene) {
+        const { enabled, caveTiming, caveVolume, hrtf } = preferences();
+        return enabled && caveTiming && caveVolume > 0 && fieldReady(scene, true) && audio.isPrepared(hrtf);
+    }
+
+    function leaveGuards(scene) {
+        if (!guards || scene && guards.scene !== scene) return;
+        audio.retire(guards.scene, 'guardStep');
+        guards = null;
+    }
+
+    function guardLanded(scene, guard) {
+        const map = root.$gameMap;
+        if (map?._events[guard._eventId] !== guard || !patrolDestination(map._mapId, guard, guard.page()) ||
+            !guardReady(scene)) return;
+        const player = root.$gamePlayer;
+        const x = guard._x - player._realX;
+        const y = player._realY - guard._y;
+        const distance = Math.hypot(x, y);
+        if (distance > 9) return;
+        if (guards?.scene !== scene || guards.map !== map || guards.player !== player) {
+            leaveGuards();
+            guards = { scene, map, player, samples: [], posted: false };
+        }
+        // Submit the two nearest foot contacts this render. Each uses a
+        // reserved ambient voice and can overlap Wendy's step or a ping.
+        const current = guards;
+        const samples = current.samples;
+        const sample = { x, y, distance };
+        if (!samples[0] || distance < samples[0].distance) samples.unshift(sample);
+        else if (!samples[1] || distance < samples[1].distance) samples[1] = sample;
+        if (samples.length > 2) samples.length = 2;
+        if (current.posted) return;
+        const renderer = root.Graphics.app?.renderer;
+        if (typeof renderer?.once !== 'function') return leaveGuards(scene);
+        current.posted = true;
+        scene._wqaPresentation = true;
+        renderer.once('postrender', () => {
+            current.posted = false;
+            const contacts = current.samples.splice(0, 2);
+            const readyAtRender = () => guards === current && root.$gameMap === map &&
+                root.$gamePlayer === player && guardReady(scene);
+            if (!readyAtRender()) return;
+            const { hrtf, caveVolume } = preferences();
+            const expires = root.Graphics.frameCount + 6;
+            for (const [index, { x, y, distance }] of contacts.entries()) {
+                const gain = caveVolume / 100 * (0.8 - 0.06 * distance);
+                audio.play(scene, hrtf, audio.cues.footstep, gain, distance ? [x, -0.25, y] : [0, -0.25, 1],
+                    () => root.Graphics.frameCount < expires && readyAtRender(), null, 'guardStep', 0.75, 0,
+                    audio.soundscapeVoices - 2 + index);
+            }
+        });
+    }
 
     function ready(scene) {
         const config = preferences();
@@ -15,6 +71,7 @@ function createFootsteps(root, fieldReady, audio, preferences) {
     }
 
     function leave(scene) {
+        leaveGuards(scene);
         if (!owner || (scene && owner.scene !== scene)) return;
         audio.retire(owner.scene, 'footstep');
         owner = null;
@@ -32,7 +89,7 @@ function createFootsteps(root, fieldReady, audio, preferences) {
     }
 
     return {
-        arm, leave,
+        arm, leave, guardLanded, leaveGuards,
         landed(scene, player) {
             if (player !== root.$gamePlayer || !ready(scene)) return;
             const { hrtf, footstepVolume } = preferences();

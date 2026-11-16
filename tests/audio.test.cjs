@@ -92,6 +92,19 @@ worker.emit('message', { epoch: wall.epoch, status: 2 });
 audio.retire(scene, 'wall');
 assert.equal(Atomics.load(word, 0), 0);
 
+assert(audio.play(scene, true, CUE.footstep, 0.4, [-1, 0, 0], () => ready, null, 'guardStep', 0.75, 0, 3));
+run();
+const guard = messages.at(-1);
+assert.deepEqual([guard.lane, guard.cue, guard.pitch, guard.right], [9, CUE.footstep, 0.75, -1]);
+assert(audio.play(scene, true, CUE.caveGo, 0.5, [1, 0, 0], () => ready, null, 'cave'));
+assert.equal(Atomics.load(word, 9), guard.epoch);
+worker.emit('message', { epoch: guard.epoch, status: 2 });
+run();
+worker.emit('message', { epoch: messages.at(-1).epoch, status: 2 });
+audio.retire(scene, 'cave');
+audio.retire(scene, 'guardStep');
+assert.equal(Atomics.load(word, 9), 0);
+
 assert(soundscape());
 run();
 const ambient = messages.at(-1);

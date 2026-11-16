@@ -215,3 +215,5 @@ The [Secret Cave update](docs/puzzles-and-secrets.md#cave-timing-cues) records l
 [Current Steam deployment](docs/deployment.md#patrol-line-loot-and-completed-footsteps) records accessible routes to both guard-line pickups and back to the exit, footsteps at native interpolation completion and the verified single rollback. [Controls and the manual exit handoff](docs/puzzles-and-secrets.md#secret-cave-room-handoffs) explain the Autowalk option.
 
 [Current Steam deployment](docs/deployment.md#manual-guard-line-routes) records the barrel, chest and exit routes with normal directional input and optional Autowalk. [Cue and playback evidence](docs/feature-checkpoint.md#manual-routes-for-the-second-patrol-room) records the two pickup orders, timing-window boundaries and remaining audible checks.
+
+The [Secret Cave safe pockets and Autowalk checkpoint](docs/feature-checkpoint.md#secret-cave-safe-pockets-and-automatic-crossings) records the manual stop hold, deeper native guard footsteps, automatic crossing and chase paths, and offline and gameplay coverage.
