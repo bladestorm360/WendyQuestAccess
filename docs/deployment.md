@@ -562,3 +562,17 @@ November 16, 2026. The verified Steam update replaced the bundled plugin, speech
 - Prior plan `0c7ff5b5116ef9c25fae002784cde41898b5aca18d4b1f3608851490c175ca61` is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-crossings-audit/rollback-latest`. Cleanup removed 36,186,416 bytes of generated outputs and superseded recovery.
 
 The world and matching NW.js fixtures passed. The replay reached the first and patrol-line room exits, verified the first distraction crossing and the next guard’s crystal, and followed all nine dash stretches in the chase room. [Verification scope](feature-checkpoint.md#secret-cave-crossing-audit) · [Cave controls](puzzles-and-secrets.md#secret-cave-room-handoffs)
+
+## Five safe tiles from the first-room refuge
+
+November 16, 2026. The Steam installer replaced the crossing worker and speech formatter. The plugin bundle, 16 native scripts and 241 geometry entries match the prior plan. The world fixture, matching NW.js smoke and isolated installer passed. The independent status verified 42 payload files and confirmed all four existing save and configuration hashes match.
+
+- Installed plan SHA-256 `b8cbcb93a051bce6b9fd20665c7cbc7f799c4c906006461a1216f760d5764e9d`
+- Crossing module SHA-256 `b3e08ba1fc1efb080f8b910b7b8fe3baecef77a4ac373d312bc56f3508c73afd`
+- Speech formatter SHA-256 `e6a49821111e7de99c3a929bc722c03310ff0424eb56a0f152a41e39b478826f`
+- The signed Microsoft Defender CLI completed a custom scan of the exact release with exit zero and no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.328.0.
+- Prior plan `f7112ff65e45ec2d584b4e642c856fbd5043f30fc4e84ba99d51dc7f5697a308` is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-refuge/rollback-latest`.
+
+Cleanup removed 24,365,500 bytes of disposable build and test output. Automatic review blocked removal of the superseded rollback copy because it is recovery data. Both recovery copies are retained.
+
+[Offline native replay and input scope](feature-checkpoint.md#first-room-refuge-to-the-next-crossing)

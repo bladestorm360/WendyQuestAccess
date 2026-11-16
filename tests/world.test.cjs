@@ -990,16 +990,17 @@ async function verifyPatrolGuidance() {
     assert.deepEqual([north.player.x, north.player.y], [16, 21]);
     const onward = { ...refugeRequest, ...motionRequest(north, northGuards) };
     const next = previewCrossing(north.geometry, snapshot(north), onward);
-    assert.equal(next.status, 'timedCue');
-    const step = next.opening;
-    assert.deepEqual([step.direction, step.tiles, step.headings], [8, 1, [3]]);
-    assert.equal(formatSpeech({ ...step, kind: 'timedCue' }),
-        'On the ping, go 1 tile north. Stop there and request directions again.');
+    assert.deepEqual(next, { status: 'patrolApproach', direction: 8, tiles: 5, terminal: false });
+    assert.equal(formatSpeech({ ...next, kind: 'patrolApproach' }), '5 north, then check directions.');
     await verifyWorker(north, onward, snapshot(north), result => assert.deepEqual(result, next));
-    const onwardFrames = step.from + 16 + 120;
-    assert.equal(verifyMotion(north, northGuards, onwardFrames, step.headings, step.from), onwardFrames);
-    assert.deepEqual([north.player.x, north.player.y], [16, 20]);
-    console.log('Verified the exact one-tile crossing north from the side refuge and a safe stop.');
+    const northSteps = Array(5).fill(DIRECTIONS.indexOf(8));
+    const onwardFrames = 5 * 16 + 240;
+    assert.equal(verifyMotion(north, northGuards, onwardFrames, northSteps), onwardFrames);
+    assert.deepEqual([north.player.x, north.player.y], [16, 16]);
+    const nextCrossing = previewCrossing(north.geometry, snapshot(north), { ...onward, ...motionRequest(north, northGuards) });
+    assert(['timedCue', 'timedWait'].includes(nextCrossing.status), 'the next guarded stretch still requires timing');
+    assert.deepEqual(nextCrossing.opening?.headings ?? nextCrossing.headings, [1, 3, 3, 3]);
+    console.log('Verified five safe north tiles from the side refuge and the next timed crossing.');
 
     const cave = load(196);
     const actors = configureMotion(cave, 6, 30, 0, 20);

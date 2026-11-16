@@ -566,7 +566,26 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
         if (unsafe && fixedHeading < 0 && !safeCrossing && unsafe[candidates[0].cell]) {
             const complete = crossingToSafeTile(world.player, origin, distances, unsafe, stops,
                 candidates[0].score, area, cancelled);
-            if (complete && studyCrossing(world, origin, motion, complete, cancelled)) entire = complete;
+            if (complete) {
+                // The fallback can choose a safe first tile in a different
+                // direction than the shortest guarded route. Follow that lane
+                // while it stays safe and continues toward the same goal.
+                if (!unsafe[origin] && complete.count === 1 && !unsafe[complete.cell]) {
+                    const { heading } = complete;
+                    let cell = complete.cell;
+                    let tiles = 1;
+                    while (tiles < MAX_CROSSING_STEPS && distances[cell] > 0 && !stops[cell]) {
+                        const next = step(world.player, cell, heading);
+                        if (next < 0 || unsafe[next] || distances[next] !== distances[cell] - 1 ||
+                            area && !inside(world.player, next, area)) break;
+                        cell = next;
+                        tiles++;
+                    }
+                    return { status: 'patrolApproach', direction: DIRECTIONS[heading], tiles,
+                        terminal: stops[cell] === 1, ...guide };
+                }
+                if (studyCrossing(world, origin, motion, complete, cancelled)) entire = complete;
+            }
         }
         break;
     }
