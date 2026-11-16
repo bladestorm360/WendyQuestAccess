@@ -49,6 +49,12 @@ if sys.argv[2:] == ['splash']:
     print(json.dumps(read_methods(MENU_REL.name, menu_notifications, pairs)))
     sys.exit()
 
+if sys.argv[2:] == ['idle-animation']:
+    print(json.dumps(read_methods(MAP_REL.name, map_notification, [
+        ('Scene_Map', 'updateInactive', "},Scene_Map['prototype']['isFastForward']"),
+    ])))
+    sys.exit()
+
 if sys.argv[2:] == ['interaction']:
     print(json.dumps(read_methods(MAP_REL.name, map_notification, [
         ('Game_Player', 'canTriggerEvent', "},Game_Player['prototype']['findEventsAt']"),

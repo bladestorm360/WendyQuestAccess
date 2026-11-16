@@ -59,4 +59,4 @@ Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon 
 
 ## Cave crossing direction
 
-The cave cue uses the same compass directions as the route beacon. A westward start plays on the left and an eastward start on the right. North is centered. South uses the rear position and a pitch of 88 percent in either stereo or HRTF. Stereo puts both north and south in the center. The ping anticipates the first leg of the announced crossing, even when later legs turn. [Cave crossing controls](puzzles-and-secrets.md#live-crossing-cues) · [Native cue rendering](../src/services/windows/spatial-cue.hpp)
+The cave cue uses the same compass directions as the route beacon. A westward start plays on the left and an eastward start on the right. North is centered. South uses the rear position and a pitch of 88 percent in either stereo or HRTF. Stereo puts both north and south in the center. The first ping points along the first leg. The ping moves to the direction of each next leg after Wendy takes the matching steps. [Cave crossing controls](puzzles-and-secrets.md#live-crossing-cues) · [Native cue rendering](../src/services/windows/spatial-cue.hpp)

@@ -390,7 +390,7 @@ function verifySettings() {
         settingsStep++;
     } else if (settingsStep === 15 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         leavePreviews();
-        preview('Preview cave crossing tone');
+        preview('Preview cave crossing ping');
         settingsStep++;
     } else if (settingsStep === 16 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         leavePreviews();
@@ -2024,6 +2024,33 @@ const interval = setInterval(() => {
             if (SceneManager._scene._wqaNarrationActive || !narrationAudio.paused || narrationAudio.getAttribute('src'))
                 throw Error('Native transfer failed to retire narration');
             fs.writeFileSync(receipt + '.cutscene-narration-ms', String(performance.now() - narrationStarted));
+            endingStep = 196;
+        } else if (endingStep === 196) {
+            const scene = SceneManager._scene;
+            $gamePlayer._transferring = false;
+            $gameMap._interpreter._list = null;
+            $gameMap._events = [];
+            $gameMap._needsRefresh = true;
+            scene._wqaNonPageRefreshOnly = true;
+            scene._wqaFieldReady = false;
+            $gameMap.inactiveTime = 30.25;
+            const effects = {};
+            scene._spriteset._effectsContainer = effects;
+            scene._spriteset._balloonSprites = [{
+                parent: effects, worldVisible: true, worldAlpha: 1, texture: { valid: true },
+                targetObject: $gamePlayer, _balloonId: 2, _duration: 30
+            }];
+            narrationAudio = null;
+            WendyQuestAccessIdleNarration(scene);
+            narrationFrame();
+            if (!narrationAudio) throw Error('Visible idle balloon did not start playback after field control closed');
+            narrationStarted = performance.now();
+            endingStep++;
+        } else if (endingStep === 197 && narrationAudio?.currentTime > 0.005) {
+            $gameMap.inactiveTime = 0;
+            narrationFrame();
+            if (!narrationAudio.paused || narrationAudio.getAttribute('src')) throw Error('Leaving idle kept the description active');
+            fs.writeFileSync(receipt + '.idle-narration-ms', String(performance.now() - narrationStarted));
             clearInterval(interval);
             nw.App.quit();
         }
@@ -2490,7 +2517,7 @@ def main():
             raise RuntimeError('NW autowalk narration or explicit stop failed')
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
             raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
-        if timed['kind'] != 'timedCue' or timed.get('speech') != '2 tiles south on the tone.':
+        if timed['kind'] != 'timedCue' or timed.get('speech') != '2 tiles south on the ping.':
             raise RuntimeError(f'NW fixture did not publish the verified crossing length: {data}')
         cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
@@ -2618,6 +2645,8 @@ def main():
                 'Increase cutscene description speed, 210 percent']:
             raise RuntimeError(f'Cutscene narration preferences did not survive restart: {reloaded}')
         narration_ms = float(receipt.with_suffix('.json.cutscene-narration-ms').read_text(encoding='utf8'))
+        idle_ms = float(receipt.with_suffix('.json.idle-narration-ms').read_text(encoding='utf8'))
+        print(f'Verified Chromium idle playback and wake retirement. Mock field idle output observed at {idle_ms:.1f} ms.')
         print(f'Verified cutscene clip decode, volume, rate, delay until visible movement, and transfer retirement. '
               f'Throttled progress observed after {narration_ms:.1f} ms with 40 ms polling.')
         print(f"Verified hidden window resize, settings, dialogue repeat and route worker in NW {versions.get('nw', VERSION)}, "

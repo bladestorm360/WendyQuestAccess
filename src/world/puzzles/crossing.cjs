@@ -9,7 +9,6 @@ const START_WINDOW = 60;
 const MIN_START_WINDOW = TIMING_CUE.minSpan;
 const MAX_STEPS = 3;
 const MAX_CROSSING_STEPS = 12;
-const TURN_GRACE_FRAMES = 18;
 
 function patrolCoverage(world, patrols, cancelled) {
     const unsafe = new Uint8Array(world.cells.length);
@@ -168,23 +167,33 @@ function crossingCandidates(world, origin, distances, stops) {
     return candidates.sort((a, b) => a.score - b.score || a.heading - b.heading || b.count - a.count);
 }
 
-function crossingToSafeTile(world, origin, distances, unsafe, stops, first, area) {
-    const headings = [];
-    let cell = origin;
-    while (headings.length < MAX_CROSSING_STEPS) {
-        const heading = headings.length === 0 ? first : DIRECTIONS.findIndex((_, direction) => {
-            const next = step(world, cell, direction);
-            return next >= 0 && distances[next] === distances[cell] - 1 &&
-                (!area || inside(world, next, area));
-        });
-        if (heading < 0) return null;
-        cell = step(world, cell, heading);
-        if (cell < 0) return null;
-        headings.push(heading);
-        if (!unsafe[cell] || stops[cell])
-            return { heading: headings[0], count: headings.length, cell, headings, terminal: stops[cell] === 1 };
+function crossingToSafeTile(world, origin, distances, unsafe, stops, distance, area, cancelled) {
+    // A shorter exposure can lead to a side refuge uphill from the start
+    // even if the geometrically shortest route stays in the patrol lane.
+    const frontier = [{ cell: origin, headings: [] }];
+    const seen = new Uint8Array(distances.length);
+    seen[origin] = 1;
+    let choice;
+    for (let index = 0; index < frontier.length; index++) {
+        if ((index & 31) === 0 && cancelled()) return null;
+        const point = frontier[index];
+        const count = point.headings.length + 1;
+        if (count > MAX_CROSSING_STEPS || choice && count > choice.count) break;
+        for (let heading = 0; heading < DIRECTIONS.length; heading++) {
+            const cell = step(world, point.cell, heading);
+            if (cell < 0 || seen[cell] || distances[cell] < 0 || area && !inside(world, cell, area)) continue;
+            seen[cell] = 1;
+            const headings = [...point.headings, heading];
+            const terminal = stops[cell] === 1;
+            if (!unsafe[cell] || terminal) {
+                // Require progress toward the destination. A turn into a safe
+                // side tile may add a step compared with the direct route.
+                if (distances[cell] < distance && (!choice || distances[cell] < distances[choice.cell]))
+                    choice = { heading: headings[0], count, cell, headings, terminal };
+            } else frontier.push({ cell, headings });
+        }
     }
-    return null;
+    return choice;
 }
 
 function studyCrossing(world, origin, motion, candidate, cancelled) {
@@ -227,7 +236,7 @@ function studyCrossing(world, origin, motion, candidate, cancelled) {
         cell = step(world.player, cell, headings[i]);
         const from = earliest;
         earliest += fastest;
-        latest += walking + (i < headings.length - 1 && headings[i] !== headings[i + 1] ? TURN_GRACE_FRAMES : 0);
+        latest += walking + (i < headings.length - 1 && headings[i] !== headings[i + 1] ? TIMING_CUE.turnGrace : 0);
         ranges.push({ cell, from, until: latest });
     }
     const independent = new Set();
@@ -434,7 +443,8 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
                 terminal: tiles === count && candidates[0].terminal, ...guide };
         }
         if (unsafe && fixedHeading < 0 && !safeCrossing && unsafe[candidates[0].cell]) {
-            const complete = crossingToSafeTile(world.player, origin, distances, unsafe, stops, candidates[0].heading, area);
+            const complete = crossingToSafeTile(world.player, origin, distances, unsafe, stops,
+                candidates[0].score, area, cancelled);
             if (complete && studyCrossing(world, origin, motion, complete, cancelled)) entire = complete;
         }
         break;

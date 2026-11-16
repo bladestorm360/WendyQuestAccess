@@ -165,7 +165,7 @@ function formatSpeech(message) {
                     if (last?.direction === direction) last.tiles++;
                     else legs.push({ direction, tiles: 1 });
                 }
-                text = (message.waiting ? 'Wait on this tile. ' : '') + 'On the tone, ' +
+                text = (message.waiting ? 'Wait on this tile. ' : '') + 'On the ping, ' +
                     legs.map(leg => leg.tiles + ' ' + leg.direction).join(', then ') +
                     '. Keep moving through the crossing.';
                 break;
@@ -173,7 +173,7 @@ function formatSpeech(message) {
             const steps = Number.isInteger(message.tiles) && message.tiles >= 2 && message.tiles <= 3 ?
                 message.tiles + ' tiles' : 'One tile';
             text = `${message.escape ? 'Leave the patrol lane. ' : message.waiting ? 'Wait for the guard to move. ' :
-                message.alternate ? 'Alternate opening. ' : ''}${steps} ${heading}${message.terminal ? ' to an event' : ''} on the tone.`;
+                message.alternate ? 'Alternate opening. ' : ''}${steps} ${heading}${message.terminal ? ' to an event' : ''} on the ping.`;
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;
         }

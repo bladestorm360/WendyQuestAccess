@@ -453,7 +453,7 @@ function createSettingsMenu(root, host) {
         button(owner, 'Preview beacon ahead', () => preview([0, 0, 1], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon arrival', () => preview([0, 0, 1], 'beaconArrival', audio.beaconVolume / 100));
-        button(owner, 'Preview cave crossing tone', () => preview([0, 0, 1], 'caveGo', audio.caveVolume / 100));
+        button(owner, 'Preview cave crossing ping', () => preview([0, 0, 1], 'caveGo', audio.caveVolume / 100));
         button(owner, 'Preview battle power tone', () => preview([0, 0, 1], 'battlePower', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
         button(owner, 'Preview battle accuracy tone', () => preview([0, 0, 1], 'battleAccuracy', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
         for (const [direction, bearing] of AUDIO_PREVIEWS) {

@@ -446,7 +446,7 @@ def objects_notification(original):
         194431: b'\n    if(this._tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
         194681: b'\n    if(this._tileId!==tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
         195557: beacon_actor(b'd') + b'if(SceneManager._scene?._wqaCaveTimingActive&&this===$gamePlayer)'
-                b'globalThis.WendyQuestAccessCaveTimingStop?.(SceneManager._scene);\n        ',  # Before destination assignment
+                b'globalThis.WendyQuestAccessCaveTimingMoved?.(SceneManager._scene,d);\n        ',  # Before destination assignment
         195829: ACTOR_STEP + b'\n        ',  # Accepted straight/diagonal steps
         196445: ACTOR_STEP + beacon_actor() + b'\n        ',
         196721: b'\n    if(xPlus||yPlus){' + ACTOR_DIRTY + beacon_actor() + b'}',
@@ -682,7 +682,7 @@ def map_notification(original):
         this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
         !SceneManager._wqaNativeAutosaves && !Graphics._wqaResize && Graphics.app?.stage === this);
     // Sample optional idle effects after the native animation update.
-    if (Graphics._wqaNarrationEnabled && $gameMap.inactiveTime >= 30 && Graphics._wqaNarrationPackFinished) {
+    if (Graphics._wqaNarrationEnabled && $gameMap.inactiveTime >= 30) {
         const wqaIdleSample = Math.floor($gameMap.inactiveTime * 4);
         if (wqaIdleSample !== this._wqaIdleNarrationSample) {
             this._wqaIdleNarrationSample = wqaIdleSample;

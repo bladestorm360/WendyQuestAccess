@@ -882,6 +882,9 @@ function boot(root, nodeRequire, nodeProcess) {
         try { caveTiming?.update(scene); } catch { caveTiming?.stop(scene); }
     };
     root.WendyQuestAccessCaveTimingStop = function (scene) { caveTiming?.stop(scene); };
+    root.WendyQuestAccessCaveTimingMoved = function (scene, direction) {
+        try { caveTiming?.moved(scene, direction); } catch { caveTiming?.stop(scene); }
+    };
     root.WendyQuestAccessCaveTimingPose = function (scene) { caveTiming?.pose(scene); };
     root.WendyQuestAccessSoundscapeUpdate = function (scene) {
         try { soundscape?.update(scene); } catch { soundscape?.leave(scene); }

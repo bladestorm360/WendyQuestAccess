@@ -58,8 +58,8 @@ function createNarration(root, host, preferences) {
     }
 
     function warm(scene) {
-        if (!enabled() || pack || loading || failed || !ready(scene) || !scene._wqaFieldReady ||
-            root.$gameMap._interpreter?._list) return;
+        if (!enabled() || pack || loading || failed || !ready(scene) || root.$gameMap._interpreter?._list ||
+            (!scene._wqaFieldReady && !idleReady(scene))) return;
         // Chromium reads the fixed package path asynchronously in a settled
         // field frame. Native boundaries retire the request before loading.
         const xhr = new root.XMLHttpRequest();
@@ -148,12 +148,16 @@ function createNarration(root, host, preferences) {
     function idleReady(scene) {
         const { $gameMap: map, $gamePlayer: player } = root;
         return ready(scene) && enabled() && !map._interpreter?._list && !map.isEventRunning?.() &&
-            !map._needsRefresh && !root.$gameMessage?.isBusy() && !player?.isInVehicle?.() &&
+            (!map._needsRefresh || scene._wqaNonPageRefreshOnly) &&
+            !root.$gameMessage?.isBusy() && !player?.isInVehicle?.() &&
             !player?._moveRouteForcing && map.inactiveTime >= 30;
     }
 
     function idle(scene) {
-        if (!pack || owner && (owner.scene !== scene || owner.interpreter) || !idleReady(scene)) return;
+        if (owner && (owner.scene !== scene || owner.interpreter) || !idleReady(scene)) return;
+        // Standing idle closes walking controls. A first settled idle
+        // sample can still load the pack when normal field warmup missed it.
+        if (!pack) return warm(scene);
         const map = root.$gameMap;
         let context = owner;
         for (const [index, beat] of idleBeats.entries()) {

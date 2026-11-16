@@ -187,10 +187,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         iceRoute = null;
     }
 
-    function retire(scene) {
+    function retire(scene, stepping = false) {
         if (!owner || owner.scene !== scene) return;
         if (admission) Atomics.store(admission, 0, 0);
-        host.caveTiming?.cancelPlan?.(scene);
+        host.caveTiming?.cancelPlan?.(scene, stepping);
         active = null;
         scene._wqaRouteActive = false;
         scene._wqaInteractionDeferred = false;
@@ -1250,7 +1250,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (!steppedActor || steppedActor === root.$gamePlayer) autowalk.dirty(scene);
             const job = active;
             if (!steppedActor || steppedActor === root.$gamePlayer || job?.scene !== scene ||
-                scene._wqaCaveReview || sequence >= 0x7ffffffe) return retire(scene);
+                scene._wqaCaveReview || sequence >= 0x7ffffffe) return retire(scene, steppedActor === root.$gamePlayer);
             if (job.ambientStatus) return;
             if (!navigationRequest(job)) return retire(scene);
             if (inFlight !== job) {

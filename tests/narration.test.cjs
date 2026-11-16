@@ -37,7 +37,7 @@ for (const [id, { beats }] of Object.entries(cues)) {
     }
 }
 assert.equal(locators.size, 139);
-function fixture(m, e, page) {
+function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
     const list = data?.events[e].pages[page].list;
     const interpreter = { _mapId: m, _eventId: e };
@@ -83,7 +83,7 @@ function fixture(m, e, page) {
     };
     const narration = createNarration(root, { graphics, manager: { _scene: scene },
         screenFading: () => false, hasFocus: () => true }, () => playback);
-    narration.warm(scene);
+    if (warm) narration.warm(scene);
     interpreter._list = list;
     function actor(id) {
         const candidate = { _characterName: id === -1 ? 'Wendy' : 'NPC' };
@@ -199,7 +199,7 @@ const idleHook = execFileSync('python', ['-B', '-c', [
     "end = source.index('    if (this._wqaFieldReady) {', start)",
     'print(source[start:end])'
 ].join('\n'), stock], { cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 5000 });
-const f = fixture();
+const f = fixture(undefined, undefined, undefined, false);
 const player = f.actor(-1);
 const { scene, nativeMap } = f;
 scene._wqaFieldReady = false;
@@ -219,13 +219,21 @@ function expect(id) {
     assert.equal(active.id, id);
     active.emit('ended');
 }
+assert.equal(f.graphics._wqaNarrationPackFinished, undefined);
+nativeMap._needsRefresh = true;
 idle(30);
+assert.equal(f.graphics._wqaNarrationPackFinished, undefined, 'a pending event-page refresh keeps idle warmup closed');
+scene._wqaNonPageRefreshOnly = true;
+idle(30.25);
+assert.equal(f.graphics._wqaNarrationPackFinished, true, 'native idle can warm the pack with walking controls closed');
 assert.equal(f.played.length, 0, 'a requested balloon must render');
 f.balloon(2, player.candidate, player.sprite);
-idle(30.25, false);
+idle(30.5, false);
 assert.equal(f.played.length, 0);
 f.renderer.emit('postrender');
 expect('idle-question');
+nativeMap._needsRefresh = false;
+scene._wqaNonPageRefreshOnly = false;
 scene._statusWindow = { offsetY: -15 };
 idle(41);
 expect('idle-hud-slides');
@@ -289,4 +297,35 @@ assert.equal(f.played.length, 15, 'native event entry retires the pending idle c
 nativeMap._interpreter._list = null;
 idle(30.75);
 expect('idle-question');
-console.log('Verified 76 clips, 139 authored locators, 15 idle cues, and uninterrupted named reaction order.');
+const nativeMethods = JSON.parse(execFileSync('python', ['-B', path.join(__dirname, 'map-producers.py'),
+    path.join(stock, 'package.nw'), 'idle-animation'], { encoding: 'utf8', timeout: 5000 }));
+const cold = fixture(undefined, undefined, undefined, false);
+const warmRequest = cold.actor(-1);
+const requests = [];
+cold.nativeMap.inactiveTime = 29.99;
+cold.nativeMap.isEventRunning = () => false;
+cold.scene._wqaFieldReady = false;
+const idleContext = vm.createContext({
+    Scene_Map: function () {}, SceneManager: { _scene: cold.scene }, Graphics: cold.graphics,
+    ConfigManager: {}, Input: { HasAnyInput: () => false }, Time: { GetDeltaTime: () => 0.02 },
+    $gamePlayer: Object.assign(warmRequest.candidate, { isInVehicle: () => false }),
+    $gameMap: cold.nativeMap, $gameTemp: { requestBalloon: (actor, id) => requests.push({ actor, id }) },
+    AudioManager: { playSe() {} }, a15_0x363c12() { throw new Error('Unresolved idle property'); },
+    WendyQuestAccessNarrationPresent: cold.narration.present, WendyQuestAccessIdleNarration: cold.narration.idle
+});
+for (const code of nativeMethods) vm.runInContext(code, idleContext, { timeout: 100 });
+const observeCold = vm.runInContext('(function () {\n' + idleHook + '\n})', idleContext);
+idleContext.Scene_Map.prototype.updateInactive.call(cold.scene);
+observeCold.call(cold.scene);
+assert.equal(cold.graphics._wqaNarrationPackFinished, true);
+assert.deepEqual(requests, [{ actor: warmRequest.candidate, id: 2 }]);
+assert.equal(cold.played.length, 0);
+cold.balloon(2, warmRequest.candidate, warmRequest.sprite);
+for (let n = 0; n < 14; n++) {
+    idleContext.Scene_Map.prototype.updateInactive.call(cold.scene);
+    cold.graphics.frameCount++;
+    observeCold.call(cold.scene);
+    cold.renderer.emit('postrender');
+}
+assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
+console.log('Verified 76 clips, 139 authored locators, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');

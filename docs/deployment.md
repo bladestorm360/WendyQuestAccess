@@ -529,3 +529,14 @@ The focused update is installed in Steam. It replaces the plugin, Windows audio 
 - The rollback plan is `4dab3652aa010da47b7e89b734fce61fb19cdc62e1a0f2e017fb571efca054d9` at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-direction/rollback-latest`.
 
 [Continuous crossing and playback checks](feature-checkpoint.md#compass-cave-pings-and-continuous-crossings) · [Boss HP producer](battle.md#boss-hp-bars)
+
+## Idle narration and per-leg cave pings
+
+November 16, 2026. The verified Steam installation changed the plugin, speech formatter, crossing planner, patrol timing contract, MapScene.js and rmmz_objects.js. The independent check verified 16 native scripts, 42 payload files and 241 geometry entries. All four save and configuration file hashes matched across installation. The exact candidate passed the isolated installer rehearsal for the launcher lease, interruption rollback, installation, reapply, unknown-file protection and removal.
+
+- Installed plan SHA-256 `2e0a9221eb34115068b112e6341332d757044ae2c822979e52c74ccc6c4ac393`
+- Plugin SHA-256 `c28d4dc26b55fd9d9faec18f6e63f4b8bc5ebc42430ad1baaee80aec80041c29`
+- Signed Microsoft Defender scan `2A96EC77-C080-4AFE-8758-D77A397CF86A` completed at 07:03:48 PST with no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.328.0.
+- Prior plan `099563c93404161354345122069019c9c451d5bf160910fbae65b6c84e3396bf` is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-idle-cave-pings/rollback-latest`. Cleanup removed 35,189,991 bytes of generated outputs and superseded recovery.
+
+Check idle narration with **Cutscene descriptions** enabled by leaving Wendy standing on a field map. In the first Secret Cave patrol room, request directions and listen for each crossing leg on the appropriate side. The north corridor crossing stops at a refuge. Request directions again from the refuge. [Offline results](feature-checkpoint.md#idle-narration-and-per-leg-cave-pings)

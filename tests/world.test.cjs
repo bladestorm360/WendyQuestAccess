@@ -950,7 +950,7 @@ async function verifyPatrolGuidance() {
     assert.deepEqual(roomPlan.opening.headings, [1, 3, 3, 3, 3, 3, 2]);
     await verifyWorker(initial, roomRequest, snapshot(initial), result => assert.deepEqual(result, roomPlan));
     assert.equal(formatSpeech({ kind: 'timedCue', direction: 4, headings: roomPlan.opening.headings, waiting: true }),
-        'Wait on this tile. On the tone, 1 west, then 5 north, then 1 east. Keep moving through the crossing.');
+        'Wait on this tile. On the ping, 1 west, then 5 north, then 1 east. Keep moving through the crossing.');
     for (const delay of [roomPlan.opening.from, roomPlan.opening.through - 30]) {
         for (const [mask, stepFrames] of [[0, 16], [127, 8]]) {
             for (const pause of [0, 18]) {
@@ -968,6 +968,25 @@ async function verifyPatrolGuidance() {
     const lanePlan = previewCrossing(fromLane.geometry, snapshot(fromLane),
         { ...motionRequest(fromLane, nearby), event: 20, field: true, patrolGuidance: true, timingCue: true });
     assert.notEqual(lanePlan.status, 'timedWait', 'an exposed starting tile is never offered as a waiting point');
+
+    const north = load(196);
+    const northGuards = configureMotion(north, 15, 24, 7.75, 19.25);
+    let refuge;
+    let refugeRequest;
+    for (let n = 0; n < 25; n++) {
+        refugeRequest = { ...motionRequest(north, northGuards), event: 20, field: true, patrolGuidance: true, timingCue: true };
+        refugeRequest.motion.dash = true;
+        refuge = previewCrossing(north.geometry, snapshot(north), refugeRequest);
+        assert.equal(refuge.opening?.tiles ?? refuge.tiles, 4, 'cross to the side refuge in four tiles');
+        if (refuge.status === 'timedCue') break;
+        for (let i = 0; i < 18; i++) north.gameMap.updateEvents();
+    }
+    assert.equal(refuge.status, 'timedCue', 'the northbound corridor produces a cue within a patrol cycle');
+    assert.deepEqual(refuge.opening.headings, [3, 3, 3, 2]);
+    await verifyWorker(north, refugeRequest, snapshot(north), result => assert.deepEqual(result, refuge));
+    const refugeFrames = refuge.opening.from + 4 * 16 + 18 + 120;
+    assert.equal(verifyMotion(north, northGuards, refugeFrames, refuge.opening.headings, refuge.opening.from, 0, 18), refugeFrames);
+    assert.deepEqual([north.player.x, north.player.y], [16, 21]);
 
     const cave = load(196);
     const actors = configureMotion(cave, 6, 30, 0, 20);
@@ -1020,6 +1039,7 @@ async function verifyLiveCrossing() {
         retire(_scene, source) { assert.equal(source, 'cave'); sounding = false; }
     }, () => ({ enabled: true, caveTiming: true, caveVolume: 55, hrtf: true }), text => reports.push(text));
     c.WendyQuestAccessCaveTimingStop = owner => timing.stop(owner);
+    c.WendyQuestAccessCaveTimingMoved = (owner, direction) => timing.moved(owner, direction);
     c.WendyQuestAccessCaveTimingPose = owner => timing.pose(owner);
     c.WendyQuestAccessFieldEvent = owner => timing.stop(owner);
     scene._wqaFieldReady = true;
@@ -1094,6 +1114,44 @@ async function verifyLiveCrossing() {
     timing.refreshResult(refreshing, null, null);
     assert.equal(scene._wqaCaveCueDue, first + 54);
     timing.stop(scene);
+
+    // Replay the painted guide as the player follows all seven accepted
+    // steps, including the handoff from field speech to traversal cues.
+    const crossing = load(196);
+    const guards = configureMotion(crossing, 6, 30, 0, 24);
+    for (const id of [1, 3, 23, 24]) crossing.gameMap._events[id]._erased = true;
+    c.Graphics.frameCount = 900;
+    const traversalMotion = captureMotion(c, c.Graphics);
+    const captured = timing.capture(scene, traversalMotion, { id: 20 });
+    const plan = previewCrossing(crossing.geometry, snapshot(crossing),
+        { x: 6, y: 30, event: 20, motion: traversalMotion, field: true, patrolGuidance: true, timingCue: true });
+    assert.deepEqual(plan.opening.headings, [1, 3, 3, 3, 3, 3, 2]);
+    assert(timing.start(captured, 6, 30, plan.opening, { direction: 4, tiles: 7, refresh: () => false }));
+    const before = sounds.length;
+    advanceToCue(crossing);
+    for (const heading of plan.opening.headings) {
+        c.Graphics.frameCount++;
+        crossing.gameMap.updateEvents();
+        c.Game_CharacterBase.prototype.moveStraight.call(crossing.player, DIRECTIONS[heading]);
+        timing.cancelPlan(scene, true);
+        for (let n = 0; n < 16; n++) {
+            if (n) {
+                c.Graphics.frameCount++;
+                crossing.gameMap.updateEvents();
+            }
+            c.Game_CharacterBase.prototype.update.call(crossing.player);
+            if (scene._wqaCaveCueDue && c.Graphics.frameCount >= scene._wqaCaveCueDue) {
+                timing.update(scene);
+                renderer.emit('postrender');
+            }
+        }
+    }
+    const cues = sounds.slice(before).map(sound => sound.bearing.join(','));
+    const changes = cues.filter((cue, index) => index === 0 || cues[index - 1] !== cue);
+    assert.deepEqual(changes, ['-1,0,0', '0,0,1', '1,0,0']);
+    assert.deepEqual([crossing.player.x, crossing.player.y], [6, 25]);
+    assert(guards.every(event => !event.isStarting()));
+    assert(!timing.active(scene) && !sounding);
     scene._wqaFieldReady = false;
 
     const distraction = load(200, { switches: [581] });
