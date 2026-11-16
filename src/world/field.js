@@ -19,7 +19,7 @@ const { createTerrainJourney, BRIDGE_REASON, CRYSTAL_REASON, PULL_REASON, STONE_
 const { saltControlName } = require('./puzzles/salt-state.cjs');
 const { mapPlace } = require('./map-banner');
 const { mapDescription } = require('./map-descriptions');
-const { createCaveGuide, timedCave, warningApproach, captureMotion } = require('./puzzles/cave');
+const { createCaveGuide, timedCave, warningApproach, captureMotion, distractionForGuard, chaseHandoff } = require('./puzzles/cave');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
 
@@ -40,7 +40,7 @@ function routeBoundary(root, eventId, spoilers, edge, mode = 'walk') {
         const exit = destination === 113 ? 'the world map' : root.$dataMapInfos?.[destination]?.name;
         if (exit && !/^Map\d+$/i.test(exit)) return { exit };
     }
-    if (target?.category === 'events') return { boundaryName: target.name };
+    if (target?.category === 'events' || target?.category === 'checkpoints') return { boundaryName: target.name };
     return {};
 }
 
@@ -429,15 +429,29 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const direction = opening?.direction ?? result.direction;
                 const tiles = opening?.tiles ?? result.tiles;
                 const headings = opening?.headings ?? result.headings;
+                const pace = opening?.pace ?? result.pace;
                 const target = result.guideEvent === undefined ? job.destination :
                     job.guideOptions?.find(item => item.target.id === result.guideEvent)?.target;
                 const repeat = opening?.escape ? undefined :
-                    { direction, tiles, refresh: state => refreshCaveTiming(job, state, target, direction, tiles, headings) };
+                    { direction, tiles, pace, refresh: state => refreshCaveTiming(job, state, target, direction, tiles, headings, pace) };
                 if (job.timing && host.caveTiming.start(job.timing, job.x, job.y, opening, repeat))
-                    return present(job, { kind: 'timedCue', direction, tiles, headings,
+                    return present(job, { kind: 'timedCue', direction, tiles, headings, pace,
                         terminal: opening?.terminal ?? result.terminal, escape: opening?.escape,
                         waiting: !opening || job.motionFrame + opening.from > host.graphics.frameCount, guide: job.guide });
                 return present(job, { kind: 'patrolWait', direction, guide: job.guide });
+            }
+            if (result?.status === 'patrolBlocked') {
+                const target = !job.caveBlocker && distractionForGuard(root, result.guard);
+                const motion = target && captureMotion(root, host.graphics);
+                const snapshot = motion && captureWorld(root, true, undefined, undefined, [], true);
+                if (snapshot) {
+                    job.caveBlocker = result.guard;
+                    job.guideOptions = null;
+                    job.readyGuide = '';
+                    job.guide = 'Activate the distraction crystal to move the guard, then request directions again.';
+                    return route(job, snapshot, target, undefined, motion);
+                }
+                return status(job, 'Blocked by a stationary Mech Guard.');
             }
             if (result?.status === 'unsafeCrossing') return status(job, result.exposed ?
                 'You are in a patrol lane. No clear move verified.' : 'No crossing to a safe stopping point is verified here.');
@@ -584,8 +598,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
                     guide: job.guide, activate, exit, useExit,
                     onward: throughChillcrest ? 'Then take the west exit to the world map.' : undefined,
+                    chase: chaseHandoff(root, result.boundaryEvent),
                     boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent, preferences().spoilers === true)),
-                    manualHandoff: !!handoff || !!boundaryName && (job.action === 'puzzleGuide' || job.mode === 'ship'),
+                    manualHandoff: !!handoff || !!boundaryName && (job.action === 'puzzleGuide' || job.mode === 'ship' || timedCave(job.map)),
                     more: result.more === true });
             }
             else if (job.remote && ['unreachable', 'approachBlocked', 'unavailable'].includes(result?.status))
@@ -792,7 +807,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return timedRoute(job, snapshot, target);
     }
 
-    function refreshCaveTiming(command, state, target, direction, tiles, headings) {
+    function refreshCaveTiming(command, state, target, direction, tiles, headings, pace) {
         const { scene } = command;
         if (active !== command || inFlight || !target || sequence >= 0x7ffffffe || !ready(scene)) return false;
         const motion = captureMotion(root, host.graphics);
@@ -801,7 +816,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (!snapshot) return false;
         const job = { scene, sequence: ++sequence, caveRefresh: { state, captured } };
         submit(job, snapshot, { ...destinationRequest(target), field: true, motion, patrolGuidance: true,
-            timingCue: true, timingDirection: direction, timingTiles: tiles, timingHeadings: headings });
+            timingCue: true, timingDirection: direction, timingTiles: tiles, timingHeadings: headings, timingPace: pace });
         return inFlight === job;
     }
 

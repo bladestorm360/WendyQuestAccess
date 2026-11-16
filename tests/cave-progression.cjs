@@ -86,7 +86,10 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
             run(c.$gameMap._interpreter, index, 205);
             run(c.$gameMap._interpreter, c.$gameMap._interpreter._list.findIndex(command => command.code === 214), 214);
         }
-        expectLocal('A mech started chasing you.');
+        const outcome = progress.settle(scene);
+        assert.equal(outcome.arrived, false);
+        assert.match(outcome.outcome, /^A mech started chasing you\. Dash /);
+        assert.equal(progress.settle(scene), null);
     }
     for (const [id, gate, routes] of [[5, 582, [25]], [10, 583, [6]], [19, 584, [8, 25, 45]]]) {
         const blocked = select(200, id, [gate]).source;

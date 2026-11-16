@@ -7,7 +7,7 @@ const MAX_ROUTE_COMMANDS = 128;
 const STAMP_FIELDS = ['id', 'x', 'y', 'rx', 'ry', 'speed', 'frequency', 'direction', 'stop', 'wait', 'jump', 'index',
     'forced', 'originalIndex', 'autonomous', 'locked', 'fixed', 'through', 'normal', 'hazard'];
 const STAMP_WIDTH = STAMP_FIELDS.length;
-const TIMING_CUE = Object.freeze({ wait: 120, minSpan: 45, maxSpan: 60, lead: 30, interval: 18, turnGrace: 18 });
+const TIMING_CUE = Object.freeze({ wait: 120, minSpan: 45, paceSpan: 39, paceWait: 320, maxSpan: 60, lead: 30, interval: 18, turnGrace: 18 });
 
 function writeMotionStamp(stamp, offset, patrols) {
     for (const actor of patrols) for (const key of STAMP_FIELDS) stamp[offset++] = Number(actor[key]);
@@ -28,7 +28,7 @@ function copyRoute(route) {
         if (code === 14 && (!Number.isInteger(a) || !Number.isInteger(b) || Math.abs(a) > 8 || Math.abs(b) > 8)) return null;
         if (code === 15 && (!Number.isInteger(a) || a < 1 || a > 600)) return null;
         if (code === 29 && (!Number.isInteger(a) || a < 1 || a > 6)) return null;
-        commands.push(code === 14 ? [code, a, b] : code === 15 || code === 29 ? [code, a] : [code]);
+        commands.push(code === 14 ? [code, a, b] : code === 15 || code === 27 || code === 28 || code === 29 ? [code, a] : [code]);
     }
     return { commands, repeat: route.repeat === true, skippable: route.skippable === true };
 }
@@ -125,7 +125,12 @@ function runRouteCommand(actor, player, tryStep) {
     }
 }
 
-function tickPatrol(actor, player, view, tryStep) {
+function mayAdvanceAutonomousRoute(actor) {
+    return !actor.jump && actor.x === actor.rx && actor.y === actor.ry && !actor.forced &&
+        actor.autonomous && !actor.locked && actor.stop + 1 > 30 * (5 - actor.frequency);
+}
+
+function tickPatrol(actor, player, view, tryStep, inView = nearScreen) {
     if (!actor.jump && actor.x === actor.rx && actor.y === actor.ry) {
         actor.stop = actor.locked ? 1 : actor.stop + 1;
         if (actor.forced) {
@@ -133,7 +138,7 @@ function tickPatrol(actor, player, view, tryStep) {
             if (outcome) return outcome;
         }
         if (!actor.forced && actor.autonomous && !actor.locked &&
-            actor.stop > 30 * (5 - actor.frequency) && nearScreen(actor, view)) {
+            actor.stop > 30 * (5 - actor.frequency) && inView(actor, view)) {
             const outcome = runRouteCommand(actor, player, tryStep);
             if (outcome) return outcome;
         }
@@ -142,4 +147,5 @@ function tickPatrol(actor, player, view, tryStep) {
     return 'settled';
 }
 
-module.exports = { copyPatrol, tickPatrol, advancePosition, TIMING_CUE, STAMP_WIDTH, writeMotionStamp, matchesMotionStamp };
+module.exports = { copyPatrol, tickPatrol, advancePosition, mayAdvanceAutonomousRoute, TIMING_CUE,
+    STAMP_WIDTH, writeMotionStamp, matchesMotionStamp };

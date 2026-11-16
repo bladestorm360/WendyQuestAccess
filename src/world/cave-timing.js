@@ -63,8 +63,8 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
         const span = opening?.through - opening?.from;
         const samples = span - TIMING_CUE.lead + 1;
         if (!CARDINAL[opening?.direction] || !Number.isInteger(opening.from) ||
-            opening.from < 0 || opening.from > TIMING_CUE.wait || !Number.isInteger(span) ||
-            span < TIMING_CUE.minSpan || span > TIMING_CUE.maxSpan ||
+            opening.from < 0 || opening.from > (opening.pace ? TIMING_CUE.paceWait : TIMING_CUE.wait) || !Number.isInteger(span) ||
+            span < (opening.pace ? TIMING_CUE.paceSpan : TIMING_CUE.minSpan) || span > TIMING_CUE.maxSpan ||
             Object.prototype.toString.call(opening.stamps) !== '[object Float64Array]' ||
             opening.stamps.length !== captured.refs.length * STAMP_WIDTH * samples) return false;
         const due = motion.frame + opening.from;
@@ -91,7 +91,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
         if (state.traversal || !live(state)) return;
         state.waiting = false;
         const admitted = captured && opening?.direction === state.repeat.direction &&
-            opening.tiles === state.repeat.tiles && admit(captured, opening);
+            opening.tiles === state.repeat.tiles && opening.pace === state.repeat.pace && admit(captured, opening);
         if (admitted) Object.assign(state, captured, admitted);
         else state.opening = null;
         schedule(state, Math.max(frame(), state.nextPing || 0, admitted?.due ?? frame() + TIMING_CUE.interval));
@@ -188,7 +188,9 @@ function createCaveTiming(root, fieldReady, audio, preferences, report) {
         const next = traversal.steps[++traversal.index];
         if (next === undefined) return stop(scene);
         const speed = player._moveSpeed + (player._dashing ? 1 : 0);
-        if (speed < state.motion.speed || speed > state.motion.speed + (state.motion.dash ? 1 : 0)) return stop(scene);
+        const minimum = state.motion.speed + (opening.pace === 'dash' ? 1 : 0);
+        const maximum = state.motion.speed + (state.motion.dash && opening.pace !== 'walk' ? 1 : 0);
+        if (!Number.isInteger(speed) || speed < minimum || speed > maximum) return stop(scene);
         const tileFrames = 256 / 2 ** speed;
         const turning = next !== direction;
         state.x += CARDINAL[direction].x;

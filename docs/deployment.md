@@ -551,3 +551,14 @@ November 16, 2026. The focused Steam update replaces the bundled plugin and spee
 - Prior plan `2e0a9221eb34115068b112e6341332d757044ae2c822979e52c74ccc6c4ac393` is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-handoff/rollback-latest`. Cleanup removed 36,009,580 bytes of generated outputs and superseded recovery.
 
 From the first room’s side refuge the guide says to go one tile north on the ping, stop and request directions again. The later west-lane crossing is still unverified. [Offline checks](feature-checkpoint.md#cave-cue-handoff-after-the-first-step)
+
+## Secret Cave crossing audit
+
+November 16, 2026. The verified Steam update replaced the bundled plugin, speech formatter, crossing planner and patrol motion module. All 16 native scripts, 38 other payload files and 241 geometry entries matched the preceding plan. The installer rehearsal verified the launcher lease, interrupted-install recovery, reapply, unknown-file protection and removal. The independent Steam status check passed, and all four save and configuration hashes matched.
+
+- Installed plan SHA-256 `f7112ff65e45ec2d584b4e642c856fbd5043f30fc4e84ba99d51dc7f5697a308`
+- Plugin SHA-256 `462743485d0642cc79cc3c9dc8f67d5471a1234ce696cb7e2f04fdbdf2fec0a2`
+- Signed Microsoft Defender scan `DF15A52D-1B27-4B5D-AA05-A74408F0CB52` completed at 08:13:54 PST with no threats. Platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.328.0.
+- Prior plan `0c7ff5b5116ef9c25fae002784cde41898b5aca18d4b1f3608851490c175ca61` is retained at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-crossings-audit/rollback-latest`. Cleanup removed 36,186,416 bytes of generated outputs and superseded recovery.
+
+The world and matching NW.js fixtures passed. The replay reached the first and patrol-line room exits, verified the first distraction crossing and the next guard’s crystal, and followed all nine dash stretches in the chase room. [Verification scope](feature-checkpoint.md#secret-cave-crossing-audit) · [Cave controls](puzzles-and-secrets.md#secret-cave-room-handoffs)

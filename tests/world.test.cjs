@@ -13,6 +13,7 @@ const { bakeMap, decodeMap, composeWorld, indexOf, DIRECTIONS, step, surface } =
 const { solveRoute } = require('../src/world/routes.cjs');
 const { warningApproach, captureMotion } = require('../src/world/puzzles/cave');
 const { verifyCaveProgression } = require('./cave-progression.cjs');
+const { verifyCaveCrossings } = require('./cave-crossings.cjs');
 const { verifyNavigationAuditFixes } = require('./navigation-regressions.cjs');
 const { verifyLocalDestinations } = require('./local-destinations.cjs');
 const { verifyVehicleNavigation } = require('./vehicle-navigation.cjs');
@@ -1553,6 +1554,7 @@ async function main() {
     verifySoundscape(c, load);
     await verifyCrossingPreview();
     await verifyPatrolGuidance();
+    await verifyCaveCrossings(c, load, configureMotion, motionRequest, verifyMotion, verifyWorker);
     await verifyLiveCrossing();
     await verifyWarningApproach();
     const entry = read('Map199.json').events[26].pages.flatMap(page => page.list).find(command =>

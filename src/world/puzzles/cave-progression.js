@@ -16,6 +16,40 @@ const CRYSTALS = { 5: [582, [25]], 10: [583, [6]], 19: [584, [8, 25, 45]] };
 const CHASES = { 3: [4, 4], 8: [9, 3], 10: [11, 3], 12: [13, 3], 14: [24, 3],
     15: [26, 3], 16: [27, 3], 17: [28, 3], 18: [29, 3] };
 const CHASE_FLOORS = new Map(Object.values(CHASES));
+// Native chase triggers launch a scripted route behind Wendy. Give the
+// manually verified dash to the next trigger before stepping into it.
+const CHASE_LEGS = {
+    4: [[8, 5], [4, 4], [8, 2]],
+    9: [[8, 6], [6, 1], [8, 6], [6, 4]],
+    11: [[6, 2], [2, 7]],
+    13: [[2, 2], [6, 4]],
+    24: [[6, 4], [8, 4]],
+    26: [[8, 4], [4, 4], [8, 5]],
+    27: [[6, 10]],
+    28: [[2, 3], [6, 1], [2, 5], [6, 3]],
+    29: [[8, 13], [4, 8], [8, 8]]
+};
+const HEADINGS = { 2: 'south', 4: 'west', 6: 'east', 8: 'north' };
+
+function chaseDirections(eventId) {
+    const legs = CHASE_LEGS[eventId];
+    if (!legs) return '';
+    return 'Dash ' + legs.map(([heading, tiles]) => tiles + ' ' + HEADINGS[heading]).join(', then ') +
+        (eventId === 29 ? ' to the next room.' : ' to the next chase trigger.');
+}
+
+function chaseHandoff(root, eventId) {
+    const map = root.$gameMap;
+    if (map._mapId !== 201) return '';
+    const chase = CHASE_FLOORS.get(eventId);
+    const event = map._events[eventId];
+    if (event?._pageIndex !== 0 || event._erased || !chase) return '';
+    const item = root.$dataMap?.events?.[eventId];
+    const command = item?.pages[0].list[chase];
+    return event._x === item?.x && event._y === item.y && command?.code === 205 &&
+        CHASES[command.parameters[0]]?.[0] === eventId ? chaseDirections(eventId) : '';
+}
+
 const ARRIVALS = { 196: 'Entered the patrol rooms.', 199: 'Reached the patrol line room.',
     200: 'Reached the distraction room.', 201: 'Reached the chase room.',
     202: 'Cleared the chase. Reached the staircase passage.', 197: 'Reached the reward chamber.',
@@ -85,7 +119,8 @@ function localOutcome(root, action) {
         if (event._erased && other?._x === 0 && other._y === 0 &&
             LINE.every((id, index) => ownsRoute(map, list, 1 + index * 85, id))) return 'The patrol line started moving.';
     } else if (chase !== undefined) {
-        if (event._erased && ownsRoute(map, list, chase)) return 'A mech started chasing you.';
+        if (event._erased && ownsRoute(map, list, chase))
+            return 'A mech started chasing you. ' + chaseDirections(event._eventId);
     } else if (crystal) {
         if (action.blocked) return 'The crystal did not activate.';
         if (crystal.some(index => ownsRoute(map, list, index))) return 'The distraction crystal activated.';
@@ -142,4 +177,4 @@ function createCaveProgress(root, graphics) {
     };
 }
 
-module.exports = { CHASES, CRYSTALS, activeDistraction, corridorMap, caveDestination, createCaveProgress };
+module.exports = { CHASE_LEGS, chaseHandoff, CHASES, CRYSTALS, activeDistraction, corridorMap, caveDestination, createCaveProgress };

@@ -165,7 +165,8 @@ function formatSpeech(message) {
                     if (last?.direction === direction) last.tiles++;
                     else legs.push({ direction, tiles: 1 });
                 }
-                text = (message.waiting ? 'Wait on this tile. ' : '') + 'On the ping, go ' +
+                const action = message.pace === 'walk' ? 'walk' : message.pace === 'dash' ? 'dash' : 'go';
+                text = (message.waiting ? 'Wait on this tile. ' : '') + 'On the ping, ' + action + ' ' +
                     (legs.length === 1 ? `${legs[0].tiles} ${legs[0].tiles === 1 ? 'tile' : 'tiles'} ${legs[0].direction}` :
                         legs.map(leg => leg.tiles + ' ' + leg.direction).join(', then ')) + '.';
             } else {
@@ -247,10 +248,14 @@ function formatSpeech(message) {
             else if (activate) {
                 const next = message.manualHandoff && label({ name: message.boundaryName });
                 parts.push(next ? `Move ${activate} to reach ${next}` : `Move ${activate} to activate`);
+                const chase = label({ name: message.chase });
+                if (chase) parts.push(chase.replace(/\.$/, ''));
             }
             else if (boundary) {
                 parts.push(`${label({ name: message.boundaryName }) || 'Floor event'} one tile ${boundary}`);
-                if (message.manualHandoff === true) parts.push(`Move ${boundary} to continue, then request directions again`);
+                const chase = label({ name: message.chase });
+                if (chase) parts.push(`Move ${boundary} to start the chase`, chase.replace(/\.$/, ''));
+                else if (message.manualHandoff === true) parts.push(`Move ${boundary} to continue, then request directions again`);
             }
             else if (message.reenter === true)
                 parts.push(message.sailing ? 'Sail off this tile and back to activate' : 'Walk off this tile and back to activate');

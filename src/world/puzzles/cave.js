@@ -1,7 +1,7 @@
 'use strict';
 
 const { copyPatrol, TIMING_CUE, STAMP_WIDTH, matchesMotionStamp } = require('./patrol-motion.cjs');
-const { CHASES, CRYSTALS, activeDistraction, corridorMap, caveDestination, createCaveProgress } = require('./cave-progression');
+const { CHASES, CRYSTALS, activeDistraction, corridorMap, caveDestination, createCaveProgress, chaseHandoff } = require('./cave-progression');
 
 const ROOMS = Object.freeze({
     196: { patrols: [4, 5, 6, 7, 12, 13, 14, 15, 17, 18], checkpoints: [21], sign: 2 },
@@ -20,6 +20,31 @@ function timedCave(map) { return Number.isInteger(map) && !!ROOMS[map]; }
 
 function checkpointTarget(map, id, page, trigger) {
     return page === 0 && trigger === 1 && ROOMS[map]?.checkpoints.includes(id);
+}
+
+function usedCheckpoint(root, event, page) {
+    if (!checkpointTarget(root.$gameMap._mapId, event._eventId, event._pageIndex, event._trigger)) return false;
+    const [condition, record] = page?.list || [];
+    const [kind, variable, source, required, comparison] = condition?.parameters || [];
+    // The native page remains active, but the checkpoint body runs only
+    // while the stored checkpoint index is below this page's index.
+    return condition?.code === 111 && kind === 1 && variable === 90 && source === 0 && comparison === 4 &&
+        Number.isInteger(required) && required >= 1 && required <= 3 && record?.code === 122 &&
+        [90, 90, 0, 0, required].every((value, index) => record.parameters?.[index] === value) &&
+        root.$gameVariables?.value?.(90) >= required;
+}
+
+function distractionForGuard(root, guard) {
+    const map = root.$gameMap;
+    if (map._mapId !== 200) return null;
+    for (const [id, [gate, commands]] of Object.entries(CRYSTALS)) {
+        const event = map._events[id];
+        const page = event?.page();
+        if (event?._pageIndex !== 0 || event._erased || root.$gameSwitches?.value?.(gate) !== false ||
+            !commands.some(index => page?.list[index]?.code === 205 && page.list[index].parameters[0] === guard)) continue;
+        return { id: event._eventId, x: event._x, y: event._y, name: 'Distraction crystal', category: 'objects' };
+    }
+    return null;
 }
 
 function patrolDestination(map, event, page) {
@@ -311,7 +336,7 @@ function createCaveGuide(root, graphics) {
                 [11, moving ? 'The distraction is active. Continue toward the chase-room entrance.' : 'Continue to the chase-room entrance.']
             ];
         }
-        if (roomId === 201) return [[2, state.outcome === 'A mech started chasing you.' ?
+        if (roomId === 201) return [[2, state.outcome.startsWith('A mech started chasing you.') ?
             'Keep moving toward the staircase passage. Recheck each turn.' : 'Follow the next safe step toward the staircase passage. Passing a trigger can start a chase.']];
         return {
             206: [[11, 'Enter the cave to begin the patrol route.']],
@@ -365,5 +390,6 @@ function createCaveGuide(root, graphics) {
     };
 }
 
-module.exports = { createCaveGuide, timedCave, checkpointTarget, caveDestination, patrolDestination, warningApproach, captureMotion,
+module.exports = { createCaveGuide, timedCave, checkpointTarget, usedCheckpoint, distractionForGuard, chaseHandoff,
+    caveDestination, patrolDestination, warningApproach, captureMotion,
     TIMING_CUE, STAMP_WIDTH, matchesMotionStamp };

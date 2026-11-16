@@ -207,3 +207,5 @@ The [Secret Cave update](docs/puzzles-and-secrets.md#cave-timing-cues) records l
 [Current Steam deployment](docs/deployment.md#idle-narration-and-per-leg-cave-pings) verifies the idle narration and per-leg cave cues. [Offline evidence](docs/feature-checkpoint.md#idle-narration-and-per-leg-cave-pings) records cold idle, the west–north–east replay and the refuge that replaces the eleven-step crossing.
 
 [Current Steam deployment](docs/deployment.md#cave-cue-handoff-after-the-first-step) verifies the stock movement cue handoff and exact stopping directions. [Offline replay](docs/feature-checkpoint.md#cave-cue-handoff-after-the-first-step) records the refuge step and the later west-lane timing limit.
+
+[Current Steam deployment](docs/deployment.md#secret-cave-crossing-audit) records the west-lane and other crossing fixes, including the exact paced pings, distraction prerequisites and chase handoffs. [Native replay scope](docs/feature-checkpoint.md#secret-cave-crossing-audit) records the confirmed room exits and remaining gameplay checks.

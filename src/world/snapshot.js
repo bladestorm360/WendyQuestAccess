@@ -9,7 +9,7 @@ const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit
 const { collectQuestDestinations, questDestinationLabel, questPageHasAction } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
 const { transferOptions } = require('./transfer-events.cjs');
-const { checkpointTarget, caveDestination, patrolDestination, timedCave } = require('./puzzles/cave');
+const { checkpointTarget, usedCheckpoint, caveDestination, patrolDestination, timedCave } = require('./puzzles/cave');
 const { GATE_SWITCHES, BREAKFAST_MAPS } = require('./terrain-control-labels.cjs');
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
 
@@ -120,7 +120,8 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         if (!entry || !Number.isFinite(x) || !Number.isFinite(y)) return null;
         const page = entry.pages[pageIndex];
         const action = pageHasInteraction(page) && !inactiveFloorScene(root, event, page) &&
-            !(seenTorchReminder && REMINDERS.includes(eventId));
+            !(seenTorchReminder && REMINDERS.includes(eventId)) &&
+            !(trigger === 1 && usedCheckpoint(root, event, page));
         if (routing) {
             const box = event.blockerProperties;
             const rectangle = box ? [x + box.x1, y + box.y1, x + box.x2, y + box.y2] : undefined;
