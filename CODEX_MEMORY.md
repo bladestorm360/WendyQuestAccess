@@ -225,3 +225,5 @@ The [silent cave stop and dash input checkpoint](docs/feature-checkpoint.md#sile
 The [footstep cadence checkpoint](docs/feature-checkpoint.md#wendys-footstep-cadence) records the native walking and dash replay, independent step audio and audible gameplay check. [Current Steam deployment and recovery](docs/deployment.md#wendys-footstep-cadence) records the exact installed payload and single rollback.
 
 The [dash input and manual cave cues checkpoint](docs/feature-checkpoint.md#dash-input-and-manual-cave-stop-cues) records the field quest binding conflict, native keyboard replay, and manual release cues. [Current Steam deployment and recovery](docs/deployment.md#dash-input-and-manual-cave-stop-cues) records the verified install and rollback.
+
+The [live keyboard dash trace](docs/feature-checkpoint.md#live-keyboard-dash-trace) records the observed Shift modifier, native action and completed step timing in the first two Exclamation Point Cave rooms. The installed build is ready for the owner’s next keyboard comparison.

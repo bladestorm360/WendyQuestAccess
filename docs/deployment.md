@@ -653,3 +653,15 @@ November 16, 2026. The local Steam update changed the plugin bundle, speech form
 - The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-dash-keyboard/rollback-latest with plan SHA-256 `0545e57baa2c914e36988abc040049ff7e534937308187794f18e3f0fd24f47e`.
 
 Install readback verified 16 native scripts, 45 payload files and 241 geometry entries. Four save and configuration hashes matched across installation. Cleanup removed 24,459,195 bytes of final build and staging data and the 10,963,694-byte superseded rollback. [Verification scope](feature-checkpoint.md#dash-input-and-manual-cave-stop-cues)
+
+### Live keyboard dash trace
+
+November 16, 2026. The local Steam diagnostic build updated the plugin bundle and the map-readiness and movement transforms. The exact installer rehearsal, world suite, focused diagnostic fixture and matching NW.js smoke passed. Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.328.0 found no threats in the exact candidate.
+
+- Installed plan SHA-256 `c7236bd23e1e2a8b0c236fc7754446539c7107e9743622db42c8d02c2892347c`
+- Plugin SHA-256 `500598b8dce97f4461c346ff7d5688e3bf10c6316814ed6397f6b3c577b04980`
+- Map-readiness transform SHA-256 `82a77818d8b370aee43adcfd18c0685871d384a4e37ad5319409fc52830f6798`
+- Movement transform SHA-256 `7c80b96bb456a39401b388dfe2fc5f29cb835afa50691779b4eb0d503e5afbe2`
+- The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-dash-trace/rollback-latest with plan SHA-256 `e94c544f1e91bbca8173a9d44469ce7244dcf460472c1d02d9e4720ff07f0b18`.
+
+Installed readback verified 16 native scripts, 45 payload files and 241 geometry entries. Four save and configuration hashes matched across installation. Cleanup removed 24,469,635 bytes of build and test output and the 10,964,620-byte superseded rollback. The recorder runs in the game session when a supported cave room is active and writes to the installed WendyQuestAccess-field.log. The live renderer PID and first comparison are pending the owner’s next session. [Verification scope](feature-checkpoint.md#live-keyboard-dash-trace)

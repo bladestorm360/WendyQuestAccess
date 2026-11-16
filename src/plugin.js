@@ -67,6 +67,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let beacon = null;
     let caveTiming = null;
     let soundscape = null;
+    let dashDiagnostics;
     let field = null;
     let settings = null;
     let settingsScene = null;
@@ -171,8 +172,8 @@ function boot(root, nodeRequire, nodeProcess) {
         dialogue = createDialogueObserver(host, notifications);
         narration = createNarration(root, host, () => audioPreferences);
         credits = createCredits(root, host, notifications, host.speechPreferences);
-        const { denied: fieldKeyDenied, routed: fieldRouteResult, caveTiming: caveTimingResult } =
-            createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
+        dashDiagnostics = createFieldDiagnostics(root, host, nodeRequire, nodeProcess, scene => field?.ready(scene, true));
+        const { denied: fieldKeyDenied, routed: fieldRouteResult, caveTiming: caveTimingResult } = dashDiagnostics;
         field = createField(root, host, notifications, fieldRouteResult);
         mapBanner = createMapBannerObserver(root, host, notifications, field.ready);
         interaction = createInteractionPrompt(root, host, field.interactionReady, notifications, field.appendInteraction);
@@ -288,6 +289,9 @@ function boot(root, nodeRequire, nodeProcess) {
                 return readyScene() || ((menus.controlOwner(scene) || battleFocus.controlOwner(scene) || field.ready(scene)) ? scene : null);
             },
             fieldReady: field.ready,
+            dashTraceKey(event, down) {
+                try { dashDiagnostics.dashKey(host.manager._scene, event, down); } catch { /* Native input keeps ownership. */ }
+            },
             fieldKeyDenied(action) {
                 try { fieldKeyDenied(host.manager._scene, action); } catch { /* Keep native input available. */ }
             },
@@ -854,6 +858,16 @@ function boot(root, nodeRequire, nodeProcess) {
         field?.controlLost(scene);
         autosaveNotice?.leave(scene);
         controller?.reset();
+    };
+
+    root.WendyQuestAccessDashTraceReady = function (scene) {
+        try { dashDiagnostics?.dashReady(scene); } catch { /* Native updates continue. */ }
+    };
+    root.WendyQuestAccessDashTraceStarted = function (scene) {
+        try { dashDiagnostics?.dashStarted(scene); } catch { /* Native movement continues. */ }
+    };
+    root.WendyQuestAccessDashTraceLanded = function (scene) {
+        try { dashDiagnostics?.dashLanded(scene); } catch { /* Native movement continues. */ }
     };
 
     root.WendyQuestAccessFieldMove = function (scene, direction, succeeded) {

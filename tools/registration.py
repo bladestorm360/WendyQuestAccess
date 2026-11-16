@@ -449,7 +449,9 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessFootstep?.(SceneManager._scene,this);'
                 b'else if(Graphics._wqaCaveTimingEnabled&&this._trigger===2&&this._mapId===$gameMap?._mapId&&'
                 b'SceneManager._scene?._wqaFieldReady)'
-                b'globalThis.WendyQuestAccessGuardFootstep?.(SceneManager._scene,this);',
+                b'globalThis.WendyQuestAccessGuardFootstep?.(SceneManager._scene,this);'
+                b'if(this===$gamePlayer&&SceneManager._scene?._wqaDashTrace&&SceneManager._scene._wqaFieldReady)'
+                b'globalThis.WendyQuestAccessDashTraceLanded?.(SceneManager._scene);',
         194431: b'\n    if(this._tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
         194681: b'\n    if(this._tileId!==tileId){' + ACTOR_DIRTY + beacon_actor() + b'}',
         195557: beacon_actor(b'd') + b'if(SceneManager._scene?._wqaCaveTimingActive&&this===$gamePlayer)'
@@ -479,7 +481,9 @@ def objects_notification(original):
                 b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
                 b'(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||SceneManager._scene._wqaAutowalkActive))'
-                b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',
+                b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);'
+                b'if(this===$gamePlayer&&this._movementSuccess&&SceneManager._scene?._wqaDashTrace&&'
+                b'SceneManager._scene._wqaFieldReady)globalThis.WendyQuestAccessDashTraceStarted?.(SceneManager._scene);',
         249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||'
                 b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||'
                 b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive||'
@@ -701,6 +705,8 @@ def map_notification(original):
     }
     if (this._wqaNarrationActive) globalThis.WendyQuestAccessNarrationPresent?.(this);
     if (this._wqaFieldReady) {
+        if (!this._wqaDashTrace && ($gameMap._mapId === 196 || $gameMap._mapId === 199))
+            globalThis.WendyQuestAccessDashTraceReady?.(this);
         if (Graphics._wqaNarrationEnabled && !Graphics._wqaNarrationPackFinished && !this._wqaNarrationLoading &&
             !$gameMap._interpreter?._list)
             globalThis.WendyQuestAccessNarrationWarm?.(this);

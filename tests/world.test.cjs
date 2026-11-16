@@ -261,6 +261,18 @@ function verifyWallFeedback() {
     c.Graphics._wqaFootstepsEnabled = true;
     scene._wqaFieldReady = true;
     const { gameMap, player } = load(19);
+    const tracedSteps = [];
+    scene._wqaDashTrace = true;
+    c.WendyQuestAccessDashTraceStarted = owner => {
+        assert.equal(owner, scene);
+        assert(player.isMoving());
+        tracedSteps.push(['start', !!player._dashing]);
+    };
+    c.WendyQuestAccessDashTraceLanded = owner => {
+        assert.equal(owner, scene);
+        assert(!player.isMoving());
+        tracedSteps.push(['land', !!player._dashing]);
+    };
     const place = (x, y, dir = 2) => Object.assign(player, { _x: x, _y: y, _realX: x, _realY: y,
         _direction: dir, _moveSpeed: 4, _followers: { areGathering: () => false, updateMove() {} } });
     const press = (direction, duringTile) => {
@@ -316,6 +328,10 @@ function verifyWallFeedback() {
     assert.equal(north.until, 5350, 'blocked movement does not extend wall playback');
     assert.equal(output.get(CUE.wallNorth), north, 'facing the same wall does not restart its loop');
     assert.equal(calls.filter(call => call.source === 'footstep').length, 2);
+    assert.deepEqual(tracedSteps, [['start', false], ['land', false], ['start', true], ['land', true]]);
+    scene._wqaDashTrace = false;
+    delete c.WendyQuestAccessDashTraceStarted;
+    delete c.WendyQuestAccessDashTraceLanded;
     now = 5349;
     wall.expire(scene);
     assert(output.size > 0);

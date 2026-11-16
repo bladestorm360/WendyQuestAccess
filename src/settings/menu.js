@@ -754,6 +754,7 @@ function createSettingsMenu(root, host) {
     }
 
     function keydown(event) {
+        host.dashTraceKey?.(event, true);
         const physical = event.code || event.key;
         if (held.has(physical)) {
             event.preventDefault();
@@ -841,6 +842,7 @@ function createSettingsMenu(root, host) {
     root.addEventListener('keydown', keydown, true);
     // Native keyup may still need to retire a key pressed before the menu.
     root.addEventListener('keyup', event => {
+        host.dashTraceKey?.(event, false);
         if (!down.size && !held.size) return;
         const physical = event.code || event.key;
         down.delete(physical);
