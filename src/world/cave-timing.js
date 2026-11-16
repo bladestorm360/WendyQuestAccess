@@ -8,6 +8,7 @@ const { patrolPhaseMatches, MANUAL_HORIZON, REACTION_FRAMES } = require('./puzzl
 
 const CUE_LIFETIME = 8;
 const MANUAL_LEAD_IN = 120;
+const HEADINGS = { 2: 'south', 4: 'west', 6: 'east', 8: 'north' };
 
 function createCaveTiming(root, fieldReady, audio, preferences, report, diagnostics) {
     let owner = null;
@@ -81,9 +82,9 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
 
     function start(captured, x, y, opening, repeat) {
         const { scene } = captured;
-        if (!ready(scene) || repeat && (!CARDINAL[repeat.direction] || typeof repeat.refresh !== 'function')) return false;
+        if (!ready(scene) || repeat && !CARDINAL[repeat.direction]) return false;
         const admitted = admit(captured, opening);
-        if (!admitted && !repeat) return false;
+        if (!admitted && !repeat?.refresh) return false;
         stop();
         owner = { ...captured, ...admitted, x, y, repeat, queued: false };
         watch(scene);
@@ -262,7 +263,12 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
 
     function advancing(state, now) {
         const { traversal } = state;
-        if (now > traversal.by) return stop(state.scene);
+        if (now > traversal.by) {
+            if (!state.repeat.stopAtPocket) return stop(state.scene);
+            diagnostics?.(state.scene, 'caveTimingLost', traversal.index, 'crossingDeadline');
+            return finish(state, 'Timing missed. Request directions to a safe pocket.');
+        }
+        if (state.repeat.stopAtPocket && now === traversal.by) return schedule(state, traversal.by + 1);
         if (!pulse(state, traversal.steps[traversal.index], Math.min(now + CUE_LIFETIME, traversal.by + 1)))
             return stop(state.scene);
         if (owner === state) schedule(state, Math.min(now + TIMING_CUE.interval, traversal.by + 1));
@@ -272,12 +278,21 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (owner !== state) return;
         const now = frame();
         if (!live(state)) return stop(state.scene);
-        if (state.pocketDue && now >= state.pocketDue) return finish(state, 'Safe to stop. Request directions again.');
+        if (state.pocketDue && now >= state.pocketDue) {
+            diagnostics?.(state.scene, 'cavePocketReached', 0, 'settled');
+            return finish(state, 'Safe pocket. Stop and request directions.');
+        }
         if (state.manual) return playManual(state, now);
         if (state.traversal) return advancing(state, now);
         if (!state.opening || !verifiedAt(state, now)) {
-            if (state.repeat) {
+            // A ping's certified reaction window can outlast the stamp
+            // used to play it. Do not erase that opening during refresh.
+            if (state.repeat?.stopAtPocket && state.opening &&
+                now >= state.due + state.samples && now <= state.startUntil)
+                return schedule(state, state.startUntil + 1);
+            if (state.repeat?.refresh) {
                 state.opening = null;
+                state.startUntil = -1;
                 state.waiting = state.repeat.refresh(state);
                 if (!state.waiting) schedule(state, now + TIMING_CUE.interval);
                 return;
@@ -308,13 +323,14 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (!state.traversal) {
             if (!state.repeat || !opening || !(now <= state.startUntil) ||
                 direction !== opening.direction || !Number.isInteger(opening.tiles) ||
-                opening.tiles < 2 || opening.tiles > 12) return stop(scene);
+                opening.tiles < (state.repeat.stopAtPocket ? 1 : 2) || opening.tiles > 12) return stop(scene);
             const steps = opening.headings ? opening.headings.map(heading => DIRECTIONS[heading]) :
                 Array(opening.tiles).fill(opening.direction);
             if (steps.length !== opening.tiles || steps[0] !== direction ||
                 steps.some(step => !CARDINAL[step])) return stop(scene);
             state.traversal = { steps, index: 0, by: state.startUntil };
             state.waiting = false;
+            if (state.repeat.stopAtPocket) diagnostics?.(scene, 'caveCrossing', 0, 'started');
         }
         const { traversal, player } = state;
         if (direction !== traversal.steps[traversal.index] || now > traversal.by) return stop(scene);
@@ -333,7 +349,9 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
             state.pocketDue = now + tileFrames - 1;
             return schedule(state, state.pocketDue);
         }
-        traversal.by = now + tileFrames + (opening.headings && turning ? TIMING_CUE.turnGrace : 0);
+        const grace = opening.escape ? turning ? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace :
+            opening.headings && turning ? TIMING_CUE.turnGrace : 0;
+        traversal.by = now + tileFrames + grace;
         if (turning) {
             audio.retire(scene, 'cave');
             schedule(state, now + tileFrames - 1);
@@ -342,6 +360,21 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
 
     return {
         warm, capture, start, startManual, refreshResult, stop, moved, input,
+        repeatDirections(scene) {
+            const state = owner;
+            if (state?.scene !== scene || !state.repeat?.stopAtPocket || !state.traversal || !live(state)) return false;
+            const { steps, index } = state.traversal;
+            const legs = [];
+            for (let at = index; at < steps.length; at++) {
+                const direction = steps[at];
+                const last = legs[legs.length - 1];
+                if (last?.direction === direction) last.tiles++;
+                else legs.push({ direction, tiles: 1 });
+            }
+            if (!legs.length) return true;
+            report('Keep moving. ' + legs.map(leg => leg.tiles + ' ' + HEADINGS[leg.direction]).join(', then ') + '.', true);
+            return true;
+        },
         automaticGate(captured, opening) {
             const state = captured && admit(captured, opening);
             if (!state) return null;

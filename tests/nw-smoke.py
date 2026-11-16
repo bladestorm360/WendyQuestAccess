@@ -2443,7 +2443,7 @@ parentPort.postMessage = packet => {
         fs.writeFileSync(receipt + phase, String(packet.status));
     }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 19 && active.lane === 9 &&
-        active.pitch === 0.75 && active.right < 0) {
+        active.pitch === 0.64 && active.right < 0) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.guard-footstep'), String(packet.status));
     }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 15 && active.right === 0 && active.forward === 1) {

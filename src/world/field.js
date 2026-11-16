@@ -484,8 +484,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const pace = opening?.pace ?? result.pace;
                 const target = result.guideEvent === undefined ? job.destination :
                     job.guideOptions?.find(item => item.target.id === result.guideEvent)?.target;
-                const repeat = opening?.escape ? undefined :
-                    { direction, tiles, pace, stopAtPocket: result.stopAtPocket, refresh: state => refreshCaveTiming(job, state, target, direction, tiles, headings, pace) };
+                const stopAtPocket = result.stopAtPocket === true;
+                const repeat = opening?.escape && !stopAtPocket ? undefined : { direction, tiles, pace, stopAtPocket,
+                    refresh: opening?.escape ? null :
+                        state => refreshCaveTiming(job, state, target, direction, tiles, headings, pace, stopAtPocket) };
                 if (job.timing && host.caveTiming.start(job.timing, job.x, job.y, opening, repeat))
                     return present(job, { kind: 'timedCue', direction, tiles, headings, pace,
                         terminal: opening?.terminal ?? result.terminal, escape: opening?.escape,
@@ -960,7 +962,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return timedRoute(job, snapshot, target);
     }
 
-    function refreshCaveTiming(command, state, target, direction, tiles, headings, pace) {
+    function refreshCaveTiming(command, state, target, direction, tiles, headings, pace, pocket) {
         const { scene } = command;
         if (active !== command || inFlight || !target || sequence >= 0x7ffffffe || !ready(scene)) return false;
         const motion = captureMotion(root, host.graphics);
@@ -969,7 +971,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (!snapshot) return false;
         const job = { scene, sequence: ++sequence, caveRefresh: { state, captured } };
         submit(job, snapshot, { ...destinationRequest(target), field: true, motion, patrolGuidance: true,
-            timingCue: true, timingDirection: direction, timingTiles: tiles, timingHeadings: headings, timingPace: pace });
+            timingCue: true, timingDirection: direction, timingTiles: tiles, timingHeadings: headings,
+            timingPace: pace, timingPocket: pocket });
         return inFlight === job;
     }
 
@@ -1229,6 +1232,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     }
     function command(action, text, controller = false, keepCaveTiming = false) {
         const scene = host.manager._scene;
+        if (action === 'directions' && host.caveTiming?.repeatDirections?.(scene)) return true;
         if ((action === 'beaconStop' || action === 'puzzleStop') && caveEvent) {
             clearCaveEvent();
             return true;
@@ -1415,8 +1419,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         command,
         report(text, keepCaveTiming = false) {
             const scene = host.manager._scene;
-            return autowalk.active(scene) ? command('navigationReport', { kind: 'fieldStatus', name: text }) :
-                command('status', text, false, keepCaveTiming);
+            return autowalk.active(scene) || keepCaveTiming ?
+                command('navigationReport', { kind: 'fieldStatus', name: text }, false, keepCaveTiming) :
+                command('status', text);
         },
         idleInput(scene) {
             scene._wqaNavigationWake = false;

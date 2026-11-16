@@ -121,6 +121,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
 
     await verifyLineLoot();
     await verifyManualLine();
+    verifyRefugeRecovery();
     verifyAutomaticChains();
 
     const distraction = setup(200, 23, 26, 15.25, 21.25);
@@ -158,6 +159,35 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
     }
     activate(chase.run, chase.guards, 2, nativeStep, true);
     console.log('Verified western refuges, patrol-line exit, distraction prerequisites and nine native chase handoffs.');
+
+    function verifyRefugeRecovery() {
+        for (const [x, y, phase] of [[14, 16, 0], [18, 16, 45], [22, 16, 30], [23, 16, 45]]) {
+            const { run, guards } = setup(199, 5, 17, 0, 12.25);
+            const { gameMap, player } = run;
+            const trigger = gameMap._events[24];
+            for (const command of trigger.list())
+                if (command.code === 205) gameMap._events[command.parameters[0]].forceMoveRoute(command.parameters[1]);
+            erase(trigger);
+            gameMap._events[22].setPosition(0, 0);
+            for (let frame = 0; frame < phase; frame++) gameMap.updateEvents();
+            player.setPosition(x, y);
+            gameMap._displayX = Math.max(0, Math.min(17, x - 9.5));
+            c.Graphics.frameCount = phase;
+            const motion = captureMotion(c, c.Graphics);
+            const plan = previewCrossing(run.geometry, liveState(), { ...motionRequest(run, guards), motion,
+                event: 25, field: true, patrolGuidance: true, timingCue: true, lineNavigation: 'manual' });
+            assert.equal(plan.status, 'timedCue');
+            assert(plan.stopAtPocket && plan.opening.escape);
+            assert.equal(plan.opening.from, 0);
+            const { direction, tiles, headings, pace } = plan.opening;
+            assert.match(formatSpeech({ kind: 'timedCue', direction, tiles, headings, pace, escape: true,
+                stopAtPocket: true }), /Leave the patrol lane on the ping/);
+            const frames = 1 + headings.length * (16 + 30);
+            assert.equal(verifyMotion(run, guards, frames, headings), frames);
+            assert.equal(player.y, 15);
+        }
+        console.log('Verified routes to safe pockets from all four positions in the latest patrol-lane log.');
+    }
 
     function verifyAutomaticChains() {
         const scene = c.SceneManager._scene;
@@ -399,7 +429,8 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                                     refresh = () => {
                                         const motion = captureMotion(c, c.Graphics);
                                         const revised = previewCrossing(run.geometry, liveState(), { ...request, motion,
-                                            timingDirection: direction, timingTiles: tiles, timingHeadings: headings, timingPace: pace });
+                                            timingDirection: direction, timingTiles: tiles, timingHeadings: headings,
+                                            timingPace: pace, timingPocket: true });
                                         timing.refreshResult(state, timing.capture(scene, motion, { id: target }), revised.opening);
                                     };
                                     return true;
@@ -410,26 +441,32 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             let respondAt = Infinity;
                             cueListener = receipt => {
                                 assert.notEqual(receipt.cue, CUE.wallBump, 'no exposed stop cue in the continuous crossing');
-                                if (!at && respondAt === Infinity) respondAt = receipt.frame + 1;
+                                if (!at && respondAt === Infinity) respondAt = receipt.frame + (phase === 0 ? 25 : 1);
                             };
                             while (at < expected.length && c.Graphics.frameCount - begin < 1600) {
                                 if (c.Graphics.frameCount + 1 >= respondAt && !player.isMoving()) c.Input.dir4 = expected[at];
                                 const before = [player.x, player.y];
                                 tick();
-                                if (player.x !== before[0] || player.y !== before[1]) at++;
+                                if (player.x !== before[0] || player.y !== before[1]) {
+                                    at++;
+                                    if (at === 2) {
+                                        assert(timing.repeatDirections(scene));
+                                        assert.match(reports.at(-1), /^Keep moving/);
+                                    }
+                                }
                             }
                             assert.equal(at, expected.length, 'all continuous steps from ' + origin);
                             const pocket = [player.x, player.y];
                             for (let i = 0; i < 82; i++) tick();
                             assert.deepEqual([player.x, player.y], pocket, 'held direction cannot leave the safe pocket');
-                            assert.equal(reports.at(-1), 'Safe to stop. Request directions again.');
+                            assert.equal(reports.at(-1), 'Safe pocket. Stop and request directions.');
                             cueListener = null;
                             c.Input.dir4 = 0;
                             tick();
                             continue;
                         } else {
                             assert.equal(plan.status, 'patrolLineManual');
-                            assert.match(formatSpeech({ ...plan, kind: plan.status }), /The guide holds movement at the planned pauses/);
+                            assert.match(formatSpeech({ ...plan, kind: plan.status }), /Wait for a ping before each leg/);
                             const captured = timing.capture(scene, request.motion, { id: target });
                             const track = capturePatrolLine(c, request.motion, target);
                             assert(timing.startManual(captured, track, player.x, player.y, plan, 'Reached the planned stop.'));

@@ -609,3 +609,14 @@ November 16, 2026. Installed and independently verified the Steam build. Two nat
 - One verified rollback remains at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-pockets/rollback-latest` with plan SHA-256 `2f6ce235116bd83247bcbdaf4dfc45abb5e671f5a919e39bb1cde8f60210c4cb`.
 
 Cleanup reclaimed 27,046,173 bytes of generated work and a 10,915,818-byte superseded rollback. [Offline verification and gameplay check](feature-checkpoint.md#secret-cave-safe-pockets-and-automatic-crossings)
+
+### Secret Cave wait instructions and recovery routes
+
+November 16, 2026. Installed and independently verified the update. Five mod payload files changed. All 16 native scripts and 241 geometry entries matched the prior release. Four save and configuration hashes matched before and after installation. The world suite, matching NW.js smoke, native audio fixture, installer rehearsal and signed Microsoft Defender scan passed. Defender engine 1.1.26100.4 and signatures 1.463.328.0 reported no threats.
+
+- Installed plan SHA-256 `785ca48a44dab0794bb72493873496605da133dc7599c8035973c07f067ce868`
+- Plugin SHA-256 `fd5ccd4b0aa7cbeee65f8b2d63e2f85af9cf1e200a8d6bf9095370cea303092a`
+- Audio addon SHA-256 `34bf3bc7f7663eea91cec480d57b8a6553445de1beefc068ba7175fc6abaadbe`
+- One verified rollback remains at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-waits/rollback-latest` with plan SHA-256 `e99e96652c2f1d84ec572610f4c9b285b274f73e75a77c35789413286a674d40`.
+
+Cleanup removed 26,646,916 bytes of disposable build, staging and test geometry and the 10,929,326-byte superseded rollback. Automatic review declined removal of the small release and recovery scripts and plan receipt, so those records remain. [Crossing evidence](feature-checkpoint.md#secret-cave-announced-waits-and-patrol-lane-recovery)

@@ -166,8 +166,11 @@ function formatSpeech(message) {
                     else legs.push({ direction, tiles: 1 });
                 }
                 const action = message.pace === 'walk' ? 'walk' : message.pace === 'dash' ? 'dash' : 'go';
-                text = (message.waiting ? 'Wait on this tile. ' : '') + 'On the ping, ' + action + ' ' +
-                    (legs.length === 1 ? `${legs[0].tiles} ${legs[0].tiles === 1 ? 'tile' : 'tiles'} ${legs[0].direction}` :
+                const lead = message.stopAtPocket ? message.escape ? 'Leave the patrol lane on the ping. Hold ' :
+                    'Wait for the first ping. Then hold ' : (message.waiting ? 'Wait on this tile. ' : '') + 'On the ping, ' + action + ' ';
+                text = lead + (message.stopAtPocket ?
+                    legs.map(leg => leg.direction + ' for ' + leg.tiles + (leg.tiles === 1 ? ' tile' : ' tiles')).join(', then ') :
+                    legs.length === 1 ? `${legs[0].tiles} ${legs[0].tiles === 1 ? 'tile' : 'tiles'} ${legs[0].direction}` :
                         legs.map(leg => leg.tiles + ' ' + leg.direction).join(', then ')) + '.';
             } else {
                 const steps = Number.isInteger(message.tiles) && message.tiles >= 2 && message.tiles <= 3 ?
@@ -176,7 +179,7 @@ function formatSpeech(message) {
                     message.alternate ? 'Alternate opening. ' : ''}On the ping, go ${steps} ${heading}.`;
             }
             text += message.terminal ? ' The last step triggers the event.' :
-                message.stopAtPocket ? ' The guide stops you in the safe pocket. Request directions there.' :
+                message.stopAtPocket ? ' Switch directions when the ping moves. Keep moving until you hear safe pocket.' :
                 ' Stop there and request directions again.';
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;
@@ -187,7 +190,7 @@ function formatSpeech(message) {
                 legs.some(({ direction, tiles }) => !HEADINGS[direction] || !Number.isInteger(tiles) ||
                     tiles < 1 || tiles > 12)) return '';
             const directions = legs.map(({ direction, tiles }) => tiles + ' ' + HEADINGS[direction]);
-            text = 'Walk on each directional ping. The guide holds movement at the planned pauses. ' +
+            text = 'Wait for a ping before each leg. Hold that direction until Wendy stops. ' +
                 directions.join(', then ') + '.';
             break;
         }

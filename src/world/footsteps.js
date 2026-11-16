@@ -57,7 +57,7 @@ function createFootsteps(root, fieldReady, audio, preferences) {
             for (const [index, { x, y, distance }] of contacts.entries()) {
                 const gain = caveVolume / 100 * (0.8 - 0.06 * distance);
                 audio.play(scene, hrtf, audio.cues.footstep, gain, distance ? [x, -0.25, y] : [0, -0.25, 1],
-                    () => root.Graphics.frameCount < expires && readyAtRender(), null, 'guardStep', 0.75, 0,
+                    () => root.Graphics.frameCount < expires && readyAtRender(), null, 'guardStep', 0.64, 0,
                     audio.soundscapeVoices - 2 + index);
             }
         });

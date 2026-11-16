@@ -231,6 +231,30 @@ function crossingToSafeTile(world, origin, distances, unsafe, stops, distance, a
     return choice;
 }
 
+function refugeCandidates(world, origin, unsafe, stops, cancelled) {
+    // An interrupted crossing may need to turn into a pocket that is
+    // away from the original destination. Follow only passable tiles.
+    const queue = [{ cell: origin, headings: [] }];
+    const seen = new Uint8Array(world.cells.length);
+    const choices = [];
+    seen[origin] = 1;
+    for (let index = 0; index < queue.length && choices.length < 6; index++) {
+        if (cancelled()) return [];
+        const { cell, headings } = queue[index];
+        if (headings.length >= 5) break;
+        for (let heading = 0; heading < DIRECTIONS.length; heading++) {
+            const next = step(world, cell, heading);
+            if (next < 0 || seen[next] || stops[next]) continue;
+            seen[next] = 1;
+            const path = [...headings, heading];
+            if (unsafe[next]) queue.push({ cell: next, headings: path });
+            else choices.push({ heading: path[0], headings: path, count: path.length, cell: next,
+                pace: 'walk', escape: true });
+        }
+    }
+    return choices;
+}
+
 function scrollRange(low, high, from, to, view, tiles, increment) {
     // The native scroll moves by the current interpolation increment
     // once the player passes the center. Account for the first increment
@@ -292,7 +316,12 @@ function studyCrossing(world, origin, motion, candidate, cancelled) {
         y = nextY;
         const from = earliest;
         earliest += fastest;
-        latest += walking + (i < headings.length - 1 && headings[i] !== headings[i + 1] ? TIMING_CUE.turnGrace : 0);
+        latest += walking;
+        if (i + 1 < headings.length) {
+            const turning = headings[i] !== headings[i + 1];
+            if (candidate.escape) latest += turning ? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace;
+            else if (turning) latest += TIMING_CUE.turnGrace;
+        }
         ranges.push({ cell, from, until: latest, camera });
     }
     const independent = new Set();
@@ -481,7 +510,8 @@ function openingFor(world, motion, player, choices, cancelled) {
                 stamps.set(history.subarray(begin, begin + stride), frame * stride);
             }
             return { direction: DIRECTIONS[candidate.heading], tiles: candidate.count, headings: candidate.headings, escape: candidate.escape, terminal: candidate.terminal,
-                alternate: candidate.heading !== choices[0].heading, pace: candidate.pace, from, through, stamps };
+                alternate: candidate.heading !== choices[0].heading, pace: candidate.pace,
+                from, through, stamps };
         }
         if (advancePatrols(waiting) !== 'settled') break;
     }
@@ -507,11 +537,19 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     let entire;
     const stops = crossingStops(world.player);
     const { patrolGuidance, timingDirection, timingPace: pace } = request;
+    const pocket = request.timingPocket === true;
     if (pace !== undefined && pace !== 'walk' && pace !== 'dash') return { status: 'unavailable' };
     const fixedHeading = DIRECTIONS.indexOf(timingDirection);
     const unsafe = patrolGuidance && (fixedHeading < 0 || request.timingHeadings) && !motion.barrier &&
         patrolCoverage(world.patrol, motion.patrols, cancelled);
     if (cancelled()) return { status: 'cancelled' };
+    if (request.lineNavigation && unsafe?.[origin] && fixedHeading < 0 && request.timingCue) {
+        const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
+        const choices = refugeCandidates(world.player, origin, unsafe, stops, cancelled)
+            .filter(candidate => studyCrossing(world, origin, { ...motion, dash: false }, candidate, cancelled));
+        const opening = choices.length && openingFor(world, { ...motion, exposed: true }, player, choices, cancelled);
+        if (opening) return { status: 'timedCue', opening, stopAtPocket: true };
+    }
     if (request.lineNavigation && !motion.barrier && fixedHeading < 0) {
         const course = lineCrossing(world, request, origin, unsafe, stops, patrolCoverage, cancelled);
         if (course?.status === 'patrolLineCrossing') {
@@ -561,7 +599,7 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
                 if (cell < 0 || (n < count - 1 && stops[cell])) return { status: 'unavailable' };
             }
             candidates = [{ heading: fixedHeading, count, cell, headings, terminal: stops[cell] === 1 }];
-            if (headings && (!unsafe || unsafe[cell] && !stops[cell] || !studyCrossing(world, origin, motion, candidates[0], cancelled)))
+            if (headings && (!unsafe || unsafe[cell] && !stops[cell] || !studyCrossing(world, origin, pocket ? { ...motion, dash: false } : motion, candidates[0], cancelled)))
                 return { status: 'unavailable' };
         } else if (unsafe) {
             const linked = safeCrossingCandidates(world.player, goals, origin, unsafe, stops, area, cancelled);

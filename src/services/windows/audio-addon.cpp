@@ -164,7 +164,8 @@ Value play(Env env, Info info) {
         (lane == footstep && cue != static_cast<int>(Cue::footstep) && cue != static_cast<int>(Cue::wall_bump)) ||
         (lane >= soundscape_begin && cue != static_cast<int>(Cue::footstep) &&
             (cue < static_cast<int>(Cue::entity_person) || cue > static_cast<int>(Cue::entity_checkpoint))) ||
-        !std::isfinite(pitch) || pitch < 0.75 || pitch > 1.25 ||
+        !std::isfinite(pitch) || pitch < (lane >= soundscape_begin && cue == static_cast<int>(Cue::footstep) ? 0.64 : 0.75) ||
+        pitch > 1.25 ||
         !std::isfinite(gain) || gain < 0.0 || gain > 1.0) return number(*owner, -1);
     try { return number(*owner, owner->play(epoch, hrtf == 1, cue, p, gain, pitch, lane)); }
     catch (...) { return number(*owner, -1); }
