@@ -197,3 +197,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Enemy food and gear audit](docs/battle.md#visual-descriptions-while-targeting) records the 32 native artwork checks and the on-demand readout.
 
 [Dungeon encounters and Secret Island](docs/navigation-audit.md#dungeon-encounters-and-secret-islands-overworld-approach) records the route change, the hidden-at-the-dock regression and the Float Fort handoff. [Battle animation and Special](docs/battle.md#wheres-the-beef-battle-animation) records visible captions and lock levels.
+
+The final build is installed and independently verified. [Current Steam deployment and recovery](docs/deployment.md#npc-passages-and-food-artwork)
