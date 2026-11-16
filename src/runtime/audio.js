@@ -8,10 +8,11 @@ const CUE = Object.freeze({ prepare: -1, preview: 0, wallBump: 1, wallBrush: 2,
     wallEast: 20, wallSouth: 21, wallWest: 22 });
 // Match the native mixer's fixed wall lanes and shared deadline word.
 const WALL_LANES = { [CUE.wallNorth]: 1, [CUE.wallEast]: 3, [CUE.wallSouth]: 4, [CUE.wallWest]: 5 };
-const FOOTSTEP = 2;
+const IMPACT = 2;
 const SOUNDSCAPE_START = 6;
 const SOUNDSCAPE_VOICES = 5;
-const WALL_DEADLINE = SOUNDSCAPE_START + SOUNDSCAPE_VOICES;
+const PLAYER_STEP_START = SOUNDSCAPE_START + SOUNDSCAPE_VOICES;
+const WALL_DEADLINE = PLAYER_STEP_START + 2;
 
 function createAudio(host) {
     let generation = null;
@@ -25,6 +26,7 @@ function createAudio(host) {
     let stereoReady = false;
     let hrtfResolved = false;
     let nextEpoch = 0;
+    let stepVoice = 0;
 
     function retire(scene, source, cue, voice) {
         for (let lane = 0; lane < active.length; lane++) {
@@ -67,7 +69,12 @@ function createAudio(host) {
 
     function drain() {
         scheduled = false;
-        const request = pending.find(Boolean);
+        const left = pending[PLAYER_STEP_START];
+        const right = pending[PLAYER_STEP_START + 1];
+        const step = left && (!right || left.epoch < right.epoch) ? left : right;
+        // Keep the primary timing cue first. An admitted step need not
+        // wait behind the batch of walls and ambient sounds in other lanes.
+        const request = pending[0] || step || pending.find(Boolean);
         if (!request || inFlight || failed) return;
         pending[request.lane] = null;
         if (!request.ready()) {
@@ -113,10 +120,16 @@ function createAudio(host) {
             complete?.(-1);
             return false;
         }
-        const movement = source === 'footstep' && cue === CUE.footstep ||
-            (source === 'bump' || source === 'caveStop') && cue === CUE.wallBump;
+        const playerStep = source === 'footstep' && cue === CUE.footstep;
+        const impact = (source === 'bump' || source === 'caveStop') && cue === CUE.wallBump;
         const ambient = (source === 'soundscape' || source === 'guardStep') && Number.isInteger(voice) && voice >= 0 && voice < SOUNDSCAPE_VOICES;
-        const lane = wallUntil ? WALL_LANES[cue] : movement ? FOOTSTEP : ambient ? SOUNDSCAPE_START + voice : 0;
+        let lane = 0;
+        if (wallUntil) lane = WALL_LANES[cue];
+        else if (playerStep) {
+            lane = PLAYER_STEP_START + stepVoice;
+            stepVoice ^= 1;
+        } else if (impact) lane = IMPACT;
+        else if (ambient) lane = SOUNDSCAPE_START + voice;
         if (lane === undefined) return false;
         if (lane === 0 && source !== 'soundscape' && cue !== CUE.prepare) retire(scene, 'soundscape');
         if (!generation) generation = new Int32Array(new SharedArrayBuffer((WALL_DEADLINE + 1) * Int32Array.BYTES_PER_ELEMENT));
@@ -134,7 +147,7 @@ function createAudio(host) {
         cues: CUE, play, retire, soundscapeVoices: SOUNDSCAPE_VOICES,
         extendWall(scene, until) {
             if (!generation || ((Atomics.load(generation, WALL_DEADLINE) - Date.now()) | 0) <= 0 ||
-                !active.some((request, lane) => lane > 0 && lane < SOUNDSCAPE_START && lane !== FOOTSTEP && request?.scene === scene))
+                !active.some((request, lane) => lane > 0 && lane < SOUNDSCAPE_START && lane !== IMPACT && request?.scene === scene))
                 return false;
             Atomics.store(generation, WALL_DEADLINE, until);
             return true;

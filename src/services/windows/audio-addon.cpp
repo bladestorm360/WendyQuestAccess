@@ -161,10 +161,12 @@ Value play(Env env, Info info) {
         api.napi_get_value_double(env, args[7], &pitch) ||
         api.napi_get_value_int32(env, args[8], &lane) || lane < 0 || lane >= output_lanes ||
         (is_wall_lane(lane) && (cue != static_cast<int>(wall_lane_cue(lane)) || pitch != 1.0)) ||
-        (lane == footstep && cue != static_cast<int>(Cue::footstep) && cue != static_cast<int>(Cue::wall_bump)) ||
-        (lane >= soundscape_begin && cue != static_cast<int>(Cue::footstep) &&
+        (lane == impact && cue != static_cast<int>(Cue::wall_bump)) ||
+        (lane >= player_step_begin && cue != static_cast<int>(Cue::footstep)) ||
+        (lane >= soundscape_begin && lane < player_step_begin && cue != static_cast<int>(Cue::footstep) &&
             (cue < static_cast<int>(Cue::entity_person) || cue > static_cast<int>(Cue::entity_checkpoint))) ||
-        !std::isfinite(pitch) || pitch < (lane >= soundscape_begin && cue == static_cast<int>(Cue::footstep) ? 0.64 : 0.75) ||
+        !std::isfinite(pitch) ||
+        pitch < (lane >= soundscape_begin && lane < player_step_begin && cue == static_cast<int>(Cue::footstep) ? 0.64 : 0.75) ||
         pitch > 1.25 ||
         !std::isfinite(gain) || gain < 0.0 || gain > 1.0) return number(*owner, -1);
     try { return number(*owner, owner->play(epoch, hrtf == 1, cue, p, gain, pitch, lane)); }

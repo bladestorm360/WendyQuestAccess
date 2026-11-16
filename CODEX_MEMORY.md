@@ -221,3 +221,5 @@ The [Secret Cave safe pockets and Autowalk checkpoint](docs/feature-checkpoint.m
 The [Secret Cave announced waits checkpoint](docs/feature-checkpoint.md#secret-cave-announced-waits-and-patrol-lane-recovery) records the opening lifetime fix, in-crossing reread, recovered logged tiles and deeper guard audio.
 
 The [silent cave stop and dash input checkpoint](docs/feature-checkpoint.md#silent-cave-stops-and-native-dash-input) records the silent endpoint, the existing timing fix, and native Shift handling for the patrol maps.
+
+The [footstep cadence checkpoint](docs/feature-checkpoint.md#wendys-footstep-cadence) records the native walking and dash replay, independent step audio and audible gameplay check. [Current Steam deployment and recovery](docs/deployment.md#wendys-footstep-cadence) records the exact installed payload and single rollback.

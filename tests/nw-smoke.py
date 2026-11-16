@@ -72,6 +72,8 @@ def fixture(runtime, installed):
                 'function Game_Map() {}', 'function Game_Interpreter() {}']
     for method in ('Game_CharacterBase.prototype.moveStraight', 'Game_CharacterBase.prototype.setDirection', 'Game_CharacterBase.prototype.isDirectionFixed',
                    'Game_CharacterBase.prototype.resetStopCount', 'Game_CharacterBase.prototype.updateMove',
+                   'Game_CharacterBase.prototype.realMoveSpeed', 'Game_CharacterBase.prototype.distancePerFrame',
+                   'Game_CharacterBase.prototype.isMoving', 'Game_Player.prototype.isDashing',
                    'Game_Player.prototype.moveByInput', 'Game_Player.prototype.reserveTransfer',
                    'Game_Map.prototype.setupStartingMapEvent', 'Game_Interpreter.prototype.command201',
                    'Game_Interpreter.prototype.command205'):
@@ -156,6 +158,7 @@ let audioStarted = 0;
 let wallPreviewStarted = 0;
 let beaconStarted = 0;
 let caveCueStarted = 0;
+let footstepContact = 0;
 let battleCueStarted = 0;
 let soundscapeStarted = 0;
 let crossMapStarted = 0;
@@ -1054,6 +1057,26 @@ const interval = setInterval(() => {
             return;
         }
         if (!fs.existsSync(receipt + '.guard-footstep')) return;
+        if (footstepContact < 2) {
+            if (footstepContact === 1 && !fs.existsSync(receipt + '.walk-footstep')) return;
+            const player = Object.assign($gamePlayer, {
+                _moveSpeed: 4, _dashing: footstepContact === 1, refreshBushDepth() {}
+            });
+            Object.setPrototypeOf(player, Game_Player.prototype);
+            player.isMoving = Game_CharacterBase.prototype.isMoving;
+            player._realX = player._x;
+            player._realY = player._y;
+            player._x++;
+            const updates = player._dashing ? 8 : 16;
+            for (let i = 0; i < updates; i++) {
+                Graphics.frameCount++;
+                player.updateMove();
+                if (player.isMoving() !== (i < updates - 1)) throw Error('Native player contact settled at the wrong update');
+            }
+            footstepContact++;
+            return;
+        }
+        if (!fs.existsSync(receipt + '.dash-footstep')) return;
         dialogueShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         if (timingScene._wqaCaveTimingActive) throw Error('Native scene entry retained the cave timing cue');
@@ -2446,6 +2469,10 @@ parentPort.postMessage = packet => {
         active.pitch === 0.64 && active.right < 0) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.guard-footstep'), String(packet.status));
     }
+    if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 19 && (active.lane === 11 || active.lane === 12)) {
+        const gait = active.pitch === 1.2 ? 'dash' : active.pitch === 1 ? 'walk' : null;
+        if (gait) fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.' + gait + '-footstep'), String(packet.status));
+    }
     if (packet.status > 0 && packet.epoch === active.epoch && active.cue === 15 && active.right === 0 && active.forward === 1) {
         fs.writeFileSync(path.join(__dirname, '..', 'receipt.json.battle-cue'),
             JSON.stringify({ status: packet.status, pitch: active.pitch, at: Date.now() }));
@@ -2585,6 +2612,9 @@ def main():
         if any(receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != '1'
                for name in ('cave-cue', 'cave-follow', 'guard-footstep')):
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL before and after the native step')
+        if any(receipt.with_suffix('.json.' + gait + '-footstep').read_text(encoding='utf8') != '1'
+               for gait in ('walk', 'dash')):
+            raise RuntimeError('Native walk and dash contacts did not publish their own stereo PCM')
         if receipt.with_suffix('.json.soundscape').read_text(encoding='utf8') != '1':
             raise RuntimeError('NW ambient object cue did not publish stereo PCM to SDL')
         if not receipt.with_suffix('.json.muted-preview').is_file():

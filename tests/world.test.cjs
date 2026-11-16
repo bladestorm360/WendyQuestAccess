@@ -232,9 +232,9 @@ function verifyWallFeedback() {
             for (const record of output.values()) record.until = until;
             return output.size > 0;
         },
-        play(_scene, _hrtf, cue, gain, bearing, ready, _complete, source, _pitch, until) {
+        play(_scene, _hrtf, cue, gain, bearing, ready, _complete, source, pitch, until) {
             assert(ready());
-            const record = { cue, gain, bearing, source, until };
+            const record = { cue, gain, bearing, source, pitch, until, ready };
             calls.push(record);
             if (source === 'wall') output.set(cue, record);
             return true;
@@ -247,11 +247,13 @@ function verifyWallFeedback() {
     };
     const fieldReady = owner => owner === scene && scene._wqaFieldReady && !scene._wqaSettingsActive;
     const wall = createWallAudio(c, fieldReady, audio, () => options, () => now);
-    const footsteps = createFootsteps(c, fieldReady, audio, () => options);
+    const footsteps = createFootsteps(c, fieldReady, audio, () => options, () => now);
     c.WendyQuestAccessFieldMove = (scene, motion, success) => wall.move(scene, motion, success);
     c.WendyQuestAccessFootstep = (owner, player) => footsteps.landed(owner, player);
     c.WendyQuestAccessFieldEvent = owner => { wall.interrupt(owner); footsteps.leave(owner); };
-    c.Input = { dir4: 0 };
+    let shift = false;
+    c.Input = { dir4: 0, isPressed: key => key === 'shift' && shift };
+    c.ConfigManager = { alwaysDash: false };
     c.$gameTemp = { clearDestination() {}, isDestinationValid: () => false };
     c.$gameMessage = { isBusy: () => false };
     c.Graphics.frameCount = 100;
@@ -261,15 +263,18 @@ function verifyWallFeedback() {
     const { gameMap, player } = load(19);
     const place = (x, y, dir = 2) => Object.assign(player, { _x: x, _y: y, _realX: x, _realY: y,
         _direction: dir, _moveSpeed: 4, _followers: { areGathering: () => false, updateMove() {} } });
-    const press = direction => {
+    const press = (direction, duringTile) => {
         c.Graphics.frameCount++;
         c.Input.dir4 = direction;
         const before = calls.filter(call => call.source === 'footstep').length;
+        player.updateDashing();
         player.moveByInput();
         const stepped = player.isMoving();
         assert.equal(calls.filter(call => call.source === 'footstep').length, before);
         let updates = 0;
         while (updates < 64 && player.isMoving()) {
+            if (!updates) duringTile?.();
+            player.updateDashing();
             player.updateMove();
             updates++;
             if (player.isMoving()) assert.equal(calls.filter(call => call.source === 'footstep').length, before);
@@ -293,17 +298,19 @@ function verifyWallFeedback() {
     }
     assert(edge);
     place(...edge, 6);
-    assert.equal(press(6), 16);
+    assert.equal(press(6, () => { shift = true; }), 16);
     const north = output.get(CUE.wallNorth);
     assert.deepEqual(north.bearing, [0, 0, 1]);
     assert.equal(north.until, 4500);
     now = 1850;
-    player._dashing = true;
-    assert.equal(press(6), 8);
-    player._dashing = false;
+    assert.equal(press(6, () => { shift = false; }), 8);
     assert.equal(output.get(CUE.wallNorth), north, 'same wall extends without restarting');
     assert.equal(north.until, 5350);
-    assert.deepEqual(calls.filter(call => call.source === 'footstep').map(call => call.bearing[0]), [-0.25, 0.25]);
+    const contacts = calls.filter(call => call.source === 'footstep');
+    assert.deepEqual(contacts.map(call => [call.bearing[0], call.pitch]), [[-0.25, 1], [0.25, 1.2]]);
+    assert(contacts[1].ready(), 'a completed pip remains admitted on the following movement update');
+    now = 1950;
+    assert(!contacts[1].ready(), 'do not play a step late after an audio stall');
     now = 3500;
     press(8);
     assert.equal(north.until, 5350, 'blocked movement does not extend wall playback');
@@ -397,7 +404,8 @@ function verifyWallFeedback() {
     footsteps.leave(scene);
     scene._wqaFieldReady = false;
     c.Graphics._wqaWallEnabled = false;
-    console.log('Verified native walking, persistent directional wall tone, exact inactivity expiry, separate footsteps and confirmed wall bumps.');
+    c.Graphics._wqaFootstepsEnabled = false;
+    console.log('Verified native walking, dash footstep cadence and mid-tile Shift changes, wall fade and confirmed wall bumps.');
 }
 
 async function verifyEnemyBlockedBeacon() {

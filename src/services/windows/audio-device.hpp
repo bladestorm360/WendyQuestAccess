@@ -10,8 +10,8 @@
 #include <string>
 
 namespace wqa::audio {
-enum OutputLane { ordinary, wall_north, footstep, wall_east, wall_south, wall_west,
-    soundscape_begin, output_lanes = soundscape_begin + 5 };
+enum OutputLane { ordinary, wall_north, impact, wall_east, wall_south, wall_west,
+    soundscape_begin, player_step_begin = soundscape_begin + 5, output_lanes = player_step_begin + 2 };
 
 constexpr bool is_wall_lane(int lane) {
     return lane == wall_north || (lane >= wall_east && lane <= wall_west);

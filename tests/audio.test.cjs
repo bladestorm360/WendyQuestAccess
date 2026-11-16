@@ -18,7 +18,7 @@ const audio = createAudio({
     schedule: task => scheduled.push(task),
     createAudioWorker(admission) {
         word = new Int32Array(admission);
-        assert.equal(word.length, 12);
+        assert.equal(word.length, 14);
         starts++;
         return worker;
     }
@@ -138,16 +138,21 @@ for (const [cue, position, available] of [
     [CUE.wallNorth, [0, 0, 1], () => ready], [CUE.wallEast, [1, 0, 0], () => eastReady],
     [CUE.wallSouth, [0, 0, -1], () => ready], [CUE.wallWest, [-1, 0, 0], () => ready]
 ]) assert(audio.play(scene, true, cue, 0.5, position, available, null, 'wall', 1, until));
-assert(audio.play(scene, true, CUE.footstep, 0.5, [0, -1, 0], () => ready, null, 'footstep'));
+// The wall batch and an impact can already be queued when two real
+// contacts arrive. Both contacts keep admission and are drained in order.
+assert(audio.play(scene, true, CUE.footstep, 0.5, [-0.25, -1, 0.15], () => ready, null, 'footstep'));
+assert(audio.play(scene, true, CUE.wallBump, 0.5, [0, 0, 1], () => ready, null, 'bump'));
+assert(audio.play(scene, true, CUE.footstep, 0.5, [0.25, -1, 0.15], () => ready, null, 'footstep', 1.2));
 const epochs = [...word.slice(1, 6)];
 assert.equal(new Set(epochs).size, 5);
 assert(epochs.every(epoch => epoch > 0));
-for (const [lane, cue] of [[1, CUE.wallNorth], [2, CUE.footstep], [3, CUE.wallEast],
-    [4, CUE.wallSouth], [5, CUE.wallWest]]) {
+for (const [lane, cue, pitch = 1] of [[11, CUE.footstep], [12, CUE.footstep, 1.2], [1, CUE.wallNorth],
+    [2, CUE.wallBump], [3, CUE.wallEast], [4, CUE.wallSouth], [5, CUE.wallWest]]) {
     run();
     const message = messages.at(-1);
     assert.equal(message.cue, cue);
     assert.equal(message.lane, lane);
+    assert.equal(message.pitch, pitch);
     if (lane === 3) eastReady = false;
     worker.emit('message', { epoch: message.epoch, status: 2 });
 }
@@ -157,12 +162,15 @@ assert(audio.play(scene, true, CUE.beaconPulse, 0.5, [0, 0, 1], () => ready, nul
 run();
 assert.equal(messages.at(-1).lane, 0);
 assert(audio.extendWall(scene, until + 100));
-assert.equal(Atomics.load(word, 11), (until + 100) | 0);
+assert.equal(Atomics.load(word, 13), (until + 100) | 0);
 audio.retire(scene, 'wall', CUE.wallNorth);
 assert.deepEqual([...word.slice(1, 6)], [0, epochs[1], 0, epochs[3], epochs[4]]);
 audio.retire(scene, 'wall');
 assert.deepEqual([...word.slice(1, 6)], [0, epochs[1], 0, 0, 0]);
 worker.emit('message', { epoch: messages.at(-1).epoch, status: 2 });
+audio.retire(scene, 'footstep');
+assert.deepEqual([...word.slice(11, 13)], [0, 0]);
+assert.equal(Atomics.load(word, 2), epochs[1]);
 audio.retire(scene);
 assert.deepEqual([...word.slice(0, 6)], [0, 0, 0, 0, 0, 0]);
 

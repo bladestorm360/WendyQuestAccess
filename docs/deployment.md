@@ -630,3 +630,14 @@ November 16, 2026. Installed and independently verified the silent-stop follow-u
 - One verified rollback remains at `C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-silent-stop/rollback-latest` with plan SHA-256 `785ca48a44dab0794bb72493873496605da133dc7599c8035973c07f067ce868`.
 
 Cleanup removed 24,459,580 bytes of disposable outputs and the 10,958,509-byte superseded rollback. [Silent stop and dash verification](feature-checkpoint.md#silent-cave-stops-and-native-dash-input)
+
+### Wendy’s footstep cadence
+
+November 16, 2026. The local Steam update rebuilt the bundled plugin and Windows audio addon. The installed-method world suite, matching NW.js smoke, native audio device fixture and exact installer rehearsal passed. The signed Microsoft Defender platform 4.18.26100.4 with engine 1.1.26100.4 and definitions 1.463.328.0 found no threats in the exact candidate. The rebuilt addon is unsigned.
+
+- Installed plan SHA-256 `0545e57baa2c914e36988abc040049ff7e534937308187794f18e3f0fd24f47e`
+- Plugin SHA-256 `cf82274fd93e5e7d5a9463f9372b9e3d017a395a2355f0d4945f94671f97b2c8`
+- Audio addon SHA-256 `5574acb3d0fa29c6514adc58cdfc302491d6221d4aba6fd4148215c0d3c01d19`
+- The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-footstep-cadence/rollback-latest with plan SHA-256 104260e30cbb1ada9776bb51484d1c1a627e350914dda626e02037e91b57ce99.
+
+Installer readback verified 16 native scripts, 45 payload files and 241 geometry entries. The native script and geometry hashes match the prior release. Four save and settings hashes matched across installation. Cleanup removed 25,883,939 bytes of generated output and the 10,963,685-byte superseded rollback. [Validation and gameplay check](feature-checkpoint.md#wendys-footstep-cadence)
