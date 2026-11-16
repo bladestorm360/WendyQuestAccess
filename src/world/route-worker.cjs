@@ -174,8 +174,8 @@ parentPort.on('message', message => {
                     request.terrainTransfer, cancelled));
                 result = routeThroughTerrain(base, live, request, manifest.maps[map].controls, cancelled, access) || result;
             }
-            const follows = (result.status === 'ready' || result.status === 'enemyBlocked' || result.status === 'iceRoute') &&
-                !result.reenter && (request.beacon === true || request.autowalk === true);
+            const follows = (result.status === 'ready' || result.status === 'enemyBlocked' || result.status === 'iceRoute' ||
+                result.status === 'npcBlocked') && !result.reenter && (request.beacon === true || request.autowalk === true);
             const prefix = ['interrupted', 'saltRoute', 'controlRoute', 'terrainExit'].includes(result.status);
             if (follows || prefix && (request.beacon === true || result.status === 'interrupted' && request.autowalk === true)) {
                 // Two direction bits and the bounded distance to the next turn.
@@ -201,7 +201,8 @@ parentPort.on('message', message => {
                     result.autowalkMore = result.legs.length - (last.tiles === 1 ? 1 : 0) > request.limit;
                 }
             }
-            if ((result.status === 'ready' || result.status === 'interrupted' || result.status === 'enemyBlocked' || result.status === 'saltRoute' || result.status === 'controlRoute' || result.status === 'terrainExit' || result.status === 'iceRoute') &&
+            if (['ready', 'interrupted', 'enemyBlocked', 'saltRoute', 'controlRoute', 'terrainExit', 'iceRoute',
+                'npcBlocked'].includes(result.status) &&
                 Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
                 result.legs.length > request.limit) {
                 result.more = true;

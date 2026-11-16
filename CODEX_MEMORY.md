@@ -191,3 +191,5 @@ November 15 follow-up. [World exits, spoiler visibility and Nuggedor detour](doc
 [Landing eligibility](docs/navigation.md#airship-landing-trace), [speaker sprite audit](docs/engine-evidence.md#dialogue-speaker-sprite-audit) and [Sunrise Bay routes and counters](docs/navigation-audit.md#sunrise-bay-scene-npcs-and-counter-access) record the native landing predicate, verified dialogue bindings and reachable NPC interaction tiles.
 
 [Current Steam deployment](docs/deployment.md#airship-landing-and-sunrise-bay) verifies the airship and Sunrise Bay batch and records the preceding recovery copy.
+
+[NPC passages and the Brekky Byway barrels](docs/navigation-audit.md#npcs-blocking-passages) records verified blocker placement and the ordered bridge and ice checks. [Food-themed terrain](docs/navigation.md#food-themed-terrain-and-current-bridge-art) records the map art audit and live bridge state. [Companion weapon artwork](docs/battle.md#baconator-and-frostyna-weapon-artwork) records the battle and portrait observations.

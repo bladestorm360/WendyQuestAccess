@@ -70,7 +70,18 @@ function routeThroughControl(geometry, live, request, controls, cancelled, remot
         }
         const onward = solveWorldRoute(opened, { ...request, x: origin.x, y: origin.y }, cancelled);
         if (onward.status === 'cancelled') return onward;
-        if (onward.status !== 'ready' && onward.status !== 'interrupted') continue;
+        let afterIce;
+        if (onward.status !== 'ready' && onward.status !== 'interrupted') {
+            if (gate !== 97) continue;
+            // The bridge work can reveal an approach that is still blocked
+            // by a separate, ordinary ice interaction. Verify both effects
+            // on worker-owned copies before naming the first prerequisite.
+            const next = routeThroughIce(geometry, { ...live, events: projected },
+                { ...request, x: origin.x, y: origin.y }, cancelled, changes);
+            if (next?.status === 'cancelled') return next;
+            if (!next) continue;
+            afterIce = next.event;
+        }
         if (detour) {
             const exit = solveWorldRoute(current, { x: request.x, y: request.y, event: 2,
                 field: true, bumpDirections: 15, handoffs: [8] }, cancelled);
@@ -84,8 +95,8 @@ function routeThroughControl(geometry, live, request, controls, cancelled, remot
                 event: id, field: true, stopBeforeEvent: true }, cancelled) : remoteAccess?.();
             if (exit?.status === 'cancelled') return exit;
             if (exit && (exit.status === 'ready' || exit.status === 'interrupted' || exit.needsEncounter))
-                return { ...exit, status: 'terrainExit', event: id, gate };
-            return request.refresh ? null : { status: 'terrainGate', gate };
+                return { ...exit, status: 'terrainExit', event: id, gate, ...(afterIce && { afterIce }) };
+            return request.refresh ? null : { status: 'terrainGate', gate, ...(afterIce && { afterIce }) };
         }
         if (!best || approach.distance < best.distance)
             best = { ...approach, status: 'controlRoute', event: id, gate, step: stepOn };
@@ -93,7 +104,7 @@ function routeThroughControl(geometry, live, request, controls, cancelled, remot
     return best || null;
 }
 
-function routeThroughIce(geometry, live, request, cancelled) {
+function routeThroughIce(geometry, live, request, cancelled, terrain = []) {
     if (live.mode !== 'walk' || request.entrances || request.vehicle || request.area || request.motion) return null;
     const ice = live.events.filter(event => event.meltable && !event.erased && event.id !== request.event);
     if (!ice.length || ice.length > 8) return null;
@@ -109,6 +120,7 @@ function routeThroughIce(geometry, live, request, cancelled) {
             !ice.some((block, slot) => block === event && (removed & (1 << slot)))) : live.events;
         const world = composeWorld(geometry, { ...live, events }, cancelled);
         if (!world) return { status: 'cancelled' };
+        for (const [cell, flags] of terrain) world.cells[cell] = (world.cells[cell] & 240) | flags;
         if (first) {
             const goal = solveWorldRoute(world, { ...request, x, y }, cancelled);
             if (goal.status === 'cancelled') return goal;

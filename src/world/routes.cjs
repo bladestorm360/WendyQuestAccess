@@ -505,6 +505,32 @@ function flightApproaches(world, tiles, candidates, cancelled) {
     return available;
 }
 
+function openedNpcPassage(geometry, snapshot, gate, cancelled) {
+    // Only the audited event and its coupled cleanup pages may change.
+    // Keep all other collision in the projected world.
+    const events = gate.movesTo ? snapshot.events.map(event => event.id === gate.event
+        ? { ...event, x: gate.movesTo[0], y: gate.movesTo[1] } : event) :
+        snapshot.events.filter(event => !gate.clears.includes(event.id));
+    return composeWorld(geometry, { ...snapshot, events }, cancelled);
+}
+
+function npcPassageRoute(geometry, live, world, request, cancelled) {
+    const gate = live.npcPassage;
+    if (!gate || request.event === gate.event || request.area || request.vehicle) return null;
+    const approach = solveWorldRoute(world, { x: request.x, y: request.y, event: gate.event, field: true }, cancelled);
+    if (approach.status === 'cancelled') return approach;
+    if (approach.status !== 'ready') return null;
+    const opened = openedNpcPassage(geometry, live, gate, cancelled);
+    if (!opened) return { status: 'cancelled' };
+    const { x, y } = approach.arrival;
+    const onward = solveWorldRoute(opened, { ...request, x, y }, cancelled);
+    if (onward.status === 'cancelled') return onward;
+    if (onward.status === 'ready' || onward.status === 'interrupted' &&
+        (onward.boundaryEvent === request.event || request.handoffs?.includes(onward.boundaryEvent)))
+        return { ...approach, status: 'npcBlocked', npc: gate.event };
+    return null;
+}
+
 function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () => false) {
     // Each event can have ordinary, generic and quest entries. Add vehicle
     // entries and up to 64 saved bookmarks.
@@ -522,6 +548,9 @@ function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () 
     if (!approaches) return { status: 'cancelled' };
     const available = new Uint8Array(candidates.length);
     let handoffRoutes;
+    let afterNpc;
+    const gate = snapshot.npcPassage;
+    const gateApproach = gate && approaches.events[gate.event];
     for (let index = 0; index < candidates.length; index++) {
         if (cancelled()) return { status: 'cancelled' };
         const candidate = candidates[index];
@@ -539,6 +568,27 @@ function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () 
             }
             const handoff = handoffRoutes.get(candidate.event);
             if (handoff && candidate.handoffs.includes(handoff)) available[index] = 2;
+        }
+        if (!available[index] && gateApproach) {
+            if (!afterNpc) {
+                const opened = openedNpcPassage(geometry, snapshot, gate, cancelled);
+                if (!opened) return { status: 'cancelled' };
+                const interactions = interactionTiles(opened, cancelled, candidates.some(candidate => !!candidate.bumpDirections));
+                const reached = reachableApproaches(opened, start, interactions, cancelled);
+                if (!reached) return { status: 'cancelled' };
+                afterNpc = { opened, interactions, reached };
+            }
+            const { opened, interactions, reached } = afterNpc;
+            if (approachAvailable(opened, start, candidate, interactions, reached, cancelled)) available[index] = 1;
+            else if (Number.isInteger(candidate.event) && candidate.handoffs?.length <= 16) {
+                afterNpc.handoffs ??= new Map();
+                if (!afterNpc.handoffs.has(candidate.event) && afterNpc.handoffs.size < 2) {
+                    const prefix = solveWorldRoute(opened, { ...candidate, x, y, field: true }, cancelled, interactions);
+                    if (prefix.status === 'cancelled') return prefix;
+                    afterNpc.handoffs.set(candidate.event, prefix.status === 'interrupted' ? prefix.boundaryEvent : 0);
+                }
+                if (candidate.handoffs.includes(afterNpc.handoffs.get(candidate.event))) available[index] = 1;
+            }
         }
     }
     return { status: 'reachable', available };
@@ -724,6 +774,10 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     const world = composeWorld(geometry, snapshot, cancelled);
     if (!world) return { status: 'cancelled' };
     const result = solveWorldRoute(world, request, cancelled);
+    if (world.mode === 'walk' && request.field === true && ['unreachable', 'approachBlocked'].includes(result.status)) {
+        const prerequisite = npcPassageRoute(geometry, snapshot, world, request, cancelled);
+        if (prerequisite) return prerequisite;
+    }
     const reversing = result.status === 'ready' && DIRECTIONS.includes(request.followedDirection) &&
         result.legs[0]?.direction === 10 - request.followedDirection;
     if (!(reversing || ['unreachable', 'approachBlocked'].includes(result.status)) || request.field !== true ||

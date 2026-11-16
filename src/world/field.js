@@ -6,7 +6,7 @@ const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName, worldEntranceRevealed, FLOAT_FORT_ENTRANCE } = require('./world-destinations');
 const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination,
-    visibleChestBarrier, BREAKFAST_HANDOFFS } = require('./local-destinations');
+    visibleChestBarrier, BREAKFAST_HANDOFFS, npcPassage } = require('./local-destinations');
 const { transferOptions } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
@@ -218,6 +218,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             (!job.questExit || chillcrestQuestExit(root)) &&
             (!job.breakfastObjective || root.$gameParty?.getNav?.() === job.breakfastObjective) &&
             (!job.enemyCurrent || job.enemyCurrent()) &&
+            (!job.npcCurrent || job.npcCurrent()) &&
             (!job.entrance || transfers.current(job.entrance)) &&
             (!job.groundEntrance || transfers.current(job.groundEntrance, 'walk')) &&
             (!job.scene._wqaPreviewUntil || host.graphics.frameCount < job.scene._wqaPreviewUntil));
@@ -268,6 +269,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         present(job, job.beaconStarted && !preferences().speakBeaconPath ? { ...record, beaconOnly: true } : record);
     }
 
+    function bridgeReason(result) {
+        return BRIDGE_REASON + (result.afterIce ? ' An ice block also blocks the approach.' : '');
+    }
+
     function terrainExit(job, result) {
         const gate = result.gate;
         const approach = job.terrainApproach;
@@ -280,7 +285,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const event = edge?.event ?? result.event;
         const exit = routeBoundary(root, event, preferences().spoilers === true, edge).exit ||
             CONTROLS[job.map]?.[event] || 'exit';
-        const text = gate === 145 ? CRYSTAL_REASON : gate === 97 ? BRIDGE_REASON : gate === 'pull' ? PULL_REASON : job.guide;
+        const text = gate === 145 ? CRYSTAL_REASON : gate === 97 ? bridgeReason(result) : gate === 'pull' ? PULL_REASON : job.guide;
         const blocked = result.needsEncounter === true;
         if (blocked && !currentEnemy(root, result)) return status(job, 'The enemy moved. Request directions again.');
         if (gate && !job.journey)
@@ -407,7 +412,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 ['ready', 'interrupted', 'enemyBlocked'].includes(result.status))
                 return terrainExit(job, result);
             if (result?.status === 'terrainGate')
-                return status(job, (result.gate === 97 ? BRIDGE_REASON : CRYSTAL_REASON) + ' No verified route to an exit from here.');
+                return status(job, (result.gate === 97 ? bridgeReason(result) : CRYSTAL_REASON) + ' No verified route to an exit from here.');
             if (job.terrainOnward && ['unreachable', 'unavailable'].includes(result?.status))
                 return status(job, [job.guide, 'No verified route to an exit from here.'].filter(Boolean).join(' '));
             if (job.remote && result?.status === 'ready' && !admitRemoteRoute(job, result))
@@ -520,6 +525,16 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     prerequisite, prerequisiteMove: kind !== 'action' ? result.boundary : undefined,
                     remainingActions: result.actions.length - 1 });
             }
+            else if (result?.status === 'npcBlocked') {
+                const gate = npcPassage(root.$gameMap);
+                if (gate?.event !== result.npc)
+                    return status(job, 'The passage changed. Request directions again.');
+                job.npcCurrent = () => npcPassage(root.$gameMap) === gate;
+                startBeaconApproach(job, result, gate.event);
+                follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs,
+                    npcBlocker: gate.name, facing: result.arrival.facing, more: result.more === true },
+                { ...job, target: gate.event, point: false });
+            }
             else if (result?.status === 'enemyBlocked') {
                 if (!currentEnemy(root, result)) {
                     if (job.retries < ACTOR_RETRIES) {
@@ -576,6 +591,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 if (job.guide) return status(job, job.guide + ' No verified route from here.');
                 if (job.map === 87 && job.target === 79)
                     return status(job, 'This cave mouth is separate from the main cavern. It is reached from the east side of Cracked Cove.');
+                if (job.map === 191 && job.target === 2)
+                    return status(job, 'The west cave entrance is on a separate shore.');
                 const reason = job.mode === 'walk' ? 'Not currently reachable' : job.mode === 'airship' ?
                     'No connected landing' : 'No sailing route';
                 status(job, job.nearestLanding ? 'No landing site is available' : reason);

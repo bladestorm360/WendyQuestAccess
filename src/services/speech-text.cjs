@@ -173,7 +173,12 @@ function formatSpeech(message) {
             const exitName = /\bexit\b/i.test(exit) ? exit : exit && 'exit to ' + exit;
             const takeExit = exitName && 'take ' + exitName;
             const prerequisite = label({ name: message.prerequisite });
-            if (prerequisite) {
+            const npcBlocker = label({ name: message.npcBlocker });
+            if (npcBlocker) {
+                parts.push('Blocked by ' + npcBlocker);
+                if (more) parts.push('More directions available');
+            }
+            else if (prerequisite) {
                 parts.push('Route to ' + prerequisite);
                 if (more) parts.push('More directions available');
                 else {

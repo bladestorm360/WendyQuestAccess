@@ -224,3 +224,18 @@ The field log identifies the failed directions from Map 76 tile (3,17) as event 
 Nuggedor's verified mine detour and the Cauldron pull and entry handoffs retain their specific instructions. Other on-foot searches without a verified route or blocker say “Not currently reachable.” [Route response](../src/world/field.js)
 
 Map 186 events 15 and 16 are Jay and Kitty respectively. Both open with Kitty’s line. The NPC browser uses the identity of each interaction, and Details still describes the speaker highlighted by the dialogue. In Maps 150 and 151, events 5 and 6 run identical conversations. Helly and Shelly each have one NPC entry with directions to event 6, the reachable counter prompt. Its dialogue Details follows the visible NPC at event 5. Old counter and NPC bookmarks resolve to the same reachable prompt. [Destination owner](../src/world/local-destinations.js) · [Dialogue owner](../src/dialogue/observer.js)
+
+## NPCs blocking passages
+
+The audit examined 6,527 pages on all 239 maps, including relocation, forced routes, erase commands, common calls and collision-clearing page changes for 397 solid NPC interaction pages. The movement sweep returned 24 direct or nested candidates, including developer scenes. The offline collision comparison covered 15 playable candidate sites. Two changed a corridor's connectivity in the tested active states. An NPC departure elsewhere can be part of the narrative while the neighboring tiles retain a walking connection.
+
+| Map and page | Verified passage |
+|---|---|
+| 191, Cracked Cove, event 3 page 0 | The Search and Rescue Officer occupies (33,17). With Baconator in the party, speaking causes a two-tile southward jump and saves the new position. From the logged approach, the gate opens the route to checkpoint 36 and on to the east Caffeine Caverns entrance, event 1. The west entrance, event 2, is on a separate shore with its own native connection. |
+| 119, event 4 page 0 | Frostyna occupies the narrow approach beside the furniture. Her conversation recruits her and consumes the related floor reminders, opening the route past that tile. |
+
+A relevant caller selects the ordinary destination. The worker requires a valid current interaction approach and proves the onward route in a private projection of the authored movement or cleanup. The result gives the steps to the NPC and “Blocked by” with the NPC's name. It preserves the selected destination and its availability through the planned passage. Autowalk stops facing the interaction where possible, and the beacon uses the verified approach tile. Native dialogue, prerequisites, collision and movement remain in control. The east cave route stops at the actual autosave handoff when needed. [Worker proof](../src/world/routes.cjs) · [Live gate and checkpoint identity](../src/world/local-destinations.js) · [Fixture](../tests/navigation-regressions.cjs)
+
+## Brekky Byway barrel prerequisites
+
+The field log from (44,9) records events 35 and 60 separately. The path to barrel 35 at (16,9) opens with the bridge edits alone. Barrel 60 at (4,3) is screened by the solid ice rectangle of event 34 even after those edits. With the introductory scene consumed, applying the actual bridge deltas and replaying the active melt page opens a native approach to the second barrel. The worker now projects the bridge and ordinary ice prerequisites in order, and the first response reports the bridge and the additional ice. After the bridge changes, ordinary routing can give directions to the ice block. [Terrain proof](../src/world/terrain-controls.cjs) · [Fixture](../tests/navigation-regressions.cjs)

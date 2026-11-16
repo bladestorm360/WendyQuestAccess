@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const { captureWorld } = require('../src/world/snapshot');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { BREAKFAST_HANDOFFS } = require('../src/world/local-destinations');
-const { solveRoute } = require('../src/world/routes.cjs');
+const { solveRoute, findReachable } = require('../src/world/routes.cjs');
+const { mapDescription } = require('../src/world/map-descriptions');
 const { createCaveGuide } = require('../src/world/puzzles/cave');
 const { createSaltGuide } = require('../src/world/puzzles/salt-caverns');
 const { createTerrainJourney } = require('../src/world/terrain-journey');
@@ -17,6 +18,46 @@ async function verifyNavigationAuditFixes(c, load, verifyRoute, verifyWorker, re
         fixture.player.setPosition(x, y);
         return { fixture, view: captureWorld(c) };
     }
+
+    const cove = at(191, 33, 14);
+    const guard = cove.fixture.gameMap._events[3];
+    const guardPage = cove.fixture.map.events[3].pages[0];
+    const jump = guardPage.list.find(row => row.code === 205 && row.indent === 1).parameters[1].list
+        .find(step => step.code === 14);
+    assert.deepEqual(jump.parameters, [0, 2]);
+    const east = cove.view.objects.find(item => item.id === 1);
+    const target = { x: 33, y: 14, event: 1, field: true, handoffs: east.handoffs, beacon: true, autowalk: true };
+    const npcRoute = solveRoute(cove.fixture.geometry, cove.view.live, target);
+    assert.deepEqual([npcRoute.status, npcRoute.npc, npcRoute.distance], ['npcBlocked', 3, 2]);
+    verifyRoute(cove.fixture, { ...target, event: 3 }, { ...npcRoute, status: 'ready' });
+    const words = { kind: 'routeDirections', name: east.name, directionsOnly: true,
+        legs: npcRoute.legs, npcBlocker: cove.view.live.npcPassage.name };
+    assert.equal(formatSpeech(words), '2 south. Blocked by Search and Rescue Officer.');
+    assert.equal(formatSpeech({ ...words, beaconOnly: true }), 'Blocked by Search and Rescue Officer.');
+    const available = findReachable(cove.fixture.geometry, cove.view.live, {
+        x: 33, y: 14, candidates: [{ event: 1, handoffs: east.handoffs }, { event: 2 }, { event: 36 }]
+    });
+    assert.deepEqual([...available.available], [1, 0, 1]);
+    await verifyWorker(cove.fixture, target, cove.view.live, result => {
+        assert.equal(result.status, 'npcBlocked');
+        assert.equal(result.npc, 3);
+        assert.equal(result.course.length, 2);
+        assert.deepEqual(result.arrival, { x: 33, y: 16, facing: 2 });
+    });
+    const fromLog = { ...target, y: 16, event: 36, handoffs: undefined, stopBeforeEvent: true };
+    assert.equal(solveRoute(cove.fixture.geometry, cove.view.live, fromLog).npc, 3);
+    assert.equal(solveRoute(cove.fixture.geometry, cove.view.live, { ...target, event: 2 }).status, 'unreachable');
+    cove.fixture.player.setPosition(33, 16);
+    guard.setPosition(guard._x + jump.parameters[0], guard._y + jump.parameters[1]);
+    guard._pageIndex = 1;
+    const openCove = captureWorld(c);
+    assert.equal(openCove.live.npcPassage, null);
+    assert.equal(solveRoute(cove.fixture.geometry, openCove.live, { ...target, y: 16 }).boundaryEvent, 36);
+    const thawed = at(119, 2, 9);
+    const crossing = { x: 2, y: 9, targetX: 4, targetY: 8, field: true };
+    assert.equal(solveRoute(thawed.fixture.geometry, thawed.view.live, crossing).npc, 4);
+    const joined = at(119, 2, 9, { switches: [33], self: ['119,4,A'] });
+    verifyRoute(joined.fixture, crossing, solveRoute(joined.fixture.geometry, joined.view.live, crossing));
 
     const cave = at(87, 69, 75);
     const exit = cave.view.objects.find(({ id }) => id === 73);
@@ -116,6 +157,37 @@ async function verifyNavigationAuditFixes(c, load, verifyRoute, verifyWorker, re
         });
         return { map, state, breakfast: open, point, candidates,
             handoffs: Object.keys(BREAKFAST_HANDOFFS[mapId] || {}).map(Number) };
+    }
+
+    for (const [id, actor] of [[77, 28], [79, 12], [80, 27], [81, 20], [84, 17], [85, 29]]) {
+        const { fixture } = at(id, 5, 5);
+        assert.match(mapDescription(c), /Broken bacon bridges/);
+        const source = fixture.map.events[actor].pages[0].list.find(row =>
+            row.code === 357 && ['B5,1', 'B5,4'].includes(row.parameters[3]?.tileId));
+        const { x, y, z } = JSON.parse(source.parameters[3].coordinates);
+        const { width, height, data } = c.$dataMap;
+        const cell = +z * width * height + +y * width + +x;
+        const original = data[cell];
+        data[cell] = source.parameters[3].tileId === 'B5,1' ? 13 : 37;
+        assert.match(mapDescription(c), /strips of bacon bridge/);
+        c.$gameMap._tilesetId = 7;
+        assert.doesNotMatch(mapDescription(c), /bacon bridges|strips of bacon/);
+        data[cell] = original;
+    }
+
+    const barrels = at(77, 44, 9, { switches: [93, 266], self: ['77,25,A', '77,33,A', '77,34,A'] });
+    for (const id of [33, 34]) {
+        const block = barrels.fixture.map.events[id].pages[0].list.find(row =>
+            row.code === 357 && row.parameters[1] === 'SetBlocker').parameters[3];
+        barrels.fixture.gameMap._events[id].SetBlocker(+block.minX, +block.minY, +block.maxX, +block.maxY);
+    }
+    const locked = captureWorld(c).live;
+    for (const [event, afterIce] of [[35, undefined], [60, 34]]) {
+        await verifyWorker(barrels.fixture, { x: 44, y: 9, event, field: true }, locked, result => {
+            assert.equal(result.status, 'terrainGate');
+            assert.equal(result.gate, 97);
+            assert.equal(result.afterIce, afterIce);
+        });
     }
 
     const startingPoints = [[77, 1, 8, 23, 113], [79, 9, 1, 6, 87], [80, 27, 4, 1, 113],

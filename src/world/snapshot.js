@@ -3,7 +3,7 @@
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
 const { localDestination, iceOpensPassage, inactiveFloorScene, concealedDestination,
-    chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit } = require('./local-destinations');
+    chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, npcPassage } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit,
     worldEntranceRevealed } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel, questPageHasAction } = require('./quest-destinations');
@@ -228,6 +228,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
     }
     return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles,
         tileset: map._tilesetId, aircraft: aircraftAt(map),
+        npcPassage: mode === 'walk' ? npcPassage(map) : undefined,
         ...(GATE_SWITCHES[id] ? { terrainMap: id, terrainSwitch: GATE_SWITCHES[id],
             terrainGate: root.$gameSwitches?.value?.(GATE_SWITCHES[id]) } : {}),
         ...(id === 55 ? { pullStage: root.$gameVariables?.value?.(4) } : {}),

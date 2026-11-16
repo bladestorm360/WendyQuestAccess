@@ -77,7 +77,7 @@ function createFieldDiagnostics(root, host, nodeRequire, nodeProcess) {
             targetMap: request?.transfer?.map, category: destination?.category,
             targetTile: destination && Number.isInteger(destination.x) ? [destination.x, destination.y] : undefined,
             followedDirection: request?.followedDirection, approach: result?.entrance ?? result?.event,
-            blocker: result?.enemy ?? result?.boundaryEvent,
+            blocker: result?.npc ?? result?.enemy ?? result?.boundaryEvent,
             distance: result?.distance, legs: result?.legs?.slice(0, 8).map(leg => [leg.direction, leg.tiles]),
             arrival: result?.arrival, boundary: result?.boundary, reenter: result?.reenter, more: result?.more
         });

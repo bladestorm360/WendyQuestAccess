@@ -148,6 +148,12 @@ assert.doesNotMatch(messages.at(-1), /gold plate|orange visor/, 'do not describe
 sprites[1]._battlerName = 'GoldenArcherVAR1';
 assert(observer.command(page, 'details'));
 assert.match(messages.at(-1), /bright orange visor/);
+enemies[1].battlerName = () => 'Axoflopl';
+sprites[1]._battlerName = 'Axoflopl';
+assert(observer.command(page, 'details'));
+assert.match(messages.at(-1), /floppy bacon.*fan out like gills/);
+assert(observer.command(page, 'reviewLast'));
+assert.doesNotMatch(messages.at(-1), /bacon/);
 enemies[1].battlerName = () => 'LilSaltyVar1';
 sprites[1]._battlerName = 'LilSaltyVar1';
 assert(observer.command(page, 'details'));

@@ -40,20 +40,20 @@ const ENEMIES = new Map([
         "Rows of long pink spikes jut from its back, above short legs and clawed feet."
     ]],
     ["SoggySnake", [
-        "A smooth golden snake rises from a patch of disturbed soil.",
-        "Its thick body curves like an S under a rounded head with a small eye and open grin."
+        "A golden snake with a body like a long, curled french fry rises from a mound of loose soil.",
+        "Pale gold bands run up its S-shaped body to a round head with a small eye and toothy grin."
     ]],
     ["Conehead", [
-        "A blue mound of dripping sludge with tiny clawed hands and a wide, dark red mouth.",
+        "A melting scoop of blue ice cream with little clawed hands and a wide, dark red mouth.",
         "A tall upside-down waffle cone covers its head down to the mouth."
     ]],
     ["Conehead - VAR1", [
-        "A broad puddle of pink sludge with little hooked hands and a gaping dark mouth.",
+        "A melting scoop of pink ice cream with little hooked hands and a gaping mouth.",
         "An upside-down golden waffle cone covers the upper part of its head."
     ]],
     ["HotSludgeSundae", [
-        "A hunched, dripping mass of brown sludge with one large glowing pink eye and a smaller one.",
-        "Sharp teeth fill its wide mouth, and thick, drooping arms nearly reach the ground."
+        "A hunched mound of glossy, chocolate-brown sludge, slumped like a melting sundae.",
+        "A large pink eye and a smaller one glow over sharp teeth. Its thick arms drip to the ground."
     ]],
     ["MechDouble", [
         "Two yellow robots of different heights stand together, with round, hamburger-like helmets.",
@@ -88,15 +88,16 @@ const ENEMIES = new Map([
         "Clawed feet support a low body, and long teeth jut from its open mouth."
     ]],
     ["Axoflopl", [
-        "A pink axolotl-like creature with a flat, oval head, small eyes and a sharp-toothed grin.",
-        "Frilled gills curl around its face, and its slender body ends in a coiled tail."
+        "A pink axolotl-like creature made of floppy bacon, with a flat head and a toothy grin.",
+        "Pale-edged bacon strips fan out like gills, and its slender tail curls into a loose coil."
     ]],
     ["MechMuffin", [
-        "A sandwich-shaped machine with a tan bun and red eyes under a metal brow.",
+        "A breakfast muffin sandwich with a toasted top and layers of yellow and pink filling.",
+        "Red eyes glow from under the metal brow of its spider-like chassis.",
         "Thin jointed legs curl around the body, with two long, scythe-shaped claws raised above it."
     ]],
     ["OrEggAmi", [
-        "A pale yellow creature folded into flat layers, with a pointed snout and small blue eyes.",
+        "A pale yellow egg creature folded like origami, with a pointed snout and blue-green eyes.",
         "A broad jaw opens between the layers, and loose flaps droop from the sides."
     ]],
     ["Iceburger", [
@@ -109,7 +110,8 @@ const ENEMIES = new Map([
     ]],
     ["BeefThief", [
         "A lean, crouching figure with red eyes under a dark hood and face covering.",
-        "Gray plates protect its chest and limbs, and a narrow gold scarf trails behind."
+        "Gray plates protect its chest and limbs. A gold scarf trails behind it.",
+        "It holds a short silver blade back behind one shoulder."
     ]],
     ["BigMech1", [
         "A towering robot with a stacked orange burger for a torso and a visible pilot on top.",
@@ -152,7 +154,8 @@ const PORTRAITS = new Map([
     ]],
     ["Frostyna", [
         "A young woman with lavender-blue skin, dark eyes and pale hair swept into icy curls.",
-        "Her deep blue coat has white trim. A gold staff with a spiral head rises behind her."
+        "Her deep blue coat has white trim.",
+        "Her golden staff ends in an open oval with a small spiral inside. Pale blue frost curls around the top like a soft-serve swirl."
     ]],
     ["Baconator", [
         "A broad, muscular man with deep brown skin, a thick black beard and a shaved head.",
@@ -235,12 +238,12 @@ const PARTY_BATTLE_ART = new Map([
     ], attack: ['He raises and draws his red bow. A red quiver of golden arrows crosses his back.'] }],
     ['Frostyna', { size: [96, 96], idle: [
         'Icy curls frame her lavender-blue face above a long dark blue coat.',
-        'She holds a golden spiral-headed staff across her body.'
-    ], attack: ['She thrusts her golden staff straight out in front of her.'] }],
+        'She holds a golden staff across her body. Its oval head curls inward like a soft-serve swirl.'
+    ], attack: ['She thrusts her spiral-tipped golden staff straight out in front of her.'] }],
     ['Baconator', { size: [141, 64], idle: [
-        'A broad, bearded man in red armor and a cape, holding a huge curved sword upright.',
-        'The broad brown blade has a bright metal edge.'
-    ], attack: ['He lunges and sweeps his broad, curved sword low. His red cape flares behind him.'] }],
+        'A broad, bearded man in red armor and a cape, holding a huge bacon sword upright.',
+        'The wavy reddish-brown blade has a pale cream edge.'
+    ], attack: ['He lunges and sweeps his bacon sword low. His red cape flares behind him.'] }],
     ['SirChicken', { size: [80, 64], idle: [
         'He wears gold armor and a winged helmet with a white feathered mantle.',
         'A chain hangs from his handle, ending in an orange drumstick-shaped flail head.'

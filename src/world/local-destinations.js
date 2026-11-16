@@ -160,6 +160,7 @@ function localHandoffName(map, event) {
     if (map === 13) return BEACH_HANDOFF_NAMES[event];
     if (BREAKFAST_HANDOFFS[map]?.[event]) return BREAKFAST_HANDOFFS[map][event];
     if (map === 55 && event === 8) return 'Side passage warning';
+    if (map === 191 && event === 36) return 'Autosave checkpoint';
     if (map === 27 && [27, 32].includes(event)) return 'Peak approach';
     if (map === 15 && event >= 46 && event <= 49) return 'Scene trigger';
     return undefined;
@@ -262,6 +263,26 @@ function pendingOfficeExit(root, event, entry) {
             command.parameters[0] === 0 && command.parameters[1] === 103);
 }
 
+const NPC_PASSAGES = {
+    // After speaking, Frostyna joins the party. Her follow-up floor
+    // reminders retire under the same rescue switch as the sprite.
+    119: { event: 4, x: 3, y: 9, art: '~Frostyna', name: 'Frostyna',
+        clears: [4, 9, 10, 11, 12, 13] },
+    // The officer jumps two tiles south and saves his new position after
+    // speaking with Baconator. He remains a solid NPC at the new tile.
+    191: { event: 3, x: 33, y: 17, art: 'NPCs - 32x32', name: 'Search and Rescue Officer',
+        movesTo: [33, 19] }
+};
+
+function npcPassage(map) {
+    const passage = NPC_PASSAGES[map?._mapId];
+    if (!passage) return null;
+    const event = map._events?.[passage.event];
+    return event && !event._erased && event._pageIndex === 0 && event._trigger === 0 &&
+        event._priorityType === 1 && event._through === false && event._characterName === passage.art &&
+        event._x === passage.x && event._y === passage.y ? passage : null;
+}
+
 function localDestination(root, event, page) {
     const map = root.$gameMap._mapId;
     const id = event._eventId;
@@ -359,6 +380,7 @@ function localDestination(root, event, page) {
         if (map === 13 && id === 7) target.handoffs = BEACH_HANDOFFS;
         if (map === 87 && id === 73) target.handoffs = [102];
         if (map === 55 && id === 2) target.handoffs = [8];
+        if (map === 191 && id === 1) target.handoffs = [36];
         return target;
     }
     // Follow Elder Tater is a live parallel NPC page. A route approaches
@@ -422,5 +444,6 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, concealedDestination, visibleChestBarrier,
+module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, concealedDestination,
+    visibleChestBarrier, npcPassage,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

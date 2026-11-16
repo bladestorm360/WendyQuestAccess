@@ -59,6 +59,8 @@ function createAutowalk(root, ready, preferences, report) {
             if (!current) return changed(state, 'Autowalk stopped. The interaction approach changed. Request directions again.');
             player.setDirection(facing);
         }
+        if (rest.npcBlocker)
+            return end(state, { kind: 'fieldStatus', name: 'Blocked by ' + rest.npcBlocker + '.' });
         const turn = facing && player._direction !== facing;
         const needsAction = rest.activate || rest.boundary || rest.prerequisite || rest.bump || rest.enter ||
             rest.conversation || rest.board || rest.land || rest.guideAction || rest.guide || rest.reenter;
