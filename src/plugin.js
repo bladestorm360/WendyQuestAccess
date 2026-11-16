@@ -370,16 +370,21 @@ function boot(root, nodeRequire, nodeProcess) {
                 try { return dialogue.repeatPage() || credits.command(host.manager._scene, 'details') || battleLogAction(); }
                 catch { return false; }
             },
-            menuCommand(action) {
+            menuCommand(action, nativeDirection) {
                 const scene = host.manager._scene;
                 try {
                     if (action === 'battleAppearance') return !battleTargets.controlOwner(scene) &&
                         battleFocus.command(battleFocus.controlOwner(scene), action);
                     const handled = menus.command(menus.controlOwner(scene), action);
                     if (handled || action === 'gold') return handled;
-                    return battleFocus.command(battleFocus.controlOwner(scene), action) ||
+                    if (battleFocus.command(battleFocus.controlOwner(scene), action) ||
                         battleTargets.command(battleTargets.controlOwner(scene), action) ||
-                        dialogue.command(scene, action) || credits.command(scene, action) || quests.command(scene, action);
+                        dialogue.command(scene, action) || credits.command(scene, action)) return true;
+                    // The field tracker has no focus of its own. Preserve the
+                    // native Shift+direction chord for dashing with arrows.
+                    if (nativeDirection === 'up' || nativeDirection === 'down' ||
+                        nativeDirection === 'left' || nativeDirection === 'right') return false;
+                    return quests.command(scene, action);
                 }
                 catch { return false; }
             },
@@ -896,10 +901,6 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessCaveTimingStop = function (scene) { caveTiming?.stop(scene); };
     root.WendyQuestAccessCaveTimingMoved = function (scene, direction) {
         try { caveTiming?.moved(scene, direction); } catch { caveTiming?.stop(scene); }
-    };
-    root.WendyQuestAccessCaveTimingInput = function (scene, direction) {
-        try { return caveTiming?.input(scene, direction) ?? direction; }
-        catch { caveTiming?.stop(scene); return direction; }
     };
     root.WendyQuestAccessCaveTimingPose = function (scene) { caveTiming?.pose(scene); };
     root.WendyQuestAccessSoundscapeUpdate = function (scene) {

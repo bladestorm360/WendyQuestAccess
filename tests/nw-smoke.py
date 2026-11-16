@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import os
+import runpy
 from pathlib import Path, PurePosixPath
 import shutil
 import struct
@@ -22,7 +23,7 @@ ARCHIVE_HASH = '1731a5ed81139a63a5d1d7e7c521b5f08add023ffe4b719d06796a1ba77dc8a3
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from registration import OBJECTS_REL, PIXI_REL, PIXI_SHA, SYSTEM_REL, SYSTEM_SHA, objects_notification
+from registration import CORE_REL, OBJECTS_REL, PIXI_REL, PIXI_SHA, SYSTEM_REL, SYSTEM_SHA, objects_notification
 
 
 def sha(path):
@@ -70,7 +71,8 @@ def fixture(runtime, installed):
     movement = ['function Game_CharacterBase() {}', 'function Game_Player() {}',
                 'Object.setPrototypeOf(Game_Player.prototype, Game_CharacterBase.prototype)',
                 'function Game_Map() {}', 'function Game_Interpreter() {}']
-    for method in ('Game_CharacterBase.prototype.moveStraight', 'Game_CharacterBase.prototype.setDirection', 'Game_CharacterBase.prototype.isDirectionFixed',
+    for method in ('Game_Player.prototype.updateDashing', 'Game_Player.prototype.isDashButtonPressed',
+                   'Game_CharacterBase.prototype.moveStraight', 'Game_CharacterBase.prototype.setDirection', 'Game_CharacterBase.prototype.isDirectionFixed',
                    'Game_CharacterBase.prototype.resetStopCount', 'Game_CharacterBase.prototype.updateMove',
                    'Game_CharacterBase.prototype.realMoveSpeed', 'Game_CharacterBase.prototype.distancePerFrame',
                    'Game_CharacterBase.prototype.isMoving', 'Game_Player.prototype.isDashing',
@@ -80,6 +82,17 @@ def fixture(runtime, installed):
         start = objects.index(method + ' = function(')
         end = objects.index('\n};', start) + 3
         movement.append(objects[start:end])
+    dash_input = runpy.run_path(str(ROOT / 'tests/input-producers.py'))['input_methods'](installed)
+    core = (installed / CORE_REL).read_text(encoding='utf8')
+    movement.extend(['function fixtureDashKeyboard() {', 'const a14_0x1f92c6 = null;',
+                     'const Input = { _currentState: {}, _shouldPreventDefault() { return false; },',
+                     'deviceType: { KEYBOARD: 0 }, SetLastInputDeviceType() {} };',
+                     dash_input[0], dash_input[2]])
+    for method in ('Input.isPressed', 'Input._isEscapeCompatible', 'Input._onKeyUp'):
+        start = core.index(method + ' = function(')
+        end = core.index('\n};', start) + 3
+        movement.append(core[start:end])
+    movement.append('return Input; }')
     (app / 'native-movement.js').write_text('\n'.join(movement), encoding='utf8')
     system = installed / SYSTEM_REL
     if sha(system) != SYSTEM_SHA:
@@ -113,6 +126,7 @@ var $gameMap, $gamePlayer, $gameScreen, $gameTemp, $dataMap, $dataTilesets, $gam
 var $gameMessage = { isBusy: () => false };
 var $dataSystem = { tileSize: 32, locale: GAME_LOCALE }, $dataMapInfos = [null, { id: 1, name: 'Starting shore' }, { id: 2, name: 'Connecting shore' }, { id: 3, name: 'Far shore' }];
 var Input = { keyMapper: { 81: 'pageup', 90: 'ok' }, clear() {} };
+var ConfigManager = { alwaysDash: false };
 Input.gamepadMapper = { 0: 'ok', 1: 'cancel', 3: 'menu', 9: 'menu', 12: 'up', 13: 'down' };
 '''.replace('GAME_LOCALE', json.dumps(game_locale)), encoding='utf8')
     (app / 'run.js').write_text('''
@@ -1209,6 +1223,47 @@ const interval = setInterval(() => {
                 { once: true });
             tap('q', 'KeyQ');
             if (!nativeQ) throw Error('Q failed to reach native input');
+            const previousInput = Input;
+            const previousTemp = $gameTemp;
+            Input = fixtureDashKeyboard();
+            $gameTemp = { isDestinationValid: () => false };
+            $gameMap.isDashDisabled = () => false;
+            const down = Input._onKeyDown.bind(Input);
+            const up = Input._onKeyUp.bind(Input);
+            document.addEventListener('keydown', down);
+            document.addEventListener('keyup', up);
+            try {
+                const player = Object.assign(new Game_Player(), { _moveSpeed: 4,
+                    canMove: () => true, isInVehicle: () => false, refreshBushDepth() {} });
+                function tileUpdates() {
+                    Object.assign(player, { _x: 0, _realX: 0, _y: 0, _realY: 0 });
+                    player.updateDashing();
+                    player._x = 1;
+                    for (let i = 1; i <= 16; i++) {
+                        player.updateMove();
+                        if (!player.isMoving()) return i;
+                    }
+                }
+                if (tileUpdates() !== 16) throw Error('The fixture could not walk normally');
+                for (const shiftCode of ['ShiftLeft', 'ShiftRight']) {
+                    key('keydown', 'Shift', shiftCode, false, { keyCode: 16, shiftKey: true });
+                    for (const [name, code, native] of [['ArrowLeft', 37, 'left'], ['ArrowUp', 38, 'up'],
+                        ['ArrowRight', 39, 'right'], ['ArrowDown', 40, 'down']]) {
+                        key('keydown', name, name, false, { keyCode: code, shiftKey: true });
+                        if (!Input.isPressed(native)) throw Error('The field quest tracker consumed Shift+' + name);
+                        if (tileUpdates() !== 8) throw Error('The native dash action failed for ' + shiftCode);
+                        key('keyup', name, name, false, { keyCode: code, shiftKey: true });
+                    }
+                    key('keyup', 'Shift', shiftCode, false, { keyCode: 16 });
+                    if (tileUpdates() !== 16) throw Error('Native walk did not return after releasing ' + shiftCode);
+                }
+                fs.writeFileSync(receipt + '.field-quest-dash', '');
+            } finally {
+                document.removeEventListener('keydown', down);
+                document.removeEventListener('keyup', up);
+                Input = previousInput;
+                $gameTemp = previousTemp;
+            }
             tap('i', 'KeyI');
             endingStep = 10;
         } else if (endingStep === 10 && fs.existsSync(receipt + '.quest-detail')) {
@@ -2612,6 +2667,8 @@ def main():
         if any(receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != '1'
                for name in ('cave-cue', 'cave-follow', 'guard-footstep')):
             raise RuntimeError('NW cave cue did not publish stereo PCM to SDL before and after the native step')
+        if not receipt.with_suffix('.json.field-quest-dash').is_file():
+            raise RuntimeError('The visible field tracker was never tested against both Shift keys')
         if any(receipt.with_suffix('.json.' + gait + '-footstep').read_text(encoding='utf8') != '1'
                for gait in ('walk', 'dash')):
             raise RuntimeError('Native walk and dash contacts did not publish their own stereo PCM')

@@ -174,6 +174,16 @@ assert.equal(Atomics.load(word, 2), epochs[1]);
 audio.retire(scene);
 assert.deepEqual([...word.slice(0, 6)], [0, 0, 0, 0, 0, 0]);
 
+assert(audio.play(scene, true, CUE.footstep, 0.5, [0.25, -1, 0.15], () => ready, null, 'footstep'));
+assert(audio.play(scene, true, CUE.wallBump, 0.5, [0, 0, 1], () => ready, null, 'caveStop'));
+run();
+assert.deepEqual([messages.at(-1).cue, messages.at(-1).lane], [CUE.wallBump, 2]);
+worker.emit('message', { epoch: messages.at(-1).epoch, status: 2 });
+run();
+assert.equal(messages.at(-1).cue, CUE.footstep);
+worker.emit('message', { epoch: messages.at(-1).epoch, status: 2 });
+audio.retire(scene);
+
 preview();
 run();
 ready = false;

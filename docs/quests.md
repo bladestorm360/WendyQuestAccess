@@ -2,7 +2,7 @@
 
 When the tracker shows a quest, the mod speaks the displayed title, when available, and the next unfinished objective with its displayed count. In **Speech**, enable **Autodetail** to hear the visible objective list after that announcement. **Menu indexing** adds the line position and count when reviewing. Both settings default off.
 
-On the map, press **I** to read the visible tracker, including the objectives and their displayed counts. **Shift+Up** and **Shift+Down** move through the lines. **Shift+Left** and **Shift+Right** jump to the first and last line. On an Xbox layout, press and release **View**, then **Y** to read details or use the D-pad in mod mode to review. The controller returns to ordinary input after the action. The controls can be remapped. An existing custom binding can move or leave a new quest binding unassigned.
+On the map, press **I** to read the visible tracker, including the objectives and their displayed counts. On the field, the native movement keys retain **Shift+arrow** for dashing. You can set non-movement keyboard shortcuts for line review under **F8 → Keyboard bindings**. On an Xbox layout, press and release **View**, then **Y** to read details or use the D-pad in mod mode to review. The controller returns to ordinary input after the action. The controls can be remapped. An existing custom binding can move or leave a new quest binding unassigned.
 
 The shortcut is listed under **F8 → Keyboard bindings → Read details**. The tracker must be visible for on-demand review.
 

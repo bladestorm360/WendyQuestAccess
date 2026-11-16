@@ -1070,7 +1070,10 @@ async function verifyLiveCrossing() {
             sounding = true;
             return true;
         },
-        retire(_scene, source) { assert.equal(source, 'cave'); sounding = false; }
+        retire(_scene, source) {
+            assert(['cave', 'caveStop'].includes(source));
+            if (source === 'cave') sounding = false;
+        }
     }, () => ({ enabled: true, caveTiming: true, caveVolume: 55, hrtf: true }), text => reports.push(text));
     c.WendyQuestAccessCaveTimingStop = owner => timing.stop(owner);
     c.WendyQuestAccessCaveTimingMoved = (owner, direction) => timing.moved(owner, direction);

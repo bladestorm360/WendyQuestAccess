@@ -641,3 +641,15 @@ November 16, 2026. The local Steam update rebuilt the bundled plugin and Windows
 - The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-footstep-cadence/rollback-latest with plan SHA-256 104260e30cbb1ada9776bb51484d1c1a627e350914dda626e02037e91b57ce99.
 
 Installer readback verified 16 native scripts, 45 payload files and 241 geometry entries. The native script and geometry hashes match the prior release. Four save and settings hashes matched across installation. Cleanup removed 25,883,939 bytes of generated output and the 10,963,685-byte superseded rollback. [Validation and gameplay check](feature-checkpoint.md#wendys-footstep-cadence)
+
+### Dash input and manual cave stop cues
+
+November 16, 2026. The local Steam update changed the plugin bundle, speech formatter and one native transform in rmmz_objects.js. The exact installer rehearsal, installed-method world suite and matching NW.js fixture passed. Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.328.0 found no threats in the exact candidate.
+
+- Installed plan SHA-256 `e94c544f1e91bbca8173a9d44469ce7244dcf460472c1d02d9e4720ff07f0b18`
+- Plugin SHA-256 `a303f8d96a7e08e36656e02d1db356871e1a53b00a43bff5d587075e4e4f8e0b`
+- Speech formatter SHA-256 `1a393b1b0dd2b28e87a1ee67baf08acf8fe371353156e304e46890578d9a8f3d`
+- Movement transform SHA-256 `922cd1eed80d7415d07c69d12c2b776cc99c5fa922d130143c2fd27ffc08899c`
+- The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-dash-keyboard/rollback-latest with plan SHA-256 `0545e57baa2c914e36988abc040049ff7e534937308187794f18e3f0fd24f47e`.
+
+Install readback verified 16 native scripts, 45 payload files and 241 geometry entries. Four save and configuration hashes matched across installation. Cleanup removed 24,459,195 bytes of final build and staging data and the 10,963,694-byte superseded rollback. [Verification scope](feature-checkpoint.md#dash-input-and-manual-cave-stop-cues)

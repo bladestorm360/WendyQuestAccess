@@ -365,7 +365,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
             reports.push(text);
         });
         c.WendyQuestAccessCaveTimingMoved = timing.moved;
-        c.WendyQuestAccessCaveTimingInput = timing.input;
+        c.WendyQuestAccessCaveTimingInput = () => assert.fail('Manual guidance intercepted native movement');
         c.WendyQuestAccessFieldMove = () => assert(!scene._wqaAutowalkActive);
         scene._wqaFieldReady = true;
 
@@ -439,9 +439,16 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             const begin = c.Graphics.frameCount;
                             let at = 0;
                             let respondAt = Infinity;
+                            let releaseAt = Infinity;
                             cueListener = receipt => {
-                                assert.notEqual(receipt.cue, CUE.wallBump, 'no exposed stop cue in the continuous crossing');
-                                if (!at && respondAt === Infinity) respondAt = receipt.frame + (phase === 0 ? 25 : 1);
+                                if (receipt.cue === CUE.wallBump) {
+                                    assert.equal(at, expected.length - 1, 'the stop cue marks the last committed tile only');
+                                    assert(player.isMoving(), 'the cue leaves time to release before the next tile');
+                                    assert.deepEqual(receipt.place, [0, 0, 1]);
+                                    releaseAt = receipt.frame + 6;
+                                } else if (!at && respondAt === Infinity) {
+                                    respondAt = receipt.frame + (phase === 0 ? 25 : 1);
+                                }
                             };
                             while (at < expected.length && c.Graphics.frameCount - begin < 1600) {
                                 if (c.Graphics.frameCount + 1 >= respondAt && !player.isMoving()) c.Input.dir4 = expected[at];
@@ -458,8 +465,12 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             assert.equal(at, expected.length, 'all continuous steps from ' + origin);
                             const pocket = [player.x, player.y];
                             const lastReport = reports.length;
-                            for (let i = 0; i < 82; i++) tick();
-                            assert.deepEqual([player.x, player.y], pocket, 'held direction cannot leave the safe pocket');
+                            assert(Number.isFinite(releaseAt), 'continuous crossing plays a stop cue');
+                            for (let i = 0; i < 82; i++) {
+                                if (c.Graphics.frameCount + 1 === releaseAt) c.Input.dir4 = 0;
+                                tick();
+                            }
+                            assert.deepEqual([player.x, player.y], pocket, 'releasing on the cue leaves Wendy in the pocket');
                             assert.equal(reports.length, lastReport, 'the stop does not announce the safe tile');
                             cueListener = null;
                             c.Input.dir4 = 0;
@@ -473,12 +484,15 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             assert(timing.startManual(captured, track, player.x, player.y, plan, 'Reached the planned stop.'));
                             let index = 0;
                             let respondAt;
+                            let releaseAt;
                             const begin = c.Graphics.frameCount;
                             cueListener = receipt => {
                                 assert(index < plan.legs.length);
                                 if (receipt.cue === CUE.wallBump) {
                                     assert.deepEqual(receipt.place, [0, 0, 1]);
                                     assert.equal(c.Input.dir4, plan.legs[index].direction);
+                                    assert(player.isMoving(), 'the stop cue precedes the end of the leg');
+                                    releaseAt = receipt.frame + 6;
                                     index++;
                                     respondAt = undefined;
                                 } else if (receipt.cue === CUE.caveGo && !respondAt) {
@@ -488,6 +502,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                             };
                             const reportCount = reports.length;
                             while (timing.active(scene) && reports.length === reportCount && c.Graphics.frameCount - begin < 1701) {
+                                if (releaseAt === c.Graphics.frameCount + 1) c.Input.dir4 = 0;
                                 if (respondAt === c.Graphics.frameCount + 1) c.Input.dir4 = plan.legs[index].direction;
                                 tick();
                             }
@@ -520,12 +535,25 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                     assert(arrived, 'manual route reaches every target');
                 }
             }
+
+            const { run } = setup(199, 5, 17, 0, 12.25);
+            const { player } = run;
+            const position = [player.x, player.y];
+            const direction = DIRECTIONS.find(heading => player.canPass(...position, heading));
+            assert(direction);
+            const current = timing.capture(scene, captureMotion(c, c.Graphics), { id: 25 });
+            assert(timing.start(current, ...position, null, { direction, tiles: 2, stopAtPocket: true, refresh: () => false }));
+            Object.assign(player._followers, { areGathering: () => false, updateMove() {} });
+            c.Input.dir4 = direction;
+            player.moveByInput();
+            assert.notDeepEqual([player.x, player.y], position, 'a legal step before a ping still reaches the native collider');
+            assert(!timing.active(scene), 'stepping before the opening retires cue tracking');
         } finally {
             timing.stop(scene);
             c.Graphics.app = savedApp;
             Object.assign(c, saved);
         }
-        console.log('Verified manual barrel, chest and exit in both orders, with early and late directional-ping responses.');
+        console.log('Verified manual barrel, chest and exit in both orders, audio releases, and native movement during an active wait.');
     }
 
     async function verifyLineLoot() {

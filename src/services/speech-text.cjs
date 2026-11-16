@@ -180,7 +180,8 @@ function formatSpeech(message) {
             }
             text += message.terminal ? ' The last step triggers the event.' :
                 message.stopAtPocket ? (message.headings?.some(heading => heading !== message.headings[0]) ?
-                    ' Switch directions when the ping moves. Keep moving through the turns.' : '') :
+                    ' Switch directions when the ping moves. Keep moving through the turns.' : '') +
+                    ' Release movement at the thud.' :
                 ' Stop there and request directions again.';
             if (message.guide) text += ' ' + label({ name: message.guide });
             break;
@@ -191,7 +192,7 @@ function formatSpeech(message) {
                 legs.some(({ direction, tiles }) => !HEADINGS[direction] || !Number.isInteger(tiles) ||
                     tiles < 1 || tiles > 12)) return '';
             const directions = legs.map(({ direction, tiles }) => tiles + ' ' + HEADINGS[direction]);
-            text = 'Wait for a ping before each leg. Hold that direction until Wendy stops. ' +
+            text = 'Wait for a ping before each leg. Release movement at the thud. ' +
                 directions.join(', then ') + '.';
             break;
         }

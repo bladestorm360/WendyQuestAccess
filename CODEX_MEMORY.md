@@ -223,3 +223,5 @@ The [Secret Cave announced waits checkpoint](docs/feature-checkpoint.md#secret-c
 The [silent cave stop and dash input checkpoint](docs/feature-checkpoint.md#silent-cave-stops-and-native-dash-input) records the silent endpoint, the existing timing fix, and native Shift handling for the patrol maps.
 
 The [footstep cadence checkpoint](docs/feature-checkpoint.md#wendys-footstep-cadence) records the native walking and dash replay, independent step audio and audible gameplay check. [Current Steam deployment and recovery](docs/deployment.md#wendys-footstep-cadence) records the exact installed payload and single rollback.
+
+The [dash input and manual cave cues checkpoint](docs/feature-checkpoint.md#dash-input-and-manual-cave-stop-cues) records the field quest binding conflict, native keyboard replay, and manual release cues. [Current Steam deployment and recovery](docs/deployment.md#dash-input-and-manual-cave-stop-cues) records the verified install and rollback.

@@ -72,9 +72,10 @@ function createAudio(host) {
         const left = pending[PLAYER_STEP_START];
         const right = pending[PLAYER_STEP_START + 1];
         const step = left && (!right || left.epoch < right.epoch) ? left : right;
-        // Keep the primary timing cue first. An admitted step need not
-        // wait behind the batch of walls and ambient sounds in other lanes.
-        const request = pending[0] || step || pending.find(Boolean);
+        // Play timing cues before other field feedback so the last step's
+        // stop cue can sound while that step is underway.
+        const stop = pending[IMPACT];
+        const request = pending[0] || (stop?.source === 'caveStop' ? stop : null) || step || pending.find(Boolean);
         if (!request || inFlight || failed) return;
         pending[request.lane] = null;
         if (!request.ready()) {

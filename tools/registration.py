@@ -476,9 +476,7 @@ def objects_notification(original):
                 + MAP_LEAVING + b'\n        ',  # Native landing after isLandOk
         222789: b'if(this===$gamePlayer&&SceneManager._scene?._wqaAutowalkActive)'
                 b'direction=globalThis.WendyQuestAccessAutowalkInput?.(SceneManager._scene,this,direction,'
-                b'direction>0||$gameTemp.isDestinationValid())??direction;\n        '
-                b'if(this===$gamePlayer&&SceneManager._scene?._wqaCaveTimingActive)'
-                b'direction=globalThis.WendyQuestAccessCaveTimingInput?.(SceneManager._scene,direction)??direction;\n        ',
+                b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
                 b'(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||SceneManager._scene._wqaAutowalkActive))'
                 b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',

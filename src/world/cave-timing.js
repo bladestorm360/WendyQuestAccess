@@ -24,7 +24,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         const current = owner || preparation;
         if (!current || (scene && current.scene !== scene)) return false;
         audio.retire(current.scene, 'cave');
-        if (current.manual) audio.retire(current.scene, 'caveStop');
+        audio.retire(current.scene, 'caveStop');
         current.scene._wqaCaveTimingActive = false;
         current.scene._wqaCaveCueDue = 0;
         current.scene._wqaCaveCueUntil = 0;
@@ -123,7 +123,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
 
     function live(state) {
         const { scene, map, player, event } = state;
-        return owner === state && ready(scene, !!(state.traversal || state.manual || state.stopped)) && map === root.$gameMap && player === root.$gamePlayer &&
+        return owner === state && ready(scene, !!(state.traversal || state.manual)) && map === root.$gameMap && player === root.$gamePlayer &&
             player._x === state.x && player._y === state.y && (!event || (map._events[event._eventId] === event &&
                 !event._erased && event._pageIndex === state.page && event._x === state.tx && event._y === state.ty));
     }
@@ -167,22 +167,24 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
             patrolPhaseMatches(line, map, stamps, now - line.frame);
     }
 
+    function stopCue(state, now, leg) {
+        const { scene } = state;
+        const { hrtf, caveVolume } = preferences();
+        // The native move has reserved the last tile. Play while Wendy
+        // approaches it so movement can be released before the next step.
+        audio.retire(scene, 'cave');
+        const queued = audio.play(scene, hrtf, audio.cues.wallBump, caveVolume / 100, [0, 0, 1],
+            () => live(state) && frame() < now + CUE_LIFETIME,
+            status => diagnostics?.(scene, 'caveStopCue', leg, status), 'caveStop');
+        if (!queued) diagnostics?.(scene, 'caveStopCue', leg, 'notQueued');
+    }
+
     function playManual(state, now) {
-        const { manual, scene } = state;
+        const { manual } = state;
         if (manual.release) {
             manual.release = false;
-            const { hrtf, caveVolume } = preferences();
-            // A centered impact marks the last accepted step of the leg.
-            // The next directional ping begins only after the tile settles.
-            // Keep the stop cue off the direction lane. A following ping
-            // can no longer revoke its generation while audio is in flight.
-            const leg = manual.index - 1;
-            const queued = audio.play(scene, hrtf, audio.cues.wallBump, caveVolume / 100, [0, 0, 1],
-                () => live(state) && frame() < now + CUE_LIFETIME,
-                status => diagnostics?.(scene, 'caveStopCue', leg, status), 'caveStop');
-            if (!queued) diagnostics?.(scene, 'caveStopCue', leg, 'notQueued');
-            schedule(state, manual.due);
-            return;
+            stopCue(state, now, manual.index - 1);
+            return schedule(state, manual.due);
         }
         if (manual.taken) return manualStopped(state, 'lateStep');
         if (manual.index === manual.legs.length) return finish(state, manual.endText);
@@ -204,41 +206,8 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
     }
 
     function finish(state, text) {
-        // Keep the last direction held until the player releases it or
-        // chooses a different one. This prevents running past the pocket.
-        state.stopped = true;
-        state.traversal = null;
-        state.scene._wqaCaveCueDue = 0;
-        audio.retire(state.scene, 'cave');
+        stop(state.scene);
         if (text) report(text, true);
-    }
-
-    function input(scene, direction) {
-        const state = owner;
-        if (!state || state.scene !== scene || !(state.manual || state.repeat?.stopAtPocket)) return direction;
-        if (!live(state)) { stop(scene); return direction; }
-        if (state.stopped) {
-            if (direction === state.lastDirection) return 0;
-            stop(scene);
-            return direction;
-        }
-        const { manual, traversal, repeat, player } = state;
-        const expected = manual ? manual.legs[manual.index]?.direction :
-            traversal ? traversal.steps[traversal.index] : repeat.direction;
-        if (!direction || direction !== expected || player._dashing) return 0;
-        const now = frame();
-        if (manual) {
-            const allowed = manual.taken ? now === manual.due : now > manual.cued && now <= manual.until;
-            if (!allowed) return 0;
-            if (!manualPose(state, now)) {
-                manualStopped(state, 'patrolChanged');
-                return 0;
-            }
-            state.checkedStep = now;
-        } else if (traversal ? now > traversal.by : !(now > state.cued && now <= state.startUntil)) {
-            return 0;
-        }
-        return direction;
     }
 
     function manualMoved(state, direction, now) {
@@ -247,8 +216,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         const inTime = manual.taken ? now === manual.due : now > manual.cued && now <= manual.until;
         if (!leg || direction !== leg.direction) return manualStopped(state, 'direction');
         if (!inTime || player._dashing) return manualStopped(state, player._dashing ? 'dash' : 'stepOutsideWindow');
-        if (state.checkedStep !== now && !manualPose(state, now)) return manualStopped(state, 'patrolChanged');
-        state.lastDirection = direction;
+        if (!manualPose(state, now)) return manualStopped(state, 'patrolChanged');
         state.x += CARDINAL[direction].x;
         state.y += CARDINAL[direction].y;
         manual.due = now + 256 / 2 ** manual.line.speed;
@@ -278,9 +246,13 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (owner !== state) return;
         const now = frame();
         if (!live(state)) return stop(state.scene);
-        if (state.pocketDue && now >= state.pocketDue) {
-            diagnostics?.(state.scene, 'cavePocketReached', 0, 'settled');
-            return finish(state);
+        if (state.pocketDue) {
+            if (now >= state.pocketDue) {
+                diagnostics?.(state.scene, 'cavePocketReached', 0, 'settled');
+                return finish(state);
+            }
+            stopCue(state, now, state.traversal.index - 1);
+            return schedule(state, state.pocketDue);
         }
         if (state.manual) return playManual(state, now);
         if (state.traversal) return advancing(state, now);
@@ -321,7 +293,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (state.manual) return manualMoved(state, direction, now);
         const opening = state.opening;
         if (!state.traversal) {
-            if (!state.repeat || !opening || !(now <= state.startUntil) ||
+            if (!state.repeat || !opening || !(now > state.cued && now <= state.startUntil) ||
                 direction !== opening.direction || !Number.isInteger(opening.tiles) ||
                 opening.tiles < (state.repeat.stopAtPocket ? 1 : 2) || opening.tiles > 12) return stop(scene);
             const steps = opening.headings ? opening.headings.map(heading => DIRECTIONS[heading]) :
@@ -344,10 +316,9 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         const turning = next !== direction;
         state.x += CARDINAL[direction].x;
         state.y += CARDINAL[direction].y;
-        state.lastDirection = direction;
         if (next === undefined) {
             state.pocketDue = now + tileFrames - 1;
-            return schedule(state, state.pocketDue);
+            return schedule(state, now);
         }
         const grace = opening.escape ? turning ? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace :
             opening.headings && turning ? TIMING_CUE.turnGrace : 0;
@@ -359,7 +330,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
     }
 
     return {
-        warm, capture, start, startManual, refreshResult, stop, moved, input,
+        warm, capture, start, startManual, refreshResult, stop, moved,
         repeatDirections(scene) {
             const state = owner;
             if (state?.scene !== scene || !state.repeat?.stopAtPocket || !state.traversal || !live(state)) return false;
@@ -392,7 +363,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
             };
         },
         cancelPlan(scene, stepping = false) {
-            if (owner?.scene === scene && !(stepping && (owner.traversal || owner.manual || owner.stopped))) stop(scene);
+            if (owner?.scene === scene && !(stepping && (owner.traversal || owner.manual))) stop(scene);
         },
         active: scene => owner?.scene === scene || preparation?.scene === scene,
         pose(scene) { if (owner?.scene === scene && !live(owner)) stop(scene); },
