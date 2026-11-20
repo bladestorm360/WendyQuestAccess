@@ -1026,7 +1026,7 @@ async function verifyPatrolGuidance() {
     const onward = { ...refugeRequest, ...motionRequest(north, northGuards) };
     const next = previewCrossing(north.geometry, snapshot(north), onward);
     assert.deepEqual(next, { status: 'patrolApproach', direction: 8, tiles: 5, terminal: false });
-    assert.equal(formatSpeech({ ...next, kind: 'patrolApproach' }), '5 north, then check directions.');
+    assert.equal(formatSpeech({ ...next, kind: 'patrolApproach' }), '5 north.');
     await verifyWorker(north, onward, snapshot(north), result => assert.deepEqual(result, next));
     const northSteps = Array(5).fill(DIRECTIONS.indexOf(8));
     const onwardFrames = 5 * 16 + 240;

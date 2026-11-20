@@ -767,3 +767,15 @@ The final focused field replay, full 178,356 world comparisons, earlier patrol r
 Source checkpoint `331058d9251460c5142c568602429a60b24b0791` was pushed to owned private origin/main; the remote ref matched before deployment. The single verified rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-crystal-first/rollback-latest, containing preceding plan `e09cf1b99aeaebd9ae2941f5342e333d178ea70694b63ebe7de36e0ebfd0bef1` and source `d15ba93bb0f73c062952627ce180627b18bc5632`. Its payload, native bytes and geometry were verified before replacement. The superseded optional recovery was removed. Gameplay confirmation remains separate.
 
 Task-close cleanup removed 25,652,992 generated build/staging/test bytes, 99,323 disposable script/probe/log bytes and the 13,412,387-byte superseded recovery. The current task folder retains only the exact final Defender result and one verified rollback. Rebuild from the source checkpoint using the canonical bundler/installer; reuse verified unchanged dependencies and replace the three mod files identified above. No game launch, control or live probe was performed.
+
+
+## Automatic manual patrol legs and crystal escape
+
+November 20, 2026. The focused bundle and formatter candidate passed the full world, patrol/crystal/chase, native input, speech transport, exact script syntax, matching NW.js 0.48.4 runtime and installer recovery checks. The two obsolete long-form speech assertions in the full-world and NW fixtures were updated after their failures; both complete checks then passed. Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.387.0 found no threats in the exact final candidate. The candidate contains 45 mod payload files, 16 patched native scripts and 241 geometry entries. Two mod payload files change, plus the existing MapScene ready condition for an accepted manual action; 43 payload dependencies, 15 other transforms and all geometry are reused unchanged.
+
+- Candidate plan SHA-256 `9cbf0477e1bff10c7d1fba4f370ee771aeecff20554d4f0851a62fc2d3a1a4f6`
+- Plugin SHA-256 `a57374a3cba5e1b071587fa29b36765343dc56d558d53b6bbede36a2c304e436`
+- Speech formatter SHA-256 `5f67657830f929ac784f42e23eccd24e6947544a4987246b52886fcd716fe985`
+- Patched MapScene SHA-256 `a1cbd67c73d7a40583a775d81e004dde884a14b068d9e46934c6a1faedb38732`
+
+[Behavior, source-boundary cause, bounds and gameplay procedure](puzzles-and-secrets.md#automatic-manual-patrol-legs-and-crystal-escape). [Scope and verification](feature-checkpoint.md#automatic-manual-patrol-legs-and-crystal-escape). Candidate staging is C:/Games/Dev/WendyQuestAccess-analysis/wendy-patrol-legs-candidate. Deployment targets the established Steam installation only, preserving verified originals, a single rollback and saves/settings. No game launch, control or live probe is part of the task.

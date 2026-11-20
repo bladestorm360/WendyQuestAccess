@@ -726,7 +726,7 @@ def map_notification(original):
             (!this._wqaInteractionActive && !this._wqaInteractionDeferred && !this._wqaAutowalkActive && wqaIcon && wqaIcon !== this._wqaInteractionSeen &&
             wqaIcon.scale.x > 0 && wqaIcon.children[0]?.texture?.valid))
             globalThis.WendyQuestAccessInteractionUpdate?.(this, wqaIcon);
-        if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaCaveAutoPending || Graphics._wqaCaveChasePending ||
+        if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaCaveAutoPending || Graphics._wqaCaveChasePending || Graphics._wqaCaveManualPending ||
             Graphics._wqaBookmarkTransferPending) &&
             !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||

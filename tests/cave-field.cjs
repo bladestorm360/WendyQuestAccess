@@ -14,6 +14,8 @@ const { createCaveTiming } = require('../src/world/cave-timing');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
 function verifyCaveField(c, load, configureMotion) {
+    const previousView = { width: c.Graphics.width, height: c.Graphics.height };
+    Object.assign(c.Graphics, { width: c.$dataSystem.advanced.screenWidth, height: c.$dataSystem.advanced.screenHeight });
     function setup(id, x, y, viewX, viewY) {
         const run = load(id), guards = configureMotion(run, x, y, viewX, viewY);
         for (const event of run.gameMap.events()) if (event._trigger === 3 || event._trigger === 4)
@@ -33,13 +35,17 @@ function verifyCaveField(c, load, configureMotion) {
     const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
     let field, fixture, guards, source, repeatChecked = false, pendingArrival = false;
     const guidanceCost = { calls: 0, total: 0, peak: 0 };
+    const patrolCost = { calls: 0, total: 0, peak: 0, framePeak: 0 };
+    let frameCost = 0;
     const replyCost = { calls: 0, total: 0, peak: 0, cpuTotal: 0, cpuPeak: 0 };
     function measure(callback) {
-        if (preferences.autowalk || fixture?.id !== 201) return callback();
+        if (preferences.autowalk || ![196, 199, 200, 201].includes(fixture?.id)) return callback();
         const start = performance.now();
         const result = callback();
         const elapsed = performance.now() - start;
-        guidanceCost.calls++; guidanceCost.total += elapsed; guidanceCost.peak = Math.max(guidanceCost.peak, elapsed);
+        const cost = fixture.id === 201 ? guidanceCost : patrolCost;
+        cost.calls++; cost.total += elapsed; cost.peak = Math.max(cost.peak, elapsed);
+        if (fixture.id !== 201) frameCost += elapsed;
         return result;
     }
     let serial = 0, deliver, manualDrive = null, staticLeg = null, manualNext = false, pickupPrompt = null;
@@ -49,24 +55,26 @@ function verifyCaveField(c, load, configureMotion) {
         // numeric packets. Only thread transport is a fixture stand-in.
         const wire = { on(type, handler) { assert.equal(type, 'message'); deliver = handler; },
             postMessage(packet) {
-                if (!preferences.autowalk && fixture.id === 200) {
+                if (!preferences.autowalk && [196, 199, 200].includes(fixture.id)) {
                     const result = packet.result;
                     if (result.pickup) pickupPrompt = result.pickup;
-                    if (result.status === 'ready' || result.status === 'interrupted' || result.status === 'patrolApproach') {
+                    if (result.status === 'ready' || result.status === 'interrupted' || result.status === 'patrolApproach' || result.status === 'patrolLineApproach') {
                         const legs = result.legs || [{ direction: result.direction, tiles: result.tiles }];
                         const moves = legs.flatMap(leg => Array(leg.tiles).fill(leg.direction));
                         if (result.boundary) moves.push(result.boundary);
-                        staticLeg = { moves, index: 0, facing: result.more ? null : result.arrival?.facing };
+                        if (result.activate) moves.push(result.activate);
+                        staticLeg = { moves, index: 0, facing: result.more ? null : result.arrival?.facing ?? result.facing,
+                            recheck: result.status === 'ready' };
                         manualDrive = 'static';
                     } else if (result.status === 'unsafeCrossing' && !result.exposed) {
-                        manualDrive = 'retry';
-                        manualNext = c.Graphics.frameCount + 18;
-                    } else if (result.status === 'timedCue' || result.status === 'timedWait') manualDrive = 'timed';
+                        manualDrive = 'wait';
+                        c.Input.dir4 = 0;
+                    } else if (result.status === 'timedCue' || result.status === 'timedWait' || result.status === 'patrolLineManual') manualDrive = 'timed';
                 }
                 const beforeReply = performance.now();
                 const beforeCpu = process.cpuUsage();
-                worker.emit('message', packet);
-                if (fixture.id === 200) {
+                measure(() => worker.emit('message', packet));
+                if ([196, 199, 200].includes(fixture.id)) {
                     const elapsed = performance.now() - beforeReply;
                     const used = process.cpuUsage(beforeCpu);
                     const cpu = (used.user + used.system) / 1000;
@@ -94,7 +102,7 @@ function verifyCaveField(c, load, configureMotion) {
     const timing = createCaveTiming(c, value => value === scene,
         { cues: CUE, isPrepared: () => true, retire() {}, play(_scene, _hrtf, cue, _gain, source, current) {
             if (!current()) return false;
-            if (!preferences.autowalk && fixture?.id === 200) {
+            if (!preferences.autowalk && [196, 199, 200].includes(fixture?.id)) {
                 if (cue === CUE.caveGo) {
                     manualDrive = 'timed';
                     c.Input.dir4 = source[0] ? source[0] < 0 ? 4 : 6 : source[2] < 0 ? 2 : 8;
@@ -103,7 +111,7 @@ function verifyCaveField(c, load, configureMotion) {
                     if (pickupPrompt && c.$gamePlayer.x === 23 && c.$gamePlayer.y === 25) {
                         manualDrive = 'pickup';
                         manualNext = false;
-                    } else manualNext = true;
+                    } else manualNext = false;
                 }
             }
             return true;
@@ -122,10 +130,12 @@ function verifyCaveField(c, load, configureMotion) {
         }, endArrival() {}
     }, (job, result) => diagnostics.push({ target: job.target, destination: job.caveWalk?.destination?.id, status: result?.status, frame: c.Graphics.frameCount, x: c.$gamePlayer.x, y: c.$gamePlayer.y, direction: result?.direction, tiles: result?.tiles, guard: [c.$gameMap._events[4]?._x, c.$gameMap._events[4]?._y, c.$gameMap._events[4]?._moveRouteForcing, c.$gameMap._events[4]?._moveRouteIndex], gate: c.$gameSwitches.value(582) }));
     c.WendyQuestAccessFieldChanged = (owner, actor) => {
-        if (actor === c.$gamePlayer) timing.pose(owner); else timing.stop(owner);
-        field.changed(owner, actor);
+        measure(() => {
+            if (actor === c.$gamePlayer) timing.pose(owner); else timing.stop(owner);
+            field.changed(owner, actor);
+        });
     };
-    c.WendyQuestAccessCaveTimingMoved = timing.moved;
+    c.WendyQuestAccessCaveTimingMoved = (...args) => measure(() => timing.moved(...args));
     c.WendyQuestAccessAutowalkInput = field.autowalk.input;
     c.WendyQuestAccessFieldMove = (owner, direction, succeeded) => {
         measure(() => { field.autowalk.moved(owner, direction, succeeded); field.chaseMoved(owner, direction, succeeded); });
@@ -135,7 +145,7 @@ function verifyCaveField(c, load, configureMotion) {
         accepted.push(event._eventId);
         measure(() => field.caveEventAccepted(owner, event));
     };
-    c.WendyQuestAccessSceneLeaving = (owner, eventId) => field.leave(owner, eventId);
+    c.WendyQuestAccessSceneLeaving = (owner, eventId) => measure(() => field.leave(owner, eventId));
 
     function start(map, x, y, viewX, viewY) {
         field.leave(scene);
@@ -220,6 +230,10 @@ function verifyCaveField(c, load, configureMotion) {
         if (interpreter.updateWaitMode()) return;
         for (let count = 0; interpreter._list && count < 128; count++) {
             if (interpreter._index >= interpreter._list.length) { interpreter._list = null; break; }
+            // The retail message-start producer closes field output without
+            // an event ID. Preserve this real boundary even with art stubbed.
+            if (interpreter._list[interpreter._index]?.code === 101)
+                c.WendyQuestAccessSceneLeaving(scene);
             interpreter.executeCommand();
             if (interpreter._waitCount || interpreter._waitMode) break;
         }
@@ -227,6 +241,7 @@ function verifyCaveField(c, load, configureMotion) {
 
     function tick() {
         const { gameMap, player } = fixture;
+        frameCost = 0;
         c.Graphics.frameCount++;
         gameMap.refreshIfNeeded();
         gameMap.updateEvents();
@@ -235,7 +250,14 @@ function verifyCaveField(c, load, configureMotion) {
             'Guard contact on map ' + fixture.id + ' at ' + [player.x, player.y] + ' after ' + records.slice(-3).map(formatSpeech) + JSON.stringify({ frame: c.Graphics.frameCount, source: [source._eventId,source._index,source._waitMode], diagnostics }));
         const beforeX = player.scrolledX(), beforeY = player.scrolledY();
         const wasMoving = player.isMoving();
-        if (!preferences.autowalk && fixture.id === 200 && !source._list && !player.isMoving()) {
+        if (!preferences.autowalk && [196, 199, 200].includes(fixture.id) && !source._list && !player.isMoving()) {
+            if (manualDrive === 'timed' && /^Face (north|south|east|west) and press the action button\.$/.test(records.at(-1)?.name || '')) {
+                const direction = {north: 8, south: 2, east: 6, west: 4}[records.at(-1).name.split(' ')[1]];
+                c.Input.dir4 = 0;
+                player.setDirection(direction);
+                player.checkEventTriggerThere([0]);
+                manualDrive = null;
+            }
             if (manualDrive === 'pickup' && /^Face west and open the barrel/.test(records.at(-1)?.name || '')) {
                 player.setDirection(pickupPrompt.facing);
                 player.checkEventTriggerThere([0]);
@@ -249,7 +271,7 @@ function verifyCaveField(c, load, configureMotion) {
                     if (staticLeg.facing) {
                         player.setDirection(staticLeg.facing);
                         player.checkEventTriggerThere([0]);
-                    } else manualNext = true;
+                    } else if (staticLeg.recheck) manualNext = true;
                 }
             }
             if (manualNext && (manualNext === true || c.Graphics.frameCount >= manualNext)) {
@@ -259,7 +281,7 @@ function verifyCaveField(c, load, configureMotion) {
         }
         const oldX = player.x, oldY = player.y;
         if (!source._list) player.moveByInput();
-        if (!preferences.autowalk && fixture.id === 200 && manualDrive === 'static' &&
+        if (!preferences.autowalk && [196, 199, 200].includes(fixture.id) && manualDrive === 'static' &&
             (oldX !== player.x || oldY !== player.y)) {
             assert.equal(player._direction, staticLeg.moves[staticLeg.index++]);
         }
@@ -271,15 +293,49 @@ function verifyCaveField(c, load, configureMotion) {
         execute(source);
         if (!source._list && !player.isMoving()) {
             scene._wqaFieldReady = true;
-            if (c.Graphics._wqaCaveChasePending) measure(() => field.observeReady(scene));
-            else field.observeReady(scene);
+            measure(() => field.observeReady(scene));
         }
         if (field.ready(scene, true) && scene._wqaCaveCueDue && scene._wqaCaveCueDue <= c.Graphics.frameCount)
-            timing.update(scene);
+            measure(() => timing.update(scene));
         render();
+        patrolCost.framePeak = Math.max(patrolCost.framePeak, frameCost);
     }
 
     try {
+        // A single Directions request drives each guarded manual route.
+        // The only later key in these cases deliberately tests a remaining leg.
+        for (const test of [
+            { map: 196, target: 20, name: 'Next cave room', category: 'Exits', point: [22, 7], from: [11, 49] },
+            { map: 199, target: 25, name: 'Barrel', category: 'Objects', point: [15, 3], from: [1, 33] },
+            { map: 199, target: 34, name: 'Chest', category: 'Treasure', point: [3, 7], from: [1, 33] },
+            { map: 199, target: 26, name: 'Next cave room', category: 'Exits', point: [35, 16], from: [1, 33] }
+        ]) {
+            preferences.autowalk = false;
+            records.length = accepted.length = diagnostics.length = 0;
+            start(test.map, ...test.from, 0, 0);
+            fixture.gameMap._displayX = Math.max(0, Math.min(test.from[0] - fixture.player.centerX(), fixture.map.width - fixture.gameMap.screenTileX()));
+            fixture.gameMap._displayY = Math.max(0, Math.min(test.from[1] - fixture.player.centerY(), fixture.map.height - fixture.gameMap.screenTileY()));
+            select(test.name, test.category, test.point);
+            ask('directions');
+            let repeated = false;
+            for (let frame = 0; frame < 22000 && source._eventId !== test.target; frame++) {
+                tick();
+                if (!repeated && manualDrive === 'timed' && fixture.player.isMoving()) {
+                    const remaining = timing.describe(scene);
+                    if (/^[2-9]\d* (north|south|east|west)\.$/.test(remaining)) {
+                        ask('directions');
+                        assert.equal(formatSpeech(records.at(-1)), remaining);
+                        repeated = true;
+                    }
+                }
+            }
+            assert.equal(source._eventId, test.target, 'Manual route reaches its destination without rechecks ' +
+                JSON.stringify({test, at:[fixture.player.x,fixture.player.y], reports:records.slice(-6).map(formatSpeech), diagnostics:diagnostics.slice(-8),manualDrive,manualNext}));
+            assert(repeated, 'A remaining leg was repeated during native interpolation');
+            assert(!records.some(record => /check directions|request directions|patrol lane/i.test(formatSpeech(record))),
+                'Guarded manual guidance contains no recheck/lane failure prose ' + JSON.stringify({test, text:records.map(formatSpeech).filter(text => /check directions|request directions|patrol lane/i.test(text))}));
+        }
+
         const entry = load(199).map.events[26].pages[0].list.find(command => command.code === 201).parameters;
         assert.equal(entry[1], 200);
         // Reproduce the exact report and cover both room barrels through the
@@ -412,12 +468,14 @@ function verifyCaveField(c, load, configureMotion) {
         Object.assign(c, saved);
         c.SceneManager._scene = originalScene;
         c.Graphics.app = app;
+        Object.assign(c.Graphics, previousView);
         c.$gameParty.members = members;
         c.$gameParty.inBattle = inBattle;
     }
-    console.log('Distraction-room field reply accounting', JSON.stringify(replyCost), 'ms, excluding route-worker computation and physical output.');
+    console.log('Manual patrol callback accounting', JSON.stringify(patrolCost), 'ms across accepted movement, event/ready gates, render continuations and replies; worker and physical output excluded.');
+    console.log('Patrol-room field reply accounting', JSON.stringify(replyCost), 'ms, excluding route-worker computation and physical output.');
     console.log('Manual chase guidance callback accounting', JSON.stringify(guidanceCost), 'ms in the bounded fixture, excluding worker computation and physical output.');
-    console.log('Verified both distraction-room barrels in manual/automatic control, the reported stationary guard, pickup/retreat, all crystals and nine chase handoffs.');
+    console.log('Verified the first two patrol rooms with automatic current-leg speech, both distraction-room barrels in manual/automatic control, the reported stationary guard, pickup/retreat, all crystals and nine chase handoffs.');
 }
 
 module.exports = { verifyCaveField };

@@ -149,7 +149,7 @@ function formatSpeech(message) {
             const steps = message.tiles;
             text = message.kind === 'patrolWait' ? `Wait for the guard to move. Crossing is ${heading}. Timing audio is unavailable.` :
                 Number.isInteger(steps) && steps > 0 && steps <= 12 ?
-                    `${steps} ${heading}${message.terminal ? ' to the event' : ', then check directions'}.` : '';
+                    `${steps} ${heading}.` : '';
             if (text && message.guide) text += ' ' + label({ name: message.guide });
             break;
         }

@@ -2550,7 +2550,7 @@ parentPort.on('message', message => {
         fs.writeFileSync(receipt + '.route-' + count, '');
     }
     if (message.kind === 'fieldStatus' && message.name.startsWith('Secret Cave.')) fs.writeFileSync(receipt + '.cave', '');
-    if (message.kind === 'timedCue') fs.writeFileSync(receipt + '.timed', '');
+    if (message.kind === 'fieldStatus' && message.name === '2 south.') fs.writeFileSync(receipt + '.timed', '');
     if (message.kind === 'dialogueChoice') fs.writeFileSync(receipt + '.choice', '');
     if (message.kind === 'dialoguePage' && fs.existsSync(receipt + '.choice')) {
         fs.writeFileSync(receipt + (fs.existsSync(receipt + '.repeat') ? '.controller-repeat' : '.repeat'), '');
@@ -2721,9 +2721,8 @@ def main():
             raise RuntimeError('NW autowalk narration or explicit stop failed')
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
             raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
-        if timed['kind'] != 'timedCue' or timed.get('speech') != ('On the ping, go 2 tiles south. Stop there and request directions again. '
-                                                            'Continue toward the next patrol room.'):
-            raise RuntimeError(f'NW fixture did not publish the verified crossing length: {data}')
+        if timed['kind'] != 'fieldStatus' or timed.get('speech') != '2 south.':
+            raise RuntimeError(f'NW cave guidance did not announce its current leg: {timed}')
         cave_ms = float(receipt.with_suffix('.json.cave-review-ms').read_text(encoding='utf8'))
         timed_ms = float(receipt.with_suffix('.json.timed-submit-ms').read_text(encoding='utf8'))
         audio_ms = float(receipt.with_suffix('.json.audio-init-ms').read_text(encoding='utf8'))

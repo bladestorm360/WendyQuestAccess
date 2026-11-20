@@ -258,6 +258,7 @@ function createSettingsMenu(root, host) {
                 'Turn on Spoiler mode under Navigation to find marked optional secrets before discovering them in the game.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
                 'Use normal walking speed for cave crossings. Follow the directional pings and release movement at the thud.',
+                'Guarded routes announce each current leg automatically. Directions repeats its remaining steps. Activate crystals when prompted.',
                 'In the distraction room, activate the crystal with the action button. Directions resume when movement returns. Follow the pings to a stop, then request directions again.',
                 'In the chase room, hear one short leg at a time. Directions repeats the distance remaining on the current leg.',
                 'Toggle the beacon ' + binding('beaconToggle') + '. Toggle wall sounds ' + binding('wallToggle') +
