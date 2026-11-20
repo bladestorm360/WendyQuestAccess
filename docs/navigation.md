@@ -305,3 +305,5 @@ Directions to a destination in the distraction room now retain the selection thr
 
 
 The [second-crystal native handoff](puzzles-and-secrets.md#second-crystal-native-interaction-handoff) completes the native event-start path for automatic crystal prerequisites and preserves an inert queued action across resource entry. The bounded field log records crystalReady after actual handback, including the acceptance producer, elapsed native frames and copied guard pose/route/jump facts. Direct crystal interactions share the same accepted-setup confirmation. Native dialogue and ordinary final object actions retain player ownership.
+
+Native page refresh now preserves the inert owner of a checked cave crossing through MapScene's readiness publication boundary. Selected cave barrels/chests activate through native controls; after the acquired message closes, a fresh forecast routes away from an exposed approach. Normal object interaction is unchanged. [Native phase contract, scope, pickup list and verification limits](puzzles-and-secrets.md#native-page-refresh-and-automatic-cave-pickups).

@@ -54,7 +54,7 @@ def methods(installed):
         'Game_Vehicle': ['pos', 'isBoat', 'isShip', 'isAirship', 'isMapPassable', 'isLandOk', 'getOn', 'getOff',
                          'setLocation', 'refresh', 'syncWithPlayer', 'isLowest', 'resetDirection',
                          'updateAirship', 'updateAirshipAltitude', 'isHighest', 'maxAltitude', 'canMove'],
-        'Game_Interpreter': ['command111', 'command115', 'command117', 'command121', 'command122', 'command123',
+        'Game_Interpreter': ['command101', 'nextEventCode', 'setupChild', 'command111', 'command115', 'command117', 'command121', 'command122', 'command123',
                              'operateVariable', 'gameDataOperand',
                              'command201', 'command202', 'command203', 'command205', 'command206',
                              'command214', 'command230', 'wait', 'command282', 'command402', 'command411', 'executeCommand', 'updateWaitMode', 'currentCommand',

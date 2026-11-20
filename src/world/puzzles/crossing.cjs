@@ -632,7 +632,12 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
                     arrival: { x: request.x, y: request.y, facing: goals[origin] } };
         }
     }
-    if ((request.lineNavigation || request.recoverPatrolLane) && unsafe?.[origin] && fixedHeading < 0 && request.timingCue) {
+    // A consumed pickup is no longer a route target. Certify departure to
+    // a protected stop with the same live patrol forecast used for recovery.
+    if (request.pickupEscape && !unsafe) return { status: 'unsafeCrossing', exposed: true };
+    if (request.pickupEscape && unsafe && !unsafe[origin]) return { status: 'ready', distance: 0, legs: [],
+        arrival: { x: request.x, y: request.y, facing: null } };
+    if ((request.lineNavigation || request.recoverPatrolLane || request.pickupEscape) && unsafe?.[origin] && fixedHeading < 0 && request.timingCue) {
         const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
         const choices = refugeCandidates(world.player, origin, unsafe, stops, cancelled, request.recoverPatrolLane)
             .map(candidate => request.recoverPatrolLane ? { ...candidate,
@@ -648,6 +653,7 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
             } : {})
         }, player, choices, cancelled);
         if (opening) return { status: 'timedCue', opening, stopAtPocket: true };
+        if (request.pickupEscape) return { status: 'unsafeCrossing', exposed: true };
     }
     if (request.pickup && unsafe && !unsafe[origin] && motion.patrols.some(actor => actor.id === 4 && actor.forced)) {
         // Barrel 3's sole reachable action side is in guard 4's lane. Check

@@ -61,6 +61,10 @@ const c = vm.createContext({
 Object.setPrototypeOf(c.Game_Character.prototype, c.Game_CharacterBase.prototype);
 for (const cls of [c.Game_Player, c.Game_Event, c.Game_Vehicle]) Object.setPrototypeOf(cls.prototype, c.Game_Character.prototype);
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
+// Only the cave pickup fixture supplies a complete native message stand-in.
+// Other map fixtures retain their established presentation-only handling.
+c.caveMessageProducer = c.Game_Interpreter.prototype.command101;
+delete c.Game_Interpreter.prototype.command101;
 c.Game_Player.prototype.isDebugThrough = () => false;
 c.Game_Event.prototype.lock = () => {};
 c.Game_CharacterBase.prototype.updateAnimation = () => {};

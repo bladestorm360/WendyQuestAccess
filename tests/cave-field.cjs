@@ -22,14 +22,15 @@ function verifyCaveField(c, load, configureMotion) {
             Object.assign(event, { _erased: true, _pageIndex: -1, _through: true, _trigger: null });
         return { run, guards };
     }
-    const keys = ['Input', '$gameTemp', '$gameMessage', '$gameScreen', 'addEventListener',
+    const keys = ['Input', '$gameTemp', '$gameMessage', '$gameScreen', '$dataCommonEvents', 'addEventListener',
         'WendyQuestAccessFieldMove', 'WendyQuestAccessAutowalkInput', 'WendyQuestAccessFieldEvent',
         'WendyQuestAccessCaveEventAccepted', 'WendyQuestAccessSceneLeaving', 'WendyQuestAccessFieldChanged', 'WendyQuestAccessCaveTimingMoved'];
     const saved = Object.fromEntries(keys.map(key => [key, c[key]]));
     const originalScene = c.SceneManager._scene, app = c.Graphics.app;
     const members = c.$gameParty.members, inBattle = c.$gameParty.inBattle;
     const renderer = new EventEmitter();
-    const scene = { _wqaMapRestored: true, _wqaFieldReady: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0 };
+    const scene = { _wqaMapRestored: true, _wqaFieldReady: true, _mapLoaded: true, _started: true,
+        _prevCanMove: true, srcWendy: {}, srcStones: {}, _active: true, _fadeDuration: 0, _fadeOpacity: 0 };
     const preferences = { autowalk: true };
     const packets = [], records = [], accepted = [], diagnostics = [];
     const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
@@ -58,6 +59,15 @@ function verifyCaveField(c, load, configureMotion) {
             }
         }
     }
+    let nativeLoot = false, nativePickup = 0, messageLeft = 0, lootMessages = 0, messagePose = null;
+    const commonEvents = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/CommonEvents.json'), 'utf8'));
+    const previousMessage = c.Game_Interpreter.prototype.command101;
+    c.Game_Interpreter.prototype.command101 = c.caveMessageProducer;
+    const childSetup = c.Game_Interpreter.prototype.setup;
+    c.Game_Interpreter.prototype.setup = function(list, id) {
+        Object.assign(this, { _list: list, _eventId: id, _mapId: c.$gameMap._mapId,
+            _index: 0, _branch: {}, _waitMode: '', _waitCount: 0, _depth: 0, _childInterpreter: null });
+    };
     let serial = 0, deliver, manualDrive = null, staticLeg = null, manualNext = false, pickupPrompt = null, crystalMessages = 0;
     const routeSource = path.join(__dirname, '../src/world/route-worker.cjs');
     function createRouteWorker(buffer) {
@@ -105,7 +115,14 @@ function verifyCaveField(c, load, configureMotion) {
     c.$gameScreen = { _brightness: 255 };
     c.Input = { dir4: 0 };
     c.$gameTemp = { isDestinationValid: () => false, clearDestination() {}, isCommonEventReserved: () => false };
-    c.$gameMessage = { isBusy: () => false };
+    c.$gameMessage = { isBusy: () => messageLeft > 0, setFaceImage() {}, setBackground() {},
+        setPositionType() {}, setSpeakerName() {}, add() {
+            if (!messageLeft) {
+                if (this._wqaSpeakerEvent === nativePickup) lootMessages++;
+                messagePose = [c.$gamePlayer.x, c.$gamePlayer.y];
+            }
+            messageLeft = 48;
+        } };
     c.$gameParty.members = () => [4];
     c.$gameParty.inBattle = () => false;
     c.addEventListener = () => {};
@@ -181,6 +198,12 @@ function verifyCaveField(c, load, configureMotion) {
             Object.assign(event, { _through: page?.through ?? true, _priorityType: page?.priorityType ?? 0,
                 _trigger: page?.trigger, _characterName: page?.image.characterName || '', _tileId: page?.image.tileId || 0 });
         };
+        const selfSwitches = new Set();
+        c.$gameSelfSwitches.value = key => selfSwitches.has(key.join(','));
+        c.$gameSelfSwitches.setValue = (key, value) => {
+            if (value) selfSwitches.add(key.join(',')); else selfSwitches.delete(key.join(','));
+            gameMap._needsRefresh = true;
+        };
         const switches = new Set();
         c.$gameSwitches.value = key => switches.has(key);
         c.$gameSwitches.setValue = (key, value) => {
@@ -203,9 +226,9 @@ function verifyCaveField(c, load, configureMotion) {
             }
             gameMap._needsRefresh = false;
         };
-        let checkpoint = 0;
-        c.$gameVariables.value = () => checkpoint;
-        c.$gameVariables.setValue = (id, value) => { if (id === 90) checkpoint = value; };
+        const variables = new Map();
+        c.$gameVariables.value = id => variables.get(id) || 0;
+        c.$gameVariables.setValue = (id, value) => { variables.set(id, value); };
         source = gameMap._interpreter = Object.assign(new c.Game_Interpreter(), {
             _list: null, setup(list, id) {
                 c.WendyQuestAccessSceneLeaving(scene, id);
@@ -213,6 +236,9 @@ function verifyCaveField(c, load, configureMotion) {
                     _index: 0, _branch: {}, _waitMode: '', _waitCount: 0 });
             }
         });
+        gameMap.isEventRunning = () => !!source._list;
+        c.$dataCommonEvents = nativeLoot ? commonEvents : [];
+        messageLeft = lootMessages = 0; messagePose = null;
         c.Graphics.frameCount = 0;
         scene._wqaFieldReady = true;
         scene._wqaCaveGuideActive = false;
@@ -251,19 +277,30 @@ function verifyCaveField(c, load, configureMotion) {
 
     function execute(interpreter) {
         if (!interpreter?._list) return;
+        if (interpreter._childInterpreter) {
+            execute(interpreter._childInterpreter);
+            if (interpreter._childInterpreter._list) return;
+            interpreter._childInterpreter = null;
+        }
         // Native branch, switch, route, wait and erase bodies run. Native page
         // selection drives the parallel return routes; art/audio are stand-ins.
         if (interpreter._waitCount > 0) { interpreter._waitCount--; return; }
         if (interpreter.updateWaitMode()) return;
         for (let count = 0; interpreter._list && count < 128; count++) {
             if (interpreter._index >= interpreter._list.length) { interpreter._list = null; break; }
+            if (interpreter._childInterpreter) {
+                execute(interpreter._childInterpreter);
+                if (interpreter._childInterpreter._list) break;
+                interpreter._childInterpreter = null;
+            }
             // The retail message-start producer closes field output without
             // an event ID. Preserve this real boundary even with art stubbed.
             if (interpreter._list[interpreter._index]?.code === 101) {
                 if (fixture.id === 200 && interpreter._eventId === 5) crystalMessages++;
                 c.WendyQuestAccessSceneLeaving(scene);
             }
-            interpreter.executeCommand();
+            if (!nativeLoot && interpreter._list[interpreter._index]?.code === 101) interpreter._index++;
+            else interpreter.executeCommand();
             if (interpreter._waitCount || interpreter._waitMode) break;
         }
     }
@@ -272,6 +309,10 @@ function verifyCaveField(c, load, configureMotion) {
         const { gameMap, player } = fixture;
         frameCost = 0;
         c.Graphics.frameCount++;
+        if (messageLeft > 0) {
+            assert.deepEqual([player.x, player.y], messagePose, 'Autowalk must wait while the native loot message is open');
+            messageLeft--;
+        }
         if (delayedMove && c.Graphics.frameCount >= delayedMove.frame) {
             c.Input.dir4 = delayedMove.direction; delayedMove = null;
         }
@@ -331,9 +372,21 @@ function verifyCaveField(c, load, configureMotion) {
             if (!source._list) gameMap.setupStartingMapEvent();
             execute(source);
         }
+        // MapScene's real end-of-update gate closes as soon as a guard's
+        // native switch command requests a page refresh, even mid-step.
+        // The previous fixture kept ready true until settled and missed this.
+        if (fixture.id === 200) {
+            const wasReady = scene._wqaFieldReady;
+            scene._wqaFieldReady = !source._list && !gameMap._needsRefresh &&
+                !(closeSecondPrompt && gameMap._events[10]?.isStarting());
+            if (!scene._wqaFieldReady && wasReady) {
+                if (!field.holdNativeRefresh(scene)) timing.stop(scene);
+                measure(() => field.controlLost(scene), 'native-control-lost');
+            }
+        }
         if (!source._list && !player.isMoving() && !(closeSecondPrompt && gameMap._events[10]?.isStarting())) {
-            scene._wqaFieldReady = true;
-            measure(() => field.observeReady(scene), 'field-ready');
+            if (fixture.id !== 200) scene._wqaFieldReady = true;
+            if (scene._wqaFieldReady) measure(() => field.observeReady(scene), 'field-ready');
         }
         if (field.ready(scene, true) && scene._wqaCaveCueDue && scene._wqaCaveCueDue <= c.Graphics.frameCount)
             measure(() => timing.update(scene));
@@ -562,7 +615,7 @@ function verifyCaveField(c, load, configureMotion) {
             assert.equal(source._eventId, test.target, 'The original barrel remains selected ' +
                 JSON.stringify({ test, accepted, position: [fixture.player.x,fixture.player.y],
                     reports: records.slice(-5).map(formatSpeech), diagnostics: diagnostics.slice(-10), manualDrive, manualNext }));
-            if (test.target === 3) {
+            if (test.target === 3 && !test.automatic) {
                 assert(records.some(record => /open the barrel, then move 1 north/i.test(record.guide || record.name || '')),
                     'The transient interaction includes its escape direction');
                 // A finite native replay checks the reserved pickup delay and
@@ -577,6 +630,44 @@ function verifyCaveField(c, load, configureMotion) {
                 assert.deepEqual([fixture.player.x, fixture.player.y], [23, 24]);
             }
         }
+        // No fixture interaction input is supplied for these pickups. Their
+        // actual common events consume self A and hold a native message; then
+        // the production coordinator must escape using a fresh guard snapshot.
+        nativeLoot = true;
+        for (const test of [
+            { map:196, target:9, point:[2,38], from:[11,49] },
+            { map:199, target:2, point:[13,30], from:[13,31] },
+            { map:199, target:10, point:[25,10], from:[25,11] },
+            { map:199, target:25, point:[15,3], from:[15,4] },
+            { map:199, target:34, point:[3,7], from:[3,8], name:'Chest', category:'Treasure' },
+            { map:200, target:3, point:[22,25], from:[9,33] },
+            { map:200, target:12, point:[33,7], from:[9,33] },
+            { map:200, target:20, point:[19,14], from:[9,33] }
+        ]) {
+            preferences.autowalk = true;
+            records.length = accepted.length = diagnostics.length = 0;
+            nativePickup = test.target;
+            start(test.map,...test.from,0,0);
+            select(test.name || 'Barrel',test.category || 'Objects',test.point);
+            ask('directions');
+            let collected = false, completed = false;
+            for (let frame=0; frame<16000; frame++) {
+                tick();
+                collected ||= c.$gameSelfSwitches.value([test.map,test.target,'A']);
+                if (collected && !source._list && !fixture.player.isMoving() &&
+                    !field.autowalk.active(scene) && !c.Graphics._wqaCaveAutoPending && !packets.length) {
+                    for (let settle=0;settle<180;settle++) tick();
+                    completed = true;
+                    break;
+                }
+            }
+            assert(collected && completed,'Automatic pickup and protected stop '+JSON.stringify({test,collected,accepted,at:[fixture.player.x,fixture.player.y],reports:records.slice(-5).map(formatSpeech),diagnostics:diagnostics.slice(-6)}));
+            assert.equal(lootMessages, 1,'The native pickup holds its acquired message');
+            assert(!records.some(row => /unavailable|Autowalk stopped/.test(row.name || '')),'No consumed destination failure');
+            if (test.map===200 && test.target===3) assert.deepEqual([fixture.player.x,fixture.player.y],[23,24],'First barrel retreats north after its message');
+        }
+        nativeLoot = false;
+        console.log('Verified all eight cave pickups through native common-event self-switch and message waits, automatic interaction without fixture Confirm, and protected departure.');
         records.length = accepted.length = diagnostics.length = 0;
         preferences.autowalk = true;
         start(200, entry[2], entry[3], 0, 26);
@@ -636,6 +727,9 @@ function verifyCaveField(c, load, configureMotion) {
     } finally {
         field.leave(scene);
         Object.assign(c, saved);
+        c.Game_Interpreter.prototype.setup = childSetup;
+        if (previousMessage) c.Game_Interpreter.prototype.command101 = previousMessage;
+        else delete c.Game_Interpreter.prototype.command101;
         c.SceneManager._scene = originalScene;
         c.Graphics.app = app;
         Object.assign(c.Graphics, previousView);

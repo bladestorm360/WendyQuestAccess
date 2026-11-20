@@ -23,6 +23,7 @@ const { createCaveGuide, timedCave, warningApproach, captureMotion, distractionF
     checkpointTarget } = require('./puzzles/cave');
 const { acceptedAction, chaseContinuation, activeDistraction } = require('./puzzles/cave-progression');
 const { createChaseGuide } = require('./puzzles/cave-chase');
+const { caveLootAction } = require('./puzzles/cave-loot');
 const { capturePatrolLine } = require('./puzzles/patrol-line-playback');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
@@ -125,6 +126,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     let manualCrossing = null;
     const preferences = host.navigationPreferences;
     const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed, arrived, job) => {
+        if (arrived && job?.caveWalk?.pickupEscape) {
+            retire(scene);
+            return;
+        }
         if (arrived && job?.caveContinue) {
             resumeCaveWalk(job, job.caveExit);
             return;
@@ -141,17 +146,17 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (scene._wqaArrivalSpeech) arrivalScene = scene;
         } else if (record && scene === host.manager._scene) command('navigationReport', record);
         else retire(scene);
-    });
+    }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true));
 
     function guideFor(scene) {
         if (salt.available(scene)) return salt;
         return cave.available(scene) ? cave : null;
     }
 
-    function ready(scene, moving = false, waking = false) {
+    function ready(scene, moving = false, waking = false, refreshing = false) {
         const player = root.$gamePlayer;
         const map = root.$gameMap;
-        const nativeField = scene?._wqaFieldReady || waking && scene?._wqaMapRestored && scene._mapLoaded &&
+        const nativeField = scene?._wqaFieldReady || (waking || refreshing) && scene?._wqaMapRestored && scene._mapLoaded &&
             scene._started && scene._prevCanMove && scene.srcWendy && scene.srcStones;
         return !!(nativeField && !scene._wqaSettingsActive &&
             scene === host.manager._scene && host.graphics.app?.stage === scene &&
@@ -159,7 +164,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             !host.graphics._wqaResize && !host.screenFading() && host.hasFocus() && !scene._wqaTerrainWork &&
             !scene._wqaPreloads?.size && !scene._wqaPreloadOverflow &&
             scene._active && scene._fadeDuration === 0 && scene._fadeOpacity === 0 && root.$gameScreen?._brightness === 255 &&
-            (waking || map?.inactiveTime < 30) && (!map?._needsRefresh || scene._wqaNonPageRefreshOnly) &&
+            (waking || map?.inactiveTime < 30) && (!map?._needsRefresh || scene._wqaNonPageRefreshOnly || refreshing) &&
             map && !map._needsTilemapRefresh && !player?._transferring &&
             !player?._vehicleGettingOn && !player?._vehicleGettingOff &&
             !root.$gameMessage?.isBusy() && !map?._interpreter?._list && travelMode(map, player) &&
@@ -827,6 +832,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (job.caveWalk.x !== snapshot.x || job.caveWalk.y !== snapshot.y)
                 Object.assign(job.caveWalk, { x: snapshot.x, y: snapshot.y, attempt: 0 });
             job.caveAction = event => expectCaveAction(job, event);
+            job.caveLoot = !!caveLootAction(root, job.scene, root.$gameMap._events[job.target]);
         }
         // Capture recovery can select a crystal itself. It then bypasses the
         // stationary-blocker branch, but still needs a fresh continuation on
@@ -861,6 +867,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 (!!job.caveWalk?.distractionCrossing || manualCrossing?.scene === job.scene &&
                     manualCrossing.map === root.$gameMap && manualCrossing.player === root.$gamePlayer) &&
                 snapshot.x === 34 && snapshot.y === 14,
+            pickupEscape: job.caveWalk?.pickupEscape === true,
             lineNavigation });
     }
 
@@ -891,7 +898,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const map = root.$gameMap;
         const list = event.list();
         if (list !== root.$dataMap.events[event._eventId]?.pages[event._pageIndex]?.list) return null;
-        return acceptedAction(root, scene, event) ||
+        return acceptedAction(root, scene, event) || caveLootAction(root, scene, event) ||
             (checkpointTarget(map._mapId, event._eventId, event._pageIndex, event._trigger) ?
                 { scene, origin: map._mapId, event, list } : null);
     }
@@ -915,13 +922,14 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return eventId === undefined && main?._eventId === action.event._eventId && main._list === action.list;
     }
 
-    function queuedCrystal(pending, scene) {
+    function queuedCaveInteraction(pending, scene) {
         const map = root.$gameMap;
         if (!pending || pending.scene !== scene || pending.map !== map || pending.player !== root.$gamePlayer ||
             scene !== host.manager._scene || host.manager._nextScene || root.$gamePlayer._transferring) return false;
         const event = pending.event || map._events[pending.eventId];
-        return event?.isStarting() && (!pending.list || event.list() === pending.list) &&
-            !!caveAction(scene, event)?.crystal;
+        const action = caveAction(scene, event);
+        return !!(event?.isStarting() && (!pending.list || event.list() === pending.list) &&
+            (action?.crystal || action?.loot));
     }
 
     function expectCaveAction(job, event) {
@@ -981,7 +989,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             job.caveFloor = floor._eventId;
             job.caveArrives = floor._eventId === (job.caveWalk.destination.event ?? job.caveWalk.destination.id);
         }
-        job.caveContinue = !terminal;
+        job.caveContinue = !terminal && !job.caveWalk.pickupEscape;
         if (!autowalk.start(job, { distance: course.length, course, gate, arrival: { x, y, facing: null } },
             { kind: 'routeDirections', name: job.label, legs, guide: terminal ? job.guide : undefined }))
             return status(job, 'Autowalk stopped. The crossing changed. Request directions again.');
@@ -1629,6 +1637,15 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                             frames: host.graphics.frameCount - action.requestedAt,
                             guard: guard && [guardId, guard._x, guard._y, guard._moveRouteIndex, guard._jumpCount] } });
                     }
+                    if (action.loot) {
+                        // The native common event has consumed the pickup and
+                        // closed its message. Replan an escape from this fresh
+                        // pose rather than route to the now-missing barrel.
+                        if (!action.event._erased && action.event._pageIndex === 0) return;
+                        action.caveWalk.pickupEscape = true;
+                        action.caveWalk.destination = { point: true, category: 'objects', name: 'Pickup retreat',
+                            x: root.$gamePlayer._x, y: root.$gamePlayer._y };
+                    }
                     const chase = chaseContinuation(root, action);
                     if (action.chase !== undefined && !chase)
                         return command('status', 'Autowalk stopped. The chase changed.');
@@ -1724,17 +1741,21 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 queue({ scene, action: job.action, changes: job.performed ? [] : job.changes, retries: job.retries + 1 });
             }
         },
+        holdNativeRefresh(scene) {
+            return !!(root.$gameMap?._needsRefresh && ready(scene, true, false, true));
+        },
         controlLost(scene) {
             retireArrival(scene, true);
-            autowalk.stop(scene);
-            retire(scene);
+            const refresh = root.$gameMap?._needsRefresh && ready(scene, true, false, true);
+            if (!autowalk.holdRefresh(scene)) autowalk.stop(scene);
+            retire(scene, refresh);
             if (control?.scene === scene) control = null;
         },
         leave(scene, mapEventId) {
             // Interpreter.setup is the definitive native acceptance site.
             // A cold resource/prompt gate may suppress the earlier field-ready
-            // notification; preserve only this exact queued crystal action.
-            if (caveEvent?.crystal && !caveEvent.accepted &&
+            // notification; preserve only this exact queued crystal or loot action.
+            if ((caveEvent?.crystal || caveEvent?.loot) && !caveEvent.accepted &&
                 sameCaveAction(caveEvent, scene, mapEventId) && caveEvent.event.list() === caveEvent.list) {
                 caveEvent.accepted = true;
                 caveEvent.acceptance = 'interpreter';
@@ -1750,8 +1771,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             // Native resource entry can occur after Event.start but before
             // Interpreter.setup. Retain only that exact queued crystal token;
             // it is still unaccepted and cannot resume until setup confirms it.
-            const queuedManual = mapEventId === undefined && queuedCrystal(manualAction, scene);
-            const queuedAutomatic = mapEventId === undefined && queuedCrystal(caveEvent, scene);
+            const queuedManual = mapEventId === undefined && queuedCaveInteraction(manualAction, scene);
+            const queuedAutomatic = mapEventId === undefined && queuedCaveInteraction(caveEvent, scene);
             if (!queuedManual && !sameCaveAction(manualAction, scene, mapEventId)) setManualAction(null);
             if (root.$gameMap?._mapId !== 200 || !mapEventId) manualCrossing = null;
             clearCaveResume();

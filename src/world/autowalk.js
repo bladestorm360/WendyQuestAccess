@@ -12,7 +12,7 @@ const { admitPatrolLine, patrolStepReady } = require('./puzzles/patrol-line-play
 
 const TOUCH_TRIGGERS = [1, 2];
 
-function createAutowalk(root, ready, preferences, report) {
+function createAutowalk(root, ready, preferences, report, refreshReady = () => false) {
     let active = null;
     const targetAt = (map, job) => job.vehicle ? parkedVehicle(map, job.vehicle.type) : map._events?.[job.target];
 
@@ -73,8 +73,9 @@ function createAutowalk(root, ready, preferences, report) {
             if (!current) return changed(state, 'Autowalk stopped. The interaction approach changed. Request directions again.');
             player.setDirection(facing);
         }
-        if (job.caveCrystal && atApproach(map, player, target, arrival) && job.caveAction?.(target)) {
+        if ((job.caveCrystal || job.caveLoot) && atApproach(map, player, target, arrival) && job.caveAction?.(target)) {
             stop(state.scene);
+            if (job.caveLoot) report(state.scene, null, false, true, job);
             if (facing === null) player.checkEventTriggerHere([0]);
             else player.checkEventTriggerThere([0]);
             // Complete the native Action Button path instead of leaving its
@@ -109,6 +110,22 @@ function createAutowalk(root, ready, preferences, report) {
             target?._x === state.targetX && target?._y === state.targetY && target?._trigger === state.trigger;
     }
 
+    function holdRefresh(scene) {
+        const state = active;
+        // A guard can request native page refresh while Wendy interpolates.
+        // Keep the already certified movement owner inert through that narrow
+        // gate; do not discard its remaining crossing or admit other loading.
+        if (!(state?.scene === scene && state.job.caveWalk && !state.dirty && !state.pending &&
+            preferences().autowalk && refreshReady(scene, state.refreshPaused === true) &&
+            !root.$gameMap.isAnyEventStarting?.() &&
+            (state.due ? state.player === root.$gamePlayer : valid(state)))) return false;
+        // Game_Map consumes refresh before player input, while MapScene only
+        // republishes readiness at the end of that update. Hold the same inert
+        // lease across that one publication boundary as well.
+        state.refreshPaused = true;
+        return true;
+    }
+
     function input(scene, player, direction, manual) {
         const state = active;
         if (!state || state.scene !== scene || state.player !== player) return direction;
@@ -119,6 +136,7 @@ function createAutowalk(root, ready, preferences, report) {
             report(scene, null, false, false, state.job);
             return direction;
         }
+        if (!ready(scene) && holdRefresh(scene)) return 0;
         if (!ready(scene) || state.map?.isAnyEventStarting?.() || !preferences().autowalk) {
             if (state.job.caveWalk && root.$gameMap?._mapId === 200 && root.$gameMap._needsRefresh &&
                 !root.$gameMap._interpreter?._list && preferences().autowalk) {
@@ -127,6 +145,7 @@ function createAutowalk(root, ready, preferences, report) {
             }
             return end(state, null, true);
         }
+        state.refreshPaused = false;
         if (state.due) {
             if (root.Graphics.frameCount < state.due) return 0;
             return end(state, null, false, true);
@@ -203,7 +222,7 @@ function createAutowalk(root, ready, preferences, report) {
         state.pending = null;
     }
 
-    return { start, wait, stop, input, moved, active: scene => active?.scene === scene,
+    return { start, wait, stop, input, moved, holdRefresh, active: scene => active?.scene === scene,
         dirty(scene) { if (active?.scene === scene) active.dirty = true; } };
 }
 

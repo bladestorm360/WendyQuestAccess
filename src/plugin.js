@@ -860,7 +860,7 @@ function boot(root, nodeRequire, nodeProcess) {
         soundscape?.leave(scene);
         wall?.leave(scene);
         footsteps?.leave(scene);
-        caveTiming?.stop(scene);
+        if (!field?.holdNativeRefresh(scene)) caveTiming?.stop(scene);
         beacon?.stop(scene);
         field?.controlLost(scene);
         autosaveNotice?.leave(scene);

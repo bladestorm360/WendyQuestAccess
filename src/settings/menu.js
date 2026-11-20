@@ -253,7 +253,7 @@ function createSettingsMenu(root, host) {
                     '. Read the visible quest tracker ' + gestureName(keys.details) + '.',
                 'All combines destinations and bookmarks. Use ' + binding('filterToggle') +
                     ' to switch between all active destinations and reachable destinations only.',
-                'Toggle Autowalk ' + binding('autowalkToggle') + ' or under Navigation. When on, use Directions to walk. Hear Walking, then Arrived. Wendy faces the interaction when needed. Use Confirm to interact or take the final exit step yourself.',
+                'Toggle Autowalk ' + binding('autowalkToggle') + ' or under Navigation. When on, use Directions to walk. Hear Walking, then Arrived. Selected Secret Cave barrels and chests open automatically. Close the reward message, then Wendy moves to a checked protected stop. Use Confirm for other objects or the final exit step.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
                 'Turn on Spoiler mode under Navigation to find marked optional secrets before discovering them in the game.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
