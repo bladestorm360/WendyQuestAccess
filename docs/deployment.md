@@ -799,3 +799,15 @@ November 20, 2026. The focused single-plugin candidate passes the full world, na
 Closed-game manifest/launcher admission and installed readback passed. Plan dc73e113fd20a589a94908a8aff6ec688fd7ecaf2958e6b9daeff08791efe12f matches all 45 payload files, 16 native scripts and 241 geometry entries. Four save/config hashes and original native recovery bytes are unchanged; browser preferences were not written. Installer status reports Installed and verified. Source checkpoint 3a4e2ad852637f201bd3e7bf1dbc1e87a17cbe8b was pushed and the private remote ref verified before deployment.
 
 The single optional rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-crystal-repeat/rollback-latest, containing preceding plan 9cbf0477e1bff10c7d1fba4f370ee771aeecff20554d4f0851a62fc2d3a1a4f6 and source checkpoint ec361c34cf599cf91977fb54d2cf466f579c9bde. Its native bytes, payload and geometry were verified. The superseded optional rollback was removed before copying the known-good installed version. Cleanup removed 24,546,232 generated build/staging/fixture/disposable analysis bytes. The task folder retains only the final Defender result and verified rollback. Two older closed-task logs were pruned under retention; their deployment results and newer world receipt remain, bringing retained development logs to 20. Rebuild with the canonical bundler, replace only the plugin, reuse hash-verified dependencies/geometry and the unchanged current native transforms, then use the canonical installer. No game launch, control or live probe was performed. Physical feedback and repeat-activation gameplay confirmation remain open.
+
+
+## Autowalk crystal handoff and exposed escape
+
+November 20, 2026. The focused candidate changes the plugin, crossing worker and shared patrol-motion constants. All 42 other payload dependencies, 16 native transforms and 241 geometry entries are reused by verified hash. First-use/repeat crystal Autowalk, direct/recovery guide entry, ten exposed native phases and delayed manual escapes pass alongside both prior rooms, both barrels, all crystal/chase handoffs and 178,356 world comparisons. Native input, transport, capture recovery, packaged syntax and matching NW.js 0.48.4 runtime pass. Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.387.0 found no threats in the exact final candidate. Installer rehearsal/deployment remain in progress.
+
+- Candidate plan SHA-256 `dafaad1b518d172ac167c148b61ef4106dc1095a37ed775e08d9692e2b2ab783`
+- Plugin SHA-256 `b1dc9e923af23014f958634170ff8488a82e75e079081911109a6b39d9413d9a`
+- Crossing worker SHA-256 `2598f4bc1f83dd1e77045fdd46b835cf0ce6cb77391100a99442677daf8ba7c4`
+- Shared patrol-motion SHA-256 `7a69bd97181a96852eb1e0a1a7fad0f42c842800d02efc12e949eb3e02e7a2bc`
+
+[Mode correction, forecast bounds, native phase evidence and gameplay limits](puzzles-and-secrets.md#automatic-crystal-handoff-and-exposed-escapes). [Scope checkpoint](feature-checkpoint.md#autowalk-crystal-handoff-and-exposed-escape). No game launch, control or live probe was performed.

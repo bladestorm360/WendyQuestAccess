@@ -237,17 +237,17 @@ function crossingToSafeTile(world, origin, distances, unsafe, stops, distance, a
     return choice;
 }
 
-function refugeCandidates(world, origin, unsafe, stops, cancelled) {
+function refugeCandidates(world, origin, unsafe, stops, cancelled, recovery = false) {
     // An interrupted crossing may need to turn into a pocket that is
     // away from the original destination. Follow only passable tiles.
     const queue = [{ cell: origin, headings: [] }];
     const seen = new Uint8Array(world.cells.length);
     const choices = [];
     seen[origin] = 1;
-    for (let index = 0; index < queue.length && choices.length < 6; index++) {
+    for (let index = 0; index < queue.length && choices.length < (recovery ? 16 : 6); index++) {
         if (cancelled()) return [];
         const { cell, headings } = queue[index];
-        if (headings.length >= 5) break;
+        if (headings.length >= (recovery ? MAX_CROSSING_STEPS : 5)) break;
         for (let heading = 0; heading < DIRECTIONS.length; heading++) {
             const next = step(world, cell, heading);
             if (next < 0 || seen[next] || stops[next]) continue;
@@ -555,7 +555,7 @@ function openingFor(world, motion, player, choices, cancelled) {
         writeMotionStamp(history, (delay % ringLength) * stride, waiting.patrols);
         for (let i = 0; i < choices.length; i++) {
             const candidate = choices[i];
-            const minSpan = candidate.pace ? TIMING_CUE.paceSpan : MIN_START_WINDOW;
+            const minSpan = motion.escapeSpan ?? (candidate.pace ? TIMING_CUE.paceSpan : MIN_START_WINDOW);
             if (!safeStart(world, waiting, motion, candidate, cancelled)) {
                 consecutive[i] = 0;
                 continue;
@@ -569,7 +569,8 @@ function openingFor(world, motion, player, choices, cancelled) {
                 through++;
                 writeMotionStamp(history, (through % ringLength) * stride, waiting.patrols);
             }
-            const samples = through - from - TIMING_CUE.lead + 1;
+            const lead = motion.escapeLead ?? TIMING_CUE.lead;
+            const samples = through - from - lead + 1;
             const stamps = new Float64Array(stride * samples);
             for (let frame = 0; frame < samples; frame++) {
                 const begin = ((from + frame) % ringLength) * stride;
@@ -577,6 +578,7 @@ function openingFor(world, motion, player, choices, cancelled) {
             }
             return { direction: DIRECTIONS[candidate.heading], tiles: candidate.count, headings: candidate.headings, escape: candidate.escape, terminal: candidate.terminal,
                 alternate: candidate.heading !== choices[0].heading, pace: candidate.pace,
+                ...(motion.escapeLead === undefined ? {} : { urgent: true, lead }),
                 ...(candidate.turnGrace === undefined ? {} : { turnGrace: candidate.turnGrace }), from, through, stamps };
         }
         if (advancePatrols(waiting) !== 'settled') break;
@@ -632,11 +634,19 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     }
     if ((request.lineNavigation || request.recoverPatrolLane) && unsafe?.[origin] && fixedHeading < 0 && request.timingCue) {
         const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
-        const choices = refugeCandidates(world.player, origin, unsafe, stops, cancelled)
+        const choices = refugeCandidates(world.player, origin, unsafe, stops, cancelled, request.recoverPatrolLane)
             .map(candidate => request.recoverPatrolLane ? { ...candidate,
                 turnGrace: request.autowalk ? 0 : TIMING_CUE.earlyTurnGrace } : candidate)
             .filter(candidate => studyCrossing(world, origin, { ...motion, dash: false }, candidate, cancelled));
-        const opening = choices.length && openingFor(world, { ...motion, exposed: true }, player, choices, cancelled);
+        // Wendy is already exposed: qualify immediate departures rather than
+        // requiring the safe-zone wait window. Keep a human response allowance
+        // for manual pings, or a short stamp-checked native window for Autowalk.
+        const opening = choices.length && openingFor(world, { ...motion, exposed: true,
+            ...(request.recoverPatrolLane ? {
+                escapeSpan: request.autowalk ? TIMING_CUE.automaticEscapeSpan : TIMING_CUE.escapeSpan,
+                escapeLead: request.autowalk ? TIMING_CUE.automaticEscapeLead : TIMING_CUE.escapeLead
+            } : {})
+        }, player, choices, cancelled);
         if (opening) return { status: 'timedCue', opening, stopAtPocket: true };
     }
     if (request.pickup && unsafe && !unsafe[origin] && motion.patrols.some(actor => actor.id === 4 && actor.forced)) {

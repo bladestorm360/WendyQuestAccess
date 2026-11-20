@@ -67,17 +67,22 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         const { motion } = captured;
         const distractionEscape = captured.map._mapId === 200 && (opening?.escape || opening?.distraction || opening?.pickup) &&
             opening.turnGrace === (captured.automatic ? 0 : opening.distraction ? TIMING_CUE.turnGrace : TIMING_CUE.earlyTurnGrace);
+        const urgent = captured.map._mapId === 200 && opening?.escape && opening.urgent === true &&
+            opening.lead === (captured.automatic ? TIMING_CUE.automaticEscapeLead : TIMING_CUE.escapeLead);
+        const lead = urgent ? opening.lead : TIMING_CUE.lead;
         const span = opening?.through - opening?.from;
-        const samples = span - TIMING_CUE.lead + 1;
+        const minimum = urgent ? captured.automatic ? TIMING_CUE.automaticEscapeSpan : TIMING_CUE.escapeSpan :
+            opening?.pace ? TIMING_CUE.paceSpan : TIMING_CUE.minSpan;
+        const samples = span - lead + 1;
         if (!CARDINAL[opening?.direction] || !Number.isInteger(opening.from) ||
             opening.from < 0 || opening.from > (opening.pace ? TIMING_CUE.paceWait : TIMING_CUE.wait) || !Number.isInteger(span) ||
-            span < (opening.pace ? TIMING_CUE.paceSpan : TIMING_CUE.minSpan) || span > TIMING_CUE.maxSpan ||
+            span < minimum || span > TIMING_CUE.maxSpan || opening.urgent && !urgent ||
             (opening.turnGrace !== undefined && !distractionEscape && (opening.turnGrace !== TIMING_CUE.earlyTurnGrace ||
                 opening.escape || !Array.isArray(opening.headings))) ||
             Object.prototype.toString.call(opening.stamps) !== '[object Float64Array]' ||
             opening.stamps.length !== captured.refs.length * STAMP_WIDTH * samples) return false;
         const due = motion.frame + opening.from;
-        return frame() < due + samples ? { opening, due, samples } : null;
+        return frame() < due + samples ? { opening, due, samples, lead } : null;
     }
 
     function schedule(state, due) {
@@ -197,7 +202,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
     function verifiedAt(state, now) {
         const { motion, opening, refs } = state;
         const delta = now - state.due;
-        if (delta < 0 || delta >= state.samples || motion.frame + opening.through - now < TIMING_CUE.lead) return false;
+        if (delta < 0 || delta >= state.samples || motion.frame + opening.through - now < state.lead) return false;
         const current = captureMotion(root, root.Graphics);
         if (!current || current.speed !== motion.speed || current.dash !== motion.dash || current.barrier !== motion.barrier ||
             current.patrols.length !== refs.length ||

@@ -481,7 +481,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const opening = result.opening;
                 if (job.caveWalk) {
                     const gate = opening && host.caveTiming.automaticGate(job.timing, opening);
-                    if (!gate) return waitCaveWalk(job);
+                    if (!gate) return waitCaveWalk(job, opening?.urgent === true);
                     const headings = opening.headings || Array(opening.tiles).fill(DIRECTIONS.indexOf(opening.direction));
                     if (result.pickup) {
                         const course = Uint8Array.from(headings);
@@ -544,9 +544,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 if (job.caveWalk) return waitCaveWalk(job);
                 return waitManual(job);
             }
-            if (result?.status === 'unsafeCrossing' && result.exposed && !job.caveWalk) return retire(job.scene);
-            if (result?.status === 'unsafeCrossing') return status(job, result.exposed ?
-                'You are in a patrol lane. No clear move verified.' : 'No crossing to a safe stopping point is verified here.');
+            if (result?.status === 'unsafeCrossing' && result.exposed) return retire(job.scene);
+            if (result?.status === 'unsafeCrossing') return status(job, 'No crossing to a safe stopping point is verified here.');
             if (job.caveWalk && result?.status === 'patrolApproach')
                 return startCaveSegment(job, [{ direction: result.direction, tiles: result.tiles }],
                     null, result.terminal);
@@ -832,7 +831,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         // Capture recovery can select a crystal itself. It then bypasses the
         // stationary-blocker branch, but still needs a fresh continuation on
         // every accepted activation, including the branch with no dialogue.
-        if (!job.caveWalk && motion && snapshot.map === 200 && manualAction?.eventId !== job.target) {
+        if ((!job.caveWalk || !job.caveCrystal) && motion && snapshot.map === 200 && manualAction?.eventId !== job.target) {
             const action = caveAction(job.scene, root.$gameMap._events[job.target]);
             if (action?.crystal && !action.blocked) {
                 setManualAction({ scene: job.scene, map: root.$gameMap, player: root.$gamePlayer,
@@ -940,10 +939,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         host.graphics._wqaCaveAutoPending = !!caveEvent;
     }
 
-    function waitCaveWalk(job) {
-        const limit = job.map === 200 ? 60 : 30;
-        if (++job.caveWalk.attempt > limit || !autowalk.wait(job, 18))
-            return status(job, 'Autowalk stopped. No safe opening verified. Request directions again.');
+    function waitCaveWalk(job, urgent = false) {
+        const limit = urgent ? 8 : job.map === 200 ? 60 : 30;
+        if (++job.caveWalk.attempt > limit || !autowalk.wait(job, urgent ? 1 : 18))
+            return urgent ? retire(job.scene) : status(job, 'Autowalk stopped. No safe opening verified. Request directions again.');
         job.caveContinue = true;
         announceCaveWalk(job);
     }
@@ -1321,6 +1320,16 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             const result = guideFor(job.scene)?.review(job.scene, snapshot.objects, snapshot.x, snapshot.y);
             if (!result) return retire(job.scene);
             if (!result.target) return status(job, result.text);
+            // Recovery guidance must use the configured automatic mode too.
+            // The room exit already owns verified crystal/checkpoint routing;
+            // manual guide options would strand automatic travel at a crystal.
+            const automaticExit = snapshot.map === 200 && preferences().autowalk &&
+                snapshot.objects.find(target => target.id === 11 && target.category === 'exits');
+            if (automaticExit) {
+                selectGuideTarget(automaticExit);
+                job.action = 'directions';
+                return timedRoute(job, snapshot, automaticExit);
+            }
             selectGuideTarget(result.target);
             job.guide = result.text;
             job.readyGuide = result.readyText;

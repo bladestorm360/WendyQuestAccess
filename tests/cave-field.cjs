@@ -36,7 +36,7 @@ function verifyCaveField(c, load, configureMotion) {
     let field, fixture, guards, source, repeatChecked = false, pendingArrival = false;
     const guidanceCost = { calls: 0, total: 0, peak: 0 };
     const patrolCost = { calls: 0, total: 0, peak: 0, framePeak: 0 };
-    let frameCost = 0;
+    let frameCost = 0, firstPingDelay = 0, delayedMove = null;
     const replyCost = { calls: 0, total: 0, peak: 0, cpuTotal: 0, cpuPeak: 0 };
     function measure(callback) {
         if (preferences.autowalk || ![196, 199, 200, 201].includes(fixture?.id)) return callback();
@@ -105,7 +105,11 @@ function verifyCaveField(c, load, configureMotion) {
             if (!preferences.autowalk && [196, 199, 200].includes(fixture?.id)) {
                 if (cue === CUE.caveGo) {
                     manualDrive = 'timed';
-                    c.Input.dir4 = source[0] ? source[0] < 0 ? 4 : 6 : source[2] < 0 ? 2 : 8;
+                    const direction = source[0] ? source[0] < 0 ? 4 : 6 : source[2] < 0 ? 2 : 8;
+                    if (firstPingDelay) {
+                        delayedMove = { frame: c.Graphics.frameCount + firstPingDelay, direction };
+                        firstPingDelay = 0;
+                    } else if (!delayedMove) c.Input.dir4 = direction;
                 } else if (cue === CUE.wallBump) {
                     c.Input.dir4 = 0;
                     if (pickupPrompt && c.$gamePlayer.x === 23 && c.$gamePlayer.y === 25) {
@@ -128,7 +132,7 @@ function verifyCaveField(c, load, configureMotion) {
             pendingArrival = true;
             return ++serial;
         }, endArrival() {}
-    }, (job, result) => diagnostics.push({ target: job.target, destination: job.caveWalk?.destination?.id, status: result?.status, frame: c.Graphics.frameCount, x: c.$gamePlayer.x, y: c.$gamePlayer.y, direction: result?.direction, tiles: result?.tiles, guard: [c.$gameMap._events[4]?._x, c.$gameMap._events[4]?._y, c.$gameMap._events[4]?._moveRouteForcing, c.$gameMap._events[4]?._moveRouteIndex], gate: c.$gameSwitches.value(582) }));
+    }, (job, result) => diagnostics.push({ target: job.target, destination: job.caveWalk?.destination?.id, status: result?.status, frame: c.Graphics.frameCount, x: c.$gamePlayer.x, y: c.$gamePlayer.y, direction: result?.direction, tiles: result?.tiles, opening: result?.opening && {from:result.opening.from,through:result.opening.through,headings:result.opening.headings,urgent:result.opening.urgent,lead:result.opening.lead,escape:result.opening.escape}, guard: [c.$gameMap._events[4]?._x, c.$gameMap._events[4]?._y, c.$gameMap._events[4]?._moveRouteForcing, c.$gameMap._events[4]?._moveRouteIndex], gate: c.$gameSwitches.value(582) }));
     c.WendyQuestAccessFieldChanged = (owner, actor) => {
         measure(() => {
             if (actor === c.$gamePlayer) timing.pose(owner); else timing.stop(owner);
@@ -195,7 +199,7 @@ function verifyCaveField(c, load, configureMotion) {
         scene._wqaFieldReady = true;
         scene._wqaCaveGuideActive = false;
         c.Input.dir4 = 0;
-        manualDrive = staticLeg = pickupPrompt = null; manualNext = false; pendingArrival = false; crystalMessages = 0;
+        manualDrive = staticLeg = pickupPrompt = null; manualNext = false; pendingArrival = false; crystalMessages = 0; firstPingDelay = 0; delayedMove = null;
     }
 
     function render() {
@@ -245,6 +249,9 @@ function verifyCaveField(c, load, configureMotion) {
         const { gameMap, player } = fixture;
         frameCost = 0;
         c.Graphics.frameCount++;
+        if (delayedMove && c.Graphics.frameCount >= delayedMove.frame) {
+            c.Input.dir4 = delayedMove.direction; delayedMove = null;
+        }
         gameMap.refreshIfNeeded();
         gameMap.updateEvents();
         for (const event of gameMap.events()) if (event._trigger === 4) execute(event._interpreter);
@@ -359,6 +366,65 @@ function verifyCaveField(c, load, configureMotion) {
             assert.equal(timing.describe(scene), '3 east.', 'The escape begins immediately after repeat activation');
             for (let frame = 0; frame < 800 && fixture.player.y !== 30; frame++) tick();
             assert.deepEqual([fixture.player.x, fixture.player.y], [19, 30], 'The repeat escape reaches the same protected stop');
+        }
+
+        // Source-verified guard phases at the reported exposed tiles.
+        // These had no normal waiting window; escape must use current collision
+        // and a complete checked route, without changing a native guard.
+        for (const automatic of [true, false]) for (const [point, phase] of automatic ? [
+            [[16,29],32], [[16,29],48], [[19,29],80], [[19,29],96],
+            [[19,29],272], [[19,29],288], [[21,29],48], [[21,29],64],
+            [[21,29],304], [[21,29],320]
+        ] : [[[19,29],80], [[21,29],48]]) {
+            preferences.autowalk = automatic;
+            records.length = accepted.length = diagnostics.length = 0;
+            start(200, 9, 33, 0, 26);
+            fixture.gameMap._events[4].forceMoveRoute(fixture.map.events[5].pages[0].list[25].parameters[1]);
+            for (let i=0;i<phase;i++) fixture.gameMap.updateEvents();
+            fixture.player.setPosition(...point);
+            fixture.gameMap._displayX = Math.max(0, point[0]-fixture.player.centerX());
+            fixture.gameMap._displayY = Math.min(point[1]-fixture.player.centerY(),fixture.map.height-fixture.gameMap.screenTileY());
+            fixture.gameMap.refreshIfNeeded();
+            if (!automatic) firstPingDelay = 14;
+            select('Barrel','Objects',[22,25]);
+            ask('directions');
+            const result = diagnostics.at(-1);
+            assert.equal(result.status, 'timedCue', 'Exposed departure must yield an escape ' + JSON.stringify({automatic,point,phase,result}));
+            assert(result.opening.urgent && result.opening.escape);
+            let [x,y] = point;
+            for (const heading of result.opening.headings) {
+                x = fixture.gameMap.roundXWithDirection(x, DIRECTIONS[heading]);
+                y = fixture.gameMap.roundYWithDirection(y, DIRECTIONS[heading]);
+            }
+            for (let frame=0;frame<800 && !(fixture.player.x===x && fixture.player.y===y && !fixture.player.isMoving());frame++) tick();
+            assert.deepEqual([fixture.player.x,fixture.player.y], [x,y], 'The certified escape reaches its protected endpoint');
+            assert(!records.some(record => /patrol lane|No .*route|No .*verified/i.test(formatSpeech(record))));
+        }
+
+        // A recovered guide or directly selected crystal must retain the
+        // configured automatic mode across both native activation branches.
+        for (const firstUse of [false, true]) for (const action of ['puzzleGuide', 'directions']) {
+            preferences.autowalk = true;
+            records.length = accepted.length = diagnostics.length = 0;
+            start(200, 9, 33, 0, 26);
+            c.$gameSwitches.setValue(587, !firstUse);
+            c.$gameVariables.setValue(90, 2);
+            fixture.gameMap.refreshIfNeeded();
+            if (action === 'directions') select('Distraction crystal', 'Objects', [15, 29]);
+            ask(action);
+            for (let frame = 0; frame < 1800 && !(accepted.includes(5) && !source._list); frame++) {
+                tick();
+                if (pendingArrival && !fixture.player.isMoving()) {
+                    pendingArrival = false;
+                    fixture.player.checkEventTriggerThere([0]);
+                }
+            }
+            assert(accepted.includes(5), 'Autowalk reaches the crystal from ' + action);
+            assert(!source._list, 'Native crystal activation completes');
+            assert.equal(crystalMessages > 0, firstUse, 'The intended native activation branch ran');
+            assert(field.autowalk.active(scene), 'Autowalk must resume after the crystal ' + JSON.stringify({action,firstUse,reports:records.slice(-3).map(formatSpeech)}));
+            for (let frame = 0; frame < 800 && !(fixture.player.x === 19 && fixture.player.y === 30); frame++) tick();
+            assert.deepEqual([fixture.player.x, fixture.player.y], [19, 30], 'Autowalk exits the crystal lane');
         }
 
         const entry = load(199).map.events[26].pages[0].list.find(command => command.code === 201).parameters;
