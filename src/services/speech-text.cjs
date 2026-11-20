@@ -288,6 +288,8 @@ function formatSpeech(message) {
                 const discovery = label({ name: message.discovery });
                 if (discovery) parts.push(`Then request walking directions to ${discovery}`);
             }
+            else if (message.distractionCrystal) parts.push((facing ? `Face ${facing} and press` : 'Press') +
+                ' the action button to activate the distraction crystal');
             else if (message.guideAction) parts.push(facing ? `Face ${facing} and press the action button` : 'Press the action button');
             else if (facing && !beaconOnly) parts.push(`face ${facing}`);
             const onward = !more && takeExit && (message.useExit || message.takeExit) && label({ name: message.onward });

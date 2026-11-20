@@ -261,6 +261,33 @@ function refugeCandidates(world, origin, unsafe, stops, cancelled) {
     return choices;
 }
 
+function distractionBlocker(world, motion, request, origin, cancelled) {
+    const guards = motion.patrols.filter(actor => actor.hazard && !actor.through && stationaryPatrol(actor));
+    if (!guards.length) return 0;
+    // Only Map 200 calls this preflight. Its two checkpoints record progress
+    // without changing connectivity. Ignore them in this dependency test;
+    // actual crystal routes still stop at and execute their native events.
+    const events = world.events.map(event => (event.id === 6 || event.id === 15) && !event.normal && event.trigger === 1 ?
+        { ...event, action: false } : event);
+    const blocked = world.blocked.slice();
+    for (const guard of guards) blocked[indexOf(world, guard.x, guard.y)] = 1;
+    const clear = solveWorldRoute({ ...world, events, blocked }, request, cancelled);
+    if (clear.status !== 'unreachable' && clear.status !== 'approachBlocked') return 0;
+    const onward = solveWorldRoute({ ...world, events }, request, cancelled);
+    if (onward.status !== 'ready') return 0;
+    let cell = origin;
+    for (const leg of onward.legs) {
+        const heading = DIRECTIONS.indexOf(leg.direction);
+        for (let left = leg.tiles; left > 0; left--) {
+            if ((left & 31) === 0 && cancelled()) return 0;
+            cell = step(world, cell, heading);
+            const guard = guards.find(actor => indexOf(world, actor.x, actor.y) === cell);
+            if (guard) return guard.id;
+        }
+    }
+    return 0;
+}
+
 function pickupApproaches(world, goals, origin, unsafe, stops, cancelled) {
     const queue = [{ cell: origin, headings: [] }];
     const seen = new Uint8Array(world.cells.length);
@@ -583,6 +610,11 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     const unsafe = patrolGuidance && (fixedHeading < 0 || request.timingHeadings) && !motion.barrier &&
         patrolCoverage(world.patrol, motion.patrols, cancelled);
     if (cancelled()) return { status: 'cancelled' };
+    if (request.recoverPatrolLane && unsafe && !unsafe[origin] && fixedHeading < 0 && !request.guideOptions) {
+        const guard = distractionBlocker(world.player, motion, request, origin, cancelled);
+        if (guard) return { status: 'patrolBlocked', guard };
+        if (cancelled()) return { status: 'cancelled' };
+    }
     if (request.pickup && unsafe?.[origin] && motion.patrols.some(actor => actor.id === 4 && actor.forced)) {
         const goals = routeGoals(world.player, request, cancelled);
         if (goals?.[origin]) for (let escape = 0; escape < DIRECTIONS.length; escape++) {

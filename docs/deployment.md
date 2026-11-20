@@ -750,3 +750,16 @@ The game-side integration and native registration hashes are unchanged. [Scope, 
 Source checkpoint `41f6c0a9ad06e89e654f5420ffa47276635c8522` was pushed to the owned private origin/main and the remote ref matched before deployment. The single verified recovery is C:/Games/Dev/WendyQuestAccess-analysis/wendy-barrel-distraction/rollback-latest, containing preceding plan `4cedc9ec52b8307a3998a671e0c15c905cb15effbf92a9a07cef18d4057901a2` and source `9bfa20c1473f4b251bac92f16854a62a6978a7e8`. Its payload, geometry and native bytes were verified before installation. The superseded recovery was removed. Gameplay confirmation of this barrel's physical cue and action timing remains open.
 
 Task-close cleanup removed 25,261,648 generated build/staging/geometry-test bytes, 42,294 disposable probe/script/log bytes and the 13,396,746-byte superseded recovery. The current task directory retains only the exact Defender result and the single verified rollback. Tests ran under C: in the capped 816 MB, one-worker resource runner; no retired-drive work, game launch or live probe was performed. Rebuild at the checkpoint using the canonical bundler and installer, reuse verified unchanged payloads, and replace the plugin, route worker and crossing worker. The exact installer plan and hashes above identify the shipped result.
+
+### Crystal-first guidance
+
+November 20, 2026. The focused build changes the plugin, crossing worker and speech formatter. It reuses 42 verified payload files, all 16 native transforms and all 241 geometry entries. Both barrel routes now resolve their first required crystal before walking directions. Repeated Directions stays on the crystal, including at its action point. Post-activation native readiness takes a fresh snapshot for the selected destination. The existing pickup/retreat is preserved.
+
+The final focused field replay, full 178,356 world comparisons, earlier patrol rooms, nine chase handoffs, native input, speech transport, matching NW.js 0.48.4 smoke, exact installer rehearsal and packaged syntax checks passed. The final runtime invocation initially found both shared resource slots occupied and launched no child. It was retried under identical limits after the world replay released its slot, and passed. Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.387.0 found no threats in the exact final candidate. Local installation readback is pending.
+
+- Candidate plan SHA-256 `128b13779087f3fbf1b58bf6644f14ee4fd5f6f50f5775c4899714e5d685e796`
+- Plugin SHA-256 `f51a781071ec88df1ff8bfc57daba4eda914e53f744dfae72e4f8cfb2c3c0a9b`
+- Speech formatter SHA-256 `d3599afdb1d8f452aac063063265c0ec53a7f40bea48103632e2124e7a8706a9`
+- Crossing worker SHA-256 `e22b25f7a5b6f68f1120136b0c1e9ebe54e54de316b5df90ee1ee0db47528979`
+
+[Behavior, finite dependency test, callback accounting and gameplay limits](puzzles-and-secrets.md#crystal-first-route-ownership). No native game script, DLL, geometry, timing preference or saved setting is changed by this correction.

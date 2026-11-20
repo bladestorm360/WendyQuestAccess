@@ -531,8 +531,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     job.caveBlocker = result.guard;
                     job.guideOptions = null;
                     job.readyGuide = '';
-                    job.guide = job.caveCrystal ? undefined :
-                        'Press the action button to draw the guards away. Guidance resumes when movement returns. Move on the pings and stop at the thud, then request directions from there.';
+                    // The actual route now ends at the crystal. Its action
+                    // instruction follows the walking legs, not a barrel route.
+                    job.guide = undefined;
                     return route(job, snapshot, target, undefined, motion);
                 }
                 return status(job, 'Blocked by a stationary Mech Guard.');
@@ -590,6 +591,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const exitEvent = exit && root.$gameMap._events?.[job.target];
                 const bump = job.eventAction === 'bump' || !!exitEvent && exitEvent._trigger === 1 && exitEvent._priorityType === 1;
                 follow(job, result, { kind: 'routeDirections', name: job.label, guide: job.guide,
+                    distractionCrystal: !!job.caveBlocker,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
                     reenter: result.reenter === true, enter: job.entrance?.action ?? exitEvent?._trigger === 0,
                     exit, takeExit: !!exit, onward: job.onward,

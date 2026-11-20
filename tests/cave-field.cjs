@@ -33,7 +33,7 @@ function verifyCaveField(c, load, configureMotion) {
     const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
     let field, fixture, guards, source, repeatChecked = false, pendingArrival = false;
     const guidanceCost = { calls: 0, total: 0, peak: 0 };
-    const replyCost = { calls: 0, total: 0, peak: 0 };
+    const replyCost = { calls: 0, total: 0, peak: 0, cpuTotal: 0, cpuPeak: 0 };
     function measure(callback) {
         if (preferences.autowalk || fixture?.id !== 201) return callback();
         const start = performance.now();
@@ -64,10 +64,14 @@ function verifyCaveField(c, load, configureMotion) {
                     } else if (result.status === 'timedCue' || result.status === 'timedWait') manualDrive = 'timed';
                 }
                 const beforeReply = performance.now();
+                const beforeCpu = process.cpuUsage();
                 worker.emit('message', packet);
                 if (fixture.id === 200) {
                     const elapsed = performance.now() - beforeReply;
+                    const used = process.cpuUsage(beforeCpu);
+                    const cpu = (used.user + used.system) / 1000;
                     replyCost.calls++; replyCost.total += elapsed; replyCost.peak = Math.max(replyCost.peak, elapsed);
+                    replyCost.cpuTotal += cpu; replyCost.cpuPeak = Math.max(replyCost.cpuPeak, cpu);
                 }
             } };
         const nativeRequire = createRequire(routeSource);
@@ -293,16 +297,42 @@ function verifyCaveField(c, load, configureMotion) {
             start(200, ...(test.from || [entry[2], entry[3], 0, 26]));
             select('Barrel', 'Objects', test.point);
             ask('directions');
+            if (packets.length) render();
+            assert.equal(diagnostics.at(-1).target, 5,
+                'The first walking leg must target the crystal, even far from the barrel');
             if (test.from) assert(diagnostics.some(row => row.status === 'patrolBlocked'),
                 'A stationary guard must select its crystal: ' + JSON.stringify(diagnostics));
+            let rechecks = 0, crystalRechecked = false, checked = [fixture.player.x, fixture.player.y];
             for (let frame = 0; frame < 14000 && source._eventId !== test.target; frame++) {
                 tick();
+                if (!test.automatic && test.target === 3 && !accepted.includes(5) && rechecks < 3 &&
+                    !fixture.player.isMoving() && field.ready(scene) &&
+                    (checked[0] !== fixture.player.x || checked[1] !== fixture.player.y)) {
+                    checked = [fixture.player.x, fixture.player.y];
+                    ask('directions');
+                    if (packets.length) render();
+                    rechecks++;
+                    assert.equal(diagnostics.at(-1).target, 5,
+                        'Directions while approaching the crystal must keep routing to it');
+                }
+                if (!test.automatic && test.target === 3 && !accepted.includes(5) && !crystalRechecked &&
+                    fixture.player.x === 16 && fixture.player.y === 29 && !fixture.player.isMoving() && field.ready(scene)) {
+                    ask('directions');
+                    if (packets.length) render();
+                    crystalRechecked = true;
+                    assert.equal(diagnostics.at(-1).target, 5);
+                    assert.match(formatSpeech(records.at(-1)), /Face west and press the action button to activate the distraction crystal/);
+                }
                 if (test.automatic && pendingArrival && !fixture.player.isMoving()) {
                     pendingArrival = false;
                     fixture.player.checkEventTriggerThere([0]);
                 }
             }
             assert(accepted.includes(5), 'The barrel route activates crystal 5');
+            if (!test.automatic && test.target === 3) {
+                assert.equal(rechecks, 3);
+                assert(crystalRechecked, 'Directions at the crystal still gives its activation action');
+            }
             assert.equal(source._eventId, test.target, 'The original barrel remains selected ' +
                 JSON.stringify({ test, accepted, position: [fixture.player.x,fixture.player.y],
                     reports: records.slice(-5).map(formatSpeech), diagnostics: diagnostics.slice(-10), manualDrive, manualNext }));
@@ -346,7 +376,8 @@ function verifyCaveField(c, load, configureMotion) {
         assert([5, 10, 19].every(id => accepted.includes(id)), 'Manual crystal activation remained available ' + JSON.stringify({accepted, position:[fixture.player.x,fixture.player.y], reports:records.slice(-4).map(formatSpeech), diagnostics:diagnostics.slice(-6), manualDrive, manualNext}));
         assert.equal(source._eventId, 11, JSON.stringify({ accepted, position: [fixture.player.x,fixture.player.y],
             reports: records.slice(-4).map(formatSpeech), diagnostics: diagnostics.slice(-5), manualDrive, manualNext }));
-        assert(records.some(record => record.guide?.includes('Press the action button')));
+        assert(records.some(record => record.distractionCrystal &&
+            formatSpeech(record).includes('activate the distraction crystal')));
 
         for (const automatic of [true, false]) {
             preferences.autowalk = automatic;
