@@ -225,7 +225,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
         const switchValue = c.$gameSwitches.value;
         const timing = createCaveTiming(c, value => value === scene, null, null);
         c.Input = { dir4: 0 };
-        c.$gameTemp = { isDestinationValid: () => false, clearDestination() {} };
+        c.$gameTemp = { isDestinationValid: () => false, clearDestination() {}, isCommonEventReserved: () => false };
         c.$gameMessage = { isBusy: () => false };
         scene._wqaFieldReady = true;
         c.WendyQuestAccessFieldMove = auto.moved;
@@ -318,11 +318,17 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
             c.$gameSwitches.value = () => false;
             const { acceptedAction, chaseContinuation } = require('../src/world/puzzles/cave-progression');
             let crystalAction;
+            distraction.run.gameMap.refreshIfNeeded = () => {};
+            distraction.run.gameMap._interpreter = Object.assign(new c.Game_Interpreter(), {
+                setup(list, id) { this._list=list;this._eventId=id; }
+            });
             walk(distraction.run, crystalTick, 5, [], { facing: 4,
                 job: { caveCrystal: true, caveAction: event => !!(crystalAction = acceptedAction(c, scene, event)) } });
             assert.equal(crystalAction?.event, crystal);
-            assert(crystal.isStarting());
-            crystal._starting = false;
+            assert(!crystal.isStarting(), 'The native action path consumes the queued crystal start');
+            assert.equal(distraction.run.gameMap._interpreter._eventId,5);
+            assert.equal(distraction.run.gameMap._interpreter._list,crystal.list());
+            distraction.run.gameMap._interpreter._list=null;
             const command = crystal.list()[25];
             distraction.run.gameMap._events[command.parameters[0]].forceMoveRoute(command.parameters[1]);
             assert.equal(distractionForGuard(c, 9).id, 10);
@@ -371,7 +377,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
         const renderer = new EventEmitter();
         c.Graphics.app = { renderer };
         c.Input = { dir4: 0 };
-        c.$gameTemp = { isDestinationValid: () => false, clearDestination() {} };
+        c.$gameTemp = { isDestinationValid: () => false, clearDestination() {}, isCommonEventReserved: () => false };
         c.$gameMessage = { isBusy: () => false };
         const reports = [];
         const sounds = [];
@@ -618,7 +624,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
         const auto = createAutowalk(c, () => true, () => prefs,
             (_scene, record, failed, arrived) => reports.push({ record, failed, arrived }));
         c.Input = { dir4: 0 };
-        c.$gameTemp = { isDestinationValid: () => false, clearDestination() {} };
+        c.$gameTemp = { isDestinationValid: () => false, clearDestination() {}, isCommonEventReserved: () => false };
         c.$gameMessage = { isBusy: () => false };
         c.WendyQuestAccessFieldMove = auto.moved;
         c.WendyQuestAccessAutowalkInput = auto.input;

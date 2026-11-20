@@ -34,19 +34,29 @@ function verifyCaveField(c, load, configureMotion) {
     const packets = [], records = [], accepted = [], diagnostics = [];
     const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
     let field, fixture, guards, source, repeatChecked = false, pendingArrival = false;
+    const computeCosts = [];
+    const automaticCost = { calls: 0, total: 0, peak: 0, framePeak: 0 };
+    let measureDepth = 0;
+    const callbackOutliers = [];
     const guidanceCost = { calls: 0, total: 0, peak: 0 };
     const patrolCost = { calls: 0, total: 0, peak: 0, framePeak: 0 };
-    let frameCost = 0, firstPingDelay = 0, delayedMove = null;
+    let frameCost = 0, firstPingDelay = 0, delayedMove = null, closeSecondPrompt = false;
     const replyCost = { calls: 0, total: 0, peak: 0, cpuTotal: 0, cpuPeak: 0 };
-    function measure(callback) {
-        if (preferences.autowalk || ![196, 199, 200, 201].includes(fixture?.id)) return callback();
-        const start = performance.now();
-        const result = callback();
-        const elapsed = performance.now() - start;
-        const cost = fixture.id === 201 ? guidanceCost : patrolCost;
-        cost.calls++; cost.total += elapsed; cost.peak = Math.max(cost.peak, elapsed);
-        if (fixture.id !== 201) frameCost += elapsed;
-        return result;
+    function measure(callback, label = 'callback') {
+        if (measureDepth || ![196,199,200,201].includes(fixture?.id)) return callback();
+        const cost = preferences.autowalk ? automaticCost : fixture.id===201 ? guidanceCost : patrolCost;
+        const start=performance.now(), cpuStart=process.cpuUsage();measureDepth++;
+        try { return callback(); }
+        finally {
+            measureDepth--;
+            const elapsed=performance.now()-start;
+            cost.calls++;cost.total+=elapsed;cost.peak=Math.max(cost.peak,elapsed);
+            frameCost+=elapsed;
+            if (elapsed>25 && callbackOutliers.length<16) {
+                const cpu=process.cpuUsage(cpuStart);
+                callbackOutliers.push({label,ms:elapsed,cpu:(cpu.user+cpu.system)/1000,map:fixture.id,automatic:preferences.autowalk,x:fixture.player.x,y:fixture.player.y});
+            }
+        }
     }
     let serial = 0, deliver, manualDrive = null, staticLeg = null, manualNext = false, pickupPrompt = null, crystalMessages = 0;
     const routeSource = path.join(__dirname, '../src/world/route-worker.cjs');
@@ -73,7 +83,7 @@ function verifyCaveField(c, load, configureMotion) {
                 }
                 const beforeReply = performance.now();
                 const beforeCpu = process.cpuUsage();
-                measure(() => worker.emit('message', packet));
+                measure(() => worker.emit('message', packet), 'worker-reply');
                 if ([196, 199, 200].includes(fixture.id)) {
                     const elapsed = performance.now() - beforeReply;
                     const used = process.cpuUsage(beforeCpu);
@@ -94,7 +104,7 @@ function verifyCaveField(c, load, configureMotion) {
     c.Graphics.app = { stage: scene, renderer };
     c.$gameScreen = { _brightness: 255 };
     c.Input = { dir4: 0 };
-    c.$gameTemp = { isDestinationValid: () => false, clearDestination() {} };
+    c.$gameTemp = { isDestinationValid: () => false, clearDestination() {}, isCommonEventReserved: () => false };
     c.$gameMessage = { isBusy: () => false };
     c.$gameParty.members = () => [4];
     c.$gameParty.inBattle = () => false;
@@ -140,7 +150,7 @@ function verifyCaveField(c, load, configureMotion) {
         });
     };
     c.WendyQuestAccessCaveTimingMoved = (...args) => measure(() => timing.moved(...args));
-    c.WendyQuestAccessAutowalkInput = field.autowalk.input;
+    c.WendyQuestAccessAutowalkInput = (...args) => measure(() => field.autowalk.input(...args), 'native-input');
     c.WendyQuestAccessFieldMove = (owner, direction, succeeded) => {
         measure(() => { field.autowalk.moved(owner, direction, succeeded); field.chaseMoved(owner, direction, succeeded); });
     };
@@ -149,12 +159,20 @@ function verifyCaveField(c, load, configureMotion) {
         accepted.push(event._eventId);
         measure(() => field.caveEventAccepted(owner, event));
     };
-    c.WendyQuestAccessSceneLeaving = (owner, eventId) => measure(() => field.leave(owner, eventId));
+    c.WendyQuestAccessSceneLeaving = (owner, eventId) => measure(() => field.leave(owner, eventId), 'native-entry');
 
     function start(map, x, y, viewX, viewY) {
         field.leave(scene);
         ({ run: fixture, guards } = setup(map, x, y, viewX, viewY));
         const { player, gameMap } = fixture;
+        const checkThere = player.checkEventTriggerThere;
+        player.checkEventTriggerThere = function(triggers) {
+            checkThere.call(this, triggers);
+            if (closeSecondPrompt && gameMap._events[10]?.isStarting()) {
+                scene._wqaFieldReady = false;
+                c.WendyQuestAccessSceneLeaving(scene);
+            }
+        };
         delete player.direction;
         Object.assign(player._followers, { areGathering: () => false, updateMove() {} });
         gameMap.inactiveTime = 0;
@@ -199,15 +217,20 @@ function verifyCaveField(c, load, configureMotion) {
         scene._wqaFieldReady = true;
         scene._wqaCaveGuideActive = false;
         c.Input.dir4 = 0;
-        manualDrive = staticLeg = pickupPrompt = null; manualNext = false; pendingArrival = false; crystalMessages = 0; firstPingDelay = 0; delayedMove = null;
+        manualDrive = staticLeg = pickupPrompt = null; manualNext = false; pendingArrival = false; crystalMessages = 0; firstPingDelay = 0; delayedMove = null; closeSecondPrompt = false;
     }
 
     function render() {
-        if (renderer.listenerCount('postrender')) measure(() => renderer.emit('postrender'));
+        if (renderer.listenerCount('postrender')) measure(() => renderer.emit('postrender'), 'postrender');
         const packet = packets.shift();
         if (packet) {
             assert(!packets.length);
+            const costStart = performance.now(), cpuStart = process.cpuUsage();
             deliver(structuredClone(packet));
+            if (fixture.id === 200 && fixture.player.x === 34 && fixture.player.y === 20) {
+                const cpu = process.cpuUsage(cpuStart);
+                computeCosts.push({ms:performance.now()-costStart,cpu:(cpu.user+cpu.system)/1000,action:packet.request?.event});
+            }
         }
     }
 
@@ -253,6 +276,12 @@ function verifyCaveField(c, load, configureMotion) {
             c.Input.dir4 = delayedMove.direction; delayedMove = null;
         }
         gameMap.refreshIfNeeded();
+        // Retail Game_Map updates its main interpreter before event actors;
+        // a crystal's newly forced guard route can jump on this same update.
+        if (fixture.id === 200) {
+            if (!source._list) gameMap.setupStartingMapEvent();
+            execute(source);
+        }
         gameMap.updateEvents();
         for (const event of gameMap.events()) if (event._trigger === 4) execute(event._interpreter);
         assert(!guards.some(guard => guard.isStarting()),
@@ -298,16 +327,19 @@ function verifyCaveField(c, load, configureMotion) {
         if (tookStep) player.updateMove();
         player.updateScroll(beforeX, beforeY);
         if ((wasMoving || tookStep) && !player.isMoving() && !source._list) player.checkEventTriggerHere([1]);
-        if (!source._list) gameMap.setupStartingMapEvent();
-        execute(source);
-        if (!source._list && !player.isMoving()) {
+        if (fixture.id !== 200) {
+            if (!source._list) gameMap.setupStartingMapEvent();
+            execute(source);
+        }
+        if (!source._list && !player.isMoving() && !(closeSecondPrompt && gameMap._events[10]?.isStarting())) {
             scene._wqaFieldReady = true;
-            measure(() => field.observeReady(scene));
+            measure(() => field.observeReady(scene), 'field-ready');
         }
         if (field.ready(scene, true) && scene._wqaCaveCueDue && scene._wqaCaveCueDue <= c.Graphics.frameCount)
             measure(() => timing.update(scene));
         render();
-        patrolCost.framePeak = Math.max(patrolCost.framePeak, frameCost);
+        const cost=preferences.autowalk ? automaticCost : patrolCost;
+        cost.framePeak=Math.max(cost.framePeak,frameCost);
     }
 
     try {
@@ -358,11 +390,11 @@ function verifyCaveField(c, load, configureMotion) {
             if (action === 'directions') select('Distraction crystal', 'Objects', [15, 29]);
             ask(action);
             assert.equal(diagnostics.at(-1).target, 5, 'Recovery selects the first crystal directly');
-            for (let frame = 0; frame < 1500 && !(accepted.includes(5) && !source._list); frame++) tick();
+            for (let frame = 0; frame < 1500 && !(accepted.includes(5) && !source._list && field.ready(scene)); frame++) tick();
             assert(accepted.includes(5), 'The repeat crystal is activated with native action');
             assert(!source._list, 'The no-dialogue activation finishes');
             assert.equal(crystalMessages, 0, 'The native repeat branch displays no crystal dialogue');
-            assert(timing.active(scene), 'Repeat crystal activation must automatically arm the escape');
+            assert(timing.active(scene), 'Repeat crystal activation must automatically arm the escape '+JSON.stringify({reports:records.slice(-4).map(formatSpeech),diagnostics:diagnostics.slice(-3),guard:[fixture.gameMap._events[4]._moveRouteIndex,fixture.gameMap._events[4]._jumpCount],action}));
             assert.equal(timing.describe(scene), '3 east.', 'The escape begins immediately after repeat activation');
             for (let frame = 0; frame < 800 && fixture.player.y !== 30; frame++) tick();
             assert.deepEqual([fixture.player.x, fixture.player.y], [19, 30], 'The repeat escape reaches the same protected stop');
@@ -412,7 +444,7 @@ function verifyCaveField(c, load, configureMotion) {
             fixture.gameMap.refreshIfNeeded();
             if (action === 'directions') select('Distraction crystal', 'Objects', [15, 29]);
             ask(action);
-            for (let frame = 0; frame < 1800 && !(accepted.includes(5) && !source._list); frame++) {
+            for (let frame = 0; frame < 1800 && !(accepted.includes(5) && !source._list && field.ready(scene)); frame++) {
                 tick();
                 if (pendingArrival && !fixture.player.isMoving()) {
                     pendingArrival = false;
@@ -425,6 +457,53 @@ function verifyCaveField(c, load, configureMotion) {
             assert(field.autowalk.active(scene), 'Autowalk must resume after the crystal ' + JSON.stringify({action,firstUse,reports:records.slice(-3).map(formatSpeech)}));
             for (let frame = 0; frame < 800 && !(fixture.player.x === 19 && fixture.player.y === 30); frame++) tick();
             assert.deepEqual([fixture.player.x, fixture.player.y], [19, 30], 'Autowalk exits the crystal lane');
+        }
+
+        for (const automatic of [false, true]) {
+            preferences.autowalk=automatic;
+            records.length=accepted.length=diagnostics.length=0;
+            start(200,34,20,24.5,14.875);
+            c.$gameSwitches.setValue(587,true);
+            c.$gameVariables.setValue(90,2);
+            fixture.gameMap.refreshIfNeeded();
+            select('Distraction crystal','Objects',[34,21]);
+            closeSecondPrompt=true;
+            ask('directions');
+            for (let frame=0;frame<1000 && !(source._eventId===10 && !source._list && field.ready(scene));frame++) {
+                tick();
+                if (automatic && pendingArrival && !fixture.player.isMoving()) {
+                    pendingArrival=false;fixture.player.checkEventTriggerThere([0]);
+                }
+            }
+            assert.equal(source._eventId,10,'The directly selected second crystal starts natively');
+            assert(!accepted.includes(10),'The early notifier remains closed');
+            assert(automatic ? field.autowalk.active(scene) : timing.active(scene),'Native setup resumes the selected control mode');
+            for (let frame=0;frame<800 && fixture.player.y!==14;frame++) tick();
+            assert.deepEqual([fixture.player.x,fixture.player.y],[34,14],'The direct second-crystal interaction escapes north');
+        }
+
+        for (const test of [
+            {target:15,name:'Checkpoint',category:'Checkpoints',point:[24,8],closed:true},
+            {target:20,name:'Barrel',category:'Objects',point:[19,14],closed:true}
+        ]) {
+            preferences.autowalk = true;
+            records.length = accepted.length = diagnostics.length = 0;
+            start(200,9,33,0,26);
+            c.$gameSwitches.setValue(587,true);
+            c.$gameVariables.setValue(90,2);
+            fixture.gameMap.refreshIfNeeded();
+            select(test.name,test.category,test.point);
+            closeSecondPrompt = test.closed;
+            ask('directions');
+            for (let frame=0; frame<14000 && source._eventId!==test.target; frame++) {
+                tick();
+                if (pendingArrival && !fixture.player.isMoving()) {
+                    pendingArrival=false;fixture.player.checkEventTriggerThere([0]);
+                }
+            }
+            assert(diagnostics.some(row => row.status === 'crystalReady' && row.target === 10), 'The second crystal is confirmed at native handback');
+            assert(!accepted.includes(10), 'The early acceptance notifier was gated off in this regression');
+            assert.equal(source._eventId,test.target, 'The second-crystal handoff retains its objective '+JSON.stringify({test,at:[fixture.player.x,fixture.player.y],accepted,diagnostics:diagnostics.slice(-8),reports:records.slice(-4).map(formatSpeech)}));
         }
 
         const entry = load(199).map.events[26].pages[0].list.find(command => command.code === 201).parameters;
@@ -563,6 +642,9 @@ function verifyCaveField(c, load, configureMotion) {
         c.$gameParty.members = members;
         c.$gameParty.inBattle = inBattle;
     }
+    console.log('Second-crystal worker-dispatch costs', JSON.stringify(computeCosts), 'throttled wall and coarse process CPU ms; the production worker executes here in the fixture process.');
+    console.log('Capped callback wall outliers',JSON.stringify(callbackOutliers),'with coarse process CPU samples; not a live-game measurement.');
+    console.log('Automatic cave callback accounting',JSON.stringify(automaticCost),'ms including native action setup and nested handoff hooks, counted once.');
     console.log('Manual patrol callback accounting', JSON.stringify(patrolCost), 'ms across accepted movement, event/ready gates, render continuations and replies; worker and physical output excluded.');
     console.log('Patrol-room field reply accounting', JSON.stringify(replyCost), 'ms, excluding route-worker computation and physical output.');
     console.log('Manual chase guidance callback accounting', JSON.stringify(guidanceCost), 'ms in the bounded fixture, excluding worker computation and physical output.');

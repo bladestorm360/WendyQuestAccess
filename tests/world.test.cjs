@@ -55,7 +55,7 @@ const c = vm.createContext({
     Graphics: { width: 480, height: 336 },
     $gameSwitches: { value: () => false }, $gameSelfSwitches: { value: () => false },
     $gameVariables: { value: () => 0 }, $gameActors: { actor: id => id }, $gameParty: { hasItem: () => false, members: () => [] },
-    $dataCommonEvents: [],
+    $dataCommonEvents: [], window: { $testEvent: null },
     $gameTileChanges: {}, Tyruswoo: { TileControl: { tileIdExists: (set, id) => Number.isInteger(tilesets[set].flags[id]) } }
 });
 Object.setPrototypeOf(c.Game_Character.prototype, c.Game_CharacterBase.prototype);

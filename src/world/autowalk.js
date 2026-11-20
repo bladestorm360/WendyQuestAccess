@@ -77,6 +77,10 @@ function createAutowalk(root, ready, preferences, report) {
             stop(state.scene);
             if (facing === null) player.checkEventTriggerHere([0]);
             else player.checkEventTriggerThere([0]);
+            // Complete the native Action Button path instead of leaving its
+            // event queued behind the visible interaction icon for another
+            // update. Reserved/common event priority stays with the engine.
+            if (target.isStarting()) map.setupStartingEvent();
             return 0;
         }
         if (rest.npcBlocker)

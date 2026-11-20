@@ -915,6 +915,15 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return eventId === undefined && main?._eventId === action.event._eventId && main._list === action.list;
     }
 
+    function queuedCrystal(pending, scene) {
+        const map = root.$gameMap;
+        if (!pending || pending.scene !== scene || pending.map !== map || pending.player !== root.$gamePlayer ||
+            scene !== host.manager._scene || host.manager._nextScene || root.$gamePlayer._transferring) return false;
+        const event = pending.event || map._events[pending.eventId];
+        return event?.isStarting() && (!pending.list || event.list() === pending.list) &&
+            !!caveAction(scene, event)?.crystal;
+    }
+
     function expectCaveAction(job, event) {
         const action = caveAction(job.scene, event);
         if (!action) return false;
@@ -923,7 +932,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             job.caveWalk.acted.add(event._eventId);
             if (action.origin === 200 && action.crystal && event._eventId === 10) job.caveWalk.distractionCrossing = true;
             caveEvent = { ...action, map: root.$gameMap, player: root.$gamePlayer, caveWalk: job.caveWalk,
-                expires: host.graphics.frameCount + 40 };
+                expires: host.graphics.frameCount + 40, requestedAt: host.graphics.frameCount };
             host.graphics._wqaCaveAutoPending = true;
         }
         return true;
@@ -1557,7 +1566,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 setManualAction(manualAction);
             }
             cave.accepted(scene, event);
-            if (caveEvent?.scene === scene && caveEvent.event === event) caveEvent.accepted = true;
+            if (caveEvent?.scene === scene && caveEvent.event === event) {
+                caveEvent.accepted = true; caveEvent.acceptance = 'event';
+            }
         },
         bookmarkEntranceAccepted: transfers.accepted,
         bookmarkLandingAccepted: transfers.landingAccepted,
@@ -1607,6 +1618,17 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 clearCaveEvent();
                 if (action.accepted && action.scene === scene && action.map === root.$gameMap &&
                     action.player === root.$gamePlayer && preferences().autowalk) {
+                    if (action.crystal) {
+                        const guardId = action.list[action.crystal[0]]?.parameters?.[0];
+                        const guard = root.$gameMap._events[guardId];
+                        // Record copied handoff facts only after field readiness.
+                        routeDiagnostics({ scene, action: 'directions', map: action.origin, mode: 'walk',
+                            x: root.$gamePlayer._x, y: root.$gamePlayer._y, target: action.event._eventId,
+                            request: { event: action.event._eventId }, destination: action.caveWalk.destination },
+                        { status: 'crystalReady', interaction: { acceptedBy: action.acceptance,
+                            frames: host.graphics.frameCount - action.requestedAt,
+                            guard: guard && [guardId, guard._x, guard._y, guard._moveRouteIndex, guard._jumpCount] } });
+                    }
                     const chase = chaseContinuation(root, action);
                     if (action.chase !== undefined && !chase)
                         return command('status', 'Autowalk stopped. The chase changed.');
@@ -1709,11 +1731,31 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (control?.scene === scene) control = null;
         },
         leave(scene, mapEventId) {
+            // Interpreter.setup is the definitive native acceptance site.
+            // A cold resource/prompt gate may suppress the earlier field-ready
+            // notification; preserve only this exact queued crystal action.
+            if (caveEvent?.crystal && !caveEvent.accepted &&
+                sameCaveAction(caveEvent, scene, mapEventId) && caveEvent.event.list() === caveEvent.list) {
+                caveEvent.accepted = true;
+                caveEvent.acceptance = 'interpreter';
+            }
+            if (manualAction && !manualAction.action && manualAction.scene === scene &&
+                manualAction.map === root.$gameMap && manualAction.player === root.$gamePlayer &&
+                manualAction.eventId === mapEventId && scene === host.manager._scene &&
+                !host.manager._nextScene && !root.$gamePlayer._transferring) {
+                const action = caveAction(scene, root.$gameMap._events[mapEventId]);
+                if (action?.crystal) { manualAction.action = action; setManualAction(manualAction); }
+            }
             chaseGuide.leave(scene, mapEventId);
-            if (!sameCaveAction(manualAction, scene, mapEventId)) setManualAction(null);
+            // Native resource entry can occur after Event.start but before
+            // Interpreter.setup. Retain only that exact queued crystal token;
+            // it is still unaccepted and cannot resume until setup confirms it.
+            const queuedManual = mapEventId === undefined && queuedCrystal(manualAction, scene);
+            const queuedAutomatic = mapEventId === undefined && queuedCrystal(caveEvent, scene);
+            if (!queuedManual && !sameCaveAction(manualAction, scene, mapEventId)) setManualAction(null);
             if (root.$gameMap?._mapId !== 200 || !mapEventId) manualCrossing = null;
             clearCaveResume();
-            if (caveEvent?.scene === scene && (!caveEvent.accepted || !sameCaveAction(caveEvent, scene, mapEventId)))
+            if (caveEvent?.scene === scene && !queuedAutomatic && (!caveEvent.accepted || !sameCaveAction(caveEvent, scene, mapEventId)))
                 clearCaveEvent();
             retireArrival(scene, true);
             if (!(iceRoute?.scene === scene && iceRoute.started && iceRoute.block._eventId === mapEventId))

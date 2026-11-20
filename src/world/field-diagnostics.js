@@ -82,7 +82,8 @@ function createFieldDiagnostics(root, host, nodeRequire, nodeProcess) {
             arrival: result?.arrival, boundary: result?.boundary, reenter: result?.reenter, more: result?.more,
             patrolStep: result?.opening?.direction ?? result?.direction, patrolTiles: result?.opening?.tiles ?? result?.tiles,
             patrolOpening: result?.opening && [result.opening.from, result.opening.through],
-            patrolHeadings: result?.opening?.headings ?? result?.headings
+            patrolHeadings: result?.opening?.headings ?? result?.headings,
+            interaction: result?.interaction
         });
     }
 

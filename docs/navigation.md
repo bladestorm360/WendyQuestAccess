@@ -302,3 +302,6 @@ Brekky Byway, Devilled Nook, Poached Pools, Scrambled Shores, Quiche Coast and B
 ## Distraction and chase handbacks
 
 Directions to a destination in the distraction room now retain the selection through the required crystal interaction. Manual guidance resumes after activation and uses the same directional pings and stop cue. Autowalk activates the crystal and continues after verified native readiness. The chase room speaks one leg at a time and repeats its remaining distance on Directions, including between tiles. See [native ownership, limits and verification](puzzles-and-secrets.md#distraction-crystals-and-current-chase-legs).
+
+
+The [second-crystal native handoff](puzzles-and-secrets.md#second-crystal-native-interaction-handoff) completes the native event-start path for automatic crystal prerequisites and preserves an inert queued action across resource entry. The bounded field log records crystalReady after actual handback, including the acceptance producer, elapsed native frames and copied guard pose/route/jump facts. Direct crystal interactions share the same accepted-setup confirmation. Native dialogue and ordinary final object actions retain player ownership.
