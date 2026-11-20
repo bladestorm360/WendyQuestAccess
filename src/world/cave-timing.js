@@ -65,7 +65,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
 
     function admit(captured, opening) {
         const { motion } = captured;
-        const distractionEscape = captured.map._mapId === 200 && (opening?.escape || opening?.distraction) &&
+        const distractionEscape = captured.map._mapId === 200 && (opening?.escape || opening?.distraction || opening?.pickup) &&
             opening.turnGrace === (captured.automatic ? 0 : opening.distraction ? TIMING_CUE.turnGrace : TIMING_CUE.earlyTurnGrace);
         const span = opening?.through - opening?.from;
         const samples = span - TIMING_CUE.lead + 1;
@@ -262,7 +262,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (state.pocketDue) {
             if (now >= state.pocketDue) {
                 diagnostics?.(state.scene, 'cavePocketReached', 0, 'settled');
-                return finish(state);
+                return finish(state, state.repeat?.endText);
             }
             stopCue(state, now, state.traversal.index - 1);
             return schedule(state, state.pocketDue);

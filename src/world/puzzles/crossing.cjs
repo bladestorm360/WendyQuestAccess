@@ -11,6 +11,9 @@ const START_WINDOW = 60;
 const MIN_START_WINDOW = TIMING_CUE.minSpan;
 const MAX_STEPS = 3;
 const MAX_CROSSING_STEPS = 12;
+// This finite interaction allowance is forecast along with the retreat, not
+// a delay imposed on the game or an unlimited invitation to wait in the lane.
+const PICKUP_PAUSE = 90;
 
 function stationaryRoute(route) {
     return route?.commands.every(([code]) => code === 0 || code === 25 || code >= 15 && code <= 19);
@@ -258,6 +261,35 @@ function refugeCandidates(world, origin, unsafe, stops, cancelled) {
     return choices;
 }
 
+function pickupApproaches(world, goals, origin, unsafe, stops, cancelled) {
+    const queue = [{ cell: origin, headings: [] }];
+    const seen = new Uint8Array(world.cells.length);
+    const choices = [];
+    seen[origin] = 1;
+    for (let at = 0; at < queue.length && choices.length < 4; at++) {
+        if ((at & 31) === 0 && cancelled()) return [];
+        const { cell, headings } = queue[at];
+        if (headings.length >= MAX_CROSSING_STEPS - 1) continue;
+        for (let heading = 0; heading < DIRECTIONS.length; heading++) {
+            const next = step(world, cell, heading);
+            if (next < 0 || seen[next] || stops[next]) continue;
+            seen[next] = 1;
+            const path = [...headings, heading];
+            if (goals[next] && unsafe[next]) {
+                for (let escape = 0; escape < DIRECTIONS.length; escape++) {
+                    const refuge = step(world, next, escape);
+                    if (refuge < 0 || unsafe[refuge] || stops[refuge]) continue;
+                    choices.push({ heading: path[0], headings: [...path, escape], count: path.length + 1,
+                        cell: refuge, pauseAt: path.length - 1, pauseFrames: PICKUP_PAUSE, pace: 'walk',
+                        pickup: { facing: goals[next], retreat: DIRECTIONS[escape] } });
+                    break;
+                }
+            } else queue.push({ cell: next, headings: path });
+        }
+    }
+    return choices;
+}
+
 function scrollRange(low, high, from, to, view, tiles, increment) {
     // The native scroll moves by the current interpolation increment
     // once the player passes the center. Account for the first increment
@@ -302,9 +334,10 @@ function studyCrossing(world, origin, motion, candidate, cancelled) {
     const { view, speed, dash } = motion;
     let x = [view.x, view.x];
     let y = [view.y, view.y];
-    const ranges = [{ cell: origin, from: 0, until: 0, camera: [view.x, view.y, view.x, view.y] }];
+    const initialPause = candidate.pauseAt === -1 ? candidate.pauseFrames : 0;
+    const ranges = [{ cell: origin, from: 0, until: initialPause, camera: [view.x, view.y, view.x, view.y] }];
     let earliest = 0;
-    let latest = 0;
+    let latest = initialPause;
     cell = origin;
     const walking = 256 / 2 ** speed;
     const fastest = dash ? walking / 2 : walking;
@@ -320,6 +353,9 @@ function studyCrossing(world, origin, motion, candidate, cancelled) {
         const from = earliest;
         earliest += fastest;
         latest += walking;
+        // A qualified pickup may require a brief action/message before the
+        // escape step. Reserve both tiles for every delay in that allowance.
+        if (i === candidate.pauseAt) latest += candidate.pauseFrames;
         if (i + 1 < headings.length) {
             const turning = headings[i] !== headings[i + 1];
             if (candidate.escape) latest += turning ? candidate.turnGrace ?? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace;
@@ -547,6 +583,21 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     const unsafe = patrolGuidance && (fixedHeading < 0 || request.timingHeadings) && !motion.barrier &&
         patrolCoverage(world.patrol, motion.patrols, cancelled);
     if (cancelled()) return { status: 'cancelled' };
+    if (request.pickup && unsafe?.[origin] && motion.patrols.some(actor => actor.id === 4 && actor.forced)) {
+        const goals = routeGoals(world.player, request, cancelled);
+        if (goals?.[origin]) for (let escape = 0; escape < DIRECTIONS.length; escape++) {
+            const refuge = step(world.player, origin, escape);
+            if (refuge < 0 || unsafe[refuge] || stops[refuge]) continue;
+            const candidate = { heading: escape, count: 1, headings: [escape], cell: refuge,
+                pauseAt: -1, pauseFrames: PICKUP_PAUSE, pace: 'walk' };
+            const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
+            if (studyCrossing(world, origin, motion, candidate, cancelled) &&
+                safeStart(world, startMotion(world, motion.patrols, player, motion.view), motion, candidate, cancelled))
+                return { status: 'ready', distance: 0, legs: [],
+                    pickup: { facing: goals[origin], retreat: DIRECTIONS[escape] },
+                    arrival: { x: request.x, y: request.y, facing: goals[origin] } };
+        }
+    }
     if ((request.lineNavigation || request.recoverPatrolLane) && unsafe?.[origin] && fixedHeading < 0 && request.timingCue) {
         const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
         const choices = refugeCandidates(world.player, origin, unsafe, stops, cancelled)
@@ -555,6 +606,28 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
             .filter(candidate => studyCrossing(world, origin, { ...motion, dash: false }, candidate, cancelled));
         const opening = choices.length && openingFor(world, { ...motion, exposed: true }, player, choices, cancelled);
         if (opening) return { status: 'timedCue', opening, stopAtPocket: true };
+    }
+    if (request.pickup && unsafe && !unsafe[origin] && motion.patrols.some(actor => actor.id === 4 && actor.forced)) {
+        // Barrel 3's sole reachable action side is in guard 4's lane. Check
+        // the whole approach, time to open it, and a step out. This
+        // also prevents the generic safe-pocket route from walking past it.
+        const goals = routeGoals(world.player, request, cancelled);
+        let choices = goals ? pickupApproaches(world.player, goals, origin, unsafe, stops, cancelled) : [];
+        if (fixedHeading >= 0) choices = choices.filter(candidate => candidate.heading === fixedHeading &&
+            candidate.headings.length === request.timingHeadings?.length + 1 &&
+            request.timingHeadings.every((heading, at) => candidate.headings[at] === heading));
+        const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
+        for (const candidate of choices) {
+            candidate.turnGrace = request.autowalk ? 0 : TIMING_CUE.earlyTurnGrace;
+            if (!studyCrossing(world, origin, motion, candidate, cancelled)) continue;
+            const opening = openingFor(world, motion, player, [candidate], cancelled);
+            const headings = candidate.headings.slice(0, -1);
+            const pickup = candidate.pickup;
+            if (opening) return { status: 'timedCue', pickup, stopAtPocket: true,
+                opening: { ...opening, tiles: headings.length, headings, pickup: true } };
+            return { status: 'timedWait', pickup, stopAtPocket: true,
+                direction: DIRECTIONS[candidate.heading], tiles: headings.length, headings, pace: 'walk' };
+        }
     }
     if (request.distractionCrossing && request.x === 34 && request.y === 14) {
         // After crystal 2, leave the northern refuge behind the departing
@@ -678,6 +751,19 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
         (unsafe && candidates.find(candidate => !unsafe[candidate.cell] || candidate.terminal)) ||
         candidates[0]);
     const exposed = unsafe?.[origin] === 1;
+    // A stationary guard's occupied tile can also be the destination's
+    // nearest interaction side. Identify that prerequisite before rejecting
+    // the landing: waiting cannot open it, but its crystal can. An exposed
+    // player still needs the existing immediate escape forecast first.
+    if (!exposed && crossing && fixedHeading < 0) {
+        let cell = origin;
+        for (let i = 0; i < crossing.count; i++) {
+            cell = step(world.player, cell, crossing.headings?.[i] ?? crossing.heading);
+            const guard = motion.patrols.find(actor => actor.hazard && !actor.through &&
+                indexOf(world.player, actor.x, actor.y) === cell && stationaryPatrol(actor));
+            if (guard) return { status: 'patrolBlocked', guard: guard.id, ...selected };
+        }
+    }
     const unsafeLanding = patrolGuidance && fixedHeading < 0 && unsafe?.[crossing.cell] && !crossing.terminal;
     if (unsafeLanding && !exposed) return { status: 'unsafeCrossing', ...selected };
     const paced = crossing?.headings && !exposed;
@@ -724,15 +810,6 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
         if (cancelled()) return { status: 'cancelled' };
     }
     if (exposed) return { status: 'unsafeCrossing', exposed, ...selected };
-    if (crossing && fixedHeading < 0) {
-        let cell = origin;
-        for (let i = 0; i < crossing.count; i++) {
-            cell = step(world.player, cell, crossing.headings?.[i] ?? crossing.heading);
-            const guard = motion.patrols.find(actor => actor.hazard && !actor.through &&
-                indexOf(world.player, actor.x, actor.y) === cell && stationaryPatrol(actor));
-            if (guard) return { status: 'patrolBlocked', guard: guard.id, ...selected };
-        }
-    }
     if (patrolGuidance) return { status: 'timedWait', direction: DIRECTIONS[crossing.heading],
         tiles: crossing.count, headings: crossing.headings, terminal: crossing.terminal, pace, ...selected };
     for (const candidate of candidates) {

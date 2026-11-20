@@ -481,6 +481,18 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     const gate = opening && host.caveTiming.automaticGate(job.timing, opening);
                     if (!gate) return waitCaveWalk(job);
                     const headings = opening.headings || Array(opening.tiles).fill(DIRECTIONS.indexOf(opening.direction));
+                    if (result.pickup) {
+                        const course = Uint8Array.from(headings);
+                        let { x, y } = job;
+                        for (const heading of headings) {
+                            x = root.$gameMap.roundXWithDirection(x, DIRECTIONS[heading]);
+                            y = root.$gameMap.roundYWithDirection(y, DIRECTIONS[heading]);
+                        }
+                        return follow(job, { status: 'ready', distance: course.length, course, gate,
+                            arrival: { x, y, facing: result.pickup.facing } }, { kind: 'routeDirections',
+                            legs: [{ direction: opening.direction, tiles: opening.tiles }], facing: result.pickup.facing,
+                            guide: 'Open the barrel, then move 1 ' + PATROL_HEADINGS[result.pickup.retreat] + '.' });
+                    }
                     return startCaveSegment(job, headings.map(heading => ({ direction: DIRECTIONS[heading], tiles: 1 })),
                         gate, opening.terminal);
                 }
@@ -492,6 +504,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     job.guideOptions?.find(item => item.target.id === result.guideEvent)?.target;
                 const stopAtPocket = result.stopAtPocket === true;
                 const repeat = opening?.escape && !stopAtPocket ? undefined : { direction, tiles, pace, stopAtPocket,
+                    endText: result.pickup ? 'Face ' + PATROL_HEADINGS[result.pickup.facing] +
+                        ' and open the barrel, then move 1 ' + PATROL_HEADINGS[result.pickup.retreat] + '.' : undefined,
                     refresh: opening?.escape ? null :
                         state => refreshCaveTiming(job, state, target, direction, tiles, headings, pace, stopAtPocket) };
                 if (job.timing && host.caveTiming.start(job.timing, job.x, job.y, opening, repeat)) {
@@ -536,6 +550,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 return present(job, { kind: 'patrolApproach', direction: result.direction, tiles: result.tiles,
                     terminal: result.terminal, guide: job.guide });
             else if (result?.status === 'ready') {
+                if (result.pickup) job.guide = 'Open the barrel, then move 1 ' + PATROL_HEADINGS[result.pickup.retreat] + '.';
                 if (job.readyGuide) job.guide = job.readyGuide;
                 if (result.land && !canLand(root.$gameMap, result.arrival.x, result.arrival.y))
                     return status(job, 'Landing site changed. Request directions again.');

@@ -31,8 +31,9 @@ function verifyCaveField(c, load, configureMotion) {
     const preferences = { autowalk: true };
     const packets = [], records = [], accepted = [], diagnostics = [];
     const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
-    let field, fixture, guards, source, repeatChecked = false;
+    let field, fixture, guards, source, repeatChecked = false, pendingArrival = false;
     const guidanceCost = { calls: 0, total: 0, peak: 0 };
+    const replyCost = { calls: 0, total: 0, peak: 0 };
     function measure(callback) {
         if (preferences.autowalk || fixture?.id !== 201) return callback();
         const start = performance.now();
@@ -41,7 +42,7 @@ function verifyCaveField(c, load, configureMotion) {
         guidanceCost.calls++; guidanceCost.total += elapsed; guidanceCost.peak = Math.max(guidanceCost.peak, elapsed);
         return result;
     }
-    let serial = 0, deliver, manualDrive = null, staticLeg = null, manualNext = false;
+    let serial = 0, deliver, manualDrive = null, staticLeg = null, manualNext = false, pickupPrompt = null;
     const routeSource = path.join(__dirname, '../src/world/route-worker.cjs');
     function createRouteWorker(buffer) {
         // Execute the production worker dispatcher with deferred, cloned
@@ -50,18 +51,24 @@ function verifyCaveField(c, load, configureMotion) {
             postMessage(packet) {
                 if (!preferences.autowalk && fixture.id === 200) {
                     const result = packet.result;
+                    if (result.pickup) pickupPrompt = result.pickup;
                     if (result.status === 'ready' || result.status === 'interrupted' || result.status === 'patrolApproach') {
                         const legs = result.legs || [{ direction: result.direction, tiles: result.tiles }];
                         const moves = legs.flatMap(leg => Array(leg.tiles).fill(leg.direction));
                         if (result.boundary) moves.push(result.boundary);
-                        staticLeg = { moves, index: 0, facing: result.arrival?.facing };
+                        staticLeg = { moves, index: 0, facing: result.more ? null : result.arrival?.facing };
                         manualDrive = 'static';
                     } else if (result.status === 'unsafeCrossing' && !result.exposed) {
                         manualDrive = 'retry';
                         manualNext = c.Graphics.frameCount + 18;
                     } else if (result.status === 'timedCue' || result.status === 'timedWait') manualDrive = 'timed';
                 }
+                const beforeReply = performance.now();
                 worker.emit('message', packet);
+                if (fixture.id === 200) {
+                    const elapsed = performance.now() - beforeReply;
+                    replyCost.calls++; replyCost.total += elapsed; replyCost.peak = Math.max(replyCost.peak, elapsed);
+                }
             } };
         const nativeRequire = createRequire(routeSource);
         vm.runInNewContext(fs.readFileSync(routeSource, 'utf8'), {
@@ -89,7 +96,10 @@ function verifyCaveField(c, load, configureMotion) {
                     c.Input.dir4 = source[0] ? source[0] < 0 ? 4 : 6 : source[2] < 0 ? 2 : 8;
                 } else if (cue === CUE.wallBump) {
                     c.Input.dir4 = 0;
-                    manualNext = true;
+                    if (pickupPrompt && c.$gamePlayer.x === 23 && c.$gamePlayer.y === 25) {
+                        manualDrive = 'pickup';
+                        manualNext = false;
+                    } else manualNext = true;
                 }
             }
             return true;
@@ -100,7 +110,12 @@ function verifyCaveField(c, load, configureMotion) {
         screenFading: () => false, navigationPreferences: () => preferences, caveTiming: timing,
         makeWord: () => new Int32Array(new SharedArrayBuffer(4)), createRouteWorker }, {
         open(record, current) { assert(current()); records.push(record); return ++serial; }, close() {},
-        arrive(record, current) { assert(current()); records.push(record); return ++serial; }, endArrival() {}
+        arrive(record, current, _walking, detail) {
+            assert(current()); records.push(record);
+            if (detail) records.push(detail);
+            pendingArrival = true;
+            return ++serial;
+        }, endArrival() {}
     }, (job, result) => diagnostics.push({ target: job.target, destination: job.caveWalk?.destination?.id, status: result?.status, frame: c.Graphics.frameCount, x: c.$gamePlayer.x, y: c.$gamePlayer.y, direction: result?.direction, tiles: result?.tiles, guard: [c.$gameMap._events[4]?._x, c.$gameMap._events[4]?._y, c.$gameMap._events[4]?._moveRouteForcing, c.$gameMap._events[4]?._moveRouteIndex], gate: c.$gameSwitches.value(582) }));
     c.WendyQuestAccessFieldChanged = (owner, actor) => {
         if (actor === c.$gamePlayer) timing.pose(owner); else timing.stop(owner);
@@ -166,7 +181,7 @@ function verifyCaveField(c, load, configureMotion) {
         scene._wqaFieldReady = true;
         scene._wqaCaveGuideActive = false;
         c.Input.dir4 = 0;
-        manualDrive = staticLeg = null; manualNext = false;
+        manualDrive = staticLeg = pickupPrompt = null; manualNext = false; pendingArrival = false;
     }
 
     function render() {
@@ -179,14 +194,16 @@ function verifyCaveField(c, load, configureMotion) {
     }
 
     function ask(action) { assert(field.command(action)); render(); }
-    function select(name) {
+    function select(name, category = 'Exits', point = null) {
         for (let count = 0; count < 9; count++) {
             ask('nextCategory');
-            if (records[records.length - 1]?.category === 'Exits') break;
+            if (records[records.length - 1]?.category === category) break;
         }
         for (let count = 0; count < 16; count++) {
             ask('nextDestination');
-            if (records[records.length - 1]?.name === name) return;
+            const record = records[records.length - 1];
+            if (record?.name === name && (!point || record.dx === point[0] - fixture.player.x &&
+                record.dy === point[1] - fixture.player.y)) return;
         }
         assert.fail('Missing field destination ' + name + '. Reports ' + JSON.stringify([...new Set(records.map(record => record.name))]));
     }
@@ -215,6 +232,11 @@ function verifyCaveField(c, load, configureMotion) {
         const beforeX = player.scrolledX(), beforeY = player.scrolledY();
         const wasMoving = player.isMoving();
         if (!preferences.autowalk && fixture.id === 200 && !source._list && !player.isMoving()) {
+            if (manualDrive === 'pickup' && /^Face west and open the barrel/.test(records.at(-1)?.name || '')) {
+                player.setDirection(pickupPrompt.facing);
+                player.checkEventTriggerThere([0]);
+                manualDrive = null;
+            }
             if (manualDrive === 'static') {
                 if (staticLeg.index < staticLeg.moves.length) c.Input.dir4 = staticLeg.moves[staticLeg.index];
                 else {
@@ -256,6 +278,51 @@ function verifyCaveField(c, load, configureMotion) {
     try {
         const entry = load(199).map.events[26].pages[0].list.find(command => command.code === 201).parameters;
         assert.equal(entry[1], 200);
+        // Reproduce the exact report and cover both room barrels through the
+        // production field owner. Selected loot is opened by the user's action,
+        // matching ordinary Autowalk arrival; crystals remain prerequisites.
+        for (const test of [
+            { automatic: false, target: 3, point: [22, 25], from: [23, 26, 15.25, 21.25] },
+            { automatic: false, target: 3, point: [22, 25] },
+            { automatic: true, target: 3, point: [22, 25] },
+            { automatic: false, target: 12, point: [33, 7] },
+            { automatic: true, target: 12, point: [33, 7] }
+        ]) {
+            preferences.autowalk = test.automatic;
+            records.length = accepted.length = diagnostics.length = 0;
+            start(200, ...(test.from || [entry[2], entry[3], 0, 26]));
+            select('Barrel', 'Objects', test.point);
+            ask('directions');
+            if (test.from) assert(diagnostics.some(row => row.status === 'patrolBlocked'),
+                'A stationary guard must select its crystal: ' + JSON.stringify(diagnostics));
+            for (let frame = 0; frame < 14000 && source._eventId !== test.target; frame++) {
+                tick();
+                if (test.automatic && pendingArrival && !fixture.player.isMoving()) {
+                    pendingArrival = false;
+                    fixture.player.checkEventTriggerThere([0]);
+                }
+            }
+            assert(accepted.includes(5), 'The barrel route activates crystal 5');
+            assert.equal(source._eventId, test.target, 'The original barrel remains selected ' +
+                JSON.stringify({ test, accepted, position: [fixture.player.x,fixture.player.y],
+                    reports: records.slice(-5).map(formatSpeech), diagnostics: diagnostics.slice(-10), manualDrive, manualNext }));
+            if (test.target === 3) {
+                assert(records.some(record => /open the barrel, then move 1 north/i.test(record.guide || record.name || '')),
+                    'The transient interaction includes its escape direction');
+                // A finite native replay checks the reserved pickup delay and
+                // the retreat. Message rendering is a stand-in, not timed speech.
+                c.Input.dir4 = 0; manualDrive = null; manualNext = false;
+                for (let frame = 0; frame < 90; frame++) tick();
+                c.Input.dir4 = 8;
+                for (let frame = 0; frame < 16; frame++) tick();
+                c.Input.dir4 = 0;
+                assert.deepEqual([fixture.player.x, fixture.player.y], [23, 24]);
+                for (let frame = 0; frame < 240; frame++) tick();
+                assert.deepEqual([fixture.player.x, fixture.player.y], [23, 24]);
+            }
+        }
+        records.length = accepted.length = diagnostics.length = 0;
+        preferences.autowalk = true;
         start(200, entry[2], entry[3], 0, 26);
         select('Chase room entrance');
         ask('directions');
@@ -317,8 +384,9 @@ function verifyCaveField(c, load, configureMotion) {
         c.$gameParty.members = members;
         c.$gameParty.inBattle = inBattle;
     }
+    console.log('Distraction-room field reply accounting', JSON.stringify(replyCost), 'ms, excluding route-worker computation and physical output.');
     console.log('Manual chase guidance callback accounting', JSON.stringify(guidanceCost), 'ms in the bounded fixture, excluding worker computation and physical output.');
-    console.log('Verified the production field owner through all distraction crystals and nine chase handoffs in automatic and concise manual control.');
+    console.log('Verified both distraction-room barrels in manual/automatic control, the reported stationary guard, pickup/retreat, all crystals and nine chase handoffs.');
 }
 
 module.exports = { verifyCaveField };

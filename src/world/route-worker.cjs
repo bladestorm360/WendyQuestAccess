@@ -167,7 +167,7 @@ parentPort.on('message', message => {
             else if (request.motion) {
                 const lineNavigation = lineDestination(map, request.event) &&
                     (request.lineNavigation === true || request.lineNavigation === 'manual') && request.lineNavigation;
-                result = previewCrossing(base, live, { ...request, lineNavigation }, cancelled);
+                result = previewCrossing(base, live, { ...request, lineNavigation, pickup: map === 200 && request.event === 3 }, cancelled);
             } else result = solveRoute(base, live, request, cancelled);
             if (map === 19 && live.salt && !request.refresh &&
                 ['unreachable', 'approachBlocked'].includes(result.status)) {

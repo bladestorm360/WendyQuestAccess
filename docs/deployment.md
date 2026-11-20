@@ -735,3 +735,14 @@ November 20, 2026. The focused build updates the plugin, crossing worker and pat
 - The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-distraction-chase/rollback-latest with plan `914712f7638eff57151959760ca32e0e95d5b61283e1207efd5e486cd21577ab` and source revision `d667691ea18d7d47047dc14bbed1289549b27e7e`. It includes verified prior native transforms as well as payload and geometry, so recovery does not depend on the newer transform implementation.
 
 Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.386.0 found no threats in the exact final candidate. Closed-game installation readback verified 16 native scripts, 45 payload files, 241 geometry entries and four unchanged save/config hashes. Cleanup removed 24,473,616 generated build/staging/world-test bytes, 29,153 disposable script/log bytes and the 10,966,102-byte superseded recovery. The resource-slot wait that returned busy launched no child and was retried under the same limits after the installer check released its slot. [Behavior, limits and gameplay procedure](puzzles-and-secrets.md#distraction-crystals-and-current-chase-legs)
+
+### Distraction-barrel prerequisite and interaction
+
+November 20, 2026. The focused candidate rebuild updates three mod files: plugin, route worker and crossing worker. It reuses 42 verified payload files, all 16 existing native transforms and all 241 geometry entries. Exact reported-start and both-barrel manual/automatic field replays, first two patrol rooms, nine chase handoffs, 178,356 directed world comparisons, native input and matching NW.js 0.48.4 smoke passed. The installer rehearsal verified staging, launcher lease, interruption rollback, install/reapply, unknown-file protection and removal. Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.386.0 found no threats in the exact candidate. Local installation readback is pending.
+
+- Candidate plan SHA-256 `e09cf1b99aeaebd9ae2941f5342e333d178ea70694b63ebe7de36e0ebfd0bef1`
+- Plugin SHA-256 `8039d748382d8808c88b0fc8e345697f602d1459d36753da0d7619e74f8dd11a`
+- Route worker SHA-256 `943b0e9decd160dec20d8911a28b3d193797c362e82847e60a79821fef60192f`
+- Crossing worker SHA-256 `e9f47096e03640c05581c7a1c0d51857a2d55a35507a7b24ad9c46fa7233100c`
+
+The game-side integration and native registration hashes are unchanged. [Scope, behavior and limits](puzzles-and-secrets.md#distraction-room-barrel-prerequisites). The initial full-world invocation lacked the cleaned packaged worker and stopped; the focused package was then built and the complete replay passed.
