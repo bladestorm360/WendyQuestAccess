@@ -854,7 +854,25 @@ function verifyNativePatrolMotion() {
     const patrols = changing.map(copyPatrol);
     const physics = motionWorld(distraction.geometry, snapshot(distraction), patrols);
     const state = startMotion(physics, patrols, { x: 0, y: 0 }, { x: 0, y: 0, width: 20, height: 11.25 });
-    assert.equal(advancePatrols(state), 'boundary', 'switch mutations must be observed after native settlement');
+    const switchWrites = [];
+    const savedSwitchWriter = c.$gameSwitches.setValue;
+    c.$gameSwitches.setValue = (id, value) => switchWrites.push([id, value]);
+    assert.equal(advancePatrols(state), 'settled', 'the qualified crystal busy flag has no movement effect');
+    assert.deepEqual(switchWrites, [], 'a forecast never writes a native switch');
+    distraction.gameMap.updateEvents();
+    assert.deepEqual(switchWrites, [[582, true]]);
+    for (let index = 0; index < changing.length; index++) assert.deepEqual(state.patrols[index], copyPatrol(changing[index]));
+    c.$gameSwitches.setValue = savedSwitchWriter;
+    const changingRoom = load(200);
+    const roomGuards = configureMotion(changingRoom, 0, 0);
+    const returnEvent = changingRoom.gameMap._events[18];
+    const returnRoute = changingRoom.map.events[19].pages[0].list[45].parameters[1];
+    returnEvent.forceMoveRoute(returnRoute);
+    returnEvent._moveRouteIndex = returnRoute.list.findIndex(command => command.code === 27);
+    const returnActors = roomGuards.map(copyPatrol);
+    const returnPhysics = motionWorld(changingRoom.geometry, snapshot(changingRoom), returnActors);
+    assert.equal(advancePatrols(startMotion(returnPhysics, returnActors, { x: 0, y: 0 },
+        { x: 0, y: 0, width: 20, height: 11.25 })), 'boundary', 'the parallel-return switch still requires native settlement');
     console.log(`Compared ${frames} native patrol updates, including screen range, blocked moves, forced routes and jumps.`);
 }
 
@@ -1301,6 +1319,10 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 
 async function main() {
     const catalog = bake(game, derived);
+    if (process.argv.includes('--cave-field')) {
+        require('./cave-field.cjs').verifyCaveField(c, load, configureMotion);
+        return;
+    }
     assert.deepEqual(catalog, { maps: 239, cells: 191235 });
     const manifest = JSON.parse(fs.readFileSync(path.join(derived, 'manifest.json'), 'utf8'));
     const weatherMaps = [12, 13, 14, 15, 16, 17, 161, 162, 164, 165, 166, 207, 208];

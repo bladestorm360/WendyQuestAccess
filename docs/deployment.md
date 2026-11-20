@@ -723,3 +723,15 @@ November 20, 2026. The focused plugin rebuild adds the saved Ctrl+Backslash togg
 - The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-autowalk-key/rollback-latest with plan `1b08f03a09769a23a7dc8111908367cd7364b125214f476f68139413c4cdf821` and source revision `5a1bc0c4f314dd19ba4792049f41a0cfbf221479`.
 
 Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.386.0 found no threats in the exact candidate. Closed-game installation readback verified 16 native scripts, 45 payload files, 241 geometry entries and four unchanged save/config hashes. Installed status is verified. Cleanup removed 24,444,237 generated build/staging/world-test bytes and the 10,965,810-byte superseded rollback, followed by the disposable task scripts and runner receipts. [Implementation and verification limits](feature-checkpoint.md#autowalk-keyboard-toggle)
+
+### Distraction routes and concise chase guidance
+
+November 20, 2026. The focused build updates the plugin, crossing worker and patrol-motion worker. It reuses 42 verified payload files and all 241 geometry entries. Seven native transforms extend the existing scene/resource gates and accepted-step/event observations for the scoped chase owner. All 16 transformed scripts passed syntax checks. Native input, the full world regression, final matching NW.js runtime and exact installer rehearsal passed. The additional field replay covers the authored distraction-room entrance, all crystals and checkpoints, manual cue-driven traversal and all nine automatic/manual chase handoffs.
+
+- Installed plan SHA-256 `4cedc9ec52b8307a3998a671e0c15c905cb15effbf92a9a07cef18d4057901a2`
+- Plugin SHA-256 `e1a5009573c2469abedd880212c7d5d4cfe982aa692865b19211b8e49b347138`
+- Crossing worker SHA-256 `ce6215327f74ed2a08302c30f298f5eaaeed26ac21b3cb00983773bdaa754d8a`
+- Patrol-motion worker SHA-256 `bffd8db4eed4374eb8fdfc9d88249054e2cd42f8a7954c5097a6f23843b10e56`
+- The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-distraction-chase/rollback-latest with plan `914712f7638eff57151959760ca32e0e95d5b61283e1207efd5e486cd21577ab` and source revision `d667691ea18d7d47047dc14bbed1289549b27e7e`. It includes verified prior native transforms as well as payload and geometry, so recovery does not depend on the newer transform implementation.
+
+Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.386.0 found no threats in the exact final candidate. Closed-game installation readback verified 16 native scripts, 45 payload files, 241 geometry entries and four unchanged save/config hashes. Cleanup removed 24,473,616 generated build/staging/world-test bytes, 29,153 disposable script/log bytes and the 10,966,102-byte superseded recovery. The resource-slot wait that returned busy launched no child and was retried under the same limits after the installer check released its slot. [Behavior, limits and gameplay procedure](puzzles-and-secrets.md#distraction-crystals-and-current-chase-legs)

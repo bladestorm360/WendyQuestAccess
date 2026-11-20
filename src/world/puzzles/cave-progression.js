@@ -135,7 +135,7 @@ function localOutcome(root, action) {
         if (event._erased && ownsRoute(map, list, chase))
             return 'A mech started chasing you. ' + chaseDirections(event._eventId);
     } else if (crystal) {
-        if (action.blocked) return 'The crystal did not activate.';
+        if (action.blocked) return event._eventId === 19 ? 'The distraction crystal has already been used.' : 'The distraction is already active.';
         if (crystal.some(index => ownsRoute(map, list, index))) return 'The distraction crystal activated.';
     } else if (action.stairs && root.$gameSwitches?.value?.(585) === true) return 'The staircase scene finished.';
     return '';

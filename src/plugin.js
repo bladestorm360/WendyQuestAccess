@@ -751,7 +751,7 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessFieldReady = function (scene) {
         if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaCaveProgressPending &&
-            !root.Graphics._wqaCaveAutoPending &&
+            !root.Graphics._wqaCaveAutoPending && !root.Graphics._wqaCaveChasePending &&
             !root.Graphics._wqaBookmarkTransferPending && !root.Graphics._wqaWallEnabled &&
             !root.Graphics._wqaFootstepsEnabled && !root.Graphics._wqaCaveTimingEnabled) ||
             fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
@@ -868,6 +868,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFieldMove = function (scene, direction, succeeded) {
+        try { field?.chaseMoved(scene, direction, succeeded); } catch { /* Keep native movement independent. */ }
         try { field?.autowalk.moved(scene, direction, succeeded); } catch { field?.autowalk.stop(scene); }
         try { beacon?.moved(scene, direction, succeeded); } catch { beacon?.stop(scene); }
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }

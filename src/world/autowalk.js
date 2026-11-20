@@ -115,8 +115,14 @@ function createAutowalk(root, ready, preferences, report) {
             report(scene, null, false, false, state.job);
             return direction;
         }
-        if (!ready(scene) || state.map?.isAnyEventStarting?.() || !preferences().autowalk)
+        if (!ready(scene) || state.map?.isAnyEventStarting?.() || !preferences().autowalk) {
+            if (state.job.caveWalk && root.$gameMap?._mapId === 200 && root.$gameMap._needsRefresh &&
+                !root.$gameMap._interpreter?._list && preferences().autowalk) {
+                state.job.caveContinue = true;
+                return end(state, null, false, true);
+            }
             return end(state, null, true);
+        }
         if (state.due) {
             if (root.Graphics.frameCount < state.due) return 0;
             return end(state, null, false, true);

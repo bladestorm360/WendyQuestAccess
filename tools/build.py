@@ -125,6 +125,7 @@ def bundle():
         './patrol-line-state.cjs': 'world/puzzles/patrol-line-state.cjs',
         './cave-progression': 'world/puzzles/cave-progression.js',
         './puzzles/cave-progression': 'world/puzzles/cave-progression.js',
+        './puzzles/cave-chase': 'world/puzzles/cave-chase.js',
         './patrol-motion.cjs': 'world/puzzles/patrol-motion.cjs',
         './geometry.cjs': 'world/geometry.cjs',
         './dialogue/observer': 'dialogue/observer.js',

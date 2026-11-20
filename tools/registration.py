@@ -152,7 +152,7 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
                  b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaArrivalSpeech||'
-                 b'SceneManager._scene?._wqaSoundscapeActive||'
+                 b'SceneManager._scene?._wqaSoundscapeActive||SceneManager._scene?._wqaCaveChaseActive||'
                  b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance||'
                  b'SceneManager._scene?._wqaBookmarkLanding||SceneManager._scene?._wqaVehicleNotice)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
@@ -431,7 +431,7 @@ def objects_notification(original):
         # Sunny Fryshire continuously reapplies the same tileset. Keep the
         # native refresh, and retire routes only when the actual ID changes.
         178811: b'\n    if(this._tilesetId!==tilesetId){' + ROUTE_DIRTY + b'}\n    ',
-        180829: b'if(this===$gameMap&&(SceneManager._scene?._wqaCaveGuideActive||Graphics._wqaCaveAutoPending)&&SceneManager._scene?._wqaFieldReady&&'
+        180829: b'if(this===$gameMap&&(SceneManager._scene?._wqaCaveGuideActive||SceneManager._scene?._wqaCaveChaseActive||Graphics._wqaCaveAutoPending)&&SceneManager._scene?._wqaFieldReady&&'
                 b'!SceneManager._nextScene&&Graphics.app?.stage===SceneManager._scene&&!$gamePlayer._transferring)'
                 b'globalThis.WendyQuestAccessCaveEventAccepted?.(SceneManager._scene,event);\n            '
                 b'if(this===$gameMap&&SceneManager._scene?._wqaBookmarkEntrance&&!SceneManager._nextScene&&'
@@ -478,10 +478,10 @@ def objects_notification(original):
                 b'direction=globalThis.WendyQuestAccessAutowalkInput?.(SceneManager._scene,this,direction,'
                 b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
-                b'(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||SceneManager._scene._wqaAutowalkActive))'
+                b'(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaCaveChaseActive))'
                 b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',
         249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||'
-                b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||'
+                b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||SceneManager._scene._wqaCaveChaseActive||'
                 b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive||'
                 b'SceneManager._scene._wqaQuestTracking||SceneManager._scene._wqaQuestNavigation||'
                 b'SceneManager._scene._wqaRouteActive||SceneManager._scene._wqaInteractionActive||'
@@ -726,7 +726,7 @@ def map_notification(original):
             (!this._wqaInteractionActive && !this._wqaInteractionDeferred && !this._wqaAutowalkActive && wqaIcon && wqaIcon !== this._wqaInteractionSeen &&
             wqaIcon.scale.x > 0 && wqaIcon.children[0]?.texture?.valid))
             globalThis.WendyQuestAccessInteractionUpdate?.(this, wqaIcon);
-        if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaCaveAutoPending ||
+        if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaCaveAutoPending || Graphics._wqaCaveChasePending ||
             Graphics._wqaBookmarkTransferPending) &&
             !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||

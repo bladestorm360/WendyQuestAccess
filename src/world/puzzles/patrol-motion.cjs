@@ -138,6 +138,10 @@ function runRouteCommand(actor, player, tryStep) {
         const dx = player.x - actor.x;
         const dy = player.y - actor.y;
         if (dx || dy) turn(actor, Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 4 : 6) : (dy < 0 ? 8 : 2));
+    } else if ((code === 27 || code === 28) && actor.forced && !actor.route.repeat &&
+        (actor.id === 4 && a === 582 || actor.id === 9 && a === 583)) {
+        // These two authored busy flags change crystal reuse, not movement.
+        // Forecast their native command tick without writing any game switch.
     } else if (code === 29) actor.speed = a;
     else if (code !== 33) return 'boundary';
     if (advanced) {

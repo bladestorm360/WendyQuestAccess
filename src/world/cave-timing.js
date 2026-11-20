@@ -55,7 +55,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (!target.point && (!event || event._erased)) return null;
         // Native object and route references stay in this renderer record.
         // The worker only gets the existing numeric snapshot and command copy.
-        return { scene, map, event, page: event?._pageIndex, tx: event?._x, ty: event?._y, motion,
+        return { scene, map, event, automatic, page: event?._pageIndex, tx: event?._x, ty: event?._y, motion,
             player: root.$gamePlayer, refs: motion.patrols.map(actor => {
                 const native = map._events[actor.id];
                 return { id: actor.id, native, route: native._moveRoute, original: native._originalMoveRoute,
@@ -65,12 +65,14 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
 
     function admit(captured, opening) {
         const { motion } = captured;
+        const distractionEscape = captured.map._mapId === 200 && (opening?.escape || opening?.distraction) &&
+            opening.turnGrace === (captured.automatic ? 0 : opening.distraction ? TIMING_CUE.turnGrace : TIMING_CUE.earlyTurnGrace);
         const span = opening?.through - opening?.from;
         const samples = span - TIMING_CUE.lead + 1;
         if (!CARDINAL[opening?.direction] || !Number.isInteger(opening.from) ||
             opening.from < 0 || opening.from > (opening.pace ? TIMING_CUE.paceWait : TIMING_CUE.wait) || !Number.isInteger(span) ||
             span < (opening.pace ? TIMING_CUE.paceSpan : TIMING_CUE.minSpan) || span > TIMING_CUE.maxSpan ||
-            (opening.turnGrace !== undefined && (opening.turnGrace !== TIMING_CUE.earlyTurnGrace ||
+            (opening.turnGrace !== undefined && !distractionEscape && (opening.turnGrace !== TIMING_CUE.earlyTurnGrace ||
                 opening.escape || !Array.isArray(opening.headings))) ||
             Object.prototype.toString.call(opening.stamps) !== '[object Float64Array]' ||
             opening.stamps.length !== captured.refs.length * STAMP_WIDTH * samples) return false;
@@ -305,7 +307,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
         if (!state.traversal) {
             if (!opening || !(now > state.cued && now <= state.startUntil) ||
                 direction !== opening.direction || !Number.isInteger(opening.tiles) ||
-                opening.tiles < 1 || opening.tiles > 12) return stop(scene);
+                opening.tiles < 1 || opening.tiles > (opening.distraction && state.map._mapId === 200 ? 32 : 12)) return stop(scene);
             const steps = opening.headings ? opening.headings.map(heading => DIRECTIONS[heading]) :
                 Array(opening.tiles).fill(opening.direction);
             if (steps.length !== opening.tiles || steps[0] !== direction ||
@@ -329,7 +331,7 @@ function createCaveTiming(root, fieldReady, audio, preferences, report, diagnost
             state.pocketDue = now + tileFrames - 1;
             return schedule(state, now);
         }
-        const grace = opening.escape ? turning ? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace :
+        const grace = opening.escape ? turning ? opening.turnGrace ?? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace :
             opening.headings && turning ? opening.turnGrace ?? TIMING_CUE.turnGrace : 0;
         traversal.by = now + tileFrames + grace;
         if (turning) audio.retire(scene, 'cave');

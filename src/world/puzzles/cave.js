@@ -371,6 +371,7 @@ function createCaveGuide(root, graphics) {
 
     return {
         available, presented, recover, review,
+        arm(scene) { if (available(scene)) activate(scene); },
         trackTiming(scene) {
             if (available(scene)) visit(scene).timing = true;
         },
@@ -380,7 +381,7 @@ function createCaveGuide(root, graphics) {
             if (!result || !available(scene)) return '';
             activate(scene).outcome = result.outcome;
             // Arrival stays in review so it cannot replace the native map name.
-            return result.arrived ? '' : result.outcome;
+            return result.arrived || root.$gameMap._mapId === 201 ? '' : result.outcome;
         },
         active(scene) { return visits.get(scene)?.active === true; },
         stop(scene) {

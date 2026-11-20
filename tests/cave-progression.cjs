@@ -97,7 +97,7 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
         assert.equal(blocked._index, 1);
         run(blocked, 1, 115);
         assert(blocked._index > blocked._list.length);
-        expectLocal('The crystal did not activate.');
+        expectLocal(id === 19 ? 'The distraction crystal has already been used.' : 'The distraction is already active.');
 
         const allowed = select(200, id).source;
         run(allowed, 0, 111);

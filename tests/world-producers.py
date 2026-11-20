@@ -57,7 +57,7 @@ def methods(installed):
         'Game_Interpreter': ['command111', 'command115', 'command117', 'command121', 'command122', 'command123',
                              'operateVariable', 'gameDataOperand',
                              'command201', 'command202', 'command203', 'command205', 'command206',
-                             'command214', 'command282', 'command402', 'command411', 'executeCommand', 'updateWaitMode', 'currentCommand',
+                             'command214', 'command230', 'wait', 'command282', 'command402', 'command411', 'executeCommand', 'updateWaitMode', 'currentCommand',
                              'setWaitMode', 'skipBranch', 'isOnCurrentMap', 'character'],
         'Game_Event': ['findProperPageIndex', 'meetsConditions', 'event', 'page', 'list', 'isTriggerIn', 'start', 'isStarting',
                        'checkEventTriggerTouch', 'isCollidedWithCharacters', 'isCollidedWithPlayerCharacters', 'isCollidedWithEvents',

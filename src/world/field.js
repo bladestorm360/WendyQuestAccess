@@ -19,9 +19,10 @@ const { createTerrainJourney, BRIDGE_REASON, CRYSTAL_REASON, PULL_REASON, STONE_
 const { saltControlName } = require('./puzzles/salt-state.cjs');
 const { mapPlace } = require('./map-banner');
 const { mapDescription } = require('./map-descriptions');
-const { createCaveGuide, timedCave, warningApproach, captureMotion, distractionForGuard, chaseHandoff,
+const { createCaveGuide, timedCave, warningApproach, captureMotion, distractionForGuard,
     checkpointTarget } = require('./puzzles/cave');
-const { acceptedAction, chaseContinuation } = require('./puzzles/cave-progression');
+const { acceptedAction, chaseContinuation, activeDistraction } = require('./puzzles/cave-progression');
+const { createChaseGuide } = require('./puzzles/cave-chase');
 const { capturePatrolLine } = require('./puzzles/patrol-line-playback');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
 const ACTOR_RETRIES = 2;
@@ -101,6 +102,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     let shoreJourney = null;
     const salt = createSaltGuide(root);
     const cave = createCaveGuide(root, host.graphics);
+    const chaseGuide = createChaseGuide(root, host.graphics);
     const transfers = createTransferBookmarks(root, host);
     const terrainJourney = createTerrainJourney(root);
     const selectionSites = new WeakMap();
@@ -117,6 +119,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     let control = null;
     let iceRoute = null;
     let caveEvent = null;
+    let caveResume = null;
+    let manualDistraction = null;
+    let manualCrossing = null;
     const preferences = host.navigationPreferences;
     const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed, arrived, job) => {
         if (arrived && job?.caveContinue) {
@@ -504,14 +509,23 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const snapshot = motion && captureWorld(root, true, undefined, undefined, [], true);
                 if (snapshot) {
                     job.caveCrystal = !!job.caveWalk;
+                    if (!job.caveWalk) {
+                        manualDistraction = { scene: job.scene, map: root.$gameMap, player: root.$gamePlayer,
+                            crystal: target.id, destination: job.destination, action: null };
+                        cave.arm(job.scene);
+                    }
                     job.caveBlocker = result.guard;
                     job.guideOptions = null;
                     job.readyGuide = '';
                     job.guide = job.caveCrystal ? undefined :
-                        'Activate the distraction crystal to move the guard, then request directions again.';
+                        'Press the action button to draw the guards away. Guidance resumes when movement returns. Move on the pings and stop at the thud, then request directions from there.';
                     return route(job, snapshot, target, undefined, motion);
                 }
                 return status(job, 'Blocked by a stationary Mech Guard.');
+            }
+            if (result?.status === 'unsafeCrossing' && job.map === 200 && !result.exposed) {
+                if (job.caveWalk) return waitCaveWalk(job);
+                return status(job, 'Wait here for the guard to return. Request directions to continue.');
             }
             if (result?.status === 'unsafeCrossing') return status(job, result.exposed ?
                 'You are in a patrol lane. No clear move verified.' : 'No crossing to a safe stopping point is verified here.');
@@ -644,6 +658,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 follow(job, result, record);
             }
             else if (result?.status === 'interrupted') {
+                if (!job.autowalk && job.map === 201) {
+                    const leg = chaseGuide.approach(job.scene, result);
+                    if (leg) return present(job, leg);
+                }
                 if (job.caveWalk && result.boundary && caveAction(job.scene, root.$gameMap._events[result.boundaryEvent]))
                     return startCaveSegment(job, [...result.legs, { direction: result.boundary, tiles: 1 }],
                         null, true, result.boundaryEvent);
@@ -667,7 +685,6 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
                     guide: job.guide, activate, exit, useExit,
                     onward: throughChillcrest ? 'Then take the west exit to the world map.' : undefined,
-                    chase: chaseHandoff(root, result.boundaryEvent),
                     boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent, preferences().spoilers === true)),
                     manualHandoff: !!handoff || !!boundaryName && (job.action === 'puzzleGuide' || job.mode === 'ship' || timedCave(job.map)),
                     more: result.more === true });
@@ -804,6 +821,11 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
             surface: snapshot.mode !== 'walk', patrolGuidance: !!motion,
             beacon: !motion && host.beacon?.enabled() === true, autowalk: job.autowalk, timingCue: !!job.timing,
+            recoverPatrolLane: snapshot.map === 200,
+            distractionCrossing: snapshot.map === 200 &&
+                (!!job.caveWalk?.distractionCrossing || manualCrossing?.scene === job.scene &&
+                    manualCrossing.map === root.$gameMap && manualCrossing.player === root.$gamePlayer) &&
+                snapshot.x === 34 && snapshot.y === 14,
             lineNavigation });
     }
 
@@ -816,7 +838,16 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
 
     function resumeCaveWalk(job, chase) {
         const { scene, caveWalk } = job;
-        if (!ready(scene) || !preferences().autowalk) return retire(scene);
+        if (!preferences().autowalk) return retire(scene);
+        if (!ready(scene)) {
+            // Native refresh completes independently. Keep only the owned
+            // request, and recapture after the established ready boundary.
+            if (root.$gameMap?._mapId === 200 && root.$gameMap._needsRefresh) {
+                caveResume = { scene, map: root.$gameMap, player: root.$gamePlayer, job };
+                host.graphics._wqaCaveAutoPending = true;
+            }
+            return retire(scene);
+        }
         queue({ scene, action: 'directions', caveWalk, chase, changes: [] });
     }
 
@@ -836,6 +867,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (!job.caveArrives) {
             if (job.caveWalk.acted.has(event._eventId)) return false;
             job.caveWalk.acted.add(event._eventId);
+            if (action.origin === 200 && action.crystal && event._eventId === 10) job.caveWalk.distractionCrossing = true;
             caveEvent = { ...action, map: root.$gameMap, player: root.$gamePlayer, caveWalk: job.caveWalk,
                 expires: host.graphics.frameCount + 40 };
             host.graphics._wqaCaveAutoPending = true;
@@ -845,11 +877,17 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
 
     function clearCaveEvent() {
         caveEvent = null;
-        host.graphics._wqaCaveAutoPending = false;
+        host.graphics._wqaCaveAutoPending = !!caveResume;
+    }
+
+    function clearCaveResume() {
+        caveResume = null;
+        host.graphics._wqaCaveAutoPending = !!caveEvent;
     }
 
     function waitCaveWalk(job) {
-        if (++job.caveWalk.attempt > 30 || !autowalk.wait(job, 18))
+        const limit = job.map === 200 ? 60 : 30;
+        if (++job.caveWalk.attempt > limit || !autowalk.wait(job, 18))
             return status(job, 'Autowalk stopped. No safe opening verified. Request directions again.');
         job.caveContinue = true;
         announceCaveWalk(job);
@@ -980,6 +1018,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     }
 
     function timedRoute(job, snapshot, target) {
+        if (snapshot.map === 200 && snapshot.x === 20 && snapshot.y === 18) manualCrossing = null;
+        if (snapshot.map === 201 && !preferences().autowalk) chaseGuide.arm(job.scene);
         const area = warningApproach(root.$gameMap, snapshot.x, snapshot.y, target.event ?? target.id);
         const motion = area ? null : captureMotion(root, host.graphics);
         if (!area && !motion) return status(job, [job.guide, 'Patrol timing is unavailable here.'].filter(Boolean).join(' '));
@@ -1151,6 +1191,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             const snapshot = captureWorld(root, true);
             if (!snapshot) return status(job, 'Map information unavailable.');
             job.performed = true;
+            if (snapshot.map === 200 && snapshot.x === 20 && snapshot.y === 18) job.caveWalk.distractionCrossing = false;
             if (job.chase) {
                 Object.assign(job, { map: snapshot.map, mode: snapshot.mode, x: snapshot.x, y: snapshot.y,
                     label: job.caveWalk.destination.name, target: job.caveWalk.destination.event ?? job.caveWalk.destination.id,
@@ -1209,6 +1250,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     }
 
     for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+        chaseGuide.stop();
+        manualDistraction = manualCrossing = null;
+        clearCaveResume();
         retireArrival(arrivalScene, false);
         transfers.clear();
         terrainJourney.clear();
@@ -1230,11 +1274,33 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (!scene._wqaStepNavigation) afterRender();
     }
 
+    function reportChaseLeg(leg) {
+        if (!command('navigationReport', leg, false, true)) return false;
+        active.chaseLeg = { x: root.$gamePlayer._x, y: root.$gamePlayer._y };
+        return true;
+    }
+
     function pendingAutowalk(scene) {
         return active?.scene === scene && active.action === 'directions' && preferences().autowalk;
     }
     function command(action, text, controller = false, keepCaveTiming = false) {
         const scene = host.manager._scene;
+        if ((action === 'beaconStop' || action === 'puzzleStop') && caveResume) {
+            clearCaveResume();
+            return true;
+        }
+        if ((action === 'directions' || action === 'puzzleGuide') && !preferences().autowalk && ready(scene, true)) {
+            const leg = chaseGuide.repeat(scene);
+            if (leg) return reportChaseLeg(leg);
+        }
+        if (BROWSE.has(action) && !ready(scene, true, true)) return false;
+        if (action === 'beaconStop' || action === 'puzzleStop' || BROWSE.has(action)) {
+            manualDistraction = manualCrossing = null;
+        }
+        if ((action === 'beaconStop' || action === 'puzzleStop' || BROWSE.has(action)) && chaseGuide.stop(scene)) {
+            retire(scene);
+            if (!BROWSE.has(action)) return true;
+        }
         if (action === 'directions' && host.caveTiming?.repeatDirections?.(scene)) return true;
         if ((action === 'beaconStop' || action === 'puzzleStop') && caveEvent) {
             clearCaveEvent();
@@ -1374,6 +1440,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         dialoguePresented(scene, paint) { guideFor(scene)?.presented(scene, paint); },
         puzzleActive(scene) { return salt.active(scene) || cave.active(scene); },
         caveEventAccepted(scene, event) {
+            chaseGuide.accepted(scene, event);
+            if (manualDistraction?.scene === scene && manualDistraction.map === root.$gameMap &&
+                manualDistraction.crystal === event._eventId) manualDistraction.action = acceptedAction(root, scene, event);
             cave.accepted(scene, event);
             if (caveEvent?.scene === scene && caveEvent.event === event) caveEvent.accepted = true;
         },
@@ -1394,8 +1463,32 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             clearIceRoute(scene);
             command('directions');
         },
+        chaseMoved(scene, direction, succeeded) {
+            if (!scene?._wqaCaveChaseActive || preferences().autowalk || !ready(scene, true)) return;
+            const leg = chaseGuide.moved(scene, direction, succeeded);
+            if (leg) reportChaseLeg(leg);
+        },
         observeReady(scene) {
             if (!ready(scene)) return;
+            if (manualDistraction?.action) {
+                const manual = manualDistraction;
+                manualDistraction = null;
+                if (manual.scene === scene && manual.map === root.$gameMap && manual.player === root.$gamePlayer &&
+                    !manual.action.blocked && activeDistraction(root.$gameMap, root.$dataMap, manual.crystal)) {
+                    if (manual.crystal === 10) manualCrossing = { scene, map: manual.map, player: manual.player };
+                    // Keep the player's original browser selection. Only speech
+                    // and live timing restart; manual movement stays native.
+                    command('directions');
+                }
+            }
+            if (caveResume) {
+                const pending = caveResume;
+                clearCaveResume();
+                if (pending.scene === scene && pending.map === root.$gameMap && pending.player === root.$gamePlayer)
+                    resumeCaveWalk(pending.job);
+            }
+            const leg = chaseGuide.settle(scene);
+            if (leg && !preferences().autowalk) reportChaseLeg(leg);
             if (caveEvent && (caveEvent.accepted || host.graphics.frameCount >= caveEvent.expires)) {
                 const action = caveEvent;
                 clearCaveEvent();
@@ -1424,6 +1517,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         cancelAutowalk(scene) {
             // Revoke pending directions as well as movement, without a second stop announcement.
             const pending = pendingAutowalk(scene);
+            clearCaveResume();
             clearCaveEvent();
             autowalk.stop(scene);
             if (pending) retire(scene);
@@ -1469,6 +1563,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         changed(scene, steppedActor) {
             if (!steppedActor || steppedActor === root.$gamePlayer) autowalk.dirty(scene);
             const job = active;
+            if (steppedActor && job?.scene === scene && job.chaseLeg &&
+                job.chaseLeg.x === root.$gamePlayer._x && job.chaseLeg.y === root.$gamePlayer._y && ready(scene, true)) return;
             if (!steppedActor || steppedActor === root.$gamePlayer || job?.scene !== scene ||
                 scene._wqaCaveReview || sequence >= 0x7ffffffe) return retire(scene, steppedActor === root.$gamePlayer);
             if (job.ambientStatus || job.line?.refs.some(ref => ref.actor === steppedActor)) return;
@@ -1498,6 +1594,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (control?.scene === scene) control = null;
         },
         leave(scene, mapEventId) {
+            chaseGuide.leave(scene, mapEventId);
+            if (manualDistraction?.action?.event._eventId !== mapEventId) manualDistraction = null;
+            if (root.$gameMap?._mapId !== 200 || !mapEventId) manualCrossing = null;
+            clearCaveResume();
             if (caveEvent?.scene === scene && (!caveEvent.accepted || caveEvent.event._eventId !== mapEventId))
                 clearCaveEvent();
             retireArrival(scene, true);

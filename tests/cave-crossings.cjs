@@ -14,6 +14,7 @@ const { previewCrossing } = require('../src/world/puzzles/crossing.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { TIMING_CUE } = require('../src/world/puzzles/patrol-motion.cjs');
 const { createAutowalk } = require('../src/world/autowalk');
+const { verifyCaveField } = require('./cave-field.cjs');
 const { capturePatrolLine } = require('../src/world/puzzles/patrol-line-playback');
 
 
@@ -145,6 +146,7 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
     await verifyManualLine();
     verifyRefugeRecovery();
     verifyAutomaticChains();
+    verifyCaveField(c, load, configureMotion);
 
     const distraction = setup(200, 23, 26, 15.25, 21.25);
     const firstBlocker = await follow(distraction.run, distraction.guards, 15);

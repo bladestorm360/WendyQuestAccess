@@ -31,6 +31,9 @@ function finitePatrolCoverage(world, unsafe, actor, origin) {
         if (code === 0) break;
         if (code === 28 && (x === 582 || x === 583) && actor.route.commands.slice(i + 1).every(([next]) =>
             next === 0 || next >= 15 && next <= 19)) break;
+        if (code === 27 && x === 581 && actor.id === 18 &&
+            actor.route.commands.slice(i + 1).every(([next]) => next === 0)) break;
+        if (code === 27 && (x === 582 || x === 583)) continue;
         if (code >= 1 && code <= 4) cell = offset(world, cell, code - 1);
         else if (code === 14) cell = indexOf(world, cell % world.width + x, Math.floor(cell / world.width) + y);
         else if ((code < 15 || code > 19) && code !== 25 && code !== 29 && code !== 33) return false;
@@ -319,7 +322,7 @@ function studyCrossing(world, origin, motion, candidate, cancelled) {
         latest += walking;
         if (i + 1 < headings.length) {
             const turning = headings[i] !== headings[i + 1];
-            if (candidate.escape) latest += turning ? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace;
+            if (candidate.escape) latest += turning ? candidate.turnGrace ?? TIMING_CUE.escapeTurnGrace : TIMING_CUE.escapeStepGrace;
             else if (turning) latest += candidate.turnGrace ?? TIMING_CUE.turnGrace;
         }
         ranges.push({ cell, from, until: latest, camera });
@@ -544,12 +547,32 @@ function previewCrossing(geometry, live, request, cancelled = () => false) {
     const unsafe = patrolGuidance && (fixedHeading < 0 || request.timingHeadings) && !motion.barrier &&
         patrolCoverage(world.patrol, motion.patrols, cancelled);
     if (cancelled()) return { status: 'cancelled' };
-    if (request.lineNavigation && unsafe?.[origin] && fixedHeading < 0 && request.timingCue) {
+    if ((request.lineNavigation || request.recoverPatrolLane) && unsafe?.[origin] && fixedHeading < 0 && request.timingCue) {
         const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
         const choices = refugeCandidates(world.player, origin, unsafe, stops, cancelled)
+            .map(candidate => request.recoverPatrolLane ? { ...candidate,
+                turnGrace: request.autowalk ? 0 : TIMING_CUE.earlyTurnGrace } : candidate)
             .filter(candidate => studyCrossing(world, origin, { ...motion, dash: false }, candidate, cancelled));
         const opening = choices.length && openingFor(world, { ...motion, exposed: true }, player, choices, cancelled);
         if (opening) return { status: 'timedCue', opening, stopAtPocket: true };
+    }
+    if (request.distractionCrossing && request.x === 34 && request.y === 14) {
+        // After crystal 2, leave the northern refuge behind the departing
+        // guard and clear its original post. Every tile and full opening is
+        // still checked against the live native patrol/camera forecast.
+        const headings = [0, ...Array(10).fill(1), ...Array(3).fill(0), ...Array(4).fill(1)];
+        let cell = origin;
+        for (const heading of headings) {
+            cell = step(world.player, cell, heading);
+            if (cell < 0 || stops[cell]) return { status: 'unavailable' };
+        }
+        const candidate = { heading: 0, headings, count: headings.length, cell, pace: 'walk',
+            turnGrace: request.autowalk ? 0 : TIMING_CUE.turnGrace };
+        const player = { x: request.x, y: request.y, rx: request.x, ry: request.y, jump: 0, speed: motion.speed };
+        const opening = studyCrossing(world, origin, motion, candidate, cancelled) &&
+            openingFor(world, motion, player, [candidate], cancelled);
+        if (opening) return { status: 'timedCue', opening: { ...opening, distraction: true }, stopAtPocket: true };
+        return { status: 'timedWait', direction: 2, tiles: headings.length, headings, pace: 'walk', stopAtPocket: true };
     }
     if (request.lineNavigation && !motion.barrier && fixedHeading < 0) {
         const course = lineCrossing(world, request, origin, unsafe, stops, patrolCoverage, cancelled);
