@@ -789,7 +789,10 @@ def map_notification(original):
         62779: field_update + banner_update + credits_update + dialogue_update(b'this._wqaMapRestored && this._mapLoaded && this.srcWendy && '
                                                b'this.srcStones && !this._wqaPreloads?.size && !this._wqaPreloadOverflow && '
                                                b'$gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),
-        67386: b'||(this._wqaNavigationWake&&globalThis.WendyQuestAccessIdleInput?.(this))',
+        # Feed owned automatic movement into the native activity branch.
+        # This includes interpolation and guard waits before idle can cancel the route.
+        67386: b'||((this._wqaNavigationWake||this._wqaAutowalkActive)&&'
+               b'globalThis.WendyQuestAccessIdleInput?.(this))',
         69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
         86279: b'if(SceneManager._scene?._mapNameWindow===this&&SceneManager._scene._wqaMapAnnouncement)'
                b'globalThis.WendyQuestAccessMapBannerLeaving?.(SceneManager._scene);'

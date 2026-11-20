@@ -1428,8 +1428,12 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 command('status', text);
         },
         idleInput(scene) {
+            const waking = scene._wqaNavigationWake;
             scene._wqaNavigationWake = false;
-            return active?.scene === scene && ready(scene, true, active.idle);
+            // Automatic movement and scheduled waits are player activity.
+            // Let updateInactive own its timer reset at the native input site.
+            return autowalk.active(scene) && ready(scene, true, true) ||
+                waking && active?.scene === scene && ready(scene, true, active.idle);
         },
         interactionReady(scene) {
             return ready(scene) && !scene._wqaInteractionDeferred && !autowalk.active(scene);

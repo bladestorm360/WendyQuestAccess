@@ -85,6 +85,19 @@ def fixture(runtime, installed):
     world_producers = runpy.run_path(str(ROOT / 'tests/world-producers.py'))
     custom_map, _ = world_producers['decode'](map_notification((installed / MAP_REL).read_bytes()).decode('utf8'))
     movement.append(world_producers['retail_dash_override'](custom_map))
+    between = world_producers['between']
+    idle = between(custom_map, "Scene_Map['prototype']['updateInactive']=function(",
+                   "},Scene_Map['prototype']['isFastForward']") + '};'
+    movement.extend([
+        'function fixtureIdleClock(balloon, physical = false) {',
+        'const Scene_Map = function () {};',
+        "const a15_0x363c12 = () => { throw Error('Unresolved idle property'); };",
+        'const Time = { GetDeltaTime: () => 1 / 60 };',
+        'const Input = { HasAnyInput: () => physical };',
+        'const $gameTemp = { requestBalloon: balloon };',
+        'const AudioManager = { playSe() {} };',
+        idle, 'return scene => Scene_Map.prototype.updateInactive.call(scene);', '}'
+    ])
     dash_input = runpy.run_path(str(ROOT / 'tests/input-producers.py'))['input_methods'](installed)
     core = (installed / CORE_REL).read_text(encoding='utf8')
     movement.extend(['function fixtureDashKeyboard() {', 'const a14_0x1f92c6 = null;',
@@ -931,11 +944,45 @@ const interval = setInterval(() => {
             Graphics.app.renderer.emit('postrender');
             autowalkStep++;
         } else if (autowalkStep === 2 && scene._wqaAutowalkActive) {
+            let balloons = 0;
+            const idle = fixtureIdleClock(() => balloons++);
+            const original = { srcWendy: scene.srcWendy, srcStones: scene.srcStones,
+                vehicle: $gamePlayer.isInVehicle, isEventRunning: $gameMap.isEventRunning };
+            scene.srcWendy = scene.srcStones = true;
+            $gamePlayer.isInVehicle = () => false;
+            $gameMap.isEventRunning = () => false;
+            // Use the real native idle producer with physical input released.
+            // Both a stationary route wait and interpolation keep it awake.
+            $gameMap.inactiveTime = 29.99;
+            const baseline = fixtureIdleClock(() => balloons++, true);
+            const baselineStart = performance.now();
+            for (let frame = 0; frame < 4800; frame++) baseline(scene);
+            const baselineMs = performance.now() - baselineStart;
+            const start = performance.now();
+            for (let moving = 0; moving < 2; moving++) {
+                $gamePlayer._realX = moving ? -0.25 : $gamePlayer._x;
+                for (let frame = 0; frame < 2400; frame++) {
+                    idle(scene);
+                    if ($gameMap.inactiveTime !== 0 || !scene._wqaAutowalkActive)
+                        throw Error('Native idle interrupted an active Autowalk route');
+                }
+            }
+            if (balloons) throw Error('Autowalk requested a native idle animation');
+            require('fs').writeFileSync(receipt + '.autowalk-idle-ms',
+                JSON.stringify({ nativeMs: baselineMs, automaticMs: performance.now() - start }));
+            $gamePlayer._realX = $gamePlayer._x;
             $gamePlayer.moveByInput();
             if ($gamePlayer._x !== 1 || !scene._wqaAutowalkActive) throw Error('The directions key did not follow its course');
             $gamePlayer.moveByInput();
             if (scene._wqaAutowalkActive || $gamePlayer._direction !== 6)
                 throw Error('The route did not turn toward the interaction and retire at arrival');
+            if (WendyQuestAccessIdleInput(scene))
+                throw Error('Arrived Autowalk kept claiming native activity');
+            $gameMap.inactiveTime = 0;
+            scene.srcWendy = original.srcWendy;
+            scene.srcStones = original.srcStones;
+            $gamePlayer.isInVehicle = original.vehicle;
+            $gameMap.isEventRunning = original.isEventRunning;
             const icon = $gamePlayer._interactIcon = { parent: scene, visible: true, worldVisible: true,
                 worldAlpha: 1, scale: { x: 1, y: 1 }, x: 20, y: 40 };
             icon.children = [{ parent: icon, worldVisible: true, worldAlpha: 1, texture: { valid: true } }];
@@ -969,6 +1016,7 @@ const interval = setInterval(() => {
             tap('V', 'KeyV', { shiftKey: true });
             Graphics.app.renderer.emit('postrender');
             if (scene._wqaAutowalkActive) throw Error('The stop command did not retire the moving route');
+            if (WendyQuestAccessIdleInput(scene)) throw Error('A stopped Autowalk kept claiming native activity');
             $gamePlayer._realX = $gamePlayer._x;
             $gamePlayer.moveByInput();
             if ($gamePlayer._x !== 0) throw Error('The stopped route dispatched movement');
@@ -2796,6 +2844,10 @@ def main():
               f"Node {versions['node']}, modules ABI {versions['modules']}.")
         print(f'Throttled synthetic cold browse submission {browse_submit_ms:.1f} ms, speech receipt '
               f'{browse_receipt_ms:.1f} ms with 40 ms polling, warm route submission {submit_ms:.1f} ms.')
+        idle_autowalk = json.loads(receipt.with_suffix('.json.autowalk-idle-ms').read_text(encoding='utf8'))
+        print(f'Verified 4,800 matched native activity updates, physical input '
+              f'{idle_autowalk["nativeMs"]:.2f} ms, standing/interpolated Autowalk '
+              f'{idle_autowalk["automaticMs"]:.2f} ms under the bounded runner, plus activity release on arrival and cancel.')
         print('Verified native autowalk dispatch, both narration settings, Walking and Arrived, ordered interaction and save speech, and explicit cancellation.')
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified Auto language detection and fallback, manual persistence, saved mute and controller restoration.')

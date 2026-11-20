@@ -702,3 +702,14 @@ November 16, 2026. The focused rebuild changed the plugin bundle. The verified g
 - The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-cave-quiet/rollback-latest with plan `07cdf5ce031203935928cfe80afb9fe11609124fd6c40613dc276b3763d8950e` and source revision `40a7030fa1a7878be3e93db2963309196709df76`.
 
 Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.328.0 found no threats in the exact candidate. Installation verified 16 native scripts, 45 payload files, 241 geometry entries and four unchanged save and configuration hashes. Cleanup removed 24,468,480 bytes of generated build and test output and the 10,964,172-byte superseded recovery. [Cave verification](feature-checkpoint.md#silent-cave-misses-stop-sound-and-checkpoint-handoff)
+
+### Autowalk and native inactivity
+
+November 20, 2026. The focused rebuild updated the plugin and the native MapScene activity condition. Verified payload workers, native libraries and geometry were reused. The world replay, ordinary idle narration fixture, matching NW.js smoke and installer rehearsal passed. The bounded NW fixture compared 4,800 native activity updates with physical input, 2.67 ms total, against standing and interpolated Autowalk, 5.91 ms total. The extra work was 3.24 ms across the simulated 80-second episode. Physical gameplay performance remains unmeasured.
+
+- Installed plan SHA-256 `1b08f03a09769a23a7dc8111908367cd7364b125214f476f68139413c4cdf821`
+- Plugin SHA-256 `4a992f15a77526bcb2251c940932ea90f71efc81301fde376165c8556aa2d91d`
+- MapScene transform SHA-256 `9afa5c1bef523384a55c186d5f230be4fd8ffa60f6c05e0077c0e50739c458f0`
+- The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-autowalk-idle/rollback-latest with plan `eb9ee4a09ae7d83677234e43011c6dc0fecea8ee0cd0f606b3d3eeace423f7c2` and source revision `446f13ad3982f28a3c45389932e516065a2962be`.
+
+Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.386.0 found no threats in the exact candidate. Installation readback verified 16 native scripts, 45 payload files, 241 geometry entries and four unchanged save and configuration hashes. Cleanup removed 24,468,907 bytes of build and test output and the 10,965,101-byte superseded recovery. [Autowalk verification and remaining gameplay check](feature-checkpoint.md#autowalk-and-native-inactivity)

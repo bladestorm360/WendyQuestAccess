@@ -233,3 +233,5 @@ The [retail walking speed checkpoint](docs/feature-checkpoint.md#retail-walking-
 The [cave ping cadence and explicit pauses checkpoint](docs/feature-checkpoint.md#cave-ping-cadence-and-explicit-pauses) records the barrel approach from the live log, step pings, forecasted stop timing and replay.
 
 The [silent cave misses, stop sound and checkpoint handoff](docs/feature-checkpoint.md#silent-cave-misses-stop-sound-and-checkpoint-handoff) records the second barrel pause, audio priority, post-capture restart and exact offline verification.
+
+The [Autowalk and native inactivity checkpoint](docs/feature-checkpoint.md#autowalk-and-native-inactivity) records the native activity producer, automatic movement and wait ownership, matched 80-second idle regression and release checks. [Current Steam deployment](docs/deployment.md#autowalk-and-native-inactivity) records the installed hashes and single rollback.
