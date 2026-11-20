@@ -829,6 +829,18 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 Object.assign(job.caveWalk, { x: snapshot.x, y: snapshot.y, attempt: 0 });
             job.caveAction = event => expectCaveAction(job, event);
         }
+        // Capture recovery can select a crystal itself. It then bypasses the
+        // stationary-blocker branch, but still needs a fresh continuation on
+        // every accepted activation, including the branch with no dialogue.
+        if (!job.caveWalk && motion && snapshot.map === 200 && manualAction?.eventId !== job.target) {
+            const action = caveAction(job.scene, root.$gameMap._events[job.target]);
+            if (action?.crystal && !action.blocked) {
+                setManualAction({ scene: job.scene, map: root.$gameMap, player: root.$gamePlayer,
+                    eventId: job.target, destination: target, action: null, isCrystal: true,
+                    resume: true, nextAction: 'puzzleGuide', controller: job.controller });
+                cave.arm(job.scene);
+            }
+        }
         job.motionFrame = motion?.frame;
         job.line = capturePatrolLine(root, motion, job.target);
         const lineNavigation = job.line && (job.caveWalk ? true : 'manual');

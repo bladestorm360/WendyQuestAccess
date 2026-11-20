@@ -48,7 +48,7 @@ function verifyCaveField(c, load, configureMotion) {
         if (fixture.id !== 201) frameCost += elapsed;
         return result;
     }
-    let serial = 0, deliver, manualDrive = null, staticLeg = null, manualNext = false, pickupPrompt = null;
+    let serial = 0, deliver, manualDrive = null, staticLeg = null, manualNext = false, pickupPrompt = null, crystalMessages = 0;
     const routeSource = path.join(__dirname, '../src/world/route-worker.cjs');
     function createRouteWorker(buffer) {
         // Execute the production worker dispatcher with deferred, cloned
@@ -195,7 +195,7 @@ function verifyCaveField(c, load, configureMotion) {
         scene._wqaFieldReady = true;
         scene._wqaCaveGuideActive = false;
         c.Input.dir4 = 0;
-        manualDrive = staticLeg = pickupPrompt = null; manualNext = false; pendingArrival = false;
+        manualDrive = staticLeg = pickupPrompt = null; manualNext = false; pendingArrival = false; crystalMessages = 0;
     }
 
     function render() {
@@ -232,8 +232,10 @@ function verifyCaveField(c, load, configureMotion) {
             if (interpreter._index >= interpreter._list.length) { interpreter._list = null; break; }
             // The retail message-start producer closes field output without
             // an event ID. Preserve this real boundary even with art stubbed.
-            if (interpreter._list[interpreter._index]?.code === 101)
+            if (interpreter._list[interpreter._index]?.code === 101) {
+                if (fixture.id === 200 && interpreter._eventId === 5) crystalMessages++;
                 c.WendyQuestAccessSceneLeaving(scene);
+            }
             interpreter.executeCommand();
             if (interpreter._waitCount || interpreter._waitMode) break;
         }
@@ -334,6 +336,29 @@ function verifyCaveField(c, load, configureMotion) {
             assert(repeated, 'A remaining leg was repeated during native interpolation');
             assert(!records.some(record => /check directions|request directions|patrol lane/i.test(formatSpeech(record))),
                 'Guarded manual guidance contains no recheck/lane failure prose ' + JSON.stringify({test, text:records.map(formatSpeech).filter(text => /check directions|request directions|patrol lane/i.test(text))}));
+        }
+
+        // Native capture resets the distraction busy flags but retains the
+        // first-use dialogue switch. Recovery routes directly to this crystal,
+        // rather than resolving it as another destination's blocker.
+        for (const action of ['puzzleGuide', 'directions']) {
+            preferences.autowalk = false;
+            records.length = accepted.length = diagnostics.length = 0;
+            start(200, 9, 33, 0, 26);
+            c.$gameSwitches.setValue(587, true);
+            c.$gameVariables.setValue(90, 2);
+            fixture.gameMap.refreshIfNeeded();
+            if (action === 'directions') select('Distraction crystal', 'Objects', [15, 29]);
+            ask(action);
+            assert.equal(diagnostics.at(-1).target, 5, 'Recovery selects the first crystal directly');
+            for (let frame = 0; frame < 1500 && !(accepted.includes(5) && !source._list); frame++) tick();
+            assert(accepted.includes(5), 'The repeat crystal is activated with native action');
+            assert(!source._list, 'The no-dialogue activation finishes');
+            assert.equal(crystalMessages, 0, 'The native repeat branch displays no crystal dialogue');
+            assert(timing.active(scene), 'Repeat crystal activation must automatically arm the escape');
+            assert.equal(timing.describe(scene), '3 east.', 'The escape begins immediately after repeat activation');
+            for (let frame = 0; frame < 800 && fixture.player.y !== 30; frame++) tick();
+            assert.deepEqual([fixture.player.x, fixture.player.y], [19, 30], 'The repeat escape reaches the same protected stop');
         }
 
         const entry = load(199).map.events[26].pages[0].list.find(command => command.code === 201).parameters;
@@ -475,7 +500,7 @@ function verifyCaveField(c, load, configureMotion) {
     console.log('Manual patrol callback accounting', JSON.stringify(patrolCost), 'ms across accepted movement, event/ready gates, render continuations and replies; worker and physical output excluded.');
     console.log('Patrol-room field reply accounting', JSON.stringify(replyCost), 'ms, excluding route-worker computation and physical output.');
     console.log('Manual chase guidance callback accounting', JSON.stringify(guidanceCost), 'ms in the bounded fixture, excluding worker computation and physical output.');
-    console.log('Verified the first two patrol rooms with automatic current-leg speech, both distraction-room barrels in manual/automatic control, the reported stationary guard, pickup/retreat, all crystals and nine chase handoffs.');
+    console.log('Verified the first two patrol rooms with automatic current-leg speech, repeat crystal activation without dialogue from recovery and direct Directions, both distraction-room barrels in manual/automatic control, the reported stationary guard, pickup/retreat, all crystals and nine chase handoffs.');
 }
 
 module.exports = { verifyCaveField };
