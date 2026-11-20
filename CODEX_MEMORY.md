@@ -259,3 +259,6 @@ November 20 Autowalk/escape follow-up: [automatic crystal handoff and exposed es
 
 
 November 20 second-crystal follow-up: [native interaction handoff](docs/puzzles-and-secrets.md#second-crystal-native-interaction-handoff) reproduces capture at 34,20 when the early notification is gated off despite native setup accepting the crystal. The queued token now survives only its own native resource boundary, Interpreter.setup confirms it, and Autowalk completes the ordinary native action-start path. Objective-specific and direct manual/automatic cases pass. [Scope/release status](docs/feature-checkpoint.md#second-distraction-crystal-interaction-and-continuation). The stricter Map 201 update-order discrepancy is recorded separately in that puzzle topic; production chase behavior is unchanged.
+
+
+Second-crystal release completion: source checkpoint c9e4f062bc75bd890a3e7709f74eb3b31ff1ac48 and the exact single-plugin update are installed and hash-verified. Required full-world/native/runtime/installer/security checks, single rollback and storage cleanup are complete; saves/settings are preserved. [Deployment and reproduction](docs/deployment.md#second-crystal-native-interaction-handoff). Physical gameplay confirmation remains open; the separate stricter chase scheduling fixture finding is unchanged.
