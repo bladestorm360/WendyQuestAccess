@@ -3,9 +3,10 @@
 const ROUTE_ACTIONS = { previousDestination: 'Previous destination', nextDestination: 'Next destination',
     currentDestination: 'Read selected destination', directions: 'Directions', previousCategory: 'Previous category',
     nextCategory: 'Next category' };
-const FIELD_KEYS = { mapName: 'M', mapDescription: 'Shift+M', beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
+const FIELD_KEYS = { mapName: 'M', mapDescription: 'Shift+M', autowalkToggle: 'Ctrl+\\',
+    beaconToggle: 'Shift+B', wallToggle: 'Shift+H', beaconStop: 'Shift+V' };
 const ACTIONS = Object.freeze({ ...ROUTE_ACTIONS, mapName: 'Read current map name', mapDescription: 'Describe current map',
-    beaconToggle: 'Toggle navigation beacon',
+    autowalkToggle: 'Toggle Autowalk', beaconToggle: 'Toggle navigation beacon',
     wallToggle: 'Toggle wall sounds', filterToggle: 'Toggle destination filter', beaconStop: 'Stop current navigation' });
 const LAYOUT_NAMES = Object.freeze({ letters: 'Letters', brackets: 'Brackets and backslash' });
 const DEFAULTS = Object.freeze({
@@ -15,15 +16,15 @@ const DEFAULTS = Object.freeze({
         previousCategory: 'Shift+[', nextCategory: 'Shift+]' })
 });
 const FILTER_GESTURES = Object.freeze({ letters: 'Shift+P', brackets: 'Shift+\\' });
-const GESTURE = /^(?:Shift\+)?(?:[A-Z]|\[|\]|\\)$/;
+const GESTURE = /^(?:(?:Shift\+)?(?:[A-Z]|\[|\]|\\)|Ctrl\+(?:Shift\+)?\\)$/;
 const SHIFTED = Object.freeze({ '{': '[', '}': ']', '|': '\\' });
 const NATIVE_CODES = Object.freeze({ '[': 219, ']': 221, '\\': 220 });
 
 function navigationGesture(event) {
-    if (event.ctrlKey || event.altKey || event.metaKey || event.defaultPrevented || event.isComposing ||
+    if (event.altKey || event.metaKey || event.defaultPrevented || event.isComposing ||
         typeof event.key !== 'string' || event.key.length !== 1) return '';
     const base = (event.shiftKey && SHIFTED[event.key]) || event.key.toUpperCase();
-    const result = event.shiftKey ? `Shift+${base}` : base;
+    const result = `${event.ctrlKey ? 'Ctrl+' : ''}${event.shiftKey ? 'Shift+' : ''}${base}`;
     return GESTURE.test(result) ? result : '';
 }
 

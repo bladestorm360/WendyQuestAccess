@@ -261,6 +261,14 @@ function boot(root, nodeRequire, nodeProcess) {
             const questAction = QUEST_ACTIONS[action];
             if (questAction) return quests.command(host.manager._scene, questAction);
             const scene = host.manager._scene;
+            if (action === 'autowalkToggle') {
+                if (!field.ready(scene, true)) return false;
+                const text = settings.toggleFieldAutowalk(() => {
+                    if (host.manager._scene === scene) field.report('Could not save Autowalk. Previous setting restored.', true);
+                });
+                if (text) field.report(text, true);
+                return !!text;
+            }
             if (action === 'filterToggle') {
                 if (!field.ready(scene)) return false;
                 const text = settings.toggleFieldFilter(() => {
@@ -295,7 +303,10 @@ function boot(root, nodeRequire, nodeProcess) {
             selectBookmark: field.selectBookmark,
             nativeButton,
             controllerChanged: () => controller?.reset(),
-            navigationChanged(value) { navigationPreferences = value; },
+            navigationChanged(value) {
+                if (navigationPreferences.autowalk && !value.autowalk) field.cancelAutowalk(host.manager._scene);
+                navigationPreferences = value;
+            },
             speechChanged(value, owner) {
                 speechPreferences = value;
                 speech.setSpeechEnabled(value.enabled, () => owner && controlContext() === owner &&

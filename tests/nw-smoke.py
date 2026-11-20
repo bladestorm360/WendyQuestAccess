@@ -912,16 +912,22 @@ const interval = setInterval(() => {
         const scene = SceneManager._scene;
         if (!scene._wqaBeaconActive) throw Error('The beacon lost its destination after a manual detour');
     }
-    if (autowalkStep < 7 && require('fs').existsSync(receipt + '.route-2')) {
+    if (autowalkStep < 8 && require('fs').existsSync(receipt + '.route-2')) {
         const scene = SceneManager._scene;
         if (autowalkStep === 0) {
-            tap('v', 'KeyV');
-            if (!document.querySelector('dialog') || !scene._wqaSettingsActive) throw Error('Field settings did not open');
-            if (scene._wqaBeaconActive) throw Error('The settings modal retained the route beacon');
-            choose('Navigation');
-            choose('Autowalk, off');
+            const slash = String.fromCharCode(92);
+            if (key('keydown', slash, 'Backslash', false, { ctrlKey: true }))
+                throw Error('The Autowalk shortcut leaked native input');
+            key('keydown', slash, 'Backslash', true, { ctrlKey: true });
+            key('keydown', slash, 'Backslash', false, { ctrlKey: true });
+            key('keyup', slash, 'Backslash');
+            Graphics.app.renderer.emit('postrender');
             autowalkStep++;
-        } else if (autowalkStep === 1 && menuStatus() === 'Navigation settings saved') {
+        } else if (autowalkStep === 1 && require('fs').existsSync(receipt + '.autowalk-on')) {
+            tap('v', 'KeyV');
+            choose('Navigation');
+            if (![...document.querySelectorAll('button')].some(button => button.textContent === 'Autowalk, on'))
+                throw Error('The shortcut did not update the Navigation setting');
             tap('Escape');
             tap('Escape');
             if (document.querySelector('dialog')) throw Error('Field settings did not return control');
@@ -1013,20 +1019,28 @@ const interval = setInterval(() => {
         } else if (autowalkStep === 5 && require('fs').existsSync(receipt + '.autowalk-path')) {
             if (!scene._wqaAutowalkActive) throw Error('The narrated route did not arm');
             $gamePlayer._realX = -0.5;
-            tap('V', 'KeyV', { shiftKey: true });
+            if (tap(String.fromCharCode(92), 'Backslash', { ctrlKey: true }))
+                throw Error('The moving Autowalk shortcut leaked native input');
             Graphics.app.renderer.emit('postrender');
-            if (scene._wqaAutowalkActive) throw Error('The stop command did not retire the moving route');
+            if (scene._wqaAutowalkActive) throw Error('Turning Autowalk off did not retire the moving route');
             if (WendyQuestAccessIdleInput(scene)) throw Error('A stopped Autowalk kept claiming native activity');
             $gamePlayer._realX = $gamePlayer._x;
             $gamePlayer.moveByInput();
             if ($gamePlayer._x !== 0) throw Error('The stopped route dispatched movement');
             autowalkStep++;
         } else if (autowalkStep === 6 && require('fs').existsSync(receipt + '.autowalk-stop')) {
+            tap('v', 'KeyV');
+            choose('Navigation');
+            choose('Autowalk, off');
+            autowalkStep++;
+        } else if (autowalkStep === 7 && menuStatus() === 'Navigation settings saved') {
+            tap('Escape');
+            tap('Escape');
             autowalkStep++;
         }
         return;
     }
-    if (!caveShown && autowalkStep === 7) {
+    if (!caveShown && autowalkStep === 8) {
         caveShown = true;
         WendyQuestAccessSceneLeaving(SceneManager._scene);
         const tilemap = new PIXI.Container();
@@ -2464,6 +2478,12 @@ parentPort.on('message', message => {
         parentPort.postMessage('ack');
         return;
     }
+    if (message.kind === 'fieldStatus' && message.name === 'Autowalk on.') {
+        if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
+            fs.writeFileSync(receipt + '.autowalk-on', formatSpeech(message));
+        parentPort.postMessage('ack');
+        return;
+    }
     if (message.kind === 'fieldStatus' && ['Walking.', 'Arrived.'].includes(message.name)) {
         const suffix = message.name === 'Walking.' ? '.autowalk-start' : '.autowalk';
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch) {
@@ -2487,7 +2507,7 @@ parentPort.on('message', message => {
         return;
     }
     if ((message.kind === 'routeDirections' && message.name === 'Synthetic wall' && fs.existsSync(receipt + '.autowalk')) ||
-        (message.kind === 'fieldStatus' && message.name === 'Autowalk stopped.')) {
+        (message.kind === 'fieldStatus' && message.name === 'Autowalk off.')) {
         const suffix = message.kind === 'routeDirections' ? '.autowalk-path' : '.autowalk-stop';
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
             fs.writeFileSync(receipt + suffix, formatSpeech(message));
@@ -2697,7 +2717,7 @@ def main():
                 any(later['sequence'] != first['sequence'] + 1 for first, later in zip(walk, walk[1:])):
             raise RuntimeError(f'NW autowalk did not queue arrival, interaction and autosave in order: {walk}')
         if receipt.with_suffix('.json.autowalk-path').read_text(encoding='utf8') != '1 east. face east.' or \
-                receipt.with_suffix('.json.autowalk-stop').read_text(encoding='utf8') != 'Autowalk stopped.':
+                receipt.with_suffix('.json.autowalk-stop').read_text(encoding='utf8') != 'Autowalk off.':
             raise RuntimeError('NW autowalk narration or explicit stop failed')
         if cave['kind'] != 'fieldStatus' or '2 west, 2 north, moving east' not in cave.get('speech', ''):
             raise RuntimeError(f'NW fixture did not qualify the transformed patrol sprite: {data}')
@@ -2848,7 +2868,7 @@ def main():
         print(f'Verified 4,800 matched native activity updates, physical input '
               f'{idle_autowalk["nativeMs"]:.2f} ms, standing/interpolated Autowalk '
               f'{idle_autowalk["automaticMs"]:.2f} ms under the bounded runner, plus activity release on arrival and cancel.')
-        print('Verified native autowalk dispatch, both narration settings, Walking and Arrived, ordered interaction and save speech, and explicit cancellation.')
+        print('Verified Ctrl+Backslash on and off, held-key suppression, mid-step cancellation, preference persistence, native autowalk dispatch, both narration settings, and ordered arrival, interaction and save speech.')
         print('Verified ambient object submission, door preview, settings persistence and native event retirement.')
         print('Verified Auto language detection and fallback, manual persistence, saved mute and controller restoration.')
         print('Verified menu and quest focus, keyboard and controller review, Autodetail, indexing and quest restoration.')

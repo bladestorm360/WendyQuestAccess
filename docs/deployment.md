@@ -713,3 +713,13 @@ November 20, 2026. The focused rebuild updated the plugin and the native MapScen
 - The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-autowalk-idle/rollback-latest with plan `eb9ee4a09ae7d83677234e43011c6dc0fecea8ee0cd0f606b3d3eeace423f7c2` and source revision `446f13ad3982f28a3c45389932e516065a2962be`.
 
 Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.386.0 found no threats in the exact candidate. Installation readback verified 16 native scripts, 45 payload files, 241 geometry entries and four unchanged save and configuration hashes. Cleanup removed 24,468,907 bytes of build and test output and the 10,965,101-byte superseded recovery. [Autowalk verification and remaining gameplay check](feature-checkpoint.md#autowalk-and-native-inactivity)
+
+### Autowalk keyboard toggle
+
+November 20, 2026. The focused plugin rebuild adds the saved Ctrl+Backslash toggle in both navigation layouts. Native input, full world regression, matching NW.js smoke and the exact installer rehearsal passed. The keyboard runtime verified held-repeat suppression, cancellation between tiles and persistence after restart. No native script, geometry or worker change was needed. The other 44 payload files were reused by verified hash.
+
+- Installed plan SHA-256 `914712f7638eff57151959760ca32e0e95d5b61283e1207efd5e486cd21577ab`
+- Plugin SHA-256 `f0603a208246f67474dc15c09de362f5182fc839de09881586a960870257f37e`
+- The single rollback is C:/Games/Dev/WendyQuestAccess-analysis/wendy-autowalk-key/rollback-latest with plan `1b08f03a09769a23a7dc8111908367cd7364b125214f476f68139413c4cdf821` and source revision `5a1bc0c4f314dd19ba4792049f41a0cfbf221479`.
+
+Signed Microsoft Defender platform 4.18.26100.4, engine 1.1.26100.4 and definitions 1.463.386.0 found no threats in the exact candidate. Closed-game installation readback verified 16 native scripts, 45 payload files, 241 geometry entries and four unchanged save/config hashes. Installed status is verified. Cleanup removed 24,444,237 generated build/staging/world-test bytes and the 10,965,810-byte superseded rollback, followed by the disposable task scripts and runner receipts. [Implementation and verification limits](feature-checkpoint.md#autowalk-keyboard-toggle)

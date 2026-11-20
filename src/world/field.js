@@ -1421,6 +1421,13 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (outcome && !active) command('status', outcome);
         },
         command,
+        cancelAutowalk(scene) {
+            // Revoke pending directions as well as movement, without a second stop announcement.
+            const pending = pendingAutowalk(scene);
+            clearCaveEvent();
+            autowalk.stop(scene);
+            if (pending) retire(scene);
+        },
         report(text, keepCaveTiming = false) {
             const scene = host.manager._scene;
             return autowalk.active(scene) || keepCaveTiming ?

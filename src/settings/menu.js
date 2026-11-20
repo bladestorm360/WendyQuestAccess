@@ -253,7 +253,7 @@ function createSettingsMenu(root, host) {
                     '. Read the visible quest tracker ' + gestureName(keys.details) + '.',
                 'All combines destinations and bookmarks. Use ' + binding('filterToggle') +
                     ' to switch between all active destinations and reachable destinations only.',
-                'Turn on Autowalk under Navigation to walk with the Directions control. Hear Walking, then Arrived. Wendy faces the interaction when needed. Use Confirm to interact or take the final exit step yourself.',
+                'Toggle Autowalk ' + binding('autowalkToggle') + ' or under Navigation. When on, use Directions to walk. Hear Walking, then Arrived. Wendy faces the interaction when needed. Use Confirm to interact or take the final exit step yourself.',
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
                 'Turn on Spoiler mode under Navigation to find marked optional secrets before discovering them in the game.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
@@ -496,7 +496,7 @@ function createSettingsMenu(root, host) {
             const item = button(owner, `${name}, ${gestureName(gesture)}${occupied}`, () => {
                 if (loading || saving) return;
                 owner.capture = owner.selected = action;
-                status(owner, 'Press a letter, bracket or backslash, with or without Shift. Delete unassigns. Escape cancels.');
+                status(owner, 'Press a letter, bracket or backslash, with or without Shift, or Ctrl+Backslash with or without Shift. Delete unassigns. Escape cancels.');
             });
             if (selection === action) focused = item;
         }
@@ -600,6 +600,12 @@ function createSettingsMenu(root, host) {
     function toggleController(owner, failure) {
         const accepted = change(owner, { ...pad, enabled: !pad.enabled }, 'enabled', 'controller', failure);
         return accepted ? (pad.enabled ? 'Controller support on' : 'Controller support off') : '';
+    }
+
+    function toggleFieldAutowalk(failure) {
+        const autowalk = !navigation.autowalk;
+        if (!change(null, { ...navigation, autowalk }, 'autowalk', 'navigation', failure)) return '';
+        return autowalk ? 'Autowalk on.' : 'Autowalk off.';
     }
 
     function toggleFieldFilter(failure) {
@@ -816,7 +822,14 @@ function createSettingsMenu(root, host) {
         }
         const gesture = navigationGesture(event);
         const action = navigationAction(navigation, gesture);
-        if (action && !nativeNavigationConflict(root, gesture, event.keyCode) && host.fieldCommand(action)) return;
+        if (action && !nativeNavigationConflict(root, gesture, event.keyCode) && host.fieldCommand(action)) {
+            if (action === 'autowalkToggle') {
+                if (physical && held.size < 64) held.add(physical);
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            return;
+        }
         if (action) host.fieldKeyDenied?.(action);
         const chord = puzzleGesture(event);
         const puzzle = chord && (chord === keys.puzzleGuide ? 'puzzleGuide' : chord === keys.puzzleStop ? 'puzzleStop' : '');
@@ -897,7 +910,7 @@ function createSettingsMenu(root, host) {
         bookmarkEntries: bookmarks.entries,
         controllerBindings: () => pad,
         toggleController,
-        toggleFieldAudio, toggleFieldFilter,
+        toggleFieldAudio, toggleFieldFilter, toggleFieldAutowalk,
         controllerInput(owner, action, family, mask) {
             if (session !== owner) return;
             if (action === 'capture') return captureController(owner, family, mask);
