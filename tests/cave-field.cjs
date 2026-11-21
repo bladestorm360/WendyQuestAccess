@@ -214,7 +214,12 @@ function verifyCaveField(c, load, configureMotion) {
             for (const event of gameMap.events()) {
                 const index = event._erased ? -1 : event.findProperPageIndex();
                 if (index === event._pageIndex) continue;
-                event._pageIndex = index;
+                // The automatic regression uses the transformed native refresh,
+                // including the notification previously omitted by this fixture.
+                // Keep the accepted manual fixture's prior scheduling model.
+                if (preferences.autowalk) event.refresh();
+                else event._pageIndex = index;
+                assert.equal(event._pageIndex, index);
                 const page = event.page();
                 Object.assign(event, { _through: page?.through ?? true, _priorityType: page?.priorityType ?? 0,
                     _trigger: page?.trigger, _characterName: page?.image.characterName || '',
@@ -367,7 +372,12 @@ function verifyCaveField(c, load, configureMotion) {
         const tookStep = player.isMoving();
         if (tookStep) player.updateMove();
         player.updateScroll(beforeX, beforeY);
-        if ((wasMoving || tookStep) && !player.isMoving() && !source._list) player.checkEventTriggerHere([1]);
+        if ((wasMoving || tookStep) && !player.isMoving() && !source._list) {
+            player.checkEventTriggerHere([1]);
+            // Native updateNonmoving calls setupStartingEvent at completed
+            // steps. That helper consumes a guard's pending page refresh now.
+            if (fixture.id === 200 && preferences.autowalk) gameMap.setupStartingEvent();
+        }
         if (fixture.id !== 200) {
             if (!source._list) gameMap.setupStartingMapEvent();
             execute(source);
@@ -556,7 +566,11 @@ function verifyCaveField(c, load, configureMotion) {
             }
             assert(diagnostics.some(row => row.status === 'crystalReady' && row.target === 10), 'The second crystal is confirmed at native handback');
             assert(!accepted.includes(10), 'The early acceptance notifier was gated off in this regression');
-            assert.equal(source._eventId,test.target, 'The second-crystal handoff retains its objective '+JSON.stringify({test,at:[fixture.player.x,fixture.player.y],accepted,diagnostics:diagnostics.slice(-8),reports:records.slice(-4).map(formatSpeech)}));
+            assert.equal(source._eventId,test.target, 'The second-crystal handoff retains its objective '+JSON.stringify({test,at:[fixture.player.x,fixture.player.y],ready:field.ready(scene),auto:field.autowalk.active(scene),pending:c.Graphics._wqaCaveAutoPending,source:[source._eventId,source._index,source._list?.length,source._waitMode],refresh:fixture.gameMap._needsRefresh,fieldReady:scene._wqaFieldReady,page19:fixture.gameMap._events[19]._pageIndex,accepted,diagnostics:diagnostics.slice(-8),reports:records.slice(-4).map(formatSpeech)}));
+            assert(!records.some(row => /Route changed/.test(row.name || '')),
+                'A native crystal page refresh must replan the ordinary course without another Directions input');
+            if (test.target === 15) assert(diagnostics.some(row => row.x === 12 && row.y === 7),
+                'The reproduced third-crystal page change automatically refreshes from the logged 12,7 tile');
         }
 
         const entry = load(199).map.events[26].pages[0].list.find(command => command.code === 201).parameters;
@@ -678,7 +692,7 @@ function verifyCaveField(c, load, configureMotion) {
             if (source._eventId === 11) break;
             tick();
             const failure = records.find(record => /^Autowalk stopped|unavailable|No crossing/i.test(record.name));
-            assert(!failure, JSON.stringify({ failure, x: fixture.player.x, y: fixture.player.y, accepted }));
+            assert(!failure, JSON.stringify({ failure, x: fixture.player.x, y: fixture.player.y, accepted, diagnostics:diagnostics.slice(-4) }));
         }
         assert([5, 10, 19].every(id => accepted.includes(id)), 'All three distraction crystals were activated ' +
             JSON.stringify({ accepted, position: [fixture.player.x, fixture.player.y], reports: records.slice(-5), active: scene._wqaAutowalkActive, source: source._eventId, diagnostics }));

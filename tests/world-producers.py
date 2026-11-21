@@ -29,7 +29,7 @@ def methods(installed):
                      'refreshTileEvents', 'changeTileset', 'vehicle', 'boat', 'ship', 'airship', 'isAnyEventStarting', 'updateEvents',
                      'tileWidth', 'tileHeight', 'screenTileX', 'screenTileY', 'adjustX', 'adjustY',
                      'scrollUp', 'scrollDown', 'scrollLeft', 'scrollRight', 'deltaX', 'deltaY', 'isLadder',
-                     'setupStartingMapEvent', 'setupStartingEvent', 'setupTestEvent', 'setupAutorunCommonEvent', 'event', 'eraseEvent', 'vehicles', 'encounterStep', 'eventsXy', 'isDashDisabled'],
+                     'setupStartingMapEvent', 'setupStartingEvent', 'setupTestEvent', 'setupAutorunCommonEvent', 'autorunCommonEvents', 'event', 'eraseEvent', 'vehicles', 'encounterStep', 'eventsXy', 'isDashDisabled'],
         'Game_CharacterBase': ['pos', 'posNt', 'isNormalPriority', 'tileId', 'isTile', 'reverseDir', 'isThrough',
                                'isMapPassable', 'isCollidedWithCharacters', 'isCollidedWithEvents', 'isCollidedWithVehicles',
                                'moveStraight', 'setMovementSuccess', 'isMovementSucceeded', 'checkEventTriggerTouchFront',

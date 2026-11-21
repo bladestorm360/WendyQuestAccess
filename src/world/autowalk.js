@@ -11,6 +11,7 @@ const { inactiveFloorScene } = require('./local-destinations');
 const { admitPatrolLine, patrolStepReady } = require('./puzzles/patrol-line-playback');
 
 const TOUCH_TRIGGERS = [1, 2];
+const MAX_CAVE_REPLANS = 2;
 
 function createAutowalk(root, ready, preferences, report, refreshReady = () => false) {
     let active = null;
@@ -40,7 +41,9 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
         stop();
         active = { scene, job, map, player, target, targetX: target?._x, targetY: target?._y, page: target?._pageIndex,
             trigger: target?._trigger, x: job.x, y: job.y, index: 0, course, line, arrival, record,
-            manualEntry: result.autowalkStop, pending: null, dirty: false, gate: result.gate };
+            manualEntry: result.autowalkStop, pending: null, dirty: false, gate: result.gate,
+            refreshCourse: job.map === 200 && !!job.caveWalk && !job.caveWalk.pickupEscape &&
+                result.status === 'ready' && !line && !result.gate };
         scene._wqaAutowalkActive = scene._wqaPresentation = true;
         if (job.caveWalk) scene._wqaCaveReview = false;
         return true;
@@ -49,7 +52,8 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
     function wait(job, delay) {
         if (!ready(job.scene)) return false;
         stop();
-        active = { scene: job.scene, player: root.$gamePlayer, job, due: root.Graphics.frameCount + delay };
+        active = { scene: job.scene, player: root.$gamePlayer, map: root.$gameMap,
+            x: root.$gamePlayer._x, y: root.$gamePlayer._y, job, due: root.Graphics.frameCount + delay };
         job.scene._wqaAutowalkActive = job.scene._wqaPresentation = true;
         return true;
     }
@@ -115,10 +119,13 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
         // A guard can request native page refresh while Wendy interpolates.
         // Keep the already certified movement owner inert through that narrow
         // gate; do not discard its remaining crossing or admit other loading.
-        if (!(state?.scene === scene && state.job.caveWalk && !state.dirty && !state.pending &&
+        if (!(state?.scene === scene && state.job.caveWalk &&
+            (!state.dirty || state.due || state.refreshCourse) && !state.pending &&
             preferences().autowalk && refreshReady(scene, state.refreshPaused === true) &&
             !root.$gameMap.isAnyEventStarting?.() &&
-            (state.due ? state.player === root.$gamePlayer : valid(state)))) return false;
+            (state.due ? state.map === root.$gameMap && state.player === root.$gamePlayer &&
+                state.player._x === state.x && state.player._y === state.y &&
+                travelMode(state.map, state.player) === state.job.mode : valid(state)))) return false;
         // Game_Map consumes refresh before player input, while MapScene only
         // republishes readiness at the end of that update. Hold the same inert
         // lease across that one publication boundary as well.
@@ -148,6 +155,16 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
         state.refreshPaused = false;
         if (state.due) {
             if (root.Graphics.frameCount < state.due) return 0;
+            return end(state, null, false, true);
+        }
+        if (state.dirty && state.refreshCourse && !state.pending && valid(state)) {
+            // A completed distraction can change a remote event page during
+            // an ordinary course. Retire it and ask the existing worker for a
+            // fresh route; never reuse a dirtied course or a timed forecast.
+            const cave = state.job.caveWalk;
+            if ((cave.replans || 0) >= MAX_CAVE_REPLANS) return changed(state);
+            cave.replans = (cave.replans || 0) + 1;
+            state.job.caveContinue = true;
             return end(state, null, false, true);
         }
         if (state.dirty || state.pending || !valid(state)) return changed(state);
