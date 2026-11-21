@@ -905,3 +905,31 @@ The owner confirmed the game closed. The exact final installer rehearsal passes 
 Source checkpoint 481bf5053ffb781b2dadd37ff1a89d04b52cd369 was committed, pushed and verified on the owned private origin/main before installation. The final update is installed at the established C: Steam target under the closed-game launcher/manifest lease. Canonical readback confirms plan 6a7e7f9f, all 45 payload, 16 native and 241 geometry hashes, all four save/config hashes unchanged, and byte-identical native-original recovery. Browser preferences were not written. The single rollback remains the verified preceding 2f787f70 plan at wendy-target-numbers/rollback-latest; no second optional recovery was created.
 
 Cleanup removed 24,939,865 generated candidate, build, fixture, source-bearing analysis, disposable log and bytecode-cache bytes at this final checkpoint, in addition to the earlier 989,007-byte cleanup. The task directory retains only defender.txt and the single verified rollback. At most 20 development logs remain under the earlier retention accounting; unique RE/source inputs, required tool/dependency archives, installed payload, saves and settings are preserved. Reproduce from source checkpoint above using the documented focused bundle/formatter staging, pinned originals/current transforms and verified dependency identities, then repeat affected native, matching runtime, installer and exact security checks. Implementation, affected documentation, offline verification and local deployment are complete. Physical automatic-meter behavior, immediate inventory H, target speech and shared board markers remain gameplay confirmation.
+
+
+### Corrected historical log retention
+
+The final retention recount included historical runner receipts, which the prior 20-log accounting had omitted. Seventeen completed resource receipts from four closed releases are consolidated below before removing their redundant JSON files. All report childrenDrained true. Exit 1 in the dash-keyboard baseline is preserved as a failed historical fixture outcome; the receipt itself contains no failure detail, and it is not a new gameplay finding. Earlier source/plan identities, reproduction procedures and acceptance evidence remain in the corresponding deployment and feature-checkpoint topics. Tool inputs, captures and unique research inputs are preserved.
+
+| Closed release / receipt | Exit | Enforced tree bytes | Peak tree bytes | Seconds |
+| --- | ---: | ---: | ---: | ---: |
+| wendy-retail-pace / deploy-budget | 0 | 815996928 | 51789824 | 25.602 |
+| wendy-dash-trace / deploy-budget | 0 | 815996928 | 51507200 | 24.41 |
+| wendy-dash-trace / installer-budget | 0 | 815996928 | 53477376 | 53.66 |
+| wendy-dash-trace / nw-budget | 0 | 1119997952 | 214695936 | 19.565 |
+| wendy-dash-trace / pack-budget | 0 | 815996928 | 81620992 | 7.635 |
+| wendy-dash-trace / world-budget | 0 | 815996928 | 323313664 | 26.323 |
+| wendy-footstep-cadence / build-budget | 0 | 815996928 | 243716096 | 17.9 |
+| wendy-footstep-cadence / deploy-budget | 0 | 815996928 | 50352128 | 24.622 |
+| wendy-footstep-cadence / installer-budget | 0 | 815996928 | 53989376 | 50.754 |
+| wendy-footstep-cadence / nw-budget | 0 | 1119997952 | 206180352 | 17.415 |
+| wendy-footstep-cadence / world-budget | 0 | 815996928 | 307744768 | 25.6 |
+| wendy-dash-keyboard / baseline-budget | 1 | 1119997952 | 210915328 | 13.763 |
+| wendy-dash-keyboard / deploy-budget | 0 | 815996928 | 51339264 | 24.07 |
+| wendy-dash-keyboard / installer-budget | 0 | 815996928 | 53628928 | 52.734 |
+| wendy-dash-keyboard / nw-budget | 0 | 1119997952 | 216334336 | 18.091 |
+| wendy-dash-keyboard / pack-budget | 0 | 815996928 | 84168704 | 7.523 |
+| wendy-dash-keyboard / world-budget | 0 | 815996928 | 301375488 | 27.652 |
+
+Four superseded scan logs are also consolidated: wendy-autowalk-idle and wendy-autowalk-key candidates reported no threats with Defender platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.386.0; wendy-footstep-cadence and wendy-dash-trace candidates reported no threats with the same platform/engine and definitions 1.463.328.0. Their exact prior source/plan identities and tests remain in the existing release records. The current final exact-payload scan remains retained in wendy-target-numbers/defender.txt.
+
