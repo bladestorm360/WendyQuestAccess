@@ -275,3 +275,6 @@ November 21 pending release: [Sunrise Bay/mine continuation](docs/navigation-aud
 
 
 The November 21 world-detour/shrine update is installed and hash-verified at payload source e848d5358c5689cb2f3fc7118b4ac65cd1a120c9. Full-world, native, connected field, matching runtime, exact installer and security checks passed. Saves/settings and original recovery are preserved. [Installed identities, single rollback and verification limits](docs/deployment.md#verified-world-detours-and-shrine-presentation). The finite scope is closed after cleanup: one verified rollback and 20 development logs remain; physical travel/speech confirmation remains separate.
+
+
+November 21 gameplay feedback: the owner found the existing Cracked Cove/Caffeine Caverns exit after browsing farther and withdrew that missing-connection report. Cross-map routing is now gameplay-confirmed for the travel exercised. [Corrected audit and confirmation](docs/navigation-audit.md#sunrise-bay-and-mine-connection-continuation). No code or installed payload change accompanies this correction.

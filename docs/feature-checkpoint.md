@@ -547,3 +547,6 @@ All final required checks passed and the verified update is installed under sour
 
 
 Task cleanup removed 29,724,879 generated build, candidate, fixture, disposable analysis/log and bytecode-cache bytes. The task folder retains only the exact final scan and the verified single rollback. There are 20 retained development logs across the project analysis tree; no additional log pruning was necessary. Unique stock/art/RE inputs, installed files, settings and saves were preserved. Closed for this user-triggered route-continuation, scene/art/label and world-connection scope. Implementation, affected documentation, required offline/release checks and verified local deployment are complete. Final source/doc push follows; gameplay confirmation and the previously recorded separate findings remain distinct.
+
+
+Owner gameplay correction, November 21, 2026: Cracked Cove already listed multiple world-map exits, including the Caffeine Caverns connection; the owner found it after browsing farther. Withdraw the claim that this particular connection was missing or broken. The owner confirms the installed cross-map routing is working in actual play. This confirms the exercised navigation, not every possible route or the unrelated pending speech/cave checks. No routing changes, rebuild or deployment are made for this feedback.

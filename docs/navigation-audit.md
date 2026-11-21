@@ -265,3 +265,6 @@ Map 197 event 11's developer name, Dave dialogue and gold bust identify a Dave s
 
 
 The connected `tests/world-detour-field.cjs` check passes actual field selection, transferred terrain buffers, production-worker response admission and final named exit speech from both Sunrise Bay approaches. Throttled native-side callback peak was 7.11 ms; worker/physical audio time is excluded and the complete worker round trips remain reported separately.
+
+
+Owner gameplay correction, November 21, 2026: Cracked Cove already listed multiple world-map exits, including the Caffeine Caverns connection; the owner found it after browsing farther. Withdraw the claim that this particular connection was missing or broken. The owner confirms the installed cross-map routing is working in actual play. This confirms the exercised navigation, not every possible route or the unrelated pending speech/cave checks. No routing changes, rebuild or deployment are made for this feedback.
