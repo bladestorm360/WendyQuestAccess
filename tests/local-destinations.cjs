@@ -23,8 +23,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     assert.equal(browse(browser, snapshot, []).target.id, 3);
     assert.equal(browse(browser, snapshot, ['nextDestination']).target.id, 2);
     snapshot.x = 12;
-    assert.equal(browse(browser, snapshot, []).target.id, 2, 'the selected ID survives a new order');
-    assert.equal(browse(browser, snapshot, ['previousDestination']).target.id, 1);
+    assert.equal(browse(browser, snapshot, []).target.id, 2, 'the selected ID survives movement without re-ordering');
+    assert.equal(browse(browser, snapshot, ['previousDestination']).target.id, 3, 'movement preserves the category order');
     assert.equal(browse(browser, snapshot, ['nextCategory']).target.id, 4, 'enter the category at the nearest NPC');
     assert.equal(browse(browser, snapshot, ['previousCategory']).target.id, 1);
     snapshot.x = 19;

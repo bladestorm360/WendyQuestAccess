@@ -168,7 +168,9 @@ function eventDescription(root, entry, page, event) {
     return null;
 }
 
-function createDestinationBrowser() { return { category: null, selections: Object.create(null) }; }
+function createDestinationBrowser() {
+    return { category: null, selections: Object.create(null), orders: Object.create(null) };
+}
 
 function browse(state, snapshot, changes) {
     const groups = new Map();
@@ -196,17 +198,33 @@ function browse(state, snapshot, changes) {
         return { status: 'Selected destination is unavailable' };
     }
     if (!categories.length) return { status: snapshot.eligibleObjects ? 'No reachable destinations here' : 'No destinations here' };
-    // Rank the current snapshot once per command, including local bookmarks.
-    // Native event order is the tie-breaker. Remote bookmarks have no tile here.
-    const distances = new Map();
-    for (const item of snapshot.objects) {
-        let dx = Math.abs(item.x - snapshot.x);
-        let dy = Math.abs(item.y - snapshot.y);
-        if (snapshot.scrollType & 2) dx = Math.min(dx, snapshot.width - dx);
-        if (snapshot.scrollType & 1) dy = Math.min(dy, snapshot.height - dy);
-        distances.set(item, Number.isFinite(dx + dy) ? dx + dy : Infinity);
+    function ordered(category, entering = false) {
+        const items = groups.get(category);
+        if (!items) return;
+        let order = state.orders[category];
+        if (entering || !order) {
+            // Only category entry ranks by current distance. Native event
+            // order breaks ties, and remote destinations sort after local ones.
+            const distances = new Map();
+            for (const item of items) {
+                let dx = Math.abs(item.x - snapshot.x), dy = Math.abs(item.y - snapshot.y);
+                if (snapshot.scrollType & 2) dx = Math.min(dx, snapshot.width - dx);
+                if (snapshot.scrollType & 1) dy = Math.min(dy, snapshot.height - dy);
+                distances.set(item, Number.isFinite(dx + dy) ? dx + dy : Infinity);
+            }
+            const ranked = items.slice().sort((a, b) => distances.get(a) - distances.get(b));
+            state.orders[category] = ranked.map(item => item.id);
+            return ranked;
+        }
+        // While walking or cycling, retain this entry's order and identity.
+        // Live removals disappear; new destinations append until re-entry.
+        const current = new Map(items.map(item => [item.id, item]));
+        order = order.filter(id => current.has(id));
+        const known = new Set(order);
+        for (const item of items) if (!known.has(item.id)) { order.push(item.id);known.add(item.id); }
+        state.orders[category] = order;
+        return order.map(id => current.get(id));
     }
-    for (const items of groups.values()) items.sort((a, b) => distances.get(a) - distances.get(b));
     const relative = (length, index, offset) => (length + index + offset) % length;
     const previousCategory = state.category;
     if (!state.category) state.category = categories.find(category => category !== 'all') || 'all';
@@ -216,8 +234,9 @@ function browse(state, snapshot, changes) {
             const previous = action === 'previousCategory';
             state.category = categories[index < 0 ? (previous ? categories.length - 1 : 0) :
                 relative(categories.length, index, previous ? -1 : 1)];
+            state.selections[state.category] = ordered(state.category, true)[0].id;
         } else {
-            const items = groups.get(state.category);
+            const items = ordered(state.category);
             if (!items) continue;
             let index = items.findIndex(item => item.id === state.selections[state.category]);
             const offset = action === 'previousDestination' ? -1 : 1;
@@ -225,7 +244,7 @@ function browse(state, snapshot, changes) {
             state.selections[state.category] = items[index < 0 ? 0 : relative(items.length, index, offset)].id;
         }
     }
-    const items = groups.get(state.category);
+    const items = ordered(state.category);
     if (!items) return { status: 'No ' + (snapshot.eligibleObjects ? 'reachable ' : '') +
         'destinations in ' + CATEGORY_LABELS[state.category] };
     const selection = state.selections[state.category];

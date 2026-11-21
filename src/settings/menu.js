@@ -256,6 +256,7 @@ function createSettingsMenu(root, host) {
                 'Under Audio, enable Cutscene descriptions for an independent voice during selected story animations. Adjust its speed and volume there.'
             ],
             Pathfinder: [
+                'Entering a category selects its nearest destination. Its distance order and your selection stay fixed as you move, until you switch categories again.',
                 'Previous destination ' + binding('previousDestination') + '. Next destination ' +
                     binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
                     binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
