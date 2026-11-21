@@ -1642,6 +1642,7 @@ async function main() {
     await verifyBookmarks(c, load, verifyRoute, verifyWorker);
     await verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, read('CommonEvents.json'));
     await verifyWorldDetours(c, load, verifyWorker, read('CommonEvents.json'), read('MapInfos.json'));
+    await require('./world-detour-field.cjs').verifyWorldDetourField(c, load, verifyWorker, read('CommonEvents.json'), read('MapInfos.json'));
     console.log(`Verified ${compared} directed movement comparisons across authored maps and dynamic cases.`);
     console.log('Verified native Map 196 patrol contact, catch-page handback, checkpoint floor trigger and bounded warning sign route.');
 }

@@ -272,3 +272,6 @@ November 21 route follow-up: [ordinary cave course invalidation](docs/puzzles-an
 
 
 November 21 pending release: [Sunrise Bay/mine continuation](docs/navigation-audit.md#sunrise-bay-and-mine-connection-continuation) records the reproduced nearest-town prefix and verified four full Cauldron/Mech Café chains, native transfer ticket and current-world worker projection. [Staircase and shrine presentation](docs/cutscene-description.md#underground-staircase-and-shrine-presentation) records the three voiced effects, displayed title boundary and MarkBorg art comparison. [Spatula discrepancy](docs/battle.md#sacred-rewards-spatula-name-discrepancy) is native text for the same weapon. Implementation/focused checks are complete; the single scope ledger tracks remaining release/deployment checks.
+
+
+The November 21 world-detour/shrine update is installed and hash-verified at payload source e848d5358c5689cb2f3fc7118b4ac65cd1a120c9. Full-world, native, connected field, matching runtime, exact installer and security checks passed. Saves/settings and original recovery are preserved. [Installed identities, single rollback and verification limits](docs/deployment.md#verified-world-detours-and-shrine-presentation). The finite scope is closed after cleanup: one verified rollback and 20 development logs remain; physical travel/speech confirmation remains separate.
