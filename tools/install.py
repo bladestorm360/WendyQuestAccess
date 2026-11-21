@@ -152,7 +152,7 @@ def game_scripts(source, check_syntax=False):
 
 def verify_geometry(game, geometry):
     contents = inventory(geometry)
-    manifest = json.loads(read(geometry / 'manifest.json', 128 * 1024))
+    manifest = json.loads(read(geometry / 'manifest.json', 136 * 1024))
     maps = manifest.get('maps', {})
     if manifest.get('build') != BUILD or len(maps) != 239 or any(not re.fullmatch(r'[1-9]\d{0,2}', key) for key in maps):
         raise ValueError('Unsupported geometry manifest')

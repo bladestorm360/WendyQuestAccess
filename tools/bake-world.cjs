@@ -95,14 +95,14 @@ function bake(installed, destination) {
     }
     const catalog = bakeCatalog(transferMaps, manifest.maps);
     const bytes = Buffer.from(JSON.stringify(catalog));
-    if (bytes.length > MAX_CATALOG_BYTES) throw Error('Walking catalog exceeds its size limit');
+    if (bytes.length > MAX_CATALOG_BYTES) throw Error('Walking catalog exceeds its size limit: ' + bytes.length + '; landings ' + catalog.landings.length);
     manifest.walking = { hash: digest(bytes), catalog };
     const region = Buffer.from(JSON.stringify(bakeBreakfast(breakfast, manifest.maps)));
     if (region.length > MAX_CATALOG_BYTES) throw Error('Regional walking catalog exceeds its size limit');
     fs.writeFileSync(path.join(output, 'breakfast.json'), region, { flag: 'wx' });
     manifest.breakfast = digest(region);
     const index = JSON.stringify(manifest);
-    if (Buffer.byteLength(index) > 128 * 1024) throw Error('Map geometry manifest exceeds its size limit');
+    if (Buffer.byteLength(index) > 136 * 1024) throw Error('Map geometry manifest exceeds its size limit: ' + Buffer.byteLength(index));
     fs.writeFileSync(path.join(output, 'manifest.json'), index, { flag: 'wx' });
     return { maps: maps.length, cells };
 }

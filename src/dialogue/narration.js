@@ -17,6 +17,7 @@ const PACK_LIMIT = 1024 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
+const REWARD_LIMIT = 60;
 const MIME = 'audio/webm; codecs="opus"';
 
 function unpackClips(root, bytes) {
@@ -136,7 +137,7 @@ function createNarration(root, host, preferences) {
         if (context.queue.length >= QUEUE_LIMIT) return;
         scene._wqaNarrationSeen = { list: interpreter._list, index: interpreter._index };
         context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual,
-            x: actor._realX, y: actor._realY, id: candidate.id });
+            x: actor._realX, y: actor._realY, mapY: map._displayY, id: candidate.id });
     }
 
     function begin(scene, interpreter = null) {
@@ -199,6 +200,28 @@ function createNarration(root, host, preferences) {
             interpreter === root.$gameMap._interpreter && interpreter._list === list : idleReady(scene);
     }
 
+    function visibleRewardGlow(scene) {
+        const names = ['_pictureContainer_upper', '_pictureContainer_mid', '_pictureContainer_lower'];
+        const name = 'img/ParticleEffects/LockedChestGlow.json';
+        let count = 0;
+        for (const key of names) {
+            const parent = scene._spriteset?.[key];
+            const children = parent?.children;
+            if (!Array.isArray(children)) continue;
+            if ((count += children.length) > 128) return false;
+            for (const sprite of children) {
+                const id = sprite._pictureId;
+                const picture = Number.isInteger(id) && id >= 1 && id <= 11 && root.$gameScreen._pictures?.[id];
+                const pose = sprite.worldTransform;
+                if (picture?._animated && picture._name === name && picture._opacity > 0 &&
+                    sprite._pictureName === name && sprite._frameAnimator && renderedSprite(sprite, parent) &&
+                    pose && pose.tx >= 0 && pose.tx <= host.graphics.width && pose.ty >= 0 && pose.ty <= host.graphics.height)
+                    return true;
+            }
+        }
+        return false;
+    }
+
     function visibleActorCue(scene, state) {
         // The finale paints a white full-screen picture over this change.
         if (state.id === 'chomps-sacrifice' && root.$gameScreen?._pictures?.[29]?._opacity > 20) return false;
@@ -207,6 +230,10 @@ function createNarration(root, host, preferences) {
         const parent = spriteset?._tilemap;
         if (!parent || actor._erased || actor._transparent || sprite.parent !== parent ||
             sprite._characterName !== actor._characterName) return false;
+        if (visual === -3) return parent.worldVisible === true && parent.worldAlpha > 0 &&
+            root.$gameMap._scrollDirection === 8 && root.$gameMap._scrollRest > 0 &&
+            root.$gameMap._displayY < state.mapY;
+        if (visual === -4) return visibleRewardGlow(scene);
         // Dave's authored light bulbs use blank map anchors. For those cues
         // the actual rendered balloon owns visibility, including its pose.
         const blankAnchor = visual === 9 && actor._characterName === '' && !actor._tileId;
@@ -236,7 +263,7 @@ function createNarration(root, host, preferences) {
         // Keep already rendered descriptions even after the effect disappears.
         // Only unpainted effects expire on the short native presentation budget.
         context.queue = context.queue.filter(state => state.confirmed ||
-            frame - state.frame <= (state.id === 'chomps-sacrifice' ? FLASH_LIMIT : FRAME_LIMIT));
+            frame - state.frame <= (state.id === 'chomps-sacrifice' ? FLASH_LIMIT : state.visual === -4 ? REWARD_LIMIT : FRAME_LIMIT));
         if (!clip && !context.queue.length) return leave(scene);
         const renderer = host.graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return leave(scene);

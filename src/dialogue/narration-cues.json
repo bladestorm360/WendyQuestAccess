@@ -1529,11 +1529,11 @@
     "beats": []
   },
   "idle-hud-slides": {
-    "text": "Wendy’s status display slides away.",
+    "text": "Wendy\u2019s status display slides away.",
     "beats": []
   },
   "idle-dozes": {
-    "text": "Zs drift over Wendy’s head as she dozes.",
+    "text": "Zs drift over Wendy\u2019s head as she dozes.",
     "beats": []
   },
   "idle-map-dark": {
@@ -1567,5 +1567,101 @@
   "idle-screen-shifts": {
     "text": "The picture starts stretching and tilting.",
     "beats": []
+  },
+  "underground-staircase": {
+    "text": "The view pans upward to reveal a staircase rising through the cavern.",
+    "beats": [
+      [
+        202,
+        5,
+        0,
+        5,
+        -1,
+        null,
+        -3
+      ],
+      [
+        202,
+        6,
+        0,
+        5,
+        -1,
+        null,
+        -3
+      ],
+      [
+        202,
+        7,
+        0,
+        5,
+        -1,
+        null,
+        -3
+      ],
+      [
+        202,
+        8,
+        0,
+        5,
+        -1,
+        null,
+        -3
+      ],
+      [
+        202,
+        9,
+        0,
+        5,
+        -1,
+        null,
+        -3
+      ],
+      [
+        202,
+        10,
+        0,
+        5,
+        -1,
+        null,
+        -3
+      ],
+      [
+        202,
+        11,
+        0,
+        5,
+        -1,
+        null,
+        -3
+      ]
+    ]
+  },
+  "frostyna-spots-markborg": {
+    "text": "Frostyna turns toward MarkBorg and jumps in alarm. The others turn toward him.",
+    "beats": [
+      [
+        197,
+        18,
+        0,
+        77,
+        1,
+        null,
+        1
+      ]
+    ]
+  },
+  "sacred-reward-glow": {
+    "text": "Golden beams shimmer above the treasure chests.",
+    "beats": [
+      [
+        197,
+        18,
+        0,
+        151,
+        -1,
+        null,
+        -4
+      ]
+    ]
   }
 }

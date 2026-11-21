@@ -456,6 +456,60 @@ function bayReturn(entry, page) {
     return landingIs(edge, 113, 39, 9) && edge.direction === 0 ? edge : null;
 }
 
+// These exits always transfer. Their surrounding branches update the atlas
+// or quest journal; they do not gate passage or select a different landing.
+function regionalExit(map, entry, page, index, common) {
+    const { list } = page;
+    if (map === 76 && [2, 3, 92].includes(entry.id)) {
+        const codes = [111, 111, 121, 122, 122, 117, 121, 121, 121, 121, 0, 412, 0, 412, 201, 117, 0];
+        const depths = [0, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 0, 0, 0, 0];
+        const edge = transferTo(list[14], map);
+        return entry.pages.length === 1 && flagsAre(page) && page.trigger === 1 && page.priorityType === 0 &&
+            list.length === codes.length && codes.every((code, at) => rowIs(list[at], code, depths[at])) &&
+            parametersAre(list[0], [0, 464, 0]) && parametersAre(list[1], [0, 466, 1]) &&
+            parametersAre(list[5], [159]) && parametersAre(list[15], [48]) && common?.[159]?.list && common?.[48]?.list &&
+            landingIs(edge, 113, 43, 28) ? [edge] : [];
+    }
+    if (map === 209 && entry.id === 9) {
+        const edge = transferTo(list[2], map);
+        return entry.pages.length === 1 && flagsAre(page) && page.trigger === 1 && page.priorityType === 0 &&
+            list.length === 4 && callsStairSound(list[0]) && questCommand(list[1], 'disableAutoMarker') &&
+            rowIs(list[2], 201) && rowIs(list[3], 0) && audioOnly(common) && landingIs(edge, 52, 12, 93) ? [edge] : [];
+    }
+    if (map === 52 && entry.id === 15) {
+        const codes = [117, 357, 657, 657, 657, 657, 111, 357, 657, 357, 657, 657, 123, 0, 412, 117, 121, 201, 0];
+        const edge = transferTo(list[17], map);
+        return entry.pages.length === 1 && flagsAre(page) && page.trigger === 1 && page.priorityType === 1 &&
+            list.length === codes.length && codes.every((code, at) => rowIs(list[at], code, at >= 7 && at <= 13 ? 1 : 0)) &&
+            recordsPositionAt(list, 0, common) && questCommand(list[1], 'questMarker') &&
+            parametersAre(list[6], [2, 'A', 1]) && questCommand(list[7], 'completeQuest') &&
+            questCommand(list[9], 'startQuest') && parametersAre(list[12], ['A', 0]) &&
+            callsStairSound(list[15]) && parametersAre(list[16], [89, 89, 0]) && audioOnly(common) &&
+            landingIs(edge, 209, 10, 7) ? [edge] : [];
+    }
+    const mine = { 3: [50, 16], 4: [51, 4], 10: [31, 4], 16: [25, 22] }[entry.id];
+    if (map === 48 && mine) {
+        const codes = [117, 111, 201, 0, 411, 201, 0, 412, 0];
+        const depths = [0, 0, 1, 1, 0, 1, 1, 0, 0];
+        const after = transferTo(list[2], map), before = transferTo(list[5], map);
+        return entry.pages.length === 1 && flagsAre(page) && page.trigger === 1 && page.priorityType === 1 &&
+            list.length === codes.length && codes.every((code, at) => rowIs(list[at], code, depths[at])) &&
+            callsStairSound(list[0]) && audioOnly(common) && parametersAre(list[1], [1, 5, 0, 4, 1]) &&
+            landingIs(after, 45, ...mine) && landingIs(before, 59, ...mine) ?
+            [{ ...before, gate: NUGGEDOR_BEFORE }, { ...after, gate: NUGGEDOR_AFTER }] : [];
+    }
+    if (map === 61 && entry.id === 1) {
+        const edge = transferTo(list[index === 0 ? 1 : 2], map);
+        const codes = index === 0 ? [117, 201, 357, 657, 657, 657, 657, 0] : [357, 117, 201, 0];
+        return entry.pages.length === 2 && index <= 1 && page.trigger === 1 && page.priorityType === 1 &&
+            (index === 0 ? flagsAre(page) : flagsAre(page, 'switch1Valid') && page.conditions.switch1Id === 72) &&
+            list.length === codes.length && codes.every((code, at) => rowIs(list[at], code)) && audioOnly(common) &&
+            callsStairSound(list[index === 0 ? 0 : 1]) && questCommand(list[index === 0 ? 2 : 0], index === 0 ? 'questMarker' : 'disableAutoMarker') &&
+            landingIs(edge, 48, 6, 5) ? [edge] : [];
+    }
+    return null;
+}
+
 function transferOptions(map, entry, page, common) {
     if (!page || ![0, 1].includes(page.trigger) || page.moveType !== 0 || page.through ||
         ![0, 1].includes(page.priorityType) || /^(?:test|debug|developer)/i.test(entry.name || '') ||
@@ -463,6 +517,8 @@ function transferOptions(map, entry, page, common) {
     const stair = houseStair(map, entry.id);
     if (stair) return audioOnly(common) ? houseBranches(stair, page.list, map) || [] : [];
     const index = entry.pages.indexOf(page);
+    const regional = regionalExit(map, entry, page, index, common);
+    if (regional) return regional;
     if (map === 87 && entry.id === 73) return caffeineEscape(entry, page, common);
     if (map === 87 && entry.id === 91) return caffeineEntrance(page, index);
     const breakfast = breakfastCaveTransfer(map, entry, page, common);
@@ -488,7 +544,14 @@ function transferOptions(map, entry, page, common) {
     const world = map === 113 ? worldQuestEntrance(entry, page, index, common) || worldWalkingEntrance(entry, page, common) :
         map === 206 ? islandReturn(entry, page) : map === 49 ? bayReturn(entry, page) : null;
     if (world) return [world];
-    const commands = page.list.filter(row => ![0, 108, 408].includes(row.code));
+    const saltcaster = common?.[48]?.list;
+    const resetSaltcaster = saltcaster?.length === 2 && rowIs(saltcaster[0], 122) &&
+        parametersAre(saltcaster[0], [12, 12, 0, 0, 0]) && rowIs(saltcaster[1], 0);
+    // These deterministic journal/ambient updates cannot change the transfer
+    // or its landing. Keep unknown scripts and all real gates excluded.
+    const commands = page.list.filter(row => ![0, 108, 408].includes(row.code) &&
+        !(row.indent === 0 && (questCommand(row, 'disableAutoMarker') ||
+            resetSaltcaster && row.code === 117 && parametersAre(row, [48]))));
     if (commands.length === 2 && callsStairSound(commands[0]) && commands[0].indent === 0 && audioOnly(common)) commands.shift();
     const destination = commands.length === 1 && commands[0].indent === 0 && transferTo(commands[0], map);
     return destination ? [destination] : [];
@@ -498,6 +561,10 @@ function catalogTransferOptions(map, entry, common, regional = false) {
     const { pages } = entry;
     if (!regional && (map === 87 && (entry.id === 77 || entry.id === 78) ||
         map === 191 && (entry.id === 1 || entry.id === 2))) return [];
+    if (map === 61 && entry.id === 1 && pages.length === 2) {
+        const variants = pages.map(page => transferOptions(map, entry, page, common));
+        return variants.every(options => options.length === 1) ? variants[0] : [];
+    }
     if (map === 87 && entry.id === 91 && pages.length === 2) {
         const first = transferOptions(map, entry, pages[0], common);
         return first.length && transferOptions(map, entry, pages[1], common).length ? first : [];

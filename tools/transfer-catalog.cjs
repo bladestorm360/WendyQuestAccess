@@ -5,6 +5,7 @@ const { walkingLanding } = require('../src/world/routes.cjs');
 const { catalogTransferOptions, shipPort } = require('../src/world/transfer-events.cjs');
 const { MAX_LANDINGS, validTile, readCatalog } = require('../src/world/walking-catalog.cjs');
 const { timedCave } = require('../src/world/puzzles/cave');
+const { movingEnemy } = require('../src/world/destinations');
 
 function transferMap(id, map, geometry, flags, common) {
     const events = [];
@@ -14,6 +15,18 @@ function transferMap(id, map, geometry, flags, common) {
     for (const entry of map.events) {
         if (!entry?.pages?.length) continue;
         const { id: event, x, y, pages } = entry;
+        // An ordinary encounter is a reachable prerequisite, not a permanent
+        // break in cross-map connectivity. The live local solver still stops
+        // at the actual enemy and names the blocker before proceeding.
+        const clearedEncounter = movingEnemy(pages[0]) && pages.some(page =>
+            page.conditions.selfSwitchValid && page.conditions.selfSwitchCh === 'A' &&
+            page.list.some(row => row.code === 214));
+        const clearedFloorScene = pages.every(page => page.priorityType === 0 && !page.image?.tileId) &&
+            pages.some(page => page.trigger === 1 && page.list.length === 2 &&
+                page.list[0]?.code === 214 && page.list[1]?.code === 0 &&
+                Object.entries(page.conditions).some(([key, value]) => key.endsWith('Valid') && value === true));
+        if (clearedEncounter || clearedFloorScene) continue;
+
         const cell = indexOf(geometry, x, y);
         if (cell < 0) continue;
         // The projected map can add authored barriers but cannot infer a

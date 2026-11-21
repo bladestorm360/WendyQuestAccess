@@ -88,15 +88,15 @@ function createMapBannerObserver(root, host, notifications, fieldReady) {
             window.worldVisible && window.worldAlpha > 0 && window.contentsOpacity > 0;
     }
 
-    function observe(scene, revision) {
+    function observe(scene, revision, scripted = false) {
         const window = scene._mapNameWindow;
         const renderer = host.graphics.app?.renderer;
         if (!window || typeof renderer?.once !== 'function') return;
-        if (scene._wqaEntranceFallback) {
+        if (scene._wqaEntranceFallback && !scripted) {
             window._wqaBannerRead = revision;
             return;
         }
-        if (current?.scene === scene) return;
+        if (current?.scene === scene && !(scripted && current.fallback)) return;
         if (current) leave(current.scene);
         const context = { scene, window, revision, epoch: 0 };
         current = context;

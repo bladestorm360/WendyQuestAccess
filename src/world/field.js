@@ -10,6 +10,7 @@ const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestina
 const { transferOptions } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
+const { createLocalDetour } = require('./local-detour');
 const { tileKey, DIRECTIONS } = require('./geometry.cjs');
 const { browse, createDestinationBrowser, activeMovingEnemy } = require('./destinations');
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
@@ -105,6 +106,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     const cave = createCaveGuide(root, host.graphics);
     const chaseGuide = createChaseGuide(root, host.graphics);
     const transfers = createTransferBookmarks(root, host);
+    const localDetour = createLocalDetour(root, transfers);
     const terrainJourney = createTerrainJourney(root);
     const selectionSites = new WeakMap();
     let browser = createDestinationBrowser();
@@ -443,6 +445,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 return status(job, (result.gate === 97 ? bridgeReason(result) : CRYSTAL_REASON) + ' No verified route to an exit from here.');
             if (job.terrainOnward && ['unreachable', 'unavailable'].includes(result?.status))
                 return status(job, [job.guide, 'No verified route to an exit from here.'].filter(Boolean).join(' '));
+            if (result?.detourPoints && !localDetour.accept(job, result))
+                return status(job, 'The entrance changed. Request directions again.');
             if (job.remote && result?.status === 'ready' && !admitRemoteRoute(job, result))
                 return status(job, 'The entrance changed. Request directions again.');
             if (result?.status === 'patrolLine') {
@@ -857,7 +861,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             snapshot.live.terrainSwitch === 97 ? terrainTransferRequest(job, STONE_ISLAND) : undefined;
         const guideOptions = motion && job.guideOptions?.map(({ target }) => destinationRequest(target));
         const followedDirection = !motion && !area ? routeProgress(job, snapshot, target, destination.event) : undefined;
-        submit(job, snapshot, { ...destination, terrainTransfer, guideOptions, followedDirection,
+        const detour = localDetour.prepare(job, snapshot, target);
+        submit(job, snapshot, { ...destination, detour, terrainTransfer, guideOptions, followedDirection,
             stopBeforeEvent: job.eventAction === 'step',
             limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
             surface: snapshot.mode !== 'walk', patrolGuidance: !!motion,
@@ -1033,7 +1038,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     function select(job, snapshot) {
         snapshot.objects = includeSavedBookmarks(snapshot, snapshot.bookmarks, quest => questDestinationCurrent(root, job.scene, quest));
         if (job.action === 'directions' && !job.changes.length) {
-            if (resumeShoreJourney(job, snapshot) || resumeTerrainJourney(job, snapshot)) return;
+            if (localDetour.resume(job, snapshot, remoteDirections, route) ||
+                resumeShoreJourney(job, snapshot) || resumeTerrainJourney(job, snapshot)) return;
         }
         const selected = owner.browser.selections[owner.browser.category];
         const result = browse(owner.browser, snapshot, job.changes);
@@ -1282,7 +1288,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const copy = ({ event, map, x, y, approach }) => ({ event, map, x, y, approach });
         const shipLanding = island && { event: island.event, x: island.x, y: island.y, facing: island.facing };
         submit(job, snapshot, { limit: 8, field: true, landing, shipLanding, autowalk: job.autowalk,
-            beacon: host.beacon?.enabled() === true, transfer: { map: bookmark.map, point, state, trail,
+            beacon: host.beacon?.enabled() === true, transfer: { map: bookmark.map, point, points: bookmark.points, state, trail,
+                world: bookmark.world, worldEntries: bookmark.worldEntries,
                 candidates: current.map(copy), ground: island ? ground.map(copy) : undefined,
                 discoveries: transfers.discoveries(island ? ground : current) } });
     }
@@ -1383,6 +1390,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         clearCaveResume();
         retireArrival(arrivalScene, false);
         transfers.clear();
+        localDetour.clear();
         terrainJourney.clear();
         shoreJourney = null;
         clearCaveEvent();
@@ -1437,6 +1445,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (action === 'beaconStop') {
             if (!ready(scene, true)) return false;
             const waitingForIce = iceRoute?.scene === scene;
+            localDetour.clear();
             terrainJourney.clear();
             shoreJourney = null;
             clearIceRoute(scene);
@@ -1486,6 +1495,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         browserOwner(scene);
         if (BROWSE.has(action) || puzzle) {
             owner.remoteBookmark = owner.routeProgress = null;
+            localDetour.clear();
             terrainJourney.clear();
             shoreJourney = null;
             transfers.clear();
@@ -1498,6 +1508,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     }
 
     function activateBookmark(scene, entry, remote = false, trail = []) {
+        localDetour.clear();
         clearIceRoute(scene);
         browserOwner(scene);
         owner.remoteBookmark = remote ? { id: entry.id, revision: entry.revision, trail } : null;
@@ -1658,7 +1669,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const map = root.$gameMap._mapId;
                 shoreJourney = map !== arrived.shore.map ? { player: root.$gamePlayer, map, ticket: arrived } : null;
             }
-            const bookmark = arrived && !arrived.shore && savedBookmark(arrived);
+            const detour = localDetour.settle(arrived);
+            const bookmark = arrived && !detour && !arrived.shore && savedBookmark(arrived);
             if (bookmark && travelMode(root.$gameMap, root.$gamePlayer) === bookmark.mode)
                 activateBookmark(scene, bookmark, root.$gameMap._mapId !== bookmark.map, arrived.trail);
             if (cave.recover(scene) && (!active || active.scene !== scene))

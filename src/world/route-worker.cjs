@@ -4,9 +4,9 @@ const { parentPort, workerData } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
 const { createHash } = require('crypto');
-const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, CELL_BITS } = require('./geometry.cjs');
-const { solveRoute, findReachable } = require('./routes.cjs');
-const { MAX_CATALOG_BYTES, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
+const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, MAX_EVENTS, CELL_BITS, tileKey } = require('./geometry.cjs');
+const { solveRoute, findReachable, routeApproachPoints, walkingLanding } = require('./routes.cjs');
+const { MAX_CATALOG_BYTES, MAX_LINKS, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
 const { lineDestination } = require('./puzzles/patrol-line-state.cjs');
 const { routeThroughTerrain } = require('./terrain-controls.cjs');
@@ -41,7 +41,7 @@ function readBounded(name, limit, cancelled) {
 function geometry(id, tileset, cancelled) {
     if (id === cachedId && tileset === cachedTileset) return cachedGeometry;
     if (!manifest) {
-        const bytes = readBounded('manifest.json', 128 * 1024, cancelled);
+        const bytes = readBounded('manifest.json', 136 * 1024, cancelled);
         if (!bytes || cancelled()) return null;
         const source = JSON.parse(bytes);
         if (source.build !== BUILD || !source.maps) throw new Error('Unsupported map geometry build');
@@ -100,9 +100,51 @@ function breakfastCatalog(open, cancelled) {
     return breakfast?.[open ? 1 : 0];
 }
 
+// Reconcile the static graph's world-map landings with the copied current
+// world state. Inactive/consumed event pages must not become permanent walls.
+// This is worker-only; no native pointers or game-file reads are involved.
+function currentWorldCatalog(catalog, transfer, cancelled) {
+    const live = transfer.world;
+    const candidates = transfer.worldEntries;
+    if (!catalog || !live || live.mode !== 'walk' || !Array.isArray(live.events) || live.events.length > MAX_EVENTS ||
+        !Array.isArray(candidates) || candidates.length > MAX_EVENTS) return catalog;
+    const base = geometry(113, live.tileset, cancelled);
+    if (!base || cancelled()) return null;
+    const landings = catalog.landings.slice();
+    const incoming = catalog.incoming.map(edges => edges.filter(edge => catalog.landings[edge.previous].map !== 113));
+    let links = incoming.reduce((total, edges) => total + edges.length, 0);
+    let worldLandings = 0;
+    for (let previous = 0; previous < landings.length; previous++) {
+        if (cancelled()) return null;
+        if (landings[previous].map !== 113) continue;
+        if (++worldLandings > 128) return null;
+        const [, x, y] = landings[previous].key.split('/').map(Number);
+        const available = walkingLanding(base, live, x, y, cancelled);
+        if (!available) return null;
+        const points = Buffer.alloc(Math.ceil(available.reached.length / 8));
+        for (let cell = 0; cell < available.reached.length; cell++) {
+            if ((cell & 63) === 0 && cancelled()) return null;
+            if (available.reached[cell]) points[cell >> 3] |= 1 << (cell & 7);
+        }
+        landings[previous] = { ...landings[previous], points };
+        for (const edge of candidates) {
+            if (edge.approach ? !(available.approaches[edge.event] & (1 << DIRECTIONS.indexOf(edge.approach))) :
+                !available.events[edge.event]) continue;
+            const next = catalog.byTile.get(tileKey(edge.map, edge.x, edge.y));
+            if (next !== undefined) {
+                if (++links > MAX_LINKS) return null;
+                incoming[next].push({ previous, gate: 0 });
+            }
+        }
+    }
+    return { landings, incoming, byTile: catalog.byTile };
+}
+
 function transferRoute(base, map, live, request, transfer, cancelled) {
     const regional = typeof transfer.breakfast === 'boolean';
-    const catalog = regional ? breakfastCatalog(transfer.breakfast, cancelled) : walkingCatalog();
+    const catalog = regional ? breakfastCatalog(transfer.breakfast, cancelled) :
+        currentWorldCatalog(walkingCatalog(), transfer, cancelled);
+    if (transfer.world && !catalog) return { status: 'unreachable' };
     const entrances = rankEntrances(catalog, map, transfer, manifest.maps, cancelled, live.mode === 'walk');
     const groundEntrances = transfer.ground && rankEntrances(catalog, map,
         { ...transfer, candidates: transfer.ground }, manifest.maps, cancelled, false);
@@ -178,6 +220,16 @@ parentPort.on('message', message => {
                 const access = request.terrainTransfer && (() => transferRoute(base, map, live, request,
                     request.terrainTransfer, cancelled));
                 result = routeThroughTerrain(base, live, request, manifest.maps[map].controls, cancelled, access) || result;
+            }
+            if (request.detour && map === 113 && live.mode === 'walk' && !request.motion &&
+                (['unreachable', 'approachBlocked'].includes(result.status) ||
+                    result.status === 'interrupted' && result.boundaryEvent !== request.event &&
+                    request.detour.candidates.some(edge => edge.event === result.boundaryEvent))) {
+                const points = routeApproachPoints(base, live, request, cancelled);
+                const via = points.length && transferRoute(base, map, live, request,
+                    { ...request.detour, points }, cancelled);
+                result = via && ['ready', 'enemyBlocked'].includes(via.status)
+                    ? { ...via, detourPoints: points } : { status: 'unreachable' };
             }
             const follows = (result.status === 'ready' || result.status === 'enemyBlocked' || result.status === 'iceRoute' ||
                 result.status === 'npcBlocked') && !result.reenter && (request.beacon === true || request.autowalk === true);

@@ -140,7 +140,7 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
     assert.deepEqual(transfer(select(197, 10), 9, 206, 0), { outcome: 'Returned to the island.', arrived: true });
 
     for (const [id, x, y, event, name, category] of [[206, 17, 7, 11, 'Cave entrance', 'exits'],
-        [202, 8, 7, 4, 'Chamber entrance', 'exits'], [197, 14, 16, 11, 'Statue', 'objects'],
+        [202, 8, 7, 4, 'Chamber entrance', 'exits'], [197, 14, 16, 11, 'Dave statue', 'objects'],
         [197, 14, 21, 10, 'Exit to island', 'exits']]) {
         const fixture = load(id, { switches: [585] });
         fixture.player.setPosition(x, y);
@@ -177,7 +177,7 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
             variables: { 92: 0, 195: count } });
         assert.equal(chamber.gameMap._events[11]._pageIndex, expected);
         chamber.player.setPosition(14, 16);
-        assert.equal(captureWorld(c, false).objects.find(item => item.id === 11).name, 'Statue');
+        assert.equal(captureWorld(c, false).objects.find(item => item.id === 11).name, 'Dave statue');
     }
 
     const common = read('CommonEvents.json');

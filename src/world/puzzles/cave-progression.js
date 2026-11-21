@@ -65,7 +65,7 @@ function caveDestination(map, event, entry, page) {
     if (exit && event._pageIndex === 0 && event._trigger === 1 && exit[1].some(index =>
         page.list[index]?.code === 201 && page.list[index].parameters[0] === 0 &&
         page.list[index].parameters[1] === exit[2])) return { name: exit[0], category: 'exits' };
-    if (map === 197 && id === 11 && event._trigger === 0) return { name: 'Statue', category: 'objects' };
+    if (map === 197 && id === 11 && event._trigger === 0) return { name: 'Dave statue', category: 'objects' };
     if (event._pageIndex !== 0 || event._trigger !== 1 || event._x !== entry.x || event._y !== entry.y) return null;
     if (map === 199 && (id === 22 || id === 24))
         return { name: 'Patrol line trigger', category: 'events', eventAction: 'step' };

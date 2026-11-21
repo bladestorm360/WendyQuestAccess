@@ -231,3 +231,8 @@ Baconator's attached battle atlas shows his bacon sword held upright in two idle
 ## Boss HP bars
 
 In Steam build 26578620, the battle spriteset creates the same `Sprite_Enemy` class for every troop member. The custom enemy sprite attaches a 64-pixel HP gauge to the battler, then places it eight pixels below the sprite origin on update. Frydusa, Mech Fry, Mech Flurry, Mech Chicken and Mech Nugget, Mech Muffin and Mech Double enter through that same path. No separate boss gauge, HP bar suppression metadata, or troop script that suppresses the gauge was found across the 175 formations. The mod reads that gauge when the live target and attached gauge are visible. Hidden participants supply no percentage until their sprite is shown and targetable. The native target and paint fixture passed. Individual boss presentation in live gameplay remains available for screenshot comparison. [Target observer](../src/battle/targets.js) · [Native fixture](../tests/battle-targets.test.cjs)
+
+
+## Sacred Rewards spatula name discrepancy
+
+November 21, 2026. Map 197 event 17/page 0 displays Miracle Spatulas obtained at command 9, then grants weapon ID 10 at command 10. Weapons record 10 is Wendy's Spatulas, with +13 Attack, +10 HP and Meter Bonus, matching the owner's inventory screenshot. This is a native text inconsistency for the same reward, not a different mod-granted item. Screen-reader speech continues to read the displayed message and inventory text; reward scripts and equipment mechanics are unchanged.

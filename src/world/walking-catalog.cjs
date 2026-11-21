@@ -5,7 +5,7 @@ const { validGate, gateAllows } = require('./transfer-gates.cjs');
 
 const MAX_LANDINGS = 1024;
 const MAX_LINKS = 16384;
-const MAX_CATALOG_BYTES = 80 * 1024;
+const MAX_CATALOG_BYTES = 84 * 1024;
 
 function validTile(map, x, y, maps) {
     const bounds = maps[map];
@@ -42,14 +42,16 @@ function readCatalog(data, maps) {
     return { landings, byTile, incoming };
 }
 
-function remainingTransfers(catalog, map, point, state, visited, maps, cancelled) {
+function remainingTransfers(catalog, map, point, state, visited, maps, cancelled, points) {
     const target = point && validTile(map, point.x, point.y, maps) ? point.y * maps[map].width + point.x : -1;
+    const targets = points?.map(p => validTile(map, p.x, p.y, maps) ? p.y * maps[map].width + p.x : -1);
     const { landings, incoming } = catalog;
     const ranks = new Uint16Array(landings.length);
     const queue = [];
     for (const [index, landing] of landings.entries()) {
         if (cancelled()) return ranks;
         if (landing.map !== map || visited.has(landing.key) ||
+            (targets && !targets.some(cell => cell >= 0 && (landing.points[cell >> 3] & (1 << (cell & 7))))) ||
             (point && (target < 0 || !(landing.points[target >> 3] & (1 << (target & 7)))))) continue;
         queue.push(index);
         ranks[index] = 1;
@@ -67,11 +69,13 @@ function remainingTransfers(catalog, map, point, state, visited, maps, cancelled
 }
 
 function rankEntrances(catalog, source, transfer, maps, cancelled, allowDirectFallback = true) {
-    const { map, point, candidates, state, trail = [] } = transfer || {};
-    if (!Number.isInteger(map) || map === source || !maps[map] || !Array.isArray(candidates) ||
+    const { map, point, points, candidates, state, trail = [] } = transfer || {};
+    if (!Number.isInteger(map) || (map === source && !points) || !maps[map] || !Array.isArray(candidates) ||
+        (points !== undefined && (!Array.isArray(points) || !points.length || points.length > 32 ||
+            points.some(p => !p || !validTile(map, p.x, p.y, maps)))) ||
         candidates.length > MAX_EVENTS || !Array.isArray(trail) || trail.length > MAX_LANDINGS) return [];
     const visited = new Set(trail);
-    const ranks = catalog && remainingTransfers(catalog, map, point, state, visited, maps, cancelled);
+    const ranks = catalog && remainingTransfers(catalog, map, point, state, visited, maps, cancelled, points);
     const options = [];
     for (const candidate of candidates) {
         if (cancelled()) return [];
@@ -90,4 +94,4 @@ function rankEntrances(catalog, source, transfer, maps, cancelled, allowDirectFa
     return options;
 }
 
-module.exports = { MAX_CATALOG_BYTES, MAX_LANDINGS, validTile, readCatalog, rankEntrances };
+module.exports = { MAX_CATALOG_BYTES, MAX_LANDINGS, MAX_LINKS, validTile, readCatalog, rankEntrances };

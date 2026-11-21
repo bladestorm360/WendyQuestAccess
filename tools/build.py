@@ -108,6 +108,7 @@ def bundle():
         './spatial-direction': 'world/spatial-direction.js',
         './snapshot': 'world/snapshot.js',
         './transfer-bookmarks': 'world/transfer-bookmarks.js',
+        './local-detour': 'world/local-detour.js',
         './transfer-events.cjs': 'world/transfer-events.cjs',
         './transfer-gates.cjs': 'world/transfer-gates.cjs',
         './bookmark-records': 'world/bookmark-records.js',

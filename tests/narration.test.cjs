@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 76);
+assert.equal(Object.keys(clips).length, 79);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -29,14 +29,14 @@ for (const [id, { beats }] of Object.entries(cues)) {
         const key = [m, e, i].join('/');
         assert(!locators.has(key));
         locators.add(key);
-        assert.equal(row.code, visual > 0 ? 213 : visual === -1 ? 224 : visual === -2 ? 250 : switched ? 121 : 205, key);
+        assert.equal(row.code, visual > 0 ? 213 : visual === -1 ? 224 : [-2, -3, -4].includes(visual) ? 250 : switched ? 121 : 205, key);
         if (visual > 0) {
             assert.equal(row.parameters[0] || e, actor, key);
             assert.equal(row.parameters[1], visual, key);
         }
     }
 }
-assert.equal(locators.size, 139);
+assert.equal(locators.size, 148);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
     const list = data?.events[e].pages[page].list;
@@ -127,6 +127,62 @@ for (const id of ['frostyna-idea', 'frostyna-prison-blast', 'frostyna-reaction',
     assert.equal(f.played[0].playbackRate, 2);
     f.narration.leave(f.scene);
     assert(f.played[0].paused);
+}
+
+// These sound commands anchor actual rendered camera and particle effects.
+for (const [m, e, p, i, a, , visual] of cues['underground-staircase'].beats) {
+    const f = fixture(m, e, p);
+    const { candidate } = f.actor(a);
+    f.nativeMap._displayY = 12;
+    f.interpreter._index = i;
+    f.narration.accepted(f.scene, f.interpreter, candidate, undefined, visual);
+    f.frame();
+    assert.equal(f.played.length, 0);
+    Object.assign(f.spriteset._tilemap, { worldVisible: true, worldAlpha: 1 });
+    Object.assign(f.nativeMap, { _scrollDirection: 8, _scrollRest: 4, _displayY: 11.9 });
+    f.frame(false);
+    assert.equal(f.played.length, 0, 'camera movement must be painted');
+    f.renderer.emit('postrender');
+    assert.equal(f.played[0]?.id, 'underground-staircase');
+}
+for (const glow of [false, true]) {
+    const f = fixture(197, 18, 0);
+    const { candidate } = f.actor(-1);
+    f.interpreter._index = 151;
+    f.status._pictures = [];
+    f.narration.accepted(f.scene, f.interpreter, candidate, undefined, -4);
+    for (let i = 0; i < 22; i++) f.frame();
+    assert.equal(f.played.length, 0, 'sound alone does not describe a chest glow');
+    if (glow) {
+        const name = 'img/ParticleEffects/LockedChestGlow.json';
+        f.status._pictures[1] = { _animated: true, _name: name, _opacity: 255 };
+        const parent = f.spriteset._pictureContainer_upper = { children: [] };
+        const sprite = { _pictureId: 1, _pictureName: name, _frameAnimator: {}, parent,
+            worldVisible: true, worldAlpha: 1, texture: { valid: true }, worldTransform: { tx: -20, ty: 100 } };
+        parent.children.push(sprite);
+        f.frame();
+        assert.equal(f.played.length, 0, 'offscreen glow is not narrated');
+        sprite.worldTransform.tx = 100;
+        f.frame(false);
+        assert.equal(f.played.length, 0);
+        f.renderer.emit('postrender');
+        assert.equal(f.played[0]?.id, 'sacred-reward-glow');
+    } else {
+        for (let i = 0; i < 60; i++) f.frame();
+        assert.equal(f.played.length, 0, 'no eligible visible glow remains silent');
+        assert(!f.scene._wqaNarrationActive);
+    }
+}
+{
+    const f = fixture(197, 18, 0);
+    const { candidate, sprite } = f.actor(1);
+    f.interpreter._index = 77;
+    f.narration.accepted(f.scene, f.interpreter, candidate, undefined, 1);
+    f.frame();
+    assert.equal(f.played.length, 0);
+    f.balloon(1, candidate, sprite);
+    f.frame();
+    assert.equal(f.played[0]?.id, 'frostyna-spots-markborg');
 }
 
 for (const [m, e, p, i, a, , visual] of cues['idea-dave-statue'].beats) {
@@ -328,4 +384,4 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 76 clips, 139 authored locators, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 79 clips, 148 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');

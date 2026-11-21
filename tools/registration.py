@@ -522,9 +522,16 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,params[1]);',
         288646: b'\n    if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._eventId===2&&this._index===15)'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,this.character(0),undefined,-1);',
-        291911: b'\n    if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._index===1&&'
-                b'(this._eventId===8||this._eventId===9)&&params[0]?.name==="WQ/SFX_LowRumble")'
-                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-2);',
+        291911: b'\n    if(Graphics._wqaNarrationEnabled){'
+                b'if(this._mapId===134&&this._index===1&&(this._eventId===8||this._eventId===9)&&'
+                b'params[0]?.name==="WQ/SFX_LowRumble")'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-2);'
+                b'else if(this._mapId===202&&this._eventId>=5&&this._eventId<=11&&this._index===5&&'
+                b'params[0]?.name==="WQ/SFX_Mechborg_Sting_1")'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-3);'
+                b'else if(this._mapId===197&&this._eventId===18&&this._index===151&&'
+                b'params[0]?.name==="WQ/Attack/SFX_RiseAndShine")'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-4);}',
         # ShowRewardTokens synchronously appends exactly one reward sprite.
         # Record it after the native call, before any later event command.
         305132: b'const wqaRewardScene=pluginName==="WendyQuest"&&params[1]==="ShowRewardTokens"?SceneManager._scene:null;'
@@ -650,12 +657,19 @@ def map_notification(original):
         const wqaWindow = this._mapNameWindow;
         const wqaRevision = wqaWindow?._wqaBannerDrawnRevision;
         const wqaUnread = wqaRevision && wqaRevision !== wqaWindow._wqaBannerRead;
+        // This authored reveal displays a location title during a native wait.
+        // Reading its rendered window does not open walking or worker gates.
+        const wqaMain = $gameMap._interpreter;
+        const wqaShrineTitle = $gameMap._mapId === 197 && wqaMain?._eventId === 18 &&
+            wqaMain._list === $dataMap.events?.[18]?.pages?.[0]?.list && wqaMain._index >= 127 && wqaMain._index <= 131 &&
+            !$gameMessage.isBusy() && !$gamePlayer._moveRouteForcing;
+
         if (this._wqaMapAnnouncement || wqaUnread) {
             const wqaReady = wqaRevision && wqaWindow._showCount > 0 &&
                 wqaWindow.visible && wqaWindow.openness === 255 && wqaWindow.contentsOpacity > 0 &&
                 this._wqaMapRestored && this._mapLoaded && this._started && this._active &&
                 !this._wqaPreloads?.size && !this._wqaPreloadOverflow &&
-                this._fadeDuration === 0 && this._fadeOpacity === 0 && this._prevCanMove === true &&
+                this._fadeDuration === 0 && this._fadeOpacity === 0 && (this._prevCanMove === true || wqaShrineTitle) &&
                 this.srcWendy && this.srcStones && $gameMap._nameDisplay && $gameMap.inactiveTime < 30 &&
                 !$gamePlayer._transferring && $gameScreen._brightness === 255 && !($gameScreen._fadeOutDuration > 0) &&
                 this === SceneManager._scene && !SceneManager._nextScene && !SceneManager._exiting &&
@@ -663,7 +677,7 @@ def map_notification(original):
             if (this._wqaMapAnnouncement > 0 && (!wqaReady || this._wqaMapAnnouncement !== wqaRevision))
                 globalThis.WendyQuestAccessMapBannerLeaving?.(this);
             if (wqaReady && wqaUnread && !(this._wqaMapAnnouncement > 0))
-                globalThis.WendyQuestAccessMapBannerReady?.(this, wqaRevision);
+                globalThis.WendyQuestAccessMapBannerReady?.(this, wqaRevision, wqaShrineTitle);
         }
     }
 '''

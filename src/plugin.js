@@ -672,11 +672,11 @@ function boot(root, nodeRequire, nodeProcess) {
     };
     root.WendyQuestAccessAutosaveNoticeEnd = function (scene, sprite) { autosaveNotice?.removed(scene, sprite); };
 
-    root.WendyQuestAccessMapBannerReady = function (scene, revision) {
+    root.WendyQuestAccessMapBannerReady = function (scene, revision, scripted = false) {
         try {
             if (!supported() || root.SceneManager._scene !== scene || !root.document.hasFocus()) return;
             if (!mapBanner) initialize();
-            mapBanner.observe(scene, revision);
+            mapBanner.observe(scene, revision, scripted);
         } catch { mapBanner?.leave(scene); }
     };
 

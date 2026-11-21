@@ -428,16 +428,42 @@ function reachableApproaches(world, start, tiles, cancelled) {
     return { reached, events, bumps };
 }
 
-function walkingLanding(geometry, snapshot, x, y) {
-    const world = composeWorld(geometry, snapshot, () => false);
+// A world-map destination can require leaving and re-entering that map.
+// Seed the transfer graph with actual native interaction approaches, never
+// the occupied floor trigger itself or an arbitrary neighboring component.
+function routeApproachPoints(geometry, snapshot, request, cancelled) {
+    const world = composeWorld(geometry, snapshot, cancelled);
+    const tiles = interactionTiles(world, cancelled, !!request.bumpDirections);
+    const goals = routeGoals(world, request, cancelled, tiles);
+    if (!goals) return [];
+    const cells = new Set();
+    for (let cell = 0; cell < goals.length; cell++) {
+        if ((cell & 63) === 0 && cancelled()) return [];
+        if (!goals[cell]) continue;
+        if (!tiles.touch[cell]) cells.add(cell);
+        else if (tiles.touch[cell] === request.event) {
+            for (let heading = 0; heading < 4; heading++) {
+                const before = offset(world, cell, 3 - heading);
+                if (before >= 0 && !tiles.touch[before] && step(world, before, heading) === cell &&
+                    (request.entryDirection === undefined || request.entryDirection === DIRECTIONS[heading])) cells.add(before);
+            }
+        }
+        if (cells.size > 32) return [];
+    }
+    return Array.from(cells, cell => ({ x: cell % world.width, y: Math.floor(cell / world.width) }));
+}
+
+function walkingLanding(geometry, snapshot, x, y, cancelled = () => false) {
+    const world = composeWorld(geometry, snapshot, cancelled);
     const start = indexOf(world, x, y);
     if (start < 0) return null;
-    const tiles = interactionTiles(world, () => false);
-    const { reached, events } = reachableApproaches(world, start, tiles, () => false);
+    const tiles = interactionTiles(world, cancelled);
+    const { reached, events } = reachableApproaches(world, start, tiles, cancelled);
     // Reaching a different floor event does not mean the player retains
     // control there. A landing itself is already occupied on native handback.
     const approaches = new Uint8Array(MAX_EVENTS + 1);
     for (let cell = 0; cell < reached.length; cell++) {
+        if ((cell & 63) === 0 && cancelled()) return null;
         if (!reached[cell]) continue;
         if (cell !== start && tiles.touch[cell]) {
             reached[cell] = 0;
@@ -854,4 +880,4 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
         ? encounterRoute(geometry, snapshot, world, request, cancelled, reversing, false) || result : result;
 }
 
-module.exports = { solveRoute, solveWorldRoute, encounterObstacles, findReachable, walkingLanding, routeGoals, inside };
+module.exports = { solveRoute, solveWorldRoute, encounterObstacles, findReachable, walkingLanding, routeApproachPoints, routeGoals, inside };
