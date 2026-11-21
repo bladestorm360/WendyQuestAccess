@@ -6,6 +6,7 @@ const path = require('path');
 const { createHash } = require('crypto');
 const { decodeMap, DIRECTIONS, HEADER, MAX_CELLS, MAX_EVENTS, CELL_BITS, tileKey } = require('./geometry.cjs');
 const { solveRoute, findReachable, routeApproachPoints, walkingLanding } = require('./routes.cjs');
+const { onFootAirshipRoute, onFootAirshipReachable } = require('./airship-route.cjs');
 const { MAX_CATALOG_BYTES, MAX_LINKS, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
 const { lineDestination } = require('./puzzles/patrol-line-state.cjs');
@@ -211,6 +212,12 @@ parentPort.on('message', message => {
                     (request.lineNavigation === true || request.lineNavigation === 'manual') && request.lineNavigation;
                 result = previewCrossing(base, live, { ...request, lineNavigation, pickup: map === 200 && request.event === 3 }, cancelled);
             } else result = solveRoute(base, live, request, cancelled);
+            if (map === 113 && live.mode === 'walk' && live.airshipAvailable === true) {
+                if (request.candidates !== undefined)
+                    result = onFootAirshipReachable(base, live, request, result, cancelled);
+                else result = onFootAirshipRoute(base, live, request, result, cancelled,
+                    request.transfer ? (flight, plan) => transferRoute(base, map, flight, plan, request.transfer, cancelled) : undefined) || result;
+            }
             if (map === 19 && live.salt && !request.refresh &&
                 ['unreachable', 'approachBlocked'].includes(result.status)) {
                 result = solveSaltRoute(base, live, request, manifest.maps[map].salt, cancelled) || result;
@@ -249,7 +256,7 @@ parentPort.on('message', message => {
                 }
                 result.course = course;
             }
-            if (result.status === 'ready' && request.autowalk === true && !result.land && !request.vehicle &&
+            if (result.status === 'ready' && request.autowalk === true && !result.land && !result.airshipBoarding && !request.vehicle &&
                 request.waypoint !== true && result.distance > 0 && result.arrival.facing === null) {
                 const target = live.events.find(event => event.id === (result.entrance ?? request.event));
                 if (target && !target.normal && (target.trigger === 1 || target.trigger === 2)) {

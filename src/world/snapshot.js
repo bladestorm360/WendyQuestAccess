@@ -7,7 +7,7 @@ const { localDestination, iceOpensPassage, inactiveFloorScene, concealedDestinat
 const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit,
     worldEntranceRevealed } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel, questPageHasAction } = require('./quest-destinations');
-const { travelMode, aircraftAt, boardingTargets } = require('./vehicle-navigation');
+const { travelMode, aircraftAt, boardingTargets, parkedVehicle } = require('./vehicle-navigation');
 const { transferOptions } = require('./transfer-events.cjs');
 const { checkpointTarget, usedCheckpoint, caveDestination, patrolDestination, timedCave } = require('./puzzles/cave');
 const { GATE_SWITCHES, BREAKFAST_MAPS } = require('./terrain-control-labels.cjs');
@@ -108,13 +108,14 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
     const terrain = routing ? terrainDelta(root.$gameTileChanges?.[id], data.data, flags, count) : null;
     if (routing && !terrain) return null;
 
+    const airshipAvailable = routing && id === 113 && mode === 'walk' && !!parkedVehicle(map, 'airship');
     const seenTorchReminder = id === 19 && root.$gameSwitches?.value?.(200);
     const events = [];
     const objects = [];
     const quests = !routesOnly && scene ? collectQuestDestinations(root, scene, mode) : null;
     const tiles = routing ? new Set(map._tileEvents) : null;
     for (const event of map._events) {
-        if (!event || (event._erased && mode !== 'airship')) continue;
+        if (!event || (event._erased && mode !== 'airship' && !airshipAvailable)) continue;
         const { _eventId: eventId, _x: x, _y: y, _pageIndex: pageIndex, _trigger: trigger } = event;
         const entry = data.events[eventId];
         if (!entry || !Number.isFinite(x) || !Number.isFinite(y)) return null;
@@ -132,7 +133,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 meltable: mode === 'walk' && action && trigger === 0 && (rectangle || event._priorityType === 1) &&
                     iceOpensPassage(entry, page),
                 movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
-                discoveryFor: mode === 'airship' ? discoveryEntrance(id, event) : undefined });
+                discoveryFor: mode === 'airship' || airshipAvailable ? discoveryEntrance(id, event) : undefined });
         }
         if (routesOnly || event._erased || !spoilers && concealedDestination(id, event)) continue;
         const quest = quests?.get(eventId);
@@ -235,7 +236,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             type: vehicle._type, through: vehicle._through === true });
     }
     return { ...snapshot, live: { width, height, scrollType, mode, terrain, events, vehicles,
-        tileset: map._tilesetId, aircraft: aircraftAt(map),
+        tileset: map._tilesetId, aircraft: aircraftAt(map), airshipAvailable,
         npcPassage: mode === 'walk' ? npcPassage(map) : undefined,
         stableEncounters: mode === 'walk' && DUNGEON_ROUTES.has(id),
         ...(GATE_SWITCHES[id] ? { terrainMap: id, terrainSwitch: GATE_SWITCHES[id],

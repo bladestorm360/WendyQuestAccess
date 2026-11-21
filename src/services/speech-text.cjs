@@ -282,7 +282,7 @@ function formatSpeech(message) {
             else if (message.conversation === true && facing) parts.push(`face ${facing} and press the action button to talk`);
             else if (message.conversation === true) parts.push('Press the action button to talk');
             else if (message.board === true && facing) parts.push(`face ${facing} and press the action button`);
-            else if (message.board === true) parts.push('Press the action button to board');
+            else if (message.board === true) parts.push(message.boardName === 'airship' ? 'Press the action button to board the airship' : 'Press the action button to board');
             else if (message.land === true) {
                 parts.push('Press the action button to land');
                 const discovery = label({ name: message.discovery });

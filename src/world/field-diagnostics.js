@@ -83,6 +83,7 @@ function createFieldDiagnostics(root, host, nodeRequire, nodeProcess) {
             patrolStep: result?.opening?.direction ?? result?.direction, patrolTiles: result?.opening?.tiles ?? result?.tiles,
             patrolOpening: result?.opening && [result.opening.from, result.opening.through],
             patrolHeadings: result?.opening?.headings ?? result?.headings,
+            airshipBoarding: result?.airshipBoarding,
             interaction: result?.interaction
         });
     }

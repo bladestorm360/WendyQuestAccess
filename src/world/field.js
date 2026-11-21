@@ -11,6 +11,7 @@ const { transferOptions } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { createLocalDetour } = require('./local-detour');
+const { createAirshipJourney } = require('./airship-journey');
 const { tileKey, DIRECTIONS } = require('./geometry.cjs');
 const { browse, createDestinationBrowser, activeMovingEnemy } = require('./destinations');
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
@@ -107,6 +108,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     const chaseGuide = createChaseGuide(root, host.graphics);
     const transfers = createTransferBookmarks(root, host);
     const localDetour = createLocalDetour(root, transfers);
+    const airshipJourney = createAirshipJourney(root, { transfers, bookmarks: () => host.bookmarks?.() || [],
+        spoilers: () => preferences().spoilers === true });
     const terrainJourney = createTerrainJourney(root);
     const selectionSites = new WeakMap();
     let browser = createDestinationBrowser();
@@ -471,6 +474,17 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 return status(job, (result.gate === 97 ? bridgeReason(result) : CRYSTAL_REASON) + ' No verified route to an exit from here.');
             if (job.terrainOnward && ['unreachable', 'unavailable'].includes(result?.status))
                 return status(job, [job.guide, 'No verified route to an exit from here.'].filter(Boolean).join(' '));
+            if (result?.airshipBoarding) {
+                if (job.remote && !transfers.matchesState(job.remote.state))
+                    return status(job, 'The entrance changed. Request directions again.');
+                const aircraft = airshipJourney.board(job, result);
+                if (!aircraft) return status(job, 'The airship route changed. Request directions again.');
+                job.remote = job.landingBookmark = job.entrance = undefined;
+                const destination = setRouteTarget(job, aircraft);
+                job.request = { ...job.request, ...destination, event: undefined, transfer: undefined,
+                    detour: undefined, stopBeforeEvent: false };
+                job.airshipBoarding = true;
+            }
             if (result?.detourPoints && !localDetour.accept(job, result))
                 return status(job, 'The entrance changed. Request directions again.');
             if (job.remote && result?.status === 'ready' && !admitRemoteRoute(job, result))
@@ -594,6 +608,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 if (job.readyGuide) job.guide = job.readyGuide;
                 if (result.land && !canLand(root.$gameMap, result.arrival.x, result.arrival.y))
                     return status(job, 'Landing site changed. Request directions again.');
+                if (result.land) airshipJourney.landing(job, result);
+                else airshipJourney.discovery(job);
                 if (job.landingBookmark) {
                     const { bookmark, edge } = job.landingBookmark;
                     const selection = { id: bookmark.id, revision: bookmark.revision, trail: [] };
@@ -637,7 +653,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     sailing: job.mode === 'ship' || job.mode === 'boat',
                     bump,
                     conversation: job.eventAction === 'talk',
-                    board: !!job.vehicle, land: result.land === true,
+                    board: !!job.vehicle, boardName: job.airshipBoarding ? 'airship' : undefined, land: result.land === true,
                     guideAction: job.eventAction === 'interact' ||
                         job.action === 'puzzleGuide' && !!result.arrival.facing && !!saltControlName(job.target),
                     discovery: result.discovery && worldBoundaryName(root, result.discovery, preferences().spoilers === true) });
@@ -656,7 +672,6 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 if (!prerequisite || result.gate && root.$gameSwitches?.value?.(result.gate) !== false)
                     return status(job, 'The passage changed. Request directions again.');
                 const reason = {
-                    103: 'The office entrance opens after the scene with Chomps.',
                     115: 'The return opens after the rescue encounter.',
                     119: 'Speak to Elder Tater to open the way.',
                     145: 'The crystal opens the passage.'
@@ -847,10 +862,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return undefined;
     }
 
-    function route(job, snapshot, target, area, motion) {
+    function setRouteTarget(job, target) {
         job.label = target.name;
         job.destination = target;
-        job.area = area;
         const destination = destinationRequest(target);
         job.target = destination.event;
         job.eventAction = target.eventAction;
@@ -858,6 +872,12 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         job.point = target.point === true;
         job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
         job.nearestLanding = target.nearestLanding === true;
+        return destination;
+    }
+
+    function route(job, snapshot, target, area, motion) {
+        const destination = setRouteTarget(job, target);
+        job.area = area;
         job.autowalk = job.action !== 'puzzleGuide' && !job.journey && preferences().autowalk;
         if (job.autowalk && timedCave(snapshot.map)) {
             job.caveWalk ||= { destination: target, attempt: 0, acted: new Set(), announced: false };
@@ -1081,6 +1101,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         }
         const { target, category } = result;
         owner.target = target;
+        job.destination = target;
         if (target.saved) return selectSavedBookmark(job, snapshot, target.saved, category);
         owner.remoteBookmark = null;
         job.breakfastObjective = target.breakfastObjective;
@@ -1371,6 +1392,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const snapshot = captureWorld(root, filtering || routing && !timed || puzzleGuide, label, job.scene, bookmarks,
             false, preferences().spoilers === true, questExitId);
         if (!snapshot) return status(job, 'Map information unavailable');
+        airshipJourney.decorate(job.scene, snapshot, browser);
         if (navigationRequest(job)) snapshot.bookmarks = bookmarks;
         if (filtering && snapshot.objects.length) {
             job.scene._wqaQuestNavigation = snapshot.objects.some(target => !!target.quest);
@@ -1482,6 +1504,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (!ready(scene, true)) return false;
             const waitingForIce = iceRoute?.scene === scene;
             localDetour.clear();
+            airshipJourney.clear();
             terrainJourney.clear();
             shoreJourney = null;
             clearIceRoute(scene);
@@ -1532,6 +1555,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (BROWSE.has(action) || puzzle) {
             owner.remoteBookmark = owner.routeProgress = null;
             localDetour.clear();
+            airshipJourney.clear();
             terrainJourney.clear();
             shoreJourney = null;
             transfers.clear();
@@ -1589,10 +1613,12 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 !(remote ? remoteBookmarkAvailable(map?._mapId, mode, entry) :
                     mode === entry.mode || localLandingAvailable(map?._mapId, mode, entry))) return false;
             transfers.clear();
+            airshipJourney.clear();
             activateBookmark(scene, entry, remote);
             return true;
         },
         questRefresh(scene) {
+            airshipJourney.questChanged();
             if (host.beacon?.questActive(scene)) host.beacon.stop(scene);
             if (active?.scene !== scene || !scene._wqaQuestNavigation) return;
             autowalk.stop(scene);
@@ -1705,8 +1731,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const map = root.$gameMap._mapId;
                 shoreJourney = map !== arrived.shore.map ? { player: root.$gamePlayer, map, ticket: arrived } : null;
             }
+            const airship = airshipJourney.settle(arrived);
             const detour = localDetour.settle(arrived);
-            const bookmark = arrived && !detour && !arrived.shore && savedBookmark(arrived);
+            const bookmark = arrived && !airship && !detour && !arrived.shore && savedBookmark(arrived);
             if (bookmark && travelMode(root.$gameMap, root.$gamePlayer) === bookmark.mode)
                 activateBookmark(scene, bookmark, root.$gameMap._mapId !== bookmark.map, arrived.trail);
             if (cave.recover(scene) && (!active || active.scene !== scene))

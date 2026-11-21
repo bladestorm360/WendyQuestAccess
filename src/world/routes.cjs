@@ -502,7 +502,7 @@ function approachAvailable(world, start, candidate, tiles, approaches, cancelled
     return before >= 0 && reached[before] && (!stops[before] || before === start) && step(world, before, heading) === cell;
 }
 
-function flightApproaches(world, tiles, candidates, cancelled) {
+function flightApproaches(world, tiles, candidates, cancelled, grounded = false) {
     const available = new Uint8Array(candidates.length);
     const landingAvailable = world.hasLandings && world.cells.some(value => value & LAND);
     const connected = new Map();
@@ -524,6 +524,18 @@ function flightApproaches(world, tiles, candidates, cancelled) {
         if (cancelled()) return null;
         const candidate = candidates[index];
         const id = candidate.event;
+        if (grounded) {
+            if (candidate.vehicle || candidate.nearestLanding) continue;
+            const key = 'ground:' + (Number.isInteger(id) ? id + ':' + (candidate.bumpDirections || 0) + ':' + !!candidate.waypoint :
+                candidate.targetX + ',' + candidate.targetY);
+            if (!connected.has(key)) {
+                const distance = groundDistances(world, candidate, cancelled, tiles);
+                connected.set(key, !!distance?.some((value, cell) => value > 1 && (world.cells[cell] & LAND)));
+            }
+            if (connected.get(key) || Number.isInteger(id) && !candidate.waypoint &&
+                discoveries.get(id)?.some(event => canReach(event))) available[index] = 1;
+            continue;
+        }
         if (indexOf(world, candidate.targetX, candidate.targetY) >= 0 ||
             (landingAvailable && (candidate.nearestLanding || (Number.isInteger(id) && !candidate.waypoint &&
                 (canReach(id, candidate.bumpDirections) || discoveries.get(id)?.some(event => canReach(event))))))) available[index] = 1;
@@ -557,7 +569,7 @@ function npcPassageRoute(geometry, live, world, request, cancelled) {
     return null;
 }
 
-function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () => false) {
+function findReachable(geometry, snapshot, { x, y, candidates, groundedFlight = false }, cancelled = () => false) {
     // Each event can have ordinary, generic and quest entries. Add vehicle
     // entries and up to 64 saved bookmarks.
     if (!Array.isArray(candidates) || candidates.length > MAX_EVENTS * 3 + 4 + 64) return { status: 'unavailable' };
@@ -567,7 +579,7 @@ function findReachable(geometry, snapshot, { x, y, candidates }, cancelled = () 
     if (start < 0) return { status: 'unavailable' };
     const tiles = interactionTiles(world, cancelled, candidates.some(candidate => !!candidate.bumpDirections));
     if (world.mode === 'airship') {
-        const available = flightApproaches(world, tiles, candidates, cancelled);
+        const available = flightApproaches(world, tiles, candidates, cancelled, groundedFlight);
         return available && !cancelled() ? { status: 'reachable', available } : { status: 'cancelled' };
     }
     const approaches = reachableApproaches(world, start, tiles, cancelled);

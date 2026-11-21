@@ -1324,6 +1324,10 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 
 async function main() {
     const catalog = bake(game, derived);
+    if (process.argv.includes('--airship-foot')) {
+        await require('./airship-foot.cjs').verifyAirshipFoot(c, load, read, verifyWorker);
+        return;
+    }
     if (process.argv.includes('--cave-field')) {
         require('./cave-field.cjs').verifyCaveField(c, load, configureMotion);
         return;
@@ -1629,6 +1633,7 @@ async function main() {
     await verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read);
     await verifyNavigationAuditFixes(c, load, verifyRoute, verifyWorker, read);
     await verifyVehicleNavigation(c, load, read, verifyWorker);
+    await require('./airship-foot.cjs').verifyAirshipFoot(c, load, read, verifyWorker);
     await verifyAutowalk(c, load, verifyWorker);
     verifySoundscape(c, load);
     await verifyCrossingPreview();
