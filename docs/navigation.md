@@ -332,3 +332,7 @@ The category fixture measured 200 separate 512-destination current-selection rea
 ## Burgenburg house bowl label
 
 November 21, 2026. Map 144, event 16 at 5,9 is a map-drawn bowl. The screenshot and its own interaction identify the contents as not-yet-pickled food, while its editor name is Books. That name previously reached the generic Bookcase resolver. The existing inspected-prop table now publishes Bowl in Objects for this one native event. No interaction page, collision, coordinates, routing, native hook or other book/shelf label changes. The all-map destination fixture checks the actual authored page through the production resolver. [Label table](../src/world/local-destinations.js) · [Native-map check](../tests/local-destinations.cjs)
+
+## Closed cupboard in Map 159
+
+November 21, 2026. The owner’s screenshot and locked-cupboard response identify a tall two-door cupboard. Map 159 events 10 and 11 are its two native interaction positions at 3,2 and 2,2; both have the misleading editor name Bookcase. The inspected-prop table now labels both Cupboard in Objects. The single active inspection pages, positions, collision and dialogue remain native; no contents or unlock reward are inferred. The existing all-map destination fixture checks both authored pages as part of the next route regression. This small accuracy fix joins the pending update without reopening generic book classification.

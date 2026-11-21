@@ -98,7 +98,8 @@ const INSPECTED_PROPS = {
     139: { 4: 'Stack of books', 6: 'Book', 12: 'Stack of books', 13: 'Stack of books', 14: 'Stack of books' },
     144: { 16: 'Bowl' }, // The Books-named event inspects the bowl of future pickles.
     147: { 24: 'Bed' },
-    158: { 2: 'Letters' }
+    158: { 2: 'Letters' },
+    159: { 10: 'Cupboard', 11: 'Cupboard' }
 };
 
 const WENDYS_RESTAURANTS = new Set([181, 182, 183, 184, 186]);
