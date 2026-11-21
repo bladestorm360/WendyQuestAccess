@@ -933,3 +933,4 @@ The final retention recount included historical runner receipts, which the prior
 
 Four superseded scan logs are also consolidated: wendy-autowalk-idle and wendy-autowalk-key candidates reported no threats with Defender platform 4.18.26100.4, engine 1.1.26100.4, definitions 1.463.386.0; wendy-footstep-cadence and wendy-dash-trace candidates reported no threats with the same platform/engine and definitions 1.463.328.0. Their exact prior source/plan identities and tests remain in the existing release records. The current final exact-payload scan remains retained in wendy-target-numbers/defender.txt.
 
+The corrected cleanup removed another 10,017 bytes. The explicit final count is 20 retained development logs, including the unique cutscene audit, footstep admission result, deep-navigation receipt and mechanism-results research record. Three copied gameplay capture files remain separately. The installed payload and sole optional rollback are unchanged.
