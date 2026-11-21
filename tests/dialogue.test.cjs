@@ -1190,6 +1190,20 @@ async function verifySpeakerDetails() {
     details();
     assert.equal(f.records.filter(record => record.kind === 'menuDetails').length, length, 'retired speaker cannot be read through the stale line');
 
+    for (const face of ['Frostyna', 'FrostynaConcerned']) {
+        window._lastFaceName = face;
+        c.$gameMessage.faceName = () => face;
+        Object.assign(settings, { text: 'A current Frostyna line.', speaker: 'Frostyna', faceReady: true });
+        f.until(() => window.pause);
+        speaker._animationRunning = false;
+        window._faceSprite = art;window._lastFaceName = face;
+        Object.assign(art, { parent: window, alpha: 1, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } });
+        f.tick();details();
+        const record = f.records.findLast(record => record.kind === 'menuDetails');
+        assert(record.lines.every(line => line.length <= 96));
+        assert.match(formatSpeech(record), /^Frostyna\. A young woman with lavender-blue skin.*soft-serve swirl/);
+        f.advance();
+    }
     Object.assign(c.Graphics, { width: 640, height: 360 });
     const nativeEvent = { _characterName: 'NPCs - 32x32', _characterIndex: 1 };
     c.$gameMap._events = [null, nativeEvent];
@@ -1284,6 +1298,13 @@ async function verifySpeakerDetails() {
     f.advance();
     assert.equal(formatSpeech({ kind: 'dialoguePage', text: 'Try a \x01177\x02 today.' }),
         'Try a Junior Bacon Cheeseburger today.');
+    Object.assign(tilemap, { worldVisible: true, worldAlpha: 1 });
+    for (const [map, id] of [[104, 78], [105, 73]]) {
+        showRenderedSpeakers(map, [id]);
+        readSpeaker('Computer', id, /^Computer\. A gray desktop computer.*rows of green characters.*keyboard/);
+        scene._spriteset._characterSprites[0].worldTransform.tx = -100;
+        readSpeaker('Computer', id, /^No visual description for this speaker/);
+    }
     console.log('Verified active-dialogue details, frame and speaker identity, portrait readiness, and native handback.');
 }
 

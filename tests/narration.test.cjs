@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 87);
+assert.equal(Object.keys(clips).length, 89);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -29,14 +29,14 @@ for (const [id, { beats }] of Object.entries(cues)) {
         const key = [m, e, p, i].join('/');
         assert(!locators.has(key));
         locators.add(key);
-        assert.equal(row.code, visual > 0 ? 213 : visual === -1 ? 224 : [-2, -3, -4].includes(visual) ? 250 : switched ? 121 : 205, key);
+        assert.equal(row.code, visual > 0 ? 213 : visual === -1 ? 224 : [-2, -3, -4].includes(visual) ? 250 : visual === -5 ? 117 : switched ? 121 : 205, key);
         if (visual > 0) {
             assert.equal(row.parameters[0] || e, actor, key);
             assert.equal(row.parameters[1], visual, key);
         }
     }
 }
-assert.equal(locators.size, 159);
+assert.equal(locators.size, 161);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
     const list = data?.events[e].pages[page].list;
@@ -106,6 +106,46 @@ function fixture(m, e, page, warm = true) {
     return { scene, graphics, root, interpreter, nativeMap, renderer, spriteset, status, switches,
         played, playback, narration, actor, balloon, frame };
 }
+
+const sceneCommands=JSON.parse(execFileSync('python',['-B',path.join(__dirname,'map-producers.py'),
+    path.join(stock,'package.nw'),'narration-commands'],{encoding:'utf8',timeout:5000}));
+function commandContext(f) {
+    const c=vm.createContext({...f.root,Game_Interpreter:function(){},SceneManager:{_scene:f.scene},Graphics:f.graphics,
+        WendyQuestAccessNarrationAccepted:f.narration.accepted});
+    for(const method of sceneCommands)vm.runInContext(method,c,{timeout:100});
+    return c;
+}
+for(const visible of [false,true]) {
+    const f=fixture(98,19,0),player=f.actor(-1),follower=f.actor(3);
+    follower.candidate._memberIndex=1;follower.sprite.worldVisible=visible;
+    f.interpreter._index=34;
+    const common=JSON.parse(fs.readFileSync(path.join(stock,'package.nw/data/CommonEvents.json'),'utf8'));
+    const actors=new Map([2,3,4,5].map(id=>[id,{graphic:'Companion',setCharacterImage(name){this.graphic=name;},setFaceImage(){},setBattlerImage(){}}]));
+    const c=commandContext(f);c.$dataCommonEvents=common;c.$gameActors={actor:id=>actors.get(id)};
+    player.candidate.refresh=()=>{follower.candidate._characterName=actors.get(3).graphic;};
+    Object.assign(f.interpreter,{isOnCurrentMap:()=>true,setupChild(list){this._childInterpreter={_list:list};}});
+    assert(c.Game_Interpreter.prototype.command117.call(f.interpreter,[65]));
+    assert.equal(f.interpreter._childInterpreter._list,common[65].list);f.frame();assert.equal(f.played.length,0);
+    for(const row of common[65].list.filter(row=>row.code===322))
+        assert(c.Game_Interpreter.prototype.command322.call(f.interpreter,row.parameters));
+    assert([...actors.values()].every(actor=>actor.graphic===''));
+    f.frame();assert.equal(f.played.length,0,'wait for the native sprite to reflect its cleared graphic');
+    follower.sprite._characterName='';f.frame(false);assert.equal(f.played.length,0);f.renderer.emit('postrender');
+    assert.equal(f.played[0]?.id,visible?'party-vanishes':undefined);
+}
+{
+    const f=fixture(97,8,1),chomps=f.actor(8),player=f.actor(-1);
+    f.interpreter._index=10;f.narration.accepted(f.scene,f.interpreter,chomps.candidate,undefined,6);
+    f.balloon(6,chomps.candidate,chomps.sprite);f.frame();assert.equal(f.played[0]?.id,'hazy-chomps');
+    Object.assign(player.candidate,{_realX:3,_realY:12,forceMoveRoute(route){this._moveRoute=route;}});
+    Object.assign(f.interpreter,{_index:56,character:()=>player.candidate,setWaitMode(){}});
+    const c=commandContext(f);f.nativeMap.refreshIfNeeded=()=>{};
+    assert(c.Game_Interpreter.prototype.command205.call(f.interpreter,f.interpreter._list[56].parameters));
+    f.frame();assert.equal(f.played.length,1);player.candidate._realY=11;f.frame();
+    assert.equal(f.played.length,1);assert(!f.played[0].paused,'the door description queues behind the dizzy reaction');
+    f.played[0].emit('ended');f.frame();assert.equal(f.played[1]?.id,'chomps-door-open');
+}
+console.log('Verified the old-RPG companion disappearance through native common/actor commands, prior visibility and actual cleared sprite; native post-smash movement and noninterrupting Chomps queue.');
 
 const emoteMethods = JSON.parse(execFileSync('python', ['-B', path.join(__dirname, 'map-producers.py'),
     path.join(stock, 'package.nw'), 'music-emotes'], { encoding: 'utf8', timeout: 5000 }));
@@ -448,4 +488,4 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 87 clips, 159 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 89 clips, 161 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');

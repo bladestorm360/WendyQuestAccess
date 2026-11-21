@@ -1529,11 +1529,11 @@
     "beats": []
   },
   "idle-hud-slides": {
-    "text": "Wendy’s status display slides away.",
+    "text": "Wendy\u2019s status display slides away.",
     "beats": []
   },
   "idle-dozes": {
-    "text": "Zs drift over Wendy’s head as she dozes.",
+    "text": "Zs drift over Wendy\u2019s head as she dozes.",
     "beats": []
   },
   "idle-map-dark": {
@@ -1800,6 +1800,32 @@
         7,
         null,
         3
+      ]
+    ]
+  },
+  "party-vanishes": {
+    "text": "Wendy's companions disappear.",
+    "beats": [
+      [
+        98,
+        19,
+        0,
+        34,
+        -1,
+        null,
+        -5
+      ]
+    ]
+  },
+  "chomps-door-open": {
+    "text": "Chomps has smashed the door open.",
+    "beats": [
+      [
+        97,
+        8,
+        1,
+        56,
+        -1
       ]
     ]
   }

@@ -54,3 +54,5 @@ Automatic perfect timing is under **F8 → Battle** and starts off. When enabled
 Regional Breakfast Stone Island quest entries announce Quests on category changes and give a local bearing via the next verified exit. Request Directions for the walking route; browsing the entry does not start Autowalk.
 
 Frozen timing assist cues the ice-breaking press first. After the game’s pause, follow the next note for the normal timing window.
+
+When the unlocked airship is parked and reachable on the world map, directions from on foot can include boarding it, flying to a valid landing and continuing toward the selected destination. A shorter valid walking route is kept. Use the game’s action button when asked to board or land. Battle announcements queue in order, so later attacks and turn announcements do not cut off earlier ones.

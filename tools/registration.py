@@ -403,7 +403,14 @@ def objects_notification(original):
     preload = (b'{const wqaPrior=ImageManager._wqaInterpreterPreload;'
                b'ImageManager._wqaInterpreterPreload=true;try{')
     restore_preload = b'}finally{ImageManager._wqaInterpreterPreload=wqaPrior;}}'
+    companions_entry = original.index(b'        this.setupChild(commonEvent.list, eventId);') + len(
+        b'        this.setupChild(commonEvent.list, eventId);')
     return insert(original, OBJECTS_SHA, {
+        companions_entry: b'\n        if(Graphics._wqaNarrationEnabled&&params[0]===65&&'
+                          b'this._mapId===98&&this._eventId===19&&this._index===34&&'
+                          b'this._childInterpreter?._list===commonEvent.list)'
+                          b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-5);',
+
         2915: b'        if(SceneManager._scene?._wqaBattleStarted){BattleManager._wqaBattleSpritesBusy=undefined;'
               + BATTLE_LOG_LEAVING + b';}\n',
         # FilterController replaces the numeric setter. Both setters still
@@ -514,7 +521,7 @@ def objects_notification(original):
         286102: b'\n        if(Graphics._wqaNarrationEnabled&&'
                 b'(this._mapId===16||this._mapId===20||this._mapId===63||this._mapId===77||'
                 b'this._mapId===103||this._mapId===106||this._mapId===107||this._mapId===108||'
-                b'this._mapId===110||this._mapId===134||this._mapId===197))'
+                b'this._mapId===110||this._mapId===134||this._mapId===197||this._mapId===97))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character);',
         # Native emotes, Frostyna's flash, and the two identical door approaches.
         287095: b'\n        if(Graphics._wqaNarrationEnabled&&this===$gameMap?._interpreter&&'

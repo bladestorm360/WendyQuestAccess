@@ -7,6 +7,12 @@ const { readMomentum } = require('../battle/outcomes');
 const DAVE_STATUES = new Map([
     [12, 46], [25, 33], [45, 36], [59, 42], [76, 87], [94, 36], [197, 11], [206, 14]
 ]);
+const COMPUTERS = new Map([[104, 78], [105, 73]]);
+const COMPUTER_ART = [
+    'A gray desktop computer has a blue screen covered in rows of green characters.',
+    'Small yellow, green and pink lights sit above the screen, with a compact keyboard below.'
+];
+
 const DAVE_STATUE_ART = [
     'A golden stone bust of a smiling man with swept hair, square glasses and a tie.',
     'Thin green lines run down its sides to a green W at the base, above a round stone platform.'
@@ -98,7 +104,8 @@ function createDialogueObserver(host, notifications) {
     }
 
     function submit(context, record) {
-        if (context.epoch) notifications.focus(context.epoch, record);
+        if (context.epoch && (!notifications.current || notifications.current(context.epoch)))
+            notifications.focus(context.epoch, record);
         else context.epoch = notifications.open(record, () => currentScene(context));
     }
 
@@ -230,6 +237,10 @@ function createDialogueObserver(host, notifications) {
         if (!pose || !(pose.tx >= 0 && pose.tx <= host.graphics.width &&
             pose.ty >= 0 && pose.ty <= host.graphics.height + 16)) return '';
         const tilemap = spriteset._tilemap;
+        // These audited blank anchors cover the same six computer tiles.
+        if (speaker === 'Computer' && COMPUTERS.get(host.mapId?.()) === eventId &&
+            event._characterName === '' && sprite.parent === tilemap && tilemap.worldVisible && tilemap.worldAlpha > 0)
+            return COMPUTER_ART;
         if (speaker === 'Dave' && DAVE_STATUES.get(host.mapId?.()) === eventId &&
             event._characterName === '' && sprite.parent === tilemap && tilemap.worldVisible && tilemap.worldAlpha > 0)
             return DAVE_STATUE_ART;
@@ -325,7 +336,6 @@ function createDialogueObserver(host, notifications) {
             }
             const speaker = paint.speaker;
             const description = paint.portrait || speakerAppearance(context, speaker);
-            if (!description && !speaker) return false;
             const lines = description ? [speaker, ...description].filter(Boolean) : ['No visual description for this speaker.'];
             submit(context, { kind: 'menuDetails', lines });
             return true;

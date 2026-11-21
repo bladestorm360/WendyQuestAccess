@@ -14,7 +14,7 @@ for (const id of clipIds) {
         (beats[map][event][index] ??= []).push({ id, page, actor, switchId: switchId ?? undefined, visual });
     }
 }
-const PACK_LIMIT = 1024 * 1024;
+const PACK_LIMIT = 1040 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -138,11 +138,21 @@ function createNarration(root, host, preferences) {
         const sprite = Array.isArray(sprites) && sprites.length <= 512 &&
             sprites.find(item => item._character === actor);
         if (!sprite) return;
+        // The common-event request precedes the native companion graphic
+        // changes. Retain only followers actually visible before they vanish.
+        const companions = visual === -5 ? sprites.filter(item =>
+            item._character?._memberIndex > 0 && item._character._memberIndex <= 8 &&
+            item._character._characterName && !item._character._transparent &&
+            renderedSprite(item, scene._spriteset._tilemap) && item.worldTransform?.tx >= 0 &&
+            item.worldTransform.tx <= host.graphics.width && item.worldTransform.ty >= 0 &&
+            item.worldTransform.ty <= host.graphics.height + 16).slice(0, 8).map(item =>
+                ({ sprite: item, actor: item._character })) : null;
+        if (visual === -5 && !companions.length) return;
         if (owner && (owner.scene !== scene || owner.list !== interpreter._list)) leave(owner.scene);
         const context = owner ?? begin(scene, interpreter);
         if (context.queue.length >= QUEUE_LIMIT) return;
         scene._wqaNarrationSeen = { list: interpreter._list, index: interpreter._index };
-        context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual,
+        context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions,
             x: actor._realX, y: actor._realY, mapY: map._displayY, id: candidate.id });
     }
 
@@ -240,6 +250,9 @@ function createNarration(root, host, preferences) {
             root.$gameMap._scrollDirection === 8 && root.$gameMap._scrollRest > 0 &&
             root.$gameMap._displayY < state.mapY;
         if (visual === -4) return visibleRewardGlow(scene);
+        if (visual === -5) return state.companions?.length > 0 && state.companions.every(item =>
+            item.sprite._character === item.actor && item.sprite.parent === parent &&
+            item.actor._characterName === '' && item.sprite._characterName === '');
         // Dave's authored light bulbs and music use blank map anchors.
         // For those cataloged cues
         // the actual rendered balloon owns visibility, including its pose.

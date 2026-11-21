@@ -155,7 +155,8 @@ const PORTRAITS = new Map([
     ["Frostyna", [
         "A young woman with lavender-blue skin, dark eyes and pale hair swept into icy curls.",
         "Her deep blue coat has white trim.",
-        "Her golden staff ends in an open oval with a small spiral inside. Pale blue frost curls around the top like a soft-serve swirl."
+        "Her golden staff ends in an open oval with a small spiral inside.",
+        "Pale blue frost curls around the top like a soft-serve swirl."
     ]],
     ["Baconator", [
         "A broad, muscular man with deep brown skin, a thick black beard and a shaved head.",
