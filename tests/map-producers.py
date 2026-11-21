@@ -64,6 +64,13 @@ if sys.argv[2:] == ['interaction']:
     sys.exit()
 
 
+if sys.argv[2:] == ['music-emotes']:
+    source = objects_notification((Path(sys.argv[1]) / OBJECTS_REL.relative_to('package.nw')).read_bytes()).decode('utf8')
+    start = source.index('Game_Interpreter.prototype.command213 = function(')
+    print(json.dumps([source[start:source.index('\n};', start) + 3]]))
+    sys.exit()
+
+
 methods = read_methods(MAP_REL.name, map_notification, [
     ('Scene_Map', 'start', "},Scene_Map['prototype']['forceLeaveVehicle']"),
     ('Scene_Map', 'doSceneStart', "},Scene_Map['prototype']['createStatusWindow']"),

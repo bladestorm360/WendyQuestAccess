@@ -1529,11 +1529,11 @@
     "beats": []
   },
   "idle-hud-slides": {
-    "text": "Wendy\u2019s status display slides away.",
+    "text": "Wendy’s status display slides away.",
     "beats": []
   },
   "idle-dozes": {
-    "text": "Zs drift over Wendy\u2019s head as she dozes.",
+    "text": "Zs drift over Wendy’s head as she dozes.",
     "beats": []
   },
   "idle-map-dark": {
@@ -1661,6 +1661,145 @@
         -1,
         null,
         -4
+      ]
+    ]
+  },
+  "music-dave-statue": {
+    "text": "Musical notes appear over the Dave statue.",
+    "beats": [
+      [
+        12,
+        53,
+        0,
+        2,
+        55,
+        null,
+        3
+      ],
+      [
+        12,
+        54,
+        0,
+        2,
+        55,
+        null,
+        3
+      ]
+    ]
+  },
+  "music-tatoria": {
+    "text": "Musical notes appear over Tatoria.",
+    "beats": [
+      [
+        24,
+        4,
+        1,
+        1,
+        4,
+        null,
+        3
+      ],
+      [
+        118,
+        4,
+        1,
+        1,
+        4,
+        null,
+        3
+      ],
+      [
+        118,
+        7,
+        1,
+        26,
+        4,
+        null,
+        3
+      ]
+    ]
+  },
+  "music-child": {
+    "text": "Musical notes appear over the child.",
+    "beats": [
+      [
+        25,
+        9,
+        0,
+        0,
+        9,
+        null,
+        3
+      ]
+    ]
+  },
+  "music-korrin": {
+    "text": "Musical notes appear over Korrin.",
+    "beats": [
+      [
+        77,
+        31,
+        0,
+        1,
+        31,
+        null,
+        3
+      ]
+    ]
+  },
+  "music-marshell": {
+    "text": "Musical notes appear over Marshell.",
+    "beats": [
+      [
+        81,
+        28,
+        0,
+        1,
+        28,
+        null,
+        3
+      ]
+    ]
+  },
+  "music-kathryn": {
+    "text": "Musical notes appear over Kathryn.",
+    "beats": [
+      [
+        105,
+        5,
+        0,
+        14,
+        7,
+        null,
+        3
+      ]
+    ]
+  },
+  "music-toby": {
+    "text": "Musical notes appear over Toby.",
+    "beats": [
+      [
+        105,
+        5,
+        0,
+        36,
+        8,
+        null,
+        3
+      ]
+    ]
+  },
+  "music-tyler": {
+    "text": "Musical notes appear over Tyler.",
+    "beats": [
+      [
+        181,
+        15,
+        2,
+        8,
+        7,
+        null,
+        3
       ]
     ]
   }

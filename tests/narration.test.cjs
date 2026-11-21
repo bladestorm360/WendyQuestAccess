@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 79);
+assert.equal(Object.keys(clips).length, 87);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -26,7 +26,7 @@ for (const [id, { beats }] of Object.entries(cues)) {
         const data = map(m);
         const row = data.events[e].pages[p].list[i];
         assert(actor === -1 || data.events[actor]);
-        const key = [m, e, i].join('/');
+        const key = [m, e, p, i].join('/');
         assert(!locators.has(key));
         locators.add(key);
         assert.equal(row.code, visual > 0 ? 213 : visual === -1 ? 224 : [-2, -3, -4].includes(visual) ? 250 : switched ? 121 : 205, key);
@@ -36,7 +36,7 @@ for (const [id, { beats }] of Object.entries(cues)) {
         }
     }
 }
-assert.equal(locators.size, 148);
+assert.equal(locators.size, 159);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
     const list = data?.events[e].pages[page].list;
@@ -106,6 +106,63 @@ function fixture(m, e, page, warm = true) {
     return { scene, graphics, root, interpreter, nativeMap, renderer, spriteset, status, switches,
         played, playback, narration, actor, balloon, frame };
 }
+
+const musicMethods = JSON.parse(execFileSync('python', ['-B', path.join(__dirname, 'map-producers.py'),
+    path.join(stock, 'package.nw'), 'music-emotes'], { encoding: 'utf8', timeout: 5000 }));
+let musicCost = 0;
+for (const [id, { beats }] of Object.entries(cues).filter(([name]) => name.startsWith('music-'))) {
+    for (const [m, e, p, i, a] of beats) {
+        const f = fixture(m, e, p), { candidate, sprite } = f.actor(a);
+        if (m === 12) { candidate._characterName = sprite._characterName = '';sprite.texture.valid = false; }
+        f.interpreter._index = i;f.interpreter.character = () => candidate;
+        f.interpreter.setWaitMode = mode => f.interpreter._waitMode = mode;
+        const native = vm.createContext({ Game_Interpreter: function () {}, SceneManager: { _scene: f.scene },
+            Graphics: f.graphics, $gameMap: f.nativeMap,
+            $gameTemp: { requestBalloon() {} },
+            WendyQuestAccessNarrationAccepted: f.narration.accepted });
+        for (const method of musicMethods) vm.runInContext(method, native);
+        const at = performance.now();
+        assert(native.Game_Interpreter.prototype.command213.call(f.interpreter, [a === e ? 0 : a, 3, true]));
+        assert.equal(f.interpreter._waitMode, 'balloon');
+        f.frame();assert.equal(f.played.length, 0, 'sound/request alone is not a rendered reaction');
+        f.balloon(2, candidate, sprite);f.frame();assert.equal(f.played.length, 0, 'a question mark is not music');
+        f.balloon(3, candidate, sprite);
+        const balloon = f.spriteset._balloonSprites.at(-1);balloon.worldTransform = { tx: 100, ty: 100 };
+        candidate._erased = true;f.frame();assert.equal(f.played.length, 0);candidate._erased = false;
+        balloon.worldVisible = false;f.frame();assert.equal(f.played.length, 0);balloon.worldVisible = true;
+        f.frame(false);assert.equal(f.played.length, 0);f.renderer.emit('postrender');
+        assert.equal(f.played[0]?.id, id, 'the named clip follows its actual painted balloon');
+        musicCost += performance.now() - at;
+        f.narration.accepted(f.scene, f.interpreter, candidate, undefined, 3);f.frame();
+        assert.equal(f.played.length, 1, 'one accepted-command guard within the active context');
+        f.played[0].emit('ended');f.frame();
+        assert(!f.scene._wqaNarrationActive);
+        f.spriteset._balloonSprites = [];f.balloon(3, candidate, sprite);
+        f.spriteset._balloonSprites[0].worldTransform = { tx: 100, ty: 100 };
+        f.narration.accepted(f.scene, f.interpreter, candidate, undefined, 3);f.frame();
+        assert.equal(f.played[1]?.id, id, 'a new real activation is not text-deduplicated');
+    }
+}
+// Both Tatoria pages use command 1: selecting a cue must include native list identity.
+{
+    const f = fixture(24, 4, 0), { candidate, sprite } = f.actor(4);
+    f.interpreter._index = 1;f.narration.accepted(f.scene, f.interpreter, candidate, undefined, 3);
+    f.balloon(3, candidate, sprite);f.frame();assert.equal(f.played.length, 0);
+    f.narration.accepted(f.scene, f.interpreter, candidate, undefined, 5);
+    f.balloon(5, candidate, sprite);f.frame();assert.equal(f.played[0]?.id, 'anger-tatoria');
+}
+{
+    const f = fixture(105, 5, 0), kathryn = f.actor(7), toby = f.actor(8);
+    f.interpreter._index = 14;f.narration.accepted(f.scene, f.interpreter, kathryn.candidate, undefined, 3);
+    f.balloon(3, kathryn.candidate, kathryn.sprite);f.frame();
+    assert.equal(f.played[0]?.id, 'music-kathryn');
+    f.interpreter._index = 36;f.narration.accepted(f.scene, f.interpreter, toby.candidate, undefined, 3);
+    f.balloon(3, toby.candidate, toby.sprite);f.frame();assert.equal(f.played.length, 1);
+    assert(!f.played[0].paused, 'the next reaction does not interrupt the playing description');
+    f.played[0].emit('ended');f.frame();assert.equal(f.played[1]?.id, 'music-toby');
+}
+console.log('Verified every authored musical-note locator through native command213, actual balloon visibility, repeat activation, page identity and uninterrupted named queue.');
+console.log('Throttled eleven complete music description episodes', musicCost.toFixed(2), 'ms.');
 
 for (const id of ['frostyna-idea', 'frostyna-prison-blast', 'frostyna-reaction',
     'frygor-frustration', 'wendy-knocks', 'wendy-door-reaction']) {
@@ -384,4 +441,4 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 79 clips, 148 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 87 clips, 159 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');

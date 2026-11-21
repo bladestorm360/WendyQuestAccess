@@ -10,7 +10,8 @@ for (const id of clipIds) {
     for (const [map, event, page, index, actor, switchId, visual] of cues[id].beats) {
         beats[map] ??= Object.create(null);
         beats[map][event] ??= Object.create(null);
-        beats[map][event][index] = { id, page, actor, switchId: switchId ?? undefined, visual };
+        // Separate pages can reuse a command index for different reactions.
+        (beats[map][event][index] ??= []).push({ id, page, actor, switchId: switchId ?? undefined, visual });
     }
 }
 const PACK_LIMIT = 1024 * 1024;
@@ -116,7 +117,9 @@ function createNarration(root, host, preferences) {
     function accepted(scene, interpreter, actor, switched, visual) {
         if (!pack || !enabled() || !ready(scene)) return;
         const map = root.$gameMap;
-        const candidate = beats[interpreter._mapId]?.[interpreter._eventId]?.[interpreter._index];
+        const candidates = beats[interpreter._mapId]?.[interpreter._eventId]?.[interpreter._index];
+        const candidate = candidates?.find(beat =>
+            root.$dataMap?.events?.[interpreter._eventId]?.pages[beat.page]?.list === interpreter._list);
         if (!candidate) return;
         const page = root.$dataMap?.events?.[interpreter._eventId]?.pages[candidate.page];
         if (interpreter !== map._interpreter || interpreter._mapId !== map._mapId ||
@@ -125,7 +128,10 @@ function createNarration(root, host, preferences) {
         if (!source || source._erased || (switched ? !root.$gameSwitches.value(switched) : actor !== source)) return;
         actor = source;
         const prior = scene._wqaNarrationSeen;
-        if (prior?.list === interpreter._list && prior.index === interpreter._index) return;
+        // Guard one command within its active narration context. A later
+        // real activation of the same NPC/list can show the balloon again.
+        if (owner?.scene === scene && owner.list === interpreter._list &&
+            prior?.list === interpreter._list && prior.index === interpreter._index) return;
         // Sample only the authored actor, and only once at the accepted
         // command. The frame callback verifies the same sprite and ownership.
         const sprites = scene._spriteset?._characterSprites;
@@ -234,9 +240,10 @@ function createNarration(root, host, preferences) {
             root.$gameMap._scrollDirection === 8 && root.$gameMap._scrollRest > 0 &&
             root.$gameMap._displayY < state.mapY;
         if (visual === -4) return visibleRewardGlow(scene);
-        // Dave's authored light bulbs use blank map anchors. For those cues
+        // Dave's authored light bulbs and music use blank map anchors.
+        // For those cataloged cues
         // the actual rendered balloon owns visibility, including its pose.
-        const blankAnchor = visual === 9 && actor._characterName === '' && !actor._tileId;
+        const blankAnchor = (visual === 9 || visual === 3) && actor._characterName === '' && !actor._tileId;
         const onScreen = (pose, allowance = 0) => pose && pose.tx >= 0 && pose.tx <= host.graphics.width &&
             pose.ty >= 0 && pose.ty <= host.graphics.height + allowance;
         if (!blankAnchor && (!actor._characterName || !renderedSprite(sprite, parent) ||
