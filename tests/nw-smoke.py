@@ -1794,8 +1794,8 @@ const interval = setInterval(() => {
             WendyQuestAccessBattleCueSample(scene, action, 0, 0.46, 0.94, 1, 1, true, false, 0.4, 0.55);
             battleCueStarted = Date.now();
             WendyQuestAccessBattleCueSample(scene, action, 0, 0.95, 0.94, 1, 1, false, false, 0.4, 0.55);
-            endingStep = 43;
-        } else if (endingStep === 43 && fs.existsSync(receipt + '.battle-cue')) {
+            endingStep = 'battle-perfect-after-ice';
+        } else if (endingStep === 'battle-perfect-after-ice' && fs.existsSync(receipt + '.battle-cue')) {
             const cueReceipt = JSON.parse(fs.readFileSync(receipt + '.battle-cue', 'utf8'));
             fs.writeFileSync(receipt + '.battle-cue-ms', String(cueReceipt.at - battleCueStarted));
             const scene = SceneManager._scene;
