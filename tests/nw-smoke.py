@@ -290,6 +290,12 @@ function verifySettings() {
         if (document.activeElement.textContent !== 'Help') throw Error('Settings Help is missing');
         tap('Enter');
         choose('Pathfinder');
+        if (!document.activeElement.textContent.includes('nearest destination') ||
+                !document.activeElement.textContent.includes('stay fixed as you move'))
+            throw Error('Help did not explain category entry and stable ordering');
+        tap('Enter');
+        if (!menuStatus()?.includes('until you switch categories again')) throw Error('Category Help was not readable');
+        tap('ArrowDown');
         if (!document.activeElement.textContent.includes('Directions P')) throw Error('Help did not show the current directions key');
         tap('Enter');
         if (!menuStatus()?.includes('Previous category Shift+J')) throw Error('Help did not expose the pathfinder instructions');
