@@ -85,16 +85,17 @@ async function verifyAirshipFoot(c, load, read, verifyWorker) {
         });
         await verifyWorker(f,{x:walk.x,y:walk.y,candidates},walk.live,result=>assert.deepEqual(result,expanded));
 
-        for(const automatic of [false,true]) {
+        for(const [automatic,savedPoint] of [[false,false],[true,false],[false,true],[true,true]]) {
             const native=begin(),{gameMap,player}=native,aircraft=gameMap.airship();
             const scene={_wqaFieldReady:true,_active:true,_fadeDuration:0,_fadeOpacity:0};
             const frames=new EventEmitter();c.SceneManager._scene=scene;c.Graphics.app={stage:scene,renderer:frames};
+            const bookmark={id:1,revision:1,kind:'point',name:'Landing marker',map:113,mode:'walk',x:44,y:24};
             const records=[],packets=[];
             const worker=Object.assign(new EventEmitter(),{unref(){},postMessage(packet,buffers){
                 packets.push(structuredClone(packet,{transfer:buffers||[]}));
             }});
             const field=createField(c,{graphics:c.Graphics,manager:c.SceneManager,hasFocus:()=>true,
-                screenFading:()=>false,navigationPreferences:()=>({spoilers:true,autowalk:automatic}),
+                screenFading:()=>false,bookmarks:()=>savedPoint?[bookmark]:[],navigationPreferences:()=>({spoilers:true,autowalk:automatic}),
                 makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),createRouteWorker:()=>worker},
             {open(record){records.push(record);return records.length;},close(){},
                 arrive(record){records.push(record);return records.length;},endArrival(){}});
@@ -107,10 +108,15 @@ async function verifyAirshipFoot(c, load, read, verifyWorker) {
                 const at=performance.now();assert(field.command(action),action);frames.emit('postrender');
                 peak=Math.max(peak,performance.now()-at);
             }
-            for(let n=0;n<15&&records.at(-1)?.category!=='Events';n++)ask('nextCategory');
-            assert.equal(records.at(-1)?.category,'Events');
-            for(let n=0;n<250&&field.bookmarkContext(scene)?.entity?.event!==113;n++)ask('nextDestination');
-            assert.equal(field.bookmarkContext(scene)?.entity?.event,113);
+            if(savedPoint) {
+                scene._wqaSettingsActive=true;assert(field.selectBookmark(scene,bookmark));scene._wqaSettingsActive=false;
+            } else {
+                for(let n=0;n<15&&records.at(-1)?.category!=='Events';n++)ask('nextCategory');
+                assert.equal(records.at(-1)?.category,'Events');
+                for(let n=0;n<250&&field.bookmarkContext(scene)?.entity?.event!==113;n++)ask('nextDestination');
+                assert.equal(field.bookmarkContext(scene)?.entity?.event,113);
+            }
+            const goalEvent=savedPoint?undefined:113;
             async function route(event, ground=false) {
                 ask('directions');const packet=packets.shift();assert(packet);assert.equal(packet.request.event,event);
                 let result;await verifyWorker(native,packet.request,packet.live,reply=>result=reply);
@@ -131,20 +137,22 @@ async function verifyAirshipFoot(c, load, read, verifyWorker) {
                 }
                 assert.deepEqual([player._x,player._y],[result.arrival.x,result.arrival.y],JSON.stringify({record:records.at(-1),inputs,canMove:player.canMove()}));
             }
-            const boarding=await route(113);assert(boarding.airshipBoarding);
+            const boarding=await route(goalEvent);assert(boarding.airshipBoarding);
             if(!automatic)assert.match(formatSpeech(records.at(-1)),/board the airship/i);
             follow(boarding);scene._wqaRouteActive=true;assert(player.triggerButtonAction());settle();
             for(let n=0;n<48;n++){aircraft.updateAirship();settle();}
             assert.equal(travelMode(gameMap,player),'airship');scene._wqaFieldReady=true;field.observeReady(scene);
-            const flight=await route(113);assert(flight.land);assert(aircraft.isLandOk(flight.arrival.x,flight.arrival.y,2));
+            const flight=await route(goalEvent);assert(flight.land);assert(aircraft.isLandOk(flight.arrival.x,flight.arrival.y,2));
             follow(flight);scene._wqaRouteActive=true;assert(player.triggerButtonAction());
             assert(c.Graphics._wqaBookmarkTransferPending);
             scene._wqaFieldReady=true;field.observeReady(scene);assert(c.Graphics._wqaBookmarkTransferPending);
             for(let n=0;n<48;n++){aircraft.updateAirship();settle();}
             assert.equal(travelMode(gameMap,player),'walk');scene._wqaFieldReady=true;field.observeReady(scene);
             assert(!c.Graphics._wqaBookmarkTransferPending);
-            const ground=await route(113,true);assert(!ground.airshipBoarding&&!ground.land);
-            assert(ground.distance<=2);assert.equal(field.bookmarkContext(scene)?.entity?.event,113);
+            const ground=await route(goalEvent,true);assert(!ground.airshipBoarding&&!ground.land);
+            assert(ground.distance<=2);
+            if(savedPoint)assert.deepEqual([ground.arrival.x,ground.arrival.y],[44,24]);
+            else assert.equal(field.bookmarkContext(scene)?.entity?.event,113);
             field.leave(scene);
         }
         console.log('Verified 23 discoveries, 21 native landings, 6 disconnected foot routes, unlock negatives, erased landing blockers, shorter walks, worker availability/cancellation and manual/automatic board-flight-ground handoff; callback peak '+peak.toFixed(2)+' ms (throttled fixture).');

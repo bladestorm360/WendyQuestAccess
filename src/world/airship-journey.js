@@ -36,10 +36,16 @@ function createAirshipJourney(root, host) {
         questChanged() { if (trip?.goal.category === 'quests') clear(); },
         board(job, result) {
             const plan = result.airshipBoarding, craft = parkedVehicle(root.$gameMap, 'airship');
-            if (!plan || !craft || craft._x !== plan.x || craft._y !== plan.y || !job.destination ||
-                !target(job.scene, job.destination) || serial >= 0x7ffffffe) return null;
+            const selected = job.destination;
+            // Local walking bookmarks are ordinary point/entity targets in
+            // their native mode. Preserve their saved revision for the later
+            // vehicle-mode owner as well as already-remote saved selections.
+            const saved = selected?.category === 'bookmarks' && host.bookmarks().find(entry => bookmarkId(entry.id) === selected.id);
+            const goal = saved ? { ...selected, saved: { id: saved.id, revision: saved.revision } } : selected;
+            if (!plan || !craft || craft._x !== plan.x || craft._y !== plan.y || !goal ||
+                !target(job.scene, goal) || serial >= 0x7ffffffe) return null;
             trip = { serial: ++serial, player: root.$gamePlayer, map: root.$gameMap, craft,
-                goal: job.destination, stage: 'board', selectionMode: 'walk' };
+                goal, stage: 'board', selectionMode: 'walk' };
             return { id: 516, x: craft._x, y: craft._y, category: 'vehicles', name: 'Airship', vehicle: 'airship' };
         },
         decorate(scene, snapshot, browser) {

@@ -2315,7 +2315,7 @@ parentPort.on('message', message => {
     if (message.kind === 'battleLog' && ["Here's.", 'The.', 'Beef!!!'].includes(message.lines?.[0])) {
         const file = receipt + '.battle-beef-words';
         const previous = fs.existsSync(file);
-        if (!!message.append !== previous ||
+        if (!message.append ||
             (previous && String(message.epoch) !== fs.readFileSync(file + '-epoch', 'utf8')))
             throw Error('Word did not use its overlay speech context');
         fs.writeFileSync(file + '-epoch', String(message.epoch));
@@ -2442,16 +2442,18 @@ parentPort.on('message', message => {
             if (message.kind === 'menuFocus' && !target && !fs.existsSync(receipt + '.battle-focus') &&
                 (!message.append || String(message.epoch) !== fs.readFileSync(receipt + '.battle-opening-epoch', 'utf8')))
                 throw Error('First battle menu speech did not queue behind the formation');
+            const prefix = target ? '.battle-target-' :
+                fs.existsSync(receipt + '.battle-bag-stage') ? '.battle-bag-' : '.battle-';
+            // Automatic and requested battle reads now both append. Distinguish
+            // the fixture's first detail/event from its later explicit repeat.
             const suffix = message.kind === 'menuFocus' ? (speech.startsWith('Synthetic companion') ? 'companion-focus' : 'focus') :
                 message.kind === 'battleLog' ? (vitals?.startsWith('Power ') ? 'radial' :
-                    vitals?.startsWith('Synthetic target, 17 HP damage') ? 'damage' : message.append ? 'log-auto' : 'log-repeat') :
+                    vitals?.startsWith('Synthetic target, 17 HP damage') ? 'damage' : fs.existsSync(receipt + '.battle-log-auto') ? 'log-repeat' : 'log-auto') :
                 message.kind === 'menuDetails' ? (vitals === 'Synthetic companion' ? 'appearance' : vitals === 'Synthetic hero' ? (target ? 'vitals' : 'wendy-status') :
-                    message.append ? 'autodetail' : 'details') :
+                    fs.existsSync(receipt + prefix + 'autodetail') ? 'details' : 'autodetail') :
                 message.kind === 'menuReview' ? (target && message.append ? 'timing' : 'review') :
                 message.kind === 'dialoguePage' ? 'outcome' :
                 message.kind === 'controllerStatus' ? 'mode' : '';
-            const prefix = target ? '.battle-target-' :
-                fs.existsSync(receipt + '.battle-bag-stage') ? '.battle-bag-' : '.battle-';
             if (suffix) fs.writeFileSync(receipt + prefix + suffix, speech);
             parentPort.postMessage('ack');
             return;
@@ -2606,7 +2608,7 @@ parentPort.on('message', message => {
     shutil.copyfile(ROOT / 'src' / 'runtime' / 'resize-markers.js', app / 'resize-markers.js')
     for name in ('speech-text.cjs', 'dialogue-icons.cjs'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
-    for name in ('route-worker.cjs', 'geometry.cjs', 'routes.cjs', 'walking-catalog.cjs', 'transfer-gates.cjs', 'terrain-controls.cjs', 'WendyQuestAudio.node'):
+    for name in ('route-worker.cjs', 'airship-route.cjs', 'geometry.cjs', 'routes.cjs', 'walking-catalog.cjs', 'transfer-gates.cjs', 'terrain-controls.cjs', 'WendyQuestAudio.node'):
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
     shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'narration.webmpack',
                     service / 'narration.webmpack')
