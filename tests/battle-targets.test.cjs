@@ -82,12 +82,13 @@ Object.setPrototypeOf(scene, c.Scene_Battle.prototype);
 const messages = [];
 const liveContexts = new Map();
 let epoch = 0;
+const settings = { indexing: true, autodetail: true };
 const observer = createBattleTargets(c, { manager: c.SceneManager, graphics: c.Graphics, hasFocus: () => true,
     screenFading: () => false }, {
     open(record, live) { liveContexts.set(++epoch, live); messages.push(formatSpeech(record)); return epoch; },
     focus(id, record) { assert(liveContexts.get(id)()); messages.push(formatSpeech(record)); },
     close(id) { liveContexts.delete(id); }
-}, () => ({ indexing: true, autodetail: true }));
+}, () => settings);
 let observations = 0;
 c.WendyQuestAccessBattleTargetReady = scene => { observations++; observer.observe(scene); };
 c.WendyQuestAccessBattleTargetLeaving = observer.retire;
@@ -114,7 +115,7 @@ scene.update();
 assert.equal(messages.length, 0, 'native selection awaits postrender');
 draw();
 const first = performance.now() - start;
-assert.equal(messages[0], 'Same name: 100%');
+assert.equal(messages[0], 'Same name 2: 100%');
 assert.equal(messages.length, 1, 'Autodetail does not repeat HP from the focus label');
 assert.equal(observations, 1);
 for (let frame = 0; frame < 300; frame++) { nativeSceneUpdate.call(scene); draw(); }
@@ -125,13 +126,13 @@ battle._currentActionCommand = Object.assign(new c.ActionCommand(), { _cancelabl
     _coroutineContainer: { coroutine: { Cancel() { assert.equal(liveContexts.size, 0); cancellations++; } } } });
 scene.update();
 draw();
-assert.equal(messages.at(-1), 'Same name: 100%');
+assert.equal(messages.at(-1), 'Same name 2: 100%');
 input.add('left');
 scene.update();
 draw();
 scene.update();
 draw();
-assert.equal(messages.at(-1), 'Same name: 35%');
+assert.equal(messages.at(-1), 'Same name 1: 35%');
 const page = observer.controlOwner(scene);
 assert(observer.command(page, 'details'));
 sprites[1]._gaugeSprite.drawGaugeRect(0, 0, 64, 5);
@@ -193,12 +194,33 @@ assert.doesNotMatch(messages.at(-1), /Attack/);
 battle._targets = nativeTargets(enemies[0], enemies[1], enemies[0]);
 scene.update();
 draw();
-assert.equal(messages.at(-1), 'Same name: 35%, Same name: 100%');
+assert.equal(messages.at(-1), 'Same name 1: 35%, Same name 2: 100%');
 assert.doesNotMatch(messages.at(-1), /clawed feet/, 'group highlight with Autodetail does not request appearance');
 assert(observer.command(observer.controlOwner(scene), 'details'));
 assert.match(messages.at(-2), /clawed feet/);
 assert(observer.command(observer.controlOwner(scene), 'reviewLast'));
 assert.match(messages.at(-1), /Same name 2, HP 100%, 2 of 2/);
+// Target identity is required even when optional menu indexing is off.
+settings.indexing = false;
+for (const sprite of sprites) {
+    sprite._nameSprite.setText('Blandhawk');
+    sprite._nameSprite.update();
+    sprite._gaugeSprite.gaugeRate = () => 1;
+    sprite._enemy.originalName = () => 'Blandhawk';
+}
+battle._targets = nativeTargets(...enemies);
+scene.update(); draw();
+assert.equal(messages.at(-1), 'Blandhawk 1: 100%, Blandhawk 2: 100%, Blandhawk 3: 100%');
+for (const [enemy, ordinal] of [[enemies[1], 1], [enemies[0], 2], [enemies[2], 3]]) {
+    battle._targets = nativeTargets(enemy, enemy);
+    scene.update(); draw();
+    assert.equal(messages.at(-1), 'Blandhawk ' + ordinal + ': 100%');
+    assert.doesNotMatch(messages.at(-1), /enemy|Target|of 3/i);
+}
+settings.indexing = true;
+battle._targets = nativeTargets(enemies[0], enemies[1]);
+scene.update(); draw();
+
 enemies[0].alive = false;
 assert.equal(observer.controlOwner(scene), null);
 battle._currentActionCommand.Cancel();

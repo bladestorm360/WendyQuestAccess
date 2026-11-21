@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / 'tools'))
 from registration import (
     ACTION_REL, BATTLE_REL, MANAGERS_REL, MAP_REL, MENU_REL, SCENES_REL, STATS_REL, WINDOW_REL, WINDOWS_REL,
     action_notification, battle_notification, managers_notification, map_notification, menu_notifications, scenes_notification,
-    windows_notification,
+    windows_notification, window_notification,
 )
 
 decode = runpy.run_path(str(ROOT / 'tools' / 'inspect-plugin.py'))['decode']
@@ -20,7 +20,7 @@ installed = Path(sys.argv[1])
 original = (installed / BATTLE_REL).read_bytes()
 battle, _ = decode(battle_notification(original).decode('utf8'))
 untouched, _ = decode(original.decode('utf8'))
-text, _ = decode((installed / WINDOW_REL).read_text(encoding='utf-8-sig'))
+text, _ = decode(window_notification((installed / WINDOW_REL).read_bytes()).decode('utf8'))
 manager = managers_notification((installed / MANAGERS_REL).read_bytes()).decode('utf8')
 
 
@@ -228,6 +228,13 @@ if sys.argv[2:] == ['vitals']:
                 'UpdateLowHealth', 'LowHealthWarningSound')]
     methods.append(sprite_method(hud, 'RadialStatus', 'UpdateMask').replace(
         "['UpdateMask']", "['fixtureUpdateMask']", 1))
+    anchor = "RadialStatus['prototype']['AddHPRoutine']=function*("
+    start = hud.index(anchor)
+    end = hud.index('},RadialStatus', start)
+    methods.append((hud[start:end + 1] + ';').replace("['AddHPRoutine']", "['fixtureAddHPRoutine']", 1))
+    raw_text, _ = decode((installed / WINDOW_REL).read_text(encoding='utf-8-sig'))
+    methods.append(sprite_method(raw_text, 'Sprite_Text', 'RedrawText').replace(
+        "['RedrawText']", "['fixtureUnobservedRedrawText']", 1))
     menu, _ = decode(menu_notifications((installed / MENU_REL).read_bytes()).decode('utf8'))
     methods.extend(sprite_method(menu, owner, 'createStatusWindow') for owner in ('Scene_Menu', 'Scene_Item'))
     map_scene, _ = decode(map_notification((installed / MAP_REL).read_bytes()).decode('utf8'))

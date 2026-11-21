@@ -1067,6 +1067,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         // without making contact with them a route goal.
         if (job.action !== 'directions' || target.patrol) return present(job, { kind: 'fieldTarget',
             name: job.action === 'directions' && target.patrol ? '' : target.name, category,
+            directionsObtained: target.directionsObtained === true,
             patrolBearing: job.action === 'directions' && target.patrol,
             dx: target.x - snapshot.x, dy: target.y - snapshot.y, outOfReach: target.outOfReach, handoff: target.handoff });
         if (target.shoreMap) {

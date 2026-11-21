@@ -1123,9 +1123,26 @@ def core_notification(original):
 
 
 def window_notification(original):
-    # Use the ticket belonging to each native async callback, including
-    # overlapping requests, and the size issued by the native scale path.
+    # Sprite_Text.RedrawText has completed all canvas writes here. Remember
+    # only attached inventory-vitals digits; later setText may dirty the
+    # next animation value while these exact glyphs remain visible.
     return insert(original, WINDOW_SHA, {
+        119201: b';{const wqaScene=globalThis.SceneManager?._scene;'
+                b'const wqaHud=wqaScene?._wqaMenuStatus;'
+                b'if(wqaHud&&wqaHud===wqaScene._statusWindow&&'
+                b'(this===wqaHud._numberSprite||this===wqaHud._FPSprite||'
+                b'this===wqaHud._totalSprite||this===wqaHud._totalSpriteFP)&&'
+                b'wqaScene._started&&wqaScene._active&&!wqaScene._fadeDuration&&!wqaScene._fadeOpacity&&'
+                b'!wqaScene._wqaPreloads?.size&&!wqaScene._wqaPreloadOverflow&&'
+                b'!SceneManager._nextScene&&!SceneManager._exiting&&!SceneManager._wqaNativeAutosaves&&'
+                b'!globalThis.Graphics?._wqaResize&&Graphics.app?.stage===wqaScene){'
+                b'const wqaValue=this._currentString;this._wqaVitalsPaint=null;'
+                b'if(typeof wqaValue==="string"&&/^\\d{1,8}$/.test(wqaValue)&&'
+                b'Array.isArray(this.children)&&this.children.length<=8){'
+                b'const wqaGlyphs=this.children.slice(0,wqaValue.length).map(g=>'
+                b'({glyph:g,bitmap:g.bitmap,texture:g.bitmap?._baseTexture,revision:g.bitmap?._baseTexture?.dirtyId}));'
+                b'if(wqaGlyphs.length===wqaValue.length&&wqaGlyphs.every(g=>Number.isSafeInteger(g.revision)))'
+                b'this._wqaVitalsPaint={owner:wqaHud,value:wqaValue,glyphs:wqaGlyphs};}}}',
         # The modal owns a settled scene only. Never suppress native start or
         # a scene change. The stock update is replaced by this custom method.
         4001: b'if(this._scene?._wqaSettingsActive&&this._scene._started&&!this._nextScene&&!this._exiting)return;',

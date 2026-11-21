@@ -17,9 +17,9 @@ function nativeTextHost() {
     Sprite_Text.prototype = Object.create(Sprite.prototype);
     Sprite_Text.prototype.updateAnimation = () => {};
 
-    function Bitmap(width, height) { Object.assign(this, { width, height, context: {} }); }
-    Bitmap.prototype.clear = function () { this.paint = ''; };
-    Bitmap.prototype.drawText = function (glyph) { this.paint = glyph; };
+    function Bitmap(width, height) { Object.assign(this, { width, height, context: {}, _baseTexture: { dirtyId: 0 } }); }
+    Bitmap.prototype.clear = function () { this.paint = ''; this._baseTexture.dirtyId++; };
+    Bitmap.prototype.drawText = function (glyph) { this.paint = glyph; this._baseTexture.dirtyId++; };
     Bitmap.prototype.measureTextWidth = () => 7;
     Bitmap.prototype.isReady = () => true;
 

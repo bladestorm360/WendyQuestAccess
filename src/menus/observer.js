@@ -2,7 +2,7 @@
 
 const { reviewLines, moveReview } = require('./review');
 const { battlePresented, drawnText } = require('../battle/presentation');
-const { fieldVitalsVisible } = require('../battle/party-vitals');
+const { fieldVitalsVisible, primeMenuVitals } = require('../battle/party-vitals');
 const { goldPaint, goldLabel, shopRow, shopQuantity, shopDetails, sameShopPaint, shopPaint } = require('./shop');
 const { couponListItem, couponListFocus, couponResponseItem, couponResponseFocus } = require('./coupons');
 
@@ -219,6 +219,7 @@ function createMenuObserver(root, host, notifications, preferences) {
         if (previous) retire(previous.scene);
         current = page;
         page.vitals = screen <= 2 && !!scene._wqaMenuStatus && scene._wqaMenuStatus === scene._statusWindow;
+        if (page.vitals) primeMenuVitals(scene);
         if (screen === 3) {
             scene._wqaBattleBagActive = true;
             window._wqaBattleBagPresented = page.bagRow;

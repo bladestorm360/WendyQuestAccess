@@ -112,8 +112,8 @@ function createBattleTargets(root, host, notifications, preferences) {
             const drawn = labels[position];
             const name = drawn || 'Target ' + (position + 1);
             const duplicate = drawn && labels.indexOf(drawn) !== labels.lastIndexOf(drawn);
-            // Focus uses the painted name. Explicit review can distinguish
-            // matching labels by their position in the native cursor order.
+            // Both focus and review distinguish duplicate painted names by
+            // their position in the same native horizontal cursor order.
             const reviewName = duplicate ? name + ' ' + (position + 1) : name;
             rows.push({ sprite, enemy: sprite._enemy, name, reviewName });
         }
@@ -129,13 +129,13 @@ function createBattleTargets(root, host, notifications, preferences) {
         const settings = preferences();
         const labelsWithHealth = rows.map(row => {
             const health = gaugePercent(row.sprite);
-            return health === null ? row.name : row.name + ': ' + health + '%';
+            return health === null ? row.reviewName : row.reviewName + ': ' + health + '%';
         });
         show(page, { kind: 'menuFocus', name: labelsWithHealth.join(', ') });
         if (settings.autodetail) {
             // HP is already in the focus label. Autodetail can add visible
             // conditions, while appearance is explicitly requested with I.
-            const lines = reviewLines(rows.map(row => statusLine(row, null, row.name)));
+            const lines = reviewLines(rows.map(row => statusLine(row, null, row.reviewName)));
             if (lines.length) notifications.focus(page.epoch, { kind: 'menuDetails', lines, append: true });
         }
         setDetails(page);

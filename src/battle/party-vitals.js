@@ -19,7 +19,35 @@ function portraitActor(scene, sprite) {
 
 function number(parent, text) {
     const value = drawnText(parent, text, 8);
-    return /^\d+$/.test(value) ? value : '';
+    if (/^\d+$/.test(value)) return value;
+    // Inventory healing updates the next text before its glyph repaint.
+    // Read the previous canvas digits only while the exact glyph/bitmap
+    // revisions still match the native completed-paint snapshot.
+    const paint = text?._wqaVitalsPaint;
+    if (text?._dirty !== true || paint?.owner !== parent || text.parent !== parent || !text.worldVisible ||
+        !(text.worldAlpha > 0) || text.renderable === false ||
+        !/^\d{1,8}$/.test(paint.value) || !Array.isArray(paint.glyphs) ||
+        paint.glyphs.length !== paint.value.length || !Array.isArray(text.children) || text.children.length > 8) return '';
+    const same = paint.glyphs.every((entry, index) => entry.glyph === text.children[index] &&
+        visibleSprite(text, entry.glyph) && entry.glyph.scale?.x && entry.glyph.scale?.y &&
+        entry.bitmap === entry.glyph.bitmap && entry.texture === entry.bitmap?._baseTexture && entry.revision === entry.bitmap?._baseTexture?.dirtyId);
+    return same ? paint.value : '';
+}
+
+// Menu publication happens after its first render. Initial HUD digits may
+// have been painted during creation, before the native repaint gate opens.
+function primeMenuVitals(scene) {
+    const hud = scene?._wqaMenuStatus;
+    if (!hud || hud !== scene._statusWindow) return;
+    for (const key of ['_numberSprite', '_FPSprite', '_totalSprite', '_totalSpriteFP']) {
+        const text = hud[key];
+        const value = drawnText(hud, text, 8);
+        if (!/^\d{1,8}$/.test(value) || text.children.length > 8) continue;
+        const glyphs = text.children.slice(0, value.length).map(glyph =>
+            ({ glyph, bitmap: glyph.bitmap, texture: glyph.bitmap?._baseTexture, revision: glyph.bitmap?._baseTexture?.dirtyId }));
+        if (glyphs.every(glyph => Number.isSafeInteger(glyph.revision)))
+            text._wqaVitalsPaint = { owner: hud, value, glyphs };
+    }
 }
 
 function pairedValue(hud, label, icon, current, divider, total) {
@@ -167,4 +195,4 @@ function battleVitals(scene, graphics) {
     return hudVitals(scene._statusWindow, graphics, main.name);
 }
 
-module.exports = { portraitActor, battleVitals, menuVitals, fieldVitals, fieldVitalsVisible, visibleCondition, visibleMomentum };
+module.exports = { portraitActor, battleVitals, menuVitals, primeMenuVitals, fieldVitals, fieldVitalsVisible, visibleCondition, visibleMomentum };

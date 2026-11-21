@@ -131,7 +131,7 @@ function formatSpeech(message) {
             if (message.handoff === true) offsets.push('route stops at a floor event');
             if (message.outOfReach === true) offsets.push('out of reach');
             text = message.patrolBearing === true ? offsets.join(', ') || 'Very close.' :
-                name && [category, name, ...offsets].filter(Boolean).join(', ');
+                name && [category, name, message.directionsObtained === true ? 'already obtained directions' : '', ...offsets].filter(Boolean).join(', ');
             break;
         }
         case 'timedDirections': {

@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { execFileSync } = require('node:child_process');
-const { battleVitals, portraitActor, menuVitals, fieldVitals, fieldVitalsVisible } = require('../src/battle/party-vitals');
+const { battleVitals, portraitActor, menuVitals, primeMenuVitals, fieldVitals, fieldVitalsVisible } = require('../src/battle/party-vitals');
 const { nativeTextHost } = require('./native-text-host.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 const { normalizeKeys } = require('../src/settings/keyboard');
@@ -152,7 +152,8 @@ c.RadialStatus = function () {
 let menuRead = 0;
 for (const kind of [c.Scene_Menu, c.Scene_Item, c.Scene_Map]) {
     Object.setPrototypeOf(kind.prototype, Sprite.prototype);
-    const menu = c.SceneManager._scene = Object.assign(new kind(), { children: [] });
+    const menu = c.SceneManager._scene = Object.assign(new kind(), { children: [], _started: true, _active: true });
+    c.Graphics.app = { stage: menu };
     menu.createStatusWindow();
     const status = menu._statusWindow;
     assert.equal(status.battler, actor);
@@ -170,6 +171,46 @@ for (const kind of [c.Scene_Menu, c.Scene_Item, c.Scene_Map]) {
     assert.equal(formatSpeech(read(menu, graphics)),
         [actors[1].name, hp, fp, 'Level 4, experience bar 59 percent', 'Momentum 1 of 2'].join('. '));
     menuRead += performance.now() - start;
+    if (!inMap) {
+        primeMenuVitals(menu);
+        status._numberSprite.setText('23');
+        assert.match(formatSpeech(read(menu, graphics)), /HP 19 of 24/, 'pending digits keep the visible HP');
+        status._numberSprite.children[0].bitmap._baseTexture.dirtyId++;
+        assert.doesNotMatch(formatSpeech(read(menu, graphics)), /HP /, 'a changed canvas invalidates old digits');
+        status._numberSprite.setText('19'); status.update();
+        status._numberSprite.setText('23');
+        const firstBitmap = status._numberSprite.children[0].bitmap;
+        firstBitmap._baseTexture = { dirtyId: firstBitmap._baseTexture.dirtyId };
+        assert.doesNotMatch(formatSpeech(read(menu, graphics)), /HP /, 'a replaced texture invalidates the snapshot');
+        status._numberSprite.setText('19'); status.update();
+        c.RandomRange = (low, high) => (low + high) / 2;
+        c.SpriteEffectHelper = { Effects: { Heal: {} }, CreateParticleEffectSprite() {} };
+        c.Time.GetDeltaTime = () => 1 / 60;
+        status.fillSprite.setBlendColor = () => {};
+        status.LerpColorArray = () => [];
+        actor.hp = 24;
+        const healing = status.fixtureAddHPRoutine(1);
+        let painted = '19';
+        for (let tick = 0; tick < 31; tick++) {
+            healing.next();
+            assert(formatSpeech(read(menu, graphics)).includes('HP ' + painted + ' of 24'), 'healing keeps painted HP at tick ' + tick);
+            status.update();
+            painted = status._numberSprite._currentString;
+            assert(formatSpeech(read(menu, graphics)).includes('HP ' + painted + ' of 24'));
+        }
+        let nativeMs = 0, observedMs = 0;
+        const digits = status._numberSprite;
+        for (let sample = 0; sample < 240; sample++) {
+            digits.setText(String(100 + sample % 100));
+            let at = performance.now(); digits.fixtureUnobservedRedrawText(); nativeMs += performance.now() - at;
+            digits.setText(String(200 + sample % 100));
+            at = performance.now(); digits.RedrawText(); observedMs += performance.now() - at;
+        }
+        console.log('Throttled inventory numeric repaint, 240 native/observed pairs', nativeMs.toFixed(2), observedMs.toFixed(2), 'ms.');
+        actor.hp = 19; status.currentHPFill = 19 / 24;
+        status._numberSprite.setText('19'); status.update();
+        c.Time.GetDeltaTime = () => 0;
+    }
     status.currentXPFill = 1;
     assert.match(formatSpeech(read(menu, graphics)), /59 percent/, 'the unpainted value cannot change speech');
     status.UpdateMask();

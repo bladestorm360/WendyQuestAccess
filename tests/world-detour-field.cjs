@@ -23,7 +23,9 @@ async function verifyWorldDetourField(c, load, verifyWorker, common, infos) {
                 packets.push(structuredClone(packet,{transfer:buffers||[]}));
             }});
             const field=createField(c,{graphics:c.Graphics,manager:c.SceneManager,hasFocus:()=>true,
-                screenFading:()=>false,navigationPreferences:()=>({}),makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),
+                // This connection fixture has no save-backed atlas quests. Match the
+                // underlying detour fixture: expose entrances explicitly.
+                screenFading:()=>false,navigationPreferences:()=>({spoilers:true}),makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),
                 createRouteWorker:()=>worker},{open(record){records.push(record);return records.length;},close(){}});
             function ask(action){const at=performance.now();assert(field.command(action));renderer.emit('postrender');peak=Math.max(peak,performance.now()-at);}
             for(let i=0;i<12&&records.at(-1)?.category!=='Exits';i++)ask('nextCategory');

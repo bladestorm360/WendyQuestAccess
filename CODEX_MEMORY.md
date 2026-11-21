@@ -278,3 +278,6 @@ The November 21 world-detour/shrine update is installed and hash-verified at pay
 
 
 November 21 gameplay feedback: the owner found the existing Cracked Cove/Caffeine Caverns exit after browsing farther and withdrew that missing-connection report. Cross-map routing is now gameplay-confirmed for the travel exercised. [Corrected audit and confirmation](docs/navigation-audit.md#sunrise-bay-and-mine-connection-continuation). No code or installed payload change accompanies this correction.
+
+
+November 21 active follow-up: duplicate enemy target numbers are restored on focus using the existing left-to-right review identity; action/defeat text stays number-free. The owner's HP omission is inventory healing, not the field gauge: [painted numeric vitals](docs/battle.md#inventory-healing-while-hp-digits-animate) retain actual glyphs during a pending redraw. [Map-board directions](docs/navigation.md#caffeine-caverns-board-directions) follows the owner’s final wording, already obtained directions, using the native pathway-type switches, including duplicate boards. Focused checks, full-world regression, matching runtime and exact security scan pass. Installer rehearsal correctly waits for the open game to close; installation and cleanup remain. [Current candidate and verification limits](docs/deployment.md#target-focus-inventory-hp-and-board-knowledge).

@@ -283,6 +283,16 @@ function npcPassage(map) {
         event._x === passage.x && event._y === passage.y ? passage : null;
 }
 
+function mapBoardDirectionsObtained(root, page) {
+    const condition = page.list?.[0];
+    const args = condition?.parameters;
+    // Ten boards share three pathway types. This exact branch chooses the
+    // native already-drawn dialogue, including knowledge from another board.
+    return condition?.code === 111 && condition.indent === 0 && args?.length === 3 &&
+        args[0] === 0 && args[2] === 1 && Number.isInteger(args[1]) && args[1] >= 205 && args[1] <= 207 &&
+        root.$gameSwitches?.value?.(args[1]) === true;
+}
+
 function localDestination(root, event, page) {
     const map = root.$gameMap._mapId;
     const id = event._eventId;
@@ -437,7 +447,7 @@ function localDestination(root, event, page) {
         return { name: 'Gate switch', category: 'objects', showBlocked: event._pageIndex === 1 };
     if (map === 27 && id === 43 && event._pageIndex === 0) return { name: 'Bridge button', category: 'objects' };
     if (map === 87 && id >= 121 && id <= 130 && page.list[35]?.parameters?.[3]?.pictureName === 'system/Caffeine Caverns Map')
-        return { name: 'Map board', category: 'objects' };
+        return { name: 'Map board', category: 'objects', ...(mapBoardDirectionsObtained(root, page) ? { directionsObtained: true } : {}) };
     // The base game shows a generic prompt and identifies these only after OK.
     if ((map === 128 && id === 11) || (map === 133 && id === 4))
         return { name: 'Hidden passage button', category: 'objects' };
