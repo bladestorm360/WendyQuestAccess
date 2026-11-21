@@ -356,6 +356,22 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return true;
     }
 
+    // A regional quest has no local coordinates. Preview only its checked
+    // next entrance; never run the route's autowalk/beacon handoff on browse.
+    function regionalSelection(job, result) {
+        const { name, category } = job.regionalSelection;
+        const edge = job.terrainApproach?.entrances.find(item => item.event === result?.entrance &&
+            item.approach === result.approach);
+        const event = edge && root.$gameMap._events?.[edge.event];
+        const exit = event && !event._erased && transfers.current(edge) &&
+            routeBoundary(root, edge.event, preferences().spoilers === true, edge).exit;
+        if (!exit || !Number.isInteger(event._x) || !Number.isInteger(event._y))
+            return present(job, { kind: 'fieldTarget', category, name: name + ', on another map' }, true);
+        job.entrance = edge;
+        return present(job, { kind: 'fieldTarget', category, name: name + ' via ' + exit,
+            dx: event._x - root.$gamePlayer._x, dy: event._y - root.$gamePlayer._y }, true);
+    }
+
     function received(packet) {
         const job = inFlight;
         if (!job || packet?.sequence !== job.sequence || packet.epoch !== job.sequence || packet.map !== job.map) return;
@@ -370,6 +386,16 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             const { state, captured } = job.caveRefresh;
             host.caveTiming.refreshResult(state, captured, packet.result?.opening);
             if (navigationRequest(active) && !active.performed && ready(active.scene)) afterRender();
+            return;
+        }
+        if (job.regionalSelection) {
+            // Movement changes the bearing, not the verified exit identity.
+            // Compute the offset at reply time, and retain all native gates.
+            if (active === job && ready(job.scene, true) && root.$gameMap._mapId === job.map &&
+                travelMode(root.$gameMap, root.$gamePlayer) === job.mode &&
+                root.$gameParty?.getNav?.() === job.breakfastObjective)
+                regionalSelection(job, packet.result);
+            else if (active !== job && navigationRequest(active) && ready(active.scene)) afterRender();
             return;
         }
         if (active === job && ready(job.scene) && root.$gameMap._mapId === job.map &&
@@ -758,7 +784,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     if (dropped && active === dropped) {
                         dropped.performed = true;
                         dropped.scene._wqaQuestNavigation = false;
-                        status(dropped, dropped.filter ? 'Reachable destinations unavailable' : 'Directions service unavailable');
+                        if (dropped.regionalSelection) regionalSelection(dropped);
+                        else status(dropped, dropped.filter ? 'Reachable destinations unavailable' : 'Directions service unavailable');
                         dropped.filter = null;
                     }
                     if (navigationRequest(active) && active !== dropped && ready(active.scene)) afterRender();
@@ -786,6 +813,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             job.performed = true;
             if (job.beaconState) host.beacon.refreshResult(job.beaconState, job.revision, job.x, job.y, null);
             else if (job.caveRefresh) host.caveTiming.stop(job.scene);
+            else if (job.regionalSelection) regionalSelection(job);
             else status(job, filtering ? 'Reachable destinations unavailable' : 'Directions service unavailable');
         }
     }
@@ -1057,7 +1085,14 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         owner.remoteBookmark = null;
         job.breakfastObjective = target.breakfastObjective;
         if (target.breakfastRegion) {
-            if (job.action !== 'directions') return status(job, target.name);
+            if (job.action !== 'directions') {
+                job.regionalSelection = { name: target.name, category };
+                // A preceding filter may have transferred its terrain buffer.
+                // This preview owns a fresh routing snapshot for its own send.
+                const local = captureWorld(root, true, undefined, undefined, [], true);
+                if (!local) return regionalSelection(job);
+                return submit(job, local, { field: true, limit: 8, transfer: terrainTransferRequest(job, STONE_ISLAND) });
+            }
             job.label = target.name;
             job.terrainOnward = true;
             return submit(job, snapshot, { field: true, limit: 8, beacon: host.beacon?.enabled() === true,

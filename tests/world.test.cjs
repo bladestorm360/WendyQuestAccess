@@ -1328,6 +1328,10 @@ async function main() {
         require('./cave-field.cjs').verifyCaveField(c, load, configureMotion);
         return;
     }
+    if (process.argv.includes('--breakfast-field')) {
+        await require('./breakfast-quest-field.cjs').verifyBreakfastQuestField(c, load, verifyWorker, read('CommonEvents.json'), read('MapInfos.json'));
+        return;
+    }
     assert.deepEqual(catalog, { maps: 239, cells: 191235 });
     const manifest = JSON.parse(fs.readFileSync(path.join(derived, 'manifest.json'), 'utf8'));
     const weatherMaps = [12, 13, 14, 15, 16, 17, 161, 162, 164, 165, 166, 207, 208];
@@ -1643,6 +1647,7 @@ async function main() {
     await verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, read('CommonEvents.json'));
     await verifyWorldDetours(c, load, verifyWorker, read('CommonEvents.json'), read('MapInfos.json'));
     await require('./world-detour-field.cjs').verifyWorldDetourField(c, load, verifyWorker, read('CommonEvents.json'), read('MapInfos.json'));
+    await require('./breakfast-quest-field.cjs').verifyBreakfastQuestField(c, load, verifyWorker, read('CommonEvents.json'), read('MapInfos.json'));
     console.log(`Verified ${compared} directed movement comparisons across authored maps and dynamic cases.`);
     console.log('Verified native Map 196 patrol contact, catch-page handback, checkpoint floor trigger and bounded warning sign route.');
 }
