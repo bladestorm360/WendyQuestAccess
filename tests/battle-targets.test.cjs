@@ -217,6 +217,28 @@ for (const [enemy, ordinal] of [[enemies[1], 1], [enemies[0], 2], [enemies[2], 3
     assert.equal(messages.at(-1), 'Blandhawk ' + ordinal + ': 100%');
     assert.doesNotMatch(messages.at(-1), /enemy|Target|of 3/i);
 }
+// A unique type before two duplicates must not consume a duplicate ordinal.
+for (const [sprite, name, pixels] of [[sprites[1], 'Hot Sludge Sundae', 2], [sprites[0], 'Conehead', 1], [sprites[2], 'Conehead', 5]]) {
+    sprite._nameSprite.setText(name);sprite._nameSprite.update();
+    sprite._gaugeSprite.gaugeRate = () => pixels / 62;
+    sprite._enemy.originalName = () => name;
+}
+battle._targets = nativeTargets(...enemies);
+scene.update();draw();
+assert.equal(messages.at(-1), 'Hot Sludge Sundae: 3%, Conehead 1: 2%, Conehead 2: 8%');
+assert(observer.command(observer.controlOwner(scene), 'reviewLast'));
+assert.match(messages.at(-1), /Conehead 2, HP 8%/);
+for (const [enemy, expected] of [[enemies[0], 'Conehead 1: 2%'], [enemies[2], 'Conehead 2: 8%'],
+    [enemies[1], 'Hot Sludge Sundae: 3%']]) {
+    battle._targets = nativeTargets(enemy, enemy);
+    scene.update();draw();
+    assert.equal(messages.at(-1), expected);
+}
+// A unique type between duplicates also leaves their own sequence unchanged.
+sprites[0].x = 0;
+battle._targets = nativeTargets(...enemies);
+scene.update();draw();
+assert.equal(messages.at(-1), 'Conehead 1: 2%, Hot Sludge Sundae: 3%, Conehead 2: 8%');
 settings.indexing = true;
 battle._targets = nativeTargets(enemies[0], enemies[1]);
 scene.update(); draw();

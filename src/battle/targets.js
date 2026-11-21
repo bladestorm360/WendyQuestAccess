@@ -105,16 +105,21 @@ function createBattleTargets(root, host, notifications, preferences) {
         const members = new Set(job.targets);
         const labels = choices.map(sprite => drawnText(sprite, sprite._nameSprite, 48) || enemyName(sprite));
         const rows = [];
+        const ordinals = new Map();
         for (let position = 0; position < choices.length; position++) {
             const sprite = choices[position];
+            const drawn = labels[position];
+            // Count every matching choice, even when this row is not selected.
+            // Other enemy types must not consume this type's target numbers.
+            const ordinal = (ordinals.get(drawn) || 0) + 1;
+            ordinals.set(drawn, ordinal);
             if (!members.has(sprite._enemy) || !sprite._isSelected ||
                 !visibleSprite(sprite._selectorIconPivot, sprite._selectorIcon)) continue;
-            const drawn = labels[position];
             const name = drawn || 'Target ' + (position + 1);
             const duplicate = drawn && labels.indexOf(drawn) !== labels.lastIndexOf(drawn);
             // Both focus and review distinguish duplicate painted names by
-            // their position in the same native horizontal cursor order.
-            const reviewName = duplicate ? name + ' ' + (position + 1) : name;
+            // their ordinal among matching names in native cursor order.
+            const reviewName = duplicate ? name + ' ' + ordinal : name;
             rows.push({ sprite, enemy: sprite._enemy, name, reviewName });
         }
         if (!rows.length || rows.length !== members.size) return false;
