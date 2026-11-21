@@ -96,6 +96,7 @@ const INSPECTED_PROPS = {
     125: { 16: 'Keg' },
     136: { 9: 'Cooking pot' },
     139: { 4: 'Stack of books', 6: 'Book', 12: 'Stack of books', 13: 'Stack of books', 14: 'Stack of books' },
+    144: { 16: 'Bowl' }, // The Books-named event inspects the bowl of future pickles.
     147: { 24: 'Bed' },
     158: { 2: 'Letters' }
 };
