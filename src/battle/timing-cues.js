@@ -6,8 +6,8 @@ const MAX_REQUEST_MS = 48;
 const SOURCE = 'battleTiming';
 const HIT_NOTE_PITCH = 1;
 
-function inPerfectWindow(progress, start, end, limit) {
-    return start < end && progress >= start && progress <= end && progress < limit && progress < 1;
+function inPerfectWindow(progress, start, end, limit, ice = false) {
+    return start < end && (ice ? progress > start : progress >= start) && progress <= end && progress < limit && progress < 1;
 }
 
 function createBattleCues(root, host, audio, preferences) {
@@ -61,14 +61,22 @@ function createBattleCues(root, host, audio, preferences) {
             owner = { scene, action, phase: 0, emitted: false, open: false };
             scene._wqaBattleCueActive = action._wqaBattleCueActive = true;
         },
-        sample(scene, action, phase, progress, start, end, limit, blocked) {
+        sample(scene, action, phase, progress, start, end, limit, blocked, frozen = false, iceStart, iceEnd) {
             const current = owner;
             if (current?.scene !== scene || current.action !== action || (phase !== 0 && phase !== 1) || phase < current.phase) return;
-            if (current.phase !== phase) {
+            const ice = frozen === true;
+            if (current.phase !== phase || current.ice !== ice) {
                 endSweep(scene, action);
                 current.phase = phase;
+                current.ice = ice;
                 current.emitted = false;
+                current.accuracyProgress = undefined;
             }
+            // Frozen ends the sweep at the ice edge unless that earlier band
+            // receives a press. Its start is exclusive in the native branch.
+            // After a real break, the native pause closes audio before the
+            // later perfect band gets its own one-note ownership.
+            if (ice) { start = iceStart;end = iceEnd; }
             // The cue is observed after native input. Lead a steady accuracy
             // sweep by one measured increment so the next input check can use
             // the opening of the band's native window.
@@ -76,14 +84,14 @@ function createBattleCues(root, host, audio, preferences) {
             if (phase === 1) {
                 const advance = progress - current.accuracyProgress;
                 current.accuracyProgress = blocked ? undefined : progress;
-                opening = progress < start && advance > 0 && !action._params?.wobbleAmount &&
-                    inPerfectWindow(progress + advance, start, end, limit);
+                opening = (ice ? progress <= start : progress < start) && advance > 0 && !action._params?.wobbleAmount &&
+                    inPerfectWindow(progress + advance, start, end, limit, ice);
             }
-            if (blocked || (!opening && !inPerfectWindow(progress, start, end, limit))) {
+            if (blocked || (!opening && !inPerfectWindow(progress, start, end, limit, ice))) {
                 endSweep(scene, action);
                 return;
             }
-            // Wobble may leave and re-enter the band. A phase gets one note.
+            // Wobble may re-enter. Each ice or perfect band gets one note.
             if (current.emitted) return;
             const config = enabled();
             if (!config || !ready(scene, action)) return retire(scene);
@@ -92,7 +100,7 @@ function createBattleCues(root, host, audio, preferences) {
             const expires = host.now() + MAX_REQUEST_MS;
             audio.play(scene, config.hrtf, cue, config.battleTimingVolume / 100,
                 [0, 0, 1],
-                () => owner === current && current.phase === phase && current.open &&
+                () => owner === current && current.phase === phase && current.ice === ice && current.open &&
                     host.now() < expires && ready(scene, action), undefined, SOURCE, HIT_NOTE_PITCH);
         },
         endSweep,

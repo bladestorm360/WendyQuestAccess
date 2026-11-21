@@ -52,3 +52,5 @@ Open **F8 → Audio → Soundscape** for nearby cues. Nearby cues have staggered
 Automatic perfect timing is under **F8 → Battle** and starts off. When enabled, choose an action and start the meter normally; the mod confirms its perfect power/accuracy windows and breaks Frozen ice. Native statuses and scoring still apply. Navigation settings contain navigation choices and bookmarks. Remap its keys under **Keyboard bindings → Navigation bindings**; current control instructions remain in **Help**.
 
 Regional Breakfast Stone Island quest entries announce Quests on category changes and give a local bearing via the next verified exit. Request Directions for the walking route; browsing the entry does not start Autowalk.
+
+Frozen timing assist cues the ice-breaking press first. After the game’s pause, follow the next note for the normal timing window.

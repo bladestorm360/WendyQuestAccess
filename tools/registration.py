@@ -1102,7 +1102,7 @@ def action_notification(original):
                 b'_0x2191e9,_0x8a92bb,_0x44198f,_0x592e0d))',
         71224: cue_sample + b'0,_0x279acd,this._params.powerCritZoneAmountStart,'
                 b'this._params.powerCritZoneAmountEnd,this._params.powerFailAmount,'
-                b'_0x21be67||_0x17f391||_0x2f41e3>0)',
+                b'_0x21be67||_0x2f41e3>0,_0x17f391,_0x1fd196,_0x7de663)',
         71232: cue_end_sweep,
         72577: feedback_begin,
         72630: feedback_end,
@@ -1110,7 +1110,7 @@ def action_notification(original):
                b'this._wqaRadialWords=null)',
         75351: b'this._wqaRadialPaint=null;',  # Power feedback has ended before accuracy input.
         77631: cue_sample + b'1,_0x1327af,_0x3d8aee,_0x357499,this._params.hitFailAmount,'
-                b'_0x197d36||_0x2191e9||_0x592e0d>0)',
+                b'_0x197d36||_0x592e0d>0,_0x2191e9,_0x8a92bb,_0x44198f)',
         77639: BATTLE_CUE_LEAVING + b';',
         79586: feedback_begin,
         79639: feedback_end,

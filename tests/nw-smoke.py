@@ -1785,9 +1785,17 @@ const interval = setInterval(() => {
             WendyQuestAccessBattleCueBegin(scene, action);
             if (!action._wqaBattleCueActive) throw Error('Warm battle timing audio did not acquire its action');
             battleCueStarted = Date.now();
-            WendyQuestAccessBattleCueSample(scene, action, 0, 0.95, 0.94, 1, 1, false);
+            WendyQuestAccessBattleCueSample(scene, action, 0, 0.45, 0.94, 1, 1, false, true, 0.4, 0.55);
             endingStep = 42;
         } else if (endingStep === 42 && fs.existsSync(receipt + '.battle-cue')) {
+            fs.writeFileSync(receipt + '.battle-ice-cue', fs.readFileSync(receipt + '.battle-cue'));
+            fs.unlinkSync(receipt + '.battle-cue');
+            const scene = SceneManager._scene, action = BattleManager._currentActionCommand;
+            WendyQuestAccessBattleCueSample(scene, action, 0, 0.46, 0.94, 1, 1, true, false, 0.4, 0.55);
+            battleCueStarted = Date.now();
+            WendyQuestAccessBattleCueSample(scene, action, 0, 0.95, 0.94, 1, 1, false, false, 0.4, 0.55);
+            endingStep = 43;
+        } else if (endingStep === 43 && fs.existsSync(receipt + '.battle-cue')) {
             const cueReceipt = JSON.parse(fs.readFileSync(receipt + '.battle-cue', 'utf8'));
             fs.writeFileSync(receipt + '.battle-cue-ms', String(cueReceipt.at - battleCueStarted));
             const scene = SceneManager._scene;
@@ -2768,6 +2776,9 @@ def main():
             raise RuntimeError('NW held collision did not submit a left wall bump to silent stereo')
         battle_cue_ms = float(receipt.with_suffix('.json.battle-cue-ms').read_text(encoding='utf8'))
         battle_cue = json.loads(receipt.with_suffix('.json.battle-cue').read_text(encoding='utf8'))
+        ice_cue = json.loads(receipt.with_suffix('.json.battle-ice-cue').read_text(encoding='utf8'))
+        if ice_cue.get('status', 0) <= 0 or ice_cue.get('cue') != battle_cue.get('cue'):
+            raise AssertionError('The packaged Frozen ice band did not submit its own timing cue')
         if battle_cue['status'] != 1 or abs(battle_cue['pitch'] - 1) > 0.00001:
             raise RuntimeError('NW battle timing cue did not submit stereo PCM to SDL')
         if any(receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != '1'
@@ -2924,7 +2935,7 @@ def main():
                 credits['mode'] != 'Mod mode.' or not credits['review'].startswith('Synthetic description.'):
             raise AssertionError('Unexpected credits review')
         print('Verified map HUD, map save, diagrams, credits review, battle commands, targets, vitals and rendered Bag items.')
-        print('Verified the Battle timing setting, preview and action retirement. '
+        print('Verified Frozen ice-first and later perfect timing cues, the Battle timing setting, preview and action retirement. '
               f'Throttled warm battle cue reached silent SDL submission in {battle_cue_ms:.0f} ms.')
         print('Verified the Quests category, packaged route and marker replacement handback.')
         print('Verified controller bookmark naming, keyboard save, native tile arrival, linked event removal and persistence.')

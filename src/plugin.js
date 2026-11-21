@@ -601,8 +601,8 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessBattleCueBegin = function (scene, action) {
         try { battleCues?.begin(scene, action); } catch { battleCues?.retire(scene); }
     };
-    root.WendyQuestAccessBattleCueSample = function (scene, action, phase, progress, start, end, limit, blocked) {
-        try { battleCues?.sample(scene, action, phase, progress, start, end, limit, blocked); }
+    root.WendyQuestAccessBattleCueSample = function (scene, action, phase, progress, start, end, limit, blocked, frozen, iceStart, iceEnd) {
+        try { battleCues?.sample(scene, action, phase, progress, start, end, limit, blocked, frozen, iceStart, iceEnd); }
         catch { battleCues?.retire(scene); }
     };
     root.WendyQuestAccessBattleCueEndSweep = function (scene, action) { battleCues?.endSweep(scene, action); };

@@ -279,7 +279,7 @@ function createSettingsMenu(root, host) {
             Battle: [
                 'Confirm to start the timing meter. Confirm again for power, then for accuracy.',
                 'Turn on Automatic perfect timing under Battle to press in each perfect band automatically, including Frozen ice breaking. Choose the action and start its meter yourself. It defaults off.',
-                'Turn on Battle timing assist under Audio for one note when a perfect window opens. Press Confirm at the note.',
+                'Turn on Battle timing assist under Audio for one note when a perfect window opens. Press Confirm at the note. Frozen gives an ice-breaking note first, then the normal timing note after the pause.',
                 'Use Read details ' + gestureName(keys.details) + ' to describe selected enemies and read their displayed HP and conditions.',
                 'At battle commands, Read details describes the active fighter. In Special, move through the rows to hear locked levels. Read details repeats a level or reads the selected ability’s help. Hold Shift with that key to describe the fighter or companion.',
                 'Read Wendy’s status ' + gestureName(keys.wendyStatus) + '.'

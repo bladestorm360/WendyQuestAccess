@@ -55,9 +55,9 @@ const c = vm.createContext({
 });
 const cues = createBattleCues(c, { manager: c.SceneManager, graphics: c.Graphics, hasFocus: () => true,
     screenFading: () => false, now: () => now }, audio, () => configuration);
-c.WendyQuestAccessBattleCueSample = (scene, action, phase, progress, start, end, limit, blocked) => {
-    samples.push({ phase, progress, start, end, limit, blocked, at: now });
-    cues.sample(scene, action, phase, progress, start, end, limit, blocked);
+c.WendyQuestAccessBattleCueSample = (scene, action, phase, progress, start, end, limit, blocked, frozen, iceStart, iceEnd) => {
+    samples.push({ phase, progress, start, end, limit, blocked, frozen, iceStart, iceEnd, at: now });
+    cues.sample(scene, action, phase, progress, start, end, limit, blocked, frozen, iceStart, iceEnd);
 };
 const automaticInput = createAutomaticTiming(c, { manager: c.SceneManager, graphics: c.Graphics,
     hasFocus: () => focused, screenFading: () => false }, () => ({ automaticTiming: automatic }));
@@ -78,12 +78,16 @@ function run(method, scenario, play) {
     delta = scenario.delta || 1 / 60;
     beats.length = samples.length = 0;
     const press = [...scenario.press];
+    let cuePress = 0;
+    const actualPresses = [];
     const action = battle._currentActionCommand = Object.assign(new c.ActionCommandRadial(), {
         _spriteBase: { parent: scene }, _hitZoneSize: 0.1,
         InputPressed() {
-            if (scenario.followCue && beats.length && now - beats[0].at >= (scenario.cueDelay || 0)) return true;
+            // Confirm is an edge: one physical response per heard cue.
+            if (scenario.followCue && beats.length > cuePress &&
+                now - beats[cuePress].at >= (scenario.cueDelay || 0)) { cuePress++;actualPresses.push(now);return true; }
             if (!press.length || now < press[0]) return false;
-            press.shift();
+            press.shift();actualPresses.push(now);
             return true;
         },
         CreateFrozenIceShards() {}
@@ -99,7 +103,7 @@ function run(method, scenario, play) {
     for (let frame = 0; frame < 300; frame++) {
         now += delta * 1000;
         const tick = stage.next();
-        if (tick.done) return { outcome: [...tick.value], beats: [...beats], samples: [...samples], elapsed: performance.now() - started };
+        if (tick.done) return { outcome: [...tick.value], beats: [...beats], samples: [...samples], presses: actualPresses, elapsed: performance.now() - started };
     }
     throw Error('Native fixture sweep exceeded its update bound');
 }
@@ -150,11 +154,32 @@ assert(promptAccuracy.outcome[0] >= narrow.lower && promptAccuracy.outcome[0] <=
     'the earliest native response is inside the same window');
 
 const frozen = { ...ordinaryPower, settings: { Frozen: true }, press: [410, 1290] };
-const ice = check('Power', frozen, CUE.battlePower);
-assert(ice.samples.some(sample => sample.blocked && sample.at > 410 && sample.at < 900));
-assert(ice.beats[0].at > 910);
-check('Accuracy', { ...frozen, press: [410, 1280] }, CUE.battleAccuracy);
-check('Power', { ...frozen, press: [] });
+// Frozen has two independent presses: break the ice, then the ordinary band.
+// The old observer produced no first note, so following cues alone failed.
+for (const [method, cue] of [['Power', CUE.battlePower], ['Accuracy', CUE.battleAccuracy]]) {
+    const scenario = { ...frozen, press: method === 'Power' ? [410,1290] : [410,1280] };
+    const result = run('observed' + method, scenario, true);
+    assert.deepEqual(result.outcome,run('native' + method,scenario,false).outcome);
+    assert.equal(result.beats.length,2);
+    assert(result.beats.every(beat => beat.cue === cue));
+    const broken = result.samples.find(sample => !sample.frozen);
+    assert(broken && result.beats[0].at < broken.at && result.beats[1].at >= broken.at + 450);
+    assert(result.samples.some(sample => sample.blocked && sample.at > broken.at && sample.at < broken.at + 450));
+    const missed = run('observed' + method,{...frozen,press:[]},true);
+    assert.equal(missed.beats.length,1,'missing the ice press never produces a misleading normal cue');
+    assert(missed.outcome[2]);
+    for (const cueDelay of [0,30]) {
+        const following = run('observed' + method,{...frozen,press:[],followCue:true,cueDelay},true);
+        assert.equal(following.beats.length,2);
+        assert(following.outcome[1] && !following.outcome[2]);
+        assert.deepEqual(following.outcome,run('native' + method,{...frozen,press:following.presses},false).outcome,
+            'Following ice and perfect notes preserves exact native scoring');
+        const start = method === 'Power' ? battle._currentActionCommand._params.powerCritZoneAmountStart : frozen.lower;
+        const end = method === 'Power' ? battle._currentActionCommand._params.powerCritZoneAmountEnd : frozen.upper;
+        assert(following.outcome[0] >= start && following.outcome[0] <= end,
+            method + ' following both Frozen cues must reach its native perfect window');
+    }
+}
 // Use the shipped state data rather than assuming the three statuses send
 // the same settings. Frosty slows the sweep and Spicy changes the native sound.
 const states = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/States.json'), 'utf8'));
@@ -179,6 +204,19 @@ for (const [stateId, name, flag] of [[39, 'Frosty', 'Frosty'], [11, 'Spicy', 'Sp
             name + ' ' + method + ' accepts an input following the cue');
     }
 }
+const actualFrozen = JSON.parse(states[37].note.slice(states[37].note.indexOf('{'))).ACSettings;
+assert.equal(states[37].name,'Frozen');assert.equal(actualFrozen.Frozen,true);
+for (const extra of [{}, {Frosty:true}, {Spicy:true}]) {
+    for (const method of ['Power','Accuracy']) {
+        const scenario={...frozen,settings:{...actualFrozen,...extra},press:[],followCue:true};
+        const result=run('observed'+method,scenario,true);
+        assert.equal(result.beats.length,2);assert(result.outcome[1] && !result.outcome[2]);
+        assert.deepEqual(result.outcome,run('native'+method,{...scenario,followCue:false,press:result.presses},false).outcome);
+    }
+}
+const soggyIce=run('observedPower',{...frozen,settings:{Frozen:true,Soggy:true},press:[],followCue:true},true);
+assert.equal(soggyIce.beats.length,1,'breaking ice does not invent an unavailable Soggy perfect band');
+assert(!soggyIce.outcome[2]);
 check('Power', { ...ordinaryPower, settings: { Soggy: true, Wobble: 0.35 }, press: [] });
 check('Power', { ...ordinaryPower, settings: { Bland: true }, press: [] });
 check('Accuracy', { ...accuracy, lower: 1, upper: 1 });
@@ -201,6 +239,21 @@ cues.sample(scene, lastAction, 1, 0.58, 0.45, 0.58, 1, false);
 assert.equal(beats.length, 2, 'the inclusive accuracy upper bound and independent phase are honored');
 cues.sample(scene, lastAction, 1, 0.58, 0.45, 0.58, 1, true);
 assert.equal(latest, null, 'accepted input retires audio');
+cues.retire(scene);
+
+// The native ice start is exclusive; queued old-band audio cannot survive
+// the actual break/pause or become valid when the later perfect band opens.
+beats.length=0;now=0;cues.begin(scene,lastAction);
+cues.sample(scene,lastAction,0,0.4,0.94,1,1,false,true,0.4,0.55);
+assert.equal(beats.length,0);
+cues.sample(scene,lastAction,0,0.42,0.94,1,1,false,true,0.4,0.55);
+assert.equal(beats.length,1);const iceReady=latest;assert(iceReady());
+cues.sample(scene,lastAction,0,0.43,0.94,1,1,true,false,0.4,0.55);
+assert(!iceReady());assert.equal(latest,null);
+cues.sample(scene,lastAction,0,0.95,0.94,1,1,false,false,0.4,0.55);
+assert.equal(beats.length,2);assert(!iceReady());
+cues.sample(scene,lastAction,0,0.96,0.94,1,1,false,false,0.4,0.55);
+assert.equal(beats.length,2,'one note for each band, including after ice-breaking');
 cues.retire(scene);
 
 let nativeTotal = 0;
@@ -226,6 +279,7 @@ assert(!preparedReady());
 preparedComplete(2);
 assert.equal(scene._wqaBattleCueActive, false);
 
+console.log('Verified Frozen ice-first cues, exact native scoring after both cue responses, exclusive start, pause/stale-audio retirement and real Frozen/Frosty/Spicy state combinations.');
 console.log('Verified native power and accuracy outcomes, one note per eligible window, next-frame confirm, early confirmation, frozen pause, both Frosty and Spicy meters, and Soggy cutoff.');
 console.log('Throttled observed sweep wall time', ordinary.elapsed.toFixed(2), 'ms across', ordinary.samples.length, 'samples.');
 console.log('Throttled 20 complete power and accuracy pairs', nativeTotal.toFixed(2), 'ms native,',
