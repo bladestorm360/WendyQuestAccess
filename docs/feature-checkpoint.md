@@ -561,3 +561,6 @@ Added owner scope: H omits HP immediately after healing with the inventory still
 
 
 The added inventory and board reports expanded the initial formatter-only estimate. All three implementations and affected documentation are complete. Focused battle/menu/field/board checks and matching runtime pass; the final full-world regression passes after correcting its missing atlas fixture setup. The unchanged baseline Salt dialogue fixture gap is documented separately; no Salt routing work is added to this scope. Exact candidate security scan passes. The canonical installer rehearsal correctly requires the open game to close; installation and cleanup are the remaining milestone. [Candidate identities, reproducible checks and limits](deployment.md#target-focus-inventory-hp-and-board-knowledge).
+
+
+Source checkpoint bc61ba85290fc23baad2b10f84268eba6f5b5856 is pushed and the owned private remote ref verified. Packaged helper health check passes. Completed test scratch is cleaned, the single verified rollback is rotated to the currently installed release, and only active installer inputs remain. Wendy Quest remains open; await owner close notification, rerun exact installer rehearsal, install under the closed-game lease, verify saves/settings and payload, then clean the remaining candidate/build and close this scope.
