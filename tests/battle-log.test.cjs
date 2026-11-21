@@ -29,7 +29,7 @@ const battle = { _phase: 'action', _spriteset: { isBusy: () => spritesBusy }, _l
 const c = vm.createContext({
     Scene_Battle: function () {}, Scene_Message: function () {}, Window_BattleActionLog: function () {},
     Window_Base: function () {}, Window_BattleLog: function () {}, Sprite_Enemy: function () {},
-    BattleHelper: { IsBattleScene: () => true }, BattleAnimations: {},
+    Point: function(x,y){this.x=x;this.y=y;}, BattleHelper: { IsBattleScene: () => true }, BattleAnimations: {}, Sprite_BattleScreenParticipant: function () {},
     a2_0x990531() { throw Error('Unresolved battle property'); },
     SceneManager: { _scene: scene }, Graphics: { app: { stage: scene, renderer }, frameCount: 0, height: 540 }, BattleManager: battle,
     $dataStates: JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/States.json'), 'utf8')),
@@ -274,6 +274,33 @@ frame();
 assert.equal(lines.length, beforeMomentum + 2, 'stable repaint must be silent');
 assert.equal(observer.latest(scene).lines.at(-1), 'Momentum gained. 3 of 3.');
 
+// Both native Freezer Burn skills transfer only their own row to the actual
+// animation-entry producer. A later identical cast is a separate event.
+const skills=gameData('Skills.json');
+const freezer=Object.assign(new c.Sprite_BattleScreenParticipant(),{parent:field,worldVisible:true,worldAlpha:1,
+    x:80,y:100,width:64,height:64,anchor:{x:.5,y:1},_enemy:{originalName:()=> 'Mech Freezer'}});
+freezer._battler=freezer._enemy;scene._spriteset._enemySprites=[freezer];
+c.BattleHelper.GetBattlerSprite=()=>({GetTargetPosition:()=>({x:300,y:80})});
+let spikes=0;c.BattleAnimations.CreateIceSpikesAnimation=()=>{spikes++;};
+c.WendyQuestAccessAbilitySource=(item,format)=>observer.abilityTicket(scene,item,format)||abilitySource(scene,item,format);
+c.WendyQuestAccessAbilityAnimation=(action,sprite)=>observer.startAbility(scene,action,sprite);
+vm.runInContext("String.prototype.format=function(...args){return this.replace(/%([12])/g,(_,n)=>args[+n-1]);};",c);
+for(const id of [102,103,102]) {
+    battle._phase='action';append=false;
+    const item=skills[id],action={item:()=>item,isSkill:()=>true,subject:()=>freezer._battler};battle._action=action;
+    c.fixtureAbility=item;c.fixtureSubject={name:()=> 'Mech Freezer'};
+    vm.runInContext('fixtureLog.displayItemMessage(fixtureAbility.message1,fixtureSubject,fixtureAbility);',c);
+    const before=lines.length;const pauses=freezer.ActionTargetAnimation(action,'FreezerBurn',{});
+    assert.deepEqual(Array.from(pauses),[60,120]);assert.equal(lines.length,before);
+    renderer.emit('postrender');assert.equal(lines.at(-1),'Mech Freezer uses Freezer Burn.');
+    const afterStart=lines.length;log.cooldown=0;battle._phase='input';for(let n=0;n<100;n++)frame();
+    assert.equal(lines.length,afterStart,'the same cast cannot speak again on Wendy’s turn');
+}
+assert.equal(spikes,3,'native effects remain unchanged');
+const staleItem=skills[102],stale={item:()=>staleItem,isSkill:()=>true,subject:()=>freezer._battler};
+battle._phase='action';battle._action=stale;const beforeStale=lines.length;
+freezer.ActionTargetAnimation(stale,'FreezerBurn',{});battle._action={};renderer.emit('postrender');assert.equal(lines.length,beforeStale);
+console.log('Verified both Freezer Burn variants at native animation entry, unchanged waits/effects, repeated casts, action-identity row ownership and stale-cast cancellation.');
 console.log('Verified native Momentum retirement, displayed count, and battle review.');
 console.log('Verified native log paint, repeated events, animation cancellation, written and icon-only conditions, enemy KO, and review.');
 console.log('Throttled battle log paint through synthetic postrender and formatted receipt', first.toFixed(2), 'ms.');

@@ -198,7 +198,7 @@ for (const [name, key, width, height, attackFrame, idle, action] of [
     ['Frygor', 'Frygor', 64, 64, 3, /bow held low/, /raises and draws/],
     ['Frostyna', 'Frostyna', 96, 96, 2, /golden staff.*soft-serve swirl/, /thrusts her spiral-tipped golden staff/],
     ['Baconator', 'Baconator', 141, 64, 2, /bacon sword upright.*pale cream edge/, /bacon sword low/],
-    ['Sir Chicken', 'SirChicken', 80, 64, 2, /drumstick-shaped flail head/, /swings his orange flail/]
+    ['Sir Chicken', 'SirChicken', 80, 64, 2, /chain.*large orange chicken nugget/, /swings his orange flail/]
 ]) {
     const companion = actorSprite(name, key, width, height, 0, 0);
     scene._spriteset._subActorSprite = companion;

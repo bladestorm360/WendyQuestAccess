@@ -173,6 +173,7 @@ function createRenderer(host, waitForSpeechPreference = false) {
         open,
         close,
         focus: submit,
+        current: token => !!context && token === context,
         arrive(focused, ready, walking, detail) {
             if (nextContext >= 0x7ffffffe || !ready()) return 0;
             const followsWalking = !!walking && context === walking;

@@ -554,7 +554,7 @@ def windows_notification(original):
         172025: b'        if (state.iconIndex > 0 && !state.message4) '
                 b'globalThis.WendyQuestAccessBattleCondition?.(this,target,state,false,true);\n',
         # Carry the source of the native ability line as a separate queue argument.
-        166632: b', (item?.id===31||item?.id===32)?'
+        166632: b', (item?.id===31||item?.id===32||item?.id===102||item?.id===103)?'
                 b'globalThis.WendyQuestAccessAbilitySource?.(item,fmt):undefined',
         162511: b'    if(SceneManager._scene?._wqaBattleStarted&&SceneManager._scene._logWindow===this){'
                 b'BattleManager._wqaBattleSpritesBusy=undefined;'
@@ -987,7 +987,13 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
 '''
     attack_source = (b'wqaAction===this._action&&globalThis.WendyQuestAccessAttackSource?.('
                      b'_0x5a64fd,wqaPerformer,_0x15034e,wqaAction),')
+    # This exact target-animation entry precedes the native Freezer Burn
+    # ice-spike effect and its 60/120-frame waits. Other skills do no mod work.
+    freezer_token = b'function(_0x545edf,_0x4eadf5,_0x1f43a8,_0x3accfc={}){'
+    freezer_entry = original.index(freezer_token) + len(freezer_token)
     return insert(original, BATTLE_SHA, {
+        freezer_entry: b'if(_0x4eadf5==="FreezerBurn")'
+                       b'globalThis.WendyQuestAccessAbilityAnimation?.(_0x545edf,this);',
         # Preserve the exact overlay returned after the native coroutine attaches it.
         57087: b'const wqaBeefOverlay=',
         57246: b'globalThis.WendyQuestAccessBeefOverlayReady?.(_0x3e461b,wqaBeefOverlay);',

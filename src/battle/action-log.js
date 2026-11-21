@@ -1,7 +1,7 @@
 'use strict';
 
 const { battleScenePresented } = require('./presentation');
-const { damageCaption } = require('./damage-popup');
+const { damageCaption, enemyLabel } = require('./damage-popup');
 const { readCollapses, readConditions, readResistance, readMomentum } = require('./outcomes');
 
 const MAX_PAINTED_ROWS = 8;
@@ -18,6 +18,7 @@ function createBattleLog(root, host, notifications, appendToFocus) {
     let rendererOwner = null;
     let history = null;
     const attackStarts = new WeakMap();
+    const abilityStarts = new WeakMap();
 
     function actionReady(scene) {
         return battleScenePresented(root, host, scene) && root.BattleManager._phase !== 'ActionCommand' &&
@@ -110,7 +111,11 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             if (row._wqaLogSeen || !window.items.includes(row) || !(row.pos > 0)) continue;
             row._wqaLogSeen = true;
             const text = readable(paint);
-            if (text) lines.push(row._wqaSource ? row._wqaSource + ' uses ' + text : text);
+            const source = row._wqaSource;
+            // Only the exact native action row transfers ownership to its
+            // animation-entry announcement; identical later actions still speak.
+            if (source?.abilityStart && (source.announced || source.pending)) continue;
+            if (text) lines.push(typeof source === 'string' && source ? source + ' uses ' + text : text);
         }
         for (const sprite of damage) {
             const caption = damageCaption(scene, host.graphics, sprite);
@@ -141,7 +146,37 @@ function createBattleLog(root, host, notifications, appendToFocus) {
         }
     }
 
+    function abilityTicket(scene, item, format) {
+        const action = root.BattleManager._action;
+        if (![102, 103].includes(item?.id) || item.message1 !== format || action?.item?.() !== item ||
+            !actionReady(scene)) return null;
+        let ticket = abilityStarts.get(action);
+        if (!ticket) {
+            ticket = { abilityStart: true, scene, pending: false, announced: false };
+            abilityStarts.set(action, ticket);
+        }
+        return ticket;
+    }
+
     return {
+        abilityTicket,
+        startAbility(scene, action, performer) {
+            if (root.BattleManager._action !== action || !action?.isSkill?.()) return;
+            const item = action.item();
+            const ticket = abilityTicket(scene, item, item?.message1);
+            const name = ticket && enemyLabel(scene, performer);
+            const renderer = host.graphics.app?.renderer;
+            if (!ticket || !name || performer?._battler !== action.subject?.() || ticket.pending || ticket.announced ||
+                typeof renderer?.once !== 'function') return;
+            ticket.pending = true;
+            renderer.once('postrender', () => {
+                ticket.pending = false;
+                if (root.BattleManager._action !== action || !actionReady(scene) || ticket.scene !== scene ||
+                    enemyLabel(scene, performer) !== name) return;
+                ticket.announced = true;
+                speak(scene, scene._actionLogWindow, [name + ' uses ' + item.name + '.'], true, true);
+            });
+        },
         startAttack(scene, action, name) {
             if (root.BattleManager._action !== action || !name || !actionReady(scene) || attackStarts.has(action)) return;
             const renderer = host.graphics.app?.renderer;

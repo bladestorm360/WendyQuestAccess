@@ -12,6 +12,7 @@ const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createAutomaticTiming } = require('./battle/automatic-timing');
 const { createBattleLog } = require('./battle/action-log');
+const { createBattleSpeech } = require('./battle/speech');
 const { createSkillEffects } = require('./battle/skill-effects');
 const { attackSource, abilitySource, expectLethalDamage } = require('./battle/damage-popup');
 const { recordCollapse, recordCondition, recordResistance, recordMomentum } = require('./battle/outcomes');
@@ -52,6 +53,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let battleCues = null;
     let automaticTiming = null;
     let battleLog = null;
+    let battleSpeech = null;
     let skillEffects = null;
     let radialResult = null;
     let quests = null;
@@ -157,17 +159,18 @@ function boot(root, nodeRequire, nodeProcess) {
         title = createTitleObserver(host, notifications);
         splash = createSplashObserver(host, notifications);
         files = createFilesObserver(host, notifications);
-        menus = createMenuObserver(root, host, notifications, () => speechPreferences);
+        battleSpeech = createBattleSpeech(root, host, notifications);
+        menus = createMenuObserver(root, host, battleSpeech, () => speechPreferences);
         battleCues = createBattleCues(root, host, audio, () => audioPreferences);
         automaticTiming = createAutomaticTiming(root, host, () => battlePreferences);
         const warmBattleAudio = scene => {
             try { battleCues.prepare(scene); } catch { battleCues.retire(scene); }
         };
-        battleFocus = createBattleFocus(root, host, notifications, () => speechPreferences, warmBattleAudio);
-        battleTargets = createBattleTargets(root, host, notifications, () => speechPreferences);
+        battleFocus = createBattleFocus(root, host, battleSpeech, () => speechPreferences, warmBattleAudio);
+        battleTargets = createBattleTargets(root, host, battleSpeech, () => speechPreferences);
         battleTiming = createBattleTiming(root, host, warmBattleAudio);
-        battleLog = createBattleLog(root, host, notifications, battleFocus.appendFeedback);
-        skillEffects = createSkillEffects(root, host, notifications);
+        battleLog = createBattleLog(root, host, battleSpeech, battleFocus.appendFeedback);
+        skillEffects = createSkillEffects(root, host, battleSpeech);
         radialResult = createRadialResult(root, host);
         host.speechPreferences = () => speechPreferences;
         host.dialogueDiagram = (scene, window) =>
@@ -357,6 +360,7 @@ function boot(root, nodeRequire, nodeProcess) {
                     owner.group === panel && controlContext() === owner && !host.screenFading(), report, audio.cues[cue], gain, pitch);
             },
             suspend(scene) {
+                battleSpeech.leave(scene);
                 narration.leave(scene);
                 interaction.leave(scene);
                 wall.leave(scene);
@@ -445,6 +449,7 @@ function boot(root, nodeRequire, nodeProcess) {
             if (root.Input?._wqaSettingsPads) delete root.Input._wqaSettingsPads[event.gamepad.index];
         });
         for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+            battleSpeech.leave();
             narration.leave();
             splash.leave(host.manager._scene);
             interaction.leave(host.manager._scene);
@@ -619,6 +624,12 @@ function boot(root, nodeRequire, nodeProcess) {
             if (scene) battleLog?.startAttack(scene, action, attackSource(scene, performer, subject, action));
         } catch { /* Keep native animation in charge. */ }
     };
+    root.WendyQuestAccessAbilityAnimation = function (action, performer) {
+        try {
+            const scene = outcomeScene();
+            if (scene) battleLog?.startAbility(scene, action, performer);
+        } catch { /* Preserve native animation and input. */ }
+    };
     root.WendyQuestAccessAttackSource = function (target, performer, subject, action) {
         try {
             const scene = outcomeScene();
@@ -638,7 +649,7 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessAbilitySource = function (item, format) {
         try {
             const scene = outcomeScene();
-            if (scene) return abilitySource(scene, item, format);
+            if (scene) return battleLog?.abilityTicket(scene, item, format) || abilitySource(scene, item, format);
         } catch { /* Preserve the native ability line. */ }
         return undefined;
     };
@@ -942,6 +953,7 @@ function boot(root, nodeRequire, nodeProcess) {
     // window's accepted actions. Their entry marker invokes this once before
     // any new scene is constructed or Chromium reload begins.
     root.WendyQuestAccessSceneLeaving = function (scene, mapEventId) {
+        battleSpeech?.leave(scene);
         root.WendyQuestAccessSplashLeaving(scene);
         quests?.leave(scene);
         soundscape?.leave(scene);
@@ -978,6 +990,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessResizeStarting = function () {
+        battleSpeech?.leave();
         narration?.leave();
         titleWaiting = null;
         filesWaiting = null;
