@@ -47,3 +47,6 @@ Confirm to start the timing meter. Confirm again for power, then for accuracy. *
 [Complete controls and navigation](docs/navigation.md) · [Installation and recovery](docs/deployment.md) · [Puzzle and secret guidance](docs/puzzles-and-secrets.md)
 
 Open **F8 → Audio → Soundscape** for nearby cues. Nearby cues have staggered starts. Longer samples can finish while the next cue plays. Adjacent tiles for the same exit share a cue, and the sound follows the map directions as Wendy turns. Browse save and autosave points in the pathfinder’s **Checkpoints** category.
+
+
+Automatic perfect timing is under **F8 → Battle** and starts off. When enabled, choose an action and start the meter normally; the mod confirms its perfect power/accuracy windows and breaks Frozen ice. Native statuses and scoring still apply. Navigation settings contain navigation choices and bookmarks. Remap its keys under **Keyboard bindings → Navigation bindings**; current control instructions remain in **Help**.

@@ -1091,6 +1091,15 @@ def action_notification(original):
         67814: BATTLE_TARGET_LEAVING + b';' + timing_leaving + b';'
                b'if(Graphics._wqaBattleCueEnabled&&SceneManager._scene?._wqaBattleStarted)'
                b'globalThis.WendyQuestAccessBattleCueBegin?.(SceneManager._scene,this);',
+        # Extend only the two native radial confirm expressions. Manual
+        # input is evaluated first; the native loop still owns all outcomes.
+        70596: b'||(Graphics._wqaAutomaticTimingEnabled&&globalThis.WendyQuestAccessAutomaticTiming?.('
+                b'SceneManager._scene,this,_0x279acd,this._params.powerCritZoneAmountStart,'
+                b'this._params.powerCritZoneAmountEnd,this._params.powerFailAmount,'
+                b'_0x17f391,_0x1fd196,_0x7de663,_0x2f41e3))',
+        77034: b'||(Graphics._wqaAutomaticTimingEnabled&&globalThis.WendyQuestAccessAutomaticTiming?.('
+                b'SceneManager._scene,this,_0x1327af,_0x3d8aee,_0x357499,this._params.hitFailAmount,'
+                b'_0x2191e9,_0x8a92bb,_0x44198f,_0x592e0d))',
         71224: cue_sample + b'0,_0x279acd,this._params.powerCritZoneAmountStart,'
                 b'this._params.powerCritZoneAmountEnd,this._params.powerFailAmount,'
                 b'_0x21be67||_0x17f391||_0x2f41e3>0)',

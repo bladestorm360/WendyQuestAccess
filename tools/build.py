@@ -69,6 +69,7 @@ def bundle():
         './battle/targets': 'battle/targets.js',
         './battle/timing': 'battle/timing.js',
         './battle/timing-cues': 'battle/timing-cues.js',
+        './battle/automatic-timing': 'battle/automatic-timing.js',
         '../battle/timing-cues': 'battle/timing-cues.js',
         './battle/action-log': 'battle/action-log.js',
         './battle/skill-effects': 'battle/skill-effects.js',

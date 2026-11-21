@@ -10,6 +10,7 @@ const { createBattleFocus } = require('./battle/focus');
 const { createBattleTargets } = require('./battle/targets');
 const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
+const { createAutomaticTiming } = require('./battle/automatic-timing');
 const { createBattleLog } = require('./battle/action-log');
 const { createSkillEffects } = require('./battle/skill-effects');
 const { attackSource, abilitySource, expectLethalDamage } = require('./battle/damage-popup');
@@ -49,6 +50,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let battleTargets = null;
     let battleTiming = null;
     let battleCues = null;
+    let automaticTiming = null;
     let battleLog = null;
     let skillEffects = null;
     let radialResult = null;
@@ -146,6 +148,7 @@ function boot(root, nodeRequire, nodeProcess) {
         const speech = createRenderer(host, !!root.indexedDB);
         const { notifications } = speech;
         let audioPreferences = {};
+        let battlePreferences = {};
         let navigationPreferences = {};
         let speechPreferences = {};
         host.navigationPreferences = () => navigationPreferences;
@@ -156,6 +159,7 @@ function boot(root, nodeRequire, nodeProcess) {
         files = createFilesObserver(host, notifications);
         menus = createMenuObserver(root, host, notifications, () => speechPreferences);
         battleCues = createBattleCues(root, host, audio, () => audioPreferences);
+        automaticTiming = createAutomaticTiming(root, host, () => battlePreferences);
         const warmBattleAudio = scene => {
             try { battleCues.prepare(scene); } catch { battleCues.retire(scene); }
         };
@@ -314,6 +318,10 @@ function boot(root, nodeRequire, nodeProcess) {
             },
             retireSpeechSilence: speech.retireSilence,
             audioStop: audio.retire,
+            battleChanged(value) {
+                battlePreferences = value;
+                root.Graphics._wqaAutomaticTimingEnabled = value.automaticTiming === true;
+            },
             audioChanged(value) {
                 const master = value.enabled !== audioPreferences.enabled || value.hrtf !== audioPreferences.hrtf;
                 if (master || value.wall !== audioPreferences.wall || value.wallVolume !== audioPreferences.wallVolume ||
@@ -586,6 +594,10 @@ function boot(root, nodeRequire, nodeProcess) {
     };
     root.WendyQuestAccessBattleTimingLeaving = function (scene) { battleTiming?.retire(scene); };
 
+    root.WendyQuestAccessAutomaticTiming = function (scene, action, progress, start, end, limit, frozen, iceStart, iceEnd, paused) {
+        try { return automaticTiming?.(scene, action, progress, start, end, limit, frozen, iceStart, iceEnd, paused) === true; }
+        catch { return false; }
+    };
     root.WendyQuestAccessBattleCueBegin = function (scene, action) {
         try { battleCues?.begin(scene, action); } catch { battleCues?.retire(scene); }
     };

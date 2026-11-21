@@ -6,6 +6,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const { createBattleCues } = require('../src/battle/timing-cues');
+const { createAutomaticTiming } = require('../src/battle/automatic-timing');
 const { CUE } = require('../src/runtime/audio');
 
 const methods = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
@@ -18,6 +19,9 @@ const samples = [];
 let prepared = true;
 let configuration = { enabled: true, hrtf: true, battleTiming: true, battleTimingVolume: 65 };
 let now = 0;
+let automatic = false;
+let focused = true;
+const automaticPresses = [];
 let delta = 1 / 60;
 let latest = null;
 let preparedReady;
@@ -55,6 +59,13 @@ c.WendyQuestAccessBattleCueSample = (scene, action, phase, progress, start, end,
     samples.push({ phase, progress, start, end, limit, blocked, at: now });
     cues.sample(scene, action, phase, progress, start, end, limit, blocked);
 };
+const automaticInput = createAutomaticTiming(c, { manager: c.SceneManager, graphics: c.Graphics,
+    hasFocus: () => focused, screenFading: () => false }, () => ({ automaticTiming: automatic }));
+c.WendyQuestAccessAutomaticTiming = (...sample) => {
+    const accepted = automaticInput(...sample);
+    if (accepted) automaticPresses.push(now);
+    return accepted;
+};
 c.WendyQuestAccessBattleCueEndSweep = cues.endSweep;
 c.WendyQuestAccessBattleCueLeaving = cues.retire;
 for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
@@ -62,6 +73,8 @@ for (const method of methods) vm.runInContext(method, c, { timeout: 100 });
 function run(method, scenario, play) {
     cues.retire();
     now = 0;
+    automaticPresses.length = 0;
+    c.Graphics._wqaAutomaticTimingEnabled = automatic;
     delta = scenario.delta || 1 / 60;
     beats.length = samples.length = 0;
     const press = [...scenario.press];
@@ -217,3 +230,51 @@ console.log('Verified native power and accuracy outcomes, one note per eligible 
 console.log('Throttled observed sweep wall time', ordinary.elapsed.toFixed(2), 'ms across', ordinary.samples.length, 'samples.');
 console.log('Throttled 20 complete power and accuracy pairs', nativeTotal.toFixed(2), 'ms native,',
     observedTotal.toFixed(2), 'ms enabled.');
+
+// Replay the actual native confirm branches, including Frozen ice breaks.
+// These must score exactly like native presses at the same accepted frames.
+{
+battle._phase = 'ActionCommand';
+automatic = true;
+let observedTotal = 0, nativeTotal = 0;
+const nativeVariants = [39, 11, 23].map(id => JSON.parse(states[id].note.slice(states[id].note.indexOf('{'))).ACSettings);
+for (const settings of [{}, ...nativeVariants, { Frozen: true }, { Soggy: true }]) {
+    for (const method of ['Power', 'Accuracy']) {
+        const scenario = { ...narrow, settings, press: [], followCue: false };
+        const result = run('observed' + method, scenario, false);
+        const presses = [...automaticPresses];
+        if (settings.Soggy && method === 'Power') {
+            assert.equal(presses.length, 0, 'Soggy cuts power off before a perfect band exists');
+            assert.deepEqual(result.outcome, run('nativePower', scenario, false).outcome);
+            continue;
+        }
+        assert.equal(presses.length, settings.Frozen ? 2 : 1, method + ' ' + JSON.stringify(settings) + ' ' + JSON.stringify(result.outcome));
+        // With audio disabled there are no cue samples: native power/accuracy
+        // outcomes themselves must be inside their current authored band.
+        const start = method === 'Power' ? battle._currentActionCommand._params.powerCritZoneAmountStart : scenario.lower;
+        const end = method === 'Power' ? battle._currentActionCommand._params.powerCritZoneAmountEnd : scenario.upper;
+        assert(result.outcome[1] && !result.outcome[2] && result.outcome[0] >= start && result.outcome[0] <= end);
+        const baseline = run('native' + method, { ...scenario, press: presses }, false);
+        assert.deepEqual(result.outcome, baseline.outcome);
+        observedTotal += result.elapsed; nativeTotal += baseline.elapsed;
+    }
+}
+const current = battle._currentActionCommand;
+const sample = () => automaticInput(scene, current, 0.93, 0.9, 0.95, 1, false, 0.4, 0.55, 0);
+assert(sample());
+for (const [object, key, value] of [[scene, '_wqaSettingsActive', true], [scene, '_fadeDuration', 1],
+    [scene, '_active', false], [scene, '_wqaPreloads', new Set([1])], [scene, '_wqaPreloadOverflow', true], [battle, '_phase', 'input'], [battle, '_currentActionCommand', {}],
+    [c.SceneManager, '_nextScene', {}], [c.Graphics, '_wqaResize', true],
+    [current._backing, 'worldVisible', false]]) {
+    const prior = object[key];object[key] = value;assert.equal(sample(), false, key);object[key] = prior;
+}
+focused = false;assert.equal(sample(),false);focused = true;
+automatic = false;assert.equal(sample(),false);automatic = true;
+assert.equal(automaticInput(scene,current,0.96,0.9,0.95,1,false,0.4,0.55,0),false);
+assert.equal(automaticInput(scene,current,0.93,0.9,0.95,1,false,0.4,0.55,0.2),false);
+assert.equal(automaticInput(scene,current,NaN,0.9,0.95,1,false,0.4,0.55,0),false);
+assert.equal(automaticInput(scene,current,0.4,0.9,0.95,1,true,0.4,0.55,0),false);
+console.log('Verified automatic native perfect timing, Frozen ice breaking, all meter variants, exact native scoring parity, disabled/manual behavior and lifecycle gates.');
+console.log('Throttled 11 complete native/automatic sweeps',nativeTotal.toFixed(2),observedTotal.toFixed(2),'ms.');
+
+}

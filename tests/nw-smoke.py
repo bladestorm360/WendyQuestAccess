@@ -182,6 +182,7 @@ let repeated = false;
 let numberShown = false;
 let settingsStep = 0;
 let beaconSpeechConfigured = 0;
+let automaticConfigured = 0;
 let footstepSettingsStep = 0;
 let wallBumpStarted = false;
 let audioStarted = 0;
@@ -317,6 +318,18 @@ function verifySettings() {
         tap('Enter');
         settingsStep++;
     } else if (settingsStep === 1 && menuStatus() !== 'Loading settings') {
+        if (automaticConfigured === 0) {
+            tap('Escape');choose('Battle');
+            if (document.activeElement.textContent !== 'Automatic perfect timing, off' || Graphics._wqaAutomaticTimingEnabled !== false)
+                throw Error('Automatic perfect timing must default off');
+            choose('Automatic perfect timing');automaticConfigured = 1;return;
+        }
+        if (automaticConfigured === 1) {
+            if (menuStatus() !== 'Battle settings saved') return;
+            if (document.activeElement.textContent !== 'Automatic perfect timing, on' || !Graphics._wqaAutomaticTimingEnabled)
+                throw Error('Automatic timing preference did not apply');
+            tap('Escape');choose('Keyboard bindings');automaticConfigured = 2;
+        }
         choose('Repeat dialogue');
         tap('w', 'KeyW'); // W is given a native action before capture.
         if (menuStatus() !== 'W is already in use. Choose another key.') throw Error('Native conflict was accepted');
@@ -348,10 +361,16 @@ function verifySettings() {
         settingsStep++;
     } else if (settingsStep === 6 && menuStatus() === 'Navigation settings saved') {
         if (document.activeElement.textContent !== 'Navigation keymap, Brackets and backslash') throw Error('Layout did not change');
+        if (Array.from(document.querySelectorAll('dialog button')).some(item => item.textContent.startsWith('Next destination,')))
+            throw Error('Keybinding rows leaked into Navigation');
+        tap('Escape');choose('Keyboard bindings');choose('Navigation bindings');
         choose('Next destination');
         tap('n', 'KeyN');
         settingsStep++;
     } else if (settingsStep === 7 && menuStatus() === 'Navigation settings saved') {
+        if (Array.from(document.querySelectorAll('dialog button')).some(item => item.textContent === 'Reset this navigation keymap')) {
+            tap('Escape');tap('Escape');choose('Navigation');
+        }
         if (beaconSpeechConfigured === 0 && document.activeElement.textContent !== 'Spoiler mode, on') {
             choose('Spoiler mode, off');
             return;
@@ -541,6 +560,14 @@ const interval = setInterval(() => {
             const buttons = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
             const controller = [...buttons.slice(0, 2), buttons.find(item => item.startsWith('Next category, '))];
             tap('Escape');
+            choose('Battle');
+            const battle = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
+            if (battle.join('|') !== 'Automatic perfect timing, on|Back' || !Graphics._wqaAutomaticTimingEnabled)
+                throw Error('Automatic timing preference was not restored independently of audio');
+            tap('Escape');
+            choose('Keyboard bindings');choose('Navigation bindings');
+            const navigationBindings = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
+            tap('Escape');tap('Escape');
             choose('Navigation');
             const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 9).map(item => item.textContent);
             choose('Bookmarks');
@@ -569,7 +596,7 @@ const interval = setInterval(() => {
                 throw Error('The independent menu speech preferences were not restored');
             if (!speechChoices.includes('Language, English') || document.querySelector('dialog').lang !== 'en-US')
                 throw Error('The manual language choice was not restored');
-            restartSettings = { bindings, controller, navigation, audio, soundscape, narration };
+            restartSettings = { bindings, controller, navigation, navigationBindings, battle, audio, soundscape, narration };
             fs.writeFileSync(receipt + '.allow-restoration', '');
             pad();
             padTap(0);
@@ -2839,8 +2866,8 @@ def main():
                 reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on',
                                                'Navigation keymap, Brackets and backslash', 'Reachable destinations only, off', 'Spoiler mode, on',
                                                'Speak beacon destination on controller directions, on', 'Speak full path with beacon, on',
-                                               'Previous destination, Left bracket',
-                                               'Next destination, N'] or reloaded.get('audio') != [
+                                               'Bookmarks', 'Back'] or reloaded.get('battle') != ['Automatic perfect timing, on', 'Back'] or \
+                reloaded.get('navigationBindings') != ['Previous destination, Left bracket', 'Next destination, N'] or reloaded.get('audio') != [
                     'Mod sounds, on', 'HRTF, off', 'Wall sounds, on', 'Decrease wall volume, 55 percent',
                     'Increase wall volume, 55 percent', 'Wall bump, on', 'Decrease wall bump volume, 50 percent',
                     'Increase wall bump volume, 50 percent', 'Footstep sounds, on', 'Decrease footstep volume, 50 percent',

@@ -77,6 +77,7 @@ function createSettingsMenu(root, host) {
     let pad = normalizeController();
     let navigation = normalizeNavigation();
     let audio = normalizeAudio();
+    let battle = { automaticTiming: false };
     let speech = normalizeSpeech();
     let storage = null;
     let loading = true;
@@ -102,13 +103,15 @@ function createSettingsMenu(root, host) {
         // A failed read for another settings group cannot erase a saved mute.
         const results = await Promise.allSettled([
             database.read(), database.read('controller'), database.read('navigation'), database.read('audio'),
-            database.read('speech'), database.read('bookmarks')]);
+            database.read('speech'), database.read('bookmarks'), database.read('battle')]);
         const [keyboard, controller, savedNavigation, savedAudio, savedSpeech] = results.map(result => result.value);
         keys = normalizeKeys(keyboard);
         pad = normalizeController(controller);
         navigation = normalizeNavigation(savedNavigation, [keys.puzzleGuide, keys.puzzleStop]);
         audio = normalizeAudio(savedAudio);
         speech = normalizeSpeech(savedSpeech);
+        battle = { automaticTiming: results[6].value?.automaticTiming === true };
+        host.battleChanged?.(battle);
         host.controllerChanged();
         host.navigationChanged(navigation);
         host.audioChanged(audio);
@@ -141,6 +144,7 @@ function createSettingsMenu(root, host) {
             controller: button(owner, 'Controller bindings', () => showController(owner)),
             speech: button(owner, 'Speech', () => showSpeech(owner)),
             navigation: button(owner, 'Navigation', () => showNavigation(owner)),
+            battle: button(owner, 'Battle', () => showBattle(owner)),
             audio: button(owner, 'Audio', () => showAudio(owner)),
             help: button(owner, 'Help', () => showHelp(owner))
         };
@@ -158,7 +162,8 @@ function createSettingsMenu(root, host) {
         const isNavigation = key === 'navigation';
         const isAudio = key === 'audio';
         const isSpeech = key === 'speech';
-        const previous = isController ? pad : isNavigation ? navigation : isAudio ? audio : isSpeech ? speech : keys;
+        const isBattle = key === 'battle';
+        const previous = isController ? pad : isNavigation ? navigation : isAudio ? audio : isSpeech ? speech : isBattle ? battle : keys;
         const origin = owner?.group;
         function apply(value) {
             if (isController) {
@@ -175,6 +180,9 @@ function createSettingsMenu(root, host) {
             } else if (isSpeech) {
                 speech = value;
                 host.speechChanged(speech, owner);
+            } else if (isBattle) {
+                battle = value;
+                host.battleChanged?.(battle);
             } else keys = value;
         }
         function refresh(message) {
@@ -189,7 +197,7 @@ function createSettingsMenu(root, host) {
             return true;
         }
         const subject = { controller: 'Controller settings', navigation: 'Navigation settings',
-            audio: 'Audio settings', speech: 'Speech settings', keyboard: 'Keyboard bindings' }[key];
+            audio: 'Audio settings', speech: 'Speech settings', battle: 'Battle settings', keyboard: 'Keyboard bindings' }[key];
         saving = true;
         refresh(`Saving ${subject.toLowerCase()}`);
         storage.save(next, key).then(() => {
@@ -198,7 +206,7 @@ function createSettingsMenu(root, host) {
         }, () => {
             saving = false;
             apply(previous);
-            if (session && (session.group === key || (isAudio && audioGroup(session.group))))
+            if (session && (session.group === key || (isNavigation && session.group === 'navigationBindings') || (isAudio && audioGroup(session.group))))
                 showGroup(session, session.selected);
             if (owner && owner.group === origin) {
                 status(owner, `Could not save ${subject.toLowerCase()}. Previous settings restored.`);
@@ -213,6 +221,8 @@ function createSettingsMenu(root, host) {
         else if (owner.group === 'keyboard') showKeyboard(owner, selection);
         else if (owner.group === 'speech') showSpeech(owner, selection);
         else if (owner.group === 'navigation') showNavigation(owner, selection);
+        else if (owner.group === 'navigationBindings') showNavigationBindings(owner, selection);
+        else if (owner.group === 'battle') showBattle(owner);
         else if (owner.group === 'bookmarks') bookmarks.show(owner);
         else if (owner.group === 'audio') showAudio(owner, selection);
         else if (owner.group === 'audioPreviews') showAudioPreviews(owner);
@@ -267,6 +277,7 @@ function createSettingsMenu(root, host) {
             ],
             Battle: [
                 'Confirm to start the timing meter. Confirm again for power, then for accuracy.',
+                'Turn on Automatic perfect timing under Battle to press in each perfect band automatically, including Frozen ice breaking. Choose the action and start its meter yourself. It defaults off.',
                 'Turn on Battle timing assist under Audio for one note when a perfect window opens. Press Confirm at the note.',
                 'Use Read details ' + gestureName(keys.details) + ' to describe selected enemies and read their displayed HP and conditions.',
                 'At battle commands, Read details describes the active fighter. In Special, move through the rows to hear locked levels. Read details repeats a level or reads the selected ability’s help. Hold Shift with that key to describe the fighter or companion.',
@@ -475,7 +486,7 @@ function createSettingsMenu(root, host) {
         owner.heading.textContent = 'Navigation';
         owner.status.textContent = loading ? 'Loading settings' : '';
         owner.contents.textContent = '';
-        const { layout, bindings } = navigation;
+        const { layout } = navigation;
         const autowalk = button(owner, `Autowalk, ${navigation.autowalk ? 'on' : 'off'}`, () => change(owner,
             { ...navigation, autowalk: !navigation.autowalk }, 'autowalk', 'navigation'));
         const narration = button(owner, `Speak autowalk path, ${navigation.speakAutowalkPath ? 'on' : 'off'}`, () => change(owner,
@@ -494,6 +505,33 @@ function createSettingsMenu(root, host) {
         }
         let focused = { autowalk, speakAutowalkPath: narration, reachableOnly: reachable, spoilers,
             ...beaconSpeech }[selection] || keymap;
+        const savedPlaces = button(owner, 'Bookmarks', () => bookmarks.show(owner));
+        if (selection === 'bookmarks') focused = savedPlaces;
+        button(owner, 'Back', () => showRoot(owner, 'navigation'));
+        focused.focus();
+    }
+
+    function showBattle(owner) {
+        owner.group = 'battle';
+        owner.capture = null;
+        owner.heading.textContent = 'Battle';
+        owner.status.textContent = loading ? 'Loading settings' : '';
+        owner.contents.textContent = '';
+        const toggle = button(owner, 'Automatic perfect timing, ' + (battle.automaticTiming ? 'on' : 'off'), () =>
+            change(owner, { automaticTiming: !battle.automaticTiming }, 'automaticTiming', 'battle'));
+        button(owner, 'Back', () => showRoot(owner, 'battle'));
+        toggle.focus();
+    }
+
+    function showNavigationBindings(owner, selection = 'nextDestination') {
+        owner.group = 'navigationBindings';
+        owner.selected = selection;
+        owner.capture = null;
+        owner.heading.textContent = 'Navigation bindings';
+        owner.status.textContent = loading ? 'Loading settings' : '';
+        owner.contents.textContent = '';
+        const { layout, bindings } = navigation;
+        let focused;
         for (const [action, name] of Object.entries(ACTIONS)) {
             const gesture = bindings[layout][action];
             const occupied = nativeNavigationConflict(root, gesture, undefined) ? ', used by the game' : '';
@@ -504,12 +542,10 @@ function createSettingsMenu(root, host) {
             });
             if (selection === action) focused = item;
         }
-        const savedPlaces = button(owner, 'Bookmarks', () => bookmarks.show(owner));
-        if (selection === 'bookmarks') focused = savedPlaces;
         button(owner, 'Reset this navigation keymap', () => change(owner,
             normalizeNavigation({ ...navigation, bindings: { ...bindings, [layout]: { ...NAVIGATION_DEFAULTS[layout] } } },
                 [keys.puzzleGuide, keys.puzzleStop]), selection, 'navigation'));
-        button(owner, 'Back', () => showRoot(owner, 'navigation'));
+        button(owner, 'Back', () => showKeyboard(owner, 'navigationBindings'));
         focused.focus();
     }
 
@@ -547,6 +583,8 @@ function createSettingsMenu(root, host) {
             });
             if (action === selection) focused = item;
         }
+        const fieldBindings = button(owner, 'Navigation bindings', () => showNavigationBindings(owner));
+        if (selection === 'navigationBindings') focused = fieldBindings;
         button(owner, 'Unassign repeat dialogue', () => change(owner, { ...keys, repeat: null }, 'repeat'));
         button(owner, 'Reset keyboard defaults', () => change(owner, normalizeKeys(DEFAULT_KEYS), selection));
         button(owner, 'Back', () => showRoot(owner));
@@ -629,6 +667,7 @@ function createSettingsMenu(root, host) {
 
     function back(owner) {
         if (owner.capture) showGroup(owner, owner.selected);
+        else if (owner.group === 'navigationBindings') showKeyboard(owner, 'navigationBindings');
         else if (owner.group === 'bookmarks') bookmarks.back(owner);
         else if (owner.unbinding) showController(owner);
         else if (owner.group === 'audioPreviews') leaveAudioPreviews(owner);
@@ -788,7 +827,7 @@ function createSettingsMenu(root, host) {
                 if (event.repeat) return;
                 if (goBack) back(owner);
                 else if (owner.group === 'keyboard') capture(key, puzzleKey, event, owner);
-                else if (owner.group === 'navigation') captureNavigation(owner, gesture, event.keyCode, unassign);
+                else if (owner.group === 'navigationBindings') captureNavigation(owner, gesture, event.keyCode, unassign);
                 else if (owner.group === 'controller' && unassign && canUnassign(owner.capture?.action)) {
                     const action = owner.capture.action;
                     change(owner, { ...pad, [action]: null }, action, 'controller');
