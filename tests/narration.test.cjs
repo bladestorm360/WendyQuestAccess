@@ -107,42 +107,49 @@ function fixture(m, e, page, warm = true) {
         played, playback, narration, actor, balloon, frame };
 }
 
-const musicMethods = JSON.parse(execFileSync('python', ['-B', path.join(__dirname, 'map-producers.py'),
+const emoteMethods = JSON.parse(execFileSync('python', ['-B', path.join(__dirname, 'map-producers.py'),
     path.join(stock, 'package.nw'), 'music-emotes'], { encoding: 'utf8', timeout: 5000 }));
-let musicCost = 0;
-for (const [id, { beats }] of Object.entries(cues).filter(([name]) => name.startsWith('music-'))) {
-    for (const [m, e, p, i, a] of beats) {
+let musicCost = 0, faceCost = 0, faceCases = 0;
+assert(!Object.values(cues).some(cue => /anger mark/i.test(cue.text)));
+for (const [id, { beats, text }] of Object.entries(cues).filter(([name, cue]) =>
+    name.startsWith('music-') || cue.beats.some(beat => beat[6] === 5))) {
+    if (beats[0][6] === 5) assert.match(text, /^A spiral-eyed face appears over .+\.$/);
+    for (const [m, e, p, i, a, , visual] of beats) {
         const f = fixture(m, e, p), { candidate, sprite } = f.actor(a);
-        if (m === 12) { candidate._characterName = sprite._characterName = '';sprite.texture.valid = false; }
+        if (m === 12 && visual === 3) { candidate._characterName = sprite._characterName = '';sprite.texture.valid = false; }
         f.interpreter._index = i;f.interpreter.character = () => candidate;
         f.interpreter.setWaitMode = mode => f.interpreter._waitMode = mode;
         const native = vm.createContext({ Game_Interpreter: function () {}, SceneManager: { _scene: f.scene },
             Graphics: f.graphics, $gameMap: f.nativeMap,
             $gameTemp: { requestBalloon() {} },
             WendyQuestAccessNarrationAccepted: f.narration.accepted });
-        for (const method of musicMethods) vm.runInContext(method, native);
+        for (const method of emoteMethods) vm.runInContext(method, native);
         const at = performance.now();
-        assert(native.Game_Interpreter.prototype.command213.call(f.interpreter, [a === e ? 0 : a, 3, true]));
+        assert(native.Game_Interpreter.prototype.command213.call(f.interpreter, [a === e ? 0 : a, visual, true]));
         assert.equal(f.interpreter._waitMode, 'balloon');
         f.frame();assert.equal(f.played.length, 0, 'sound/request alone is not a rendered reaction');
-        f.balloon(2, candidate, sprite);f.frame();assert.equal(f.played.length, 0, 'a question mark is not music');
-        f.balloon(3, candidate, sprite);
+        f.balloon(2, candidate, sprite);f.frame();assert.equal(f.played.length, 0, 'a question mark is not the selected reaction');
+        f.balloon(visual, candidate, sprite);
         const balloon = f.spriteset._balloonSprites.at(-1);balloon.worldTransform = { tx: 100, ty: 100 };
         candidate._erased = true;f.frame();assert.equal(f.played.length, 0);candidate._erased = false;
         balloon.worldVisible = false;f.frame();assert.equal(f.played.length, 0);balloon.worldVisible = true;
         f.frame(false);assert.equal(f.played.length, 0);f.renderer.emit('postrender');
         assert.equal(f.played[0]?.id, id, 'the named clip follows its actual painted balloon');
-        musicCost += performance.now() - at;
-        f.narration.accepted(f.scene, f.interpreter, candidate, undefined, 3);f.frame();
+        if (visual === 5) { faceCost += performance.now() - at;faceCases++; }
+        else musicCost += performance.now() - at;
+        f.narration.accepted(f.scene, f.interpreter, candidate, undefined, visual);f.frame();
         assert.equal(f.played.length, 1, 'one accepted-command guard within the active context');
         f.played[0].emit('ended');f.frame();
         assert(!f.scene._wqaNarrationActive);
-        f.spriteset._balloonSprites = [];f.balloon(3, candidate, sprite);
+        f.spriteset._balloonSprites = [];f.balloon(visual, candidate, sprite);
         f.spriteset._balloonSprites[0].worldTransform = { tx: 100, ty: 100 };
-        f.narration.accepted(f.scene, f.interpreter, candidate, undefined, 3);f.frame();
+        f.narration.accepted(f.scene, f.interpreter, candidate, undefined, visual);f.frame();
         assert.equal(f.played[1]?.id, id, 'a new real activation is not text-deduplicated');
     }
 }
+assert.equal(faceCases, 24, 'all authored spiral-eyed balloon sites exercise the native producer');
+console.log('Verified all 24 spiral-eyed reactions, 16 corrected named clips and absence of anger-mark wording.');
+console.log('Throttled 24 separate spiral-face description episodes', faceCost.toFixed(2), 'ms total.');
 // Both Tatoria pages use command 1: selecting a cue must include native list identity.
 {
     const f = fixture(24, 4, 0), { candidate, sprite } = f.actor(4);
