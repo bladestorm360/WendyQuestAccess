@@ -21,9 +21,10 @@ function createBattleSpeech(root, host, notifications) {
             stream.ready = ready;
             if (notifications.current(stream.epoch))
                 return notifications.focus(stream.epoch, { ...record, append: true });
-            // Another explicit output context may have replaced the stream.
-            // Re-admit this current event without replaying older records.
-            leave();
+            // A requested notice replaced only the transport. Other battle
+            // controls can still be live; keep their independent logical IDs.
+            notifications.close(stream.epoch);
+            stream = null;
         }
         const page = stream = { scene, ready, epoch: 0 };
         page.epoch = notifications.open(record, () => stream === page &&

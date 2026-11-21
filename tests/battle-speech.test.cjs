@@ -37,3 +37,20 @@ scene._wqaBattleStarted=false;
 const outside=speech.open({kind:'fieldStatus',name:'On foot.'},()=>true);assert(outside>0);
 speech.close(outside);assert.equal(packets.at(-1).kind,'cancel');
 console.log('Verified battle FIFO across attack retirement, damage-before-defeat, enemy attacks, turn focus and details; exact repeat events, stale owners, bounded overload and native-boundary cancellation.');
+
+// A separately requested notice can replace the renderer transport while
+// several native battle controls remain live. Reacquiring the FIFO must not
+// invalidate the other live logical owners.
+{
+ const secondWorker=new EventEmitter(),secondTasks=[];secondWorker.unref=()=>{};secondWorker.postMessage=()=>{};
+ scene._wqaBattleStarted=true;
+ const secondRenderer=createRenderer({...host,schedule:task=>secondTasks.push(task),createWorker:()=>secondWorker});
+ const second=createBattleSpeech(root,host,secondRenderer.notifications);
+ const command=second.open({kind:'menuFocus',name:'Attack'},()=>true);secondTasks.shift()();
+ const action=second.open({kind:'battleLog',lines:['Wendy attacks.']},()=>true);
+ secondRenderer.notifications.open({kind:'controllerStatus',name:'Mod mode.'},()=>true);
+ assert(second.focus(action,{kind:'battleLog',lines:['29 damage.']}));
+ assert(second.focus(command,{kind:'menuDetails',lines:['Still current command details.']}),
+     'transport replacement cannot revoke another still-live battle control');
+ second.leave(scene);
+}
