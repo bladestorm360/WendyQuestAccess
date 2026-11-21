@@ -246,7 +246,7 @@ const PARTY_BATTLE_ART = new Map([
     ], attack: ['He lunges and sweeps his bacon sword low. His red cape flares behind him.'] }],
     ['SirChicken', { size: [80, 64], idle: [
         'He wears gold armor and a winged helmet with a white feathered mantle.',
-        'A chain hangs from his handle, ending in an orange drumstick-shaped flail head.'
+        'A chain hangs from his handle, ending in a large orange chicken nugget.'
     ], attack: ['He swings his orange flail in a wide arc, the chain stretched taut.'] }]
 ]);
 
