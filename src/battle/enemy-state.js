@@ -2,10 +2,11 @@
 
 const { visibleSprite } = require('./presentation');
 
-// The installed IconSet reuses these frames across several native states.
-// Use the shared meaning visible in the icon and leave the variants private.
-const SHARED_ICONS = new Map([
-    [7, 'Rage or spicy'], [65, 'Frozen or frosted'], [72, 'Regeneration'], [81, 'Crispy']
+// Use the installed artwork's shared meanings and displayed countdown
+// numerals. The Self Destruct 0/1/2 editor names are not the shown 3/2/1.
+const DISPLAYED_ICON_LABELS = new Map([
+    [7, 'Rage or spicy'], [65, 'Frozen or frosted'], [72, 'Regeneration'], [81, 'Crispy'],
+    [317, 'Self-destruct in 3'], [318, 'Self-destruct in 2'], [319, 'Self-destruct in 1']
 ]);
 
 function enemyIconIndex(root, sprite) {
@@ -37,8 +38,8 @@ function parameterIcon(root, index) {
 function enemyState(root, sprite) {
     const index = enemyIconIndex(root, sprite);
     if (!index) return '';
-    const shared = SHARED_ICONS.get(index);
-    if (shared) return shared;
+    const displayed = DISPLAYED_ICON_LABELS.get(index);
+    if (displayed) return displayed;
     const states = root.$dataStates;
     if (Array.isArray(states) && states.length <= 64) {
         const match = states.find(state => state?.iconIndex === index);

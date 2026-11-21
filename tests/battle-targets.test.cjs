@@ -182,6 +182,20 @@ assert.doesNotMatch(messages.at(-1), /Burning|Frozen/);
 icon.updateFrame();
 assert(observer.command(page, 'details'));
 assert.match(messages.at(-1), /Burning/);
+// The actual sheet is 36 pixels per icon. Use native frame painting and
+// only its visible numeral; hidden or not-yet-updated frames are silent.
+c.ImageManager.iconWidth=c.ImageManager.iconHeight=36;
+for(const [id,count] of [[42,3],[43,2],[44,1]]) {
+    activeIcon=states[id].iconIndex;assert.equal(activeIcon,320-count);
+    icon.updateIcon();assert(observer.command(page,'details'));
+    assert.doesNotMatch(messages.at(-1),/Self[- ]destruct/i,'an unpainted countdown is not described');
+    icon.updateFrame();assert(observer.command(page,'details'));
+    assert.match(messages.at(-1),new RegExp('Self-destruct in '+count));
+    assert.doesNotMatch(messages.at(-1),/Self Destruct [012]/);
+    icon.worldVisible=false;assert(observer.command(page,'details'));
+    assert.doesNotMatch(messages.at(-1),/Self[- ]destruct/i);icon.worldVisible=true;
+}
+c.ImageManager.iconWidth=c.ImageManager.iconHeight=32;
 activeIcon = 42;
 icon.updateIcon();
 icon.updateFrame();
