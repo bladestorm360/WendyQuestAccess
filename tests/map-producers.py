@@ -72,7 +72,7 @@ if sys.argv[2:] == ['terrain-paint']:
 if sys.argv[2:] == ['narration-commands']:
     source = objects_notification((Path(sys.argv[1]) / OBJECTS_REL.relative_to('package.nw')).read_bytes()).decode('utf8')
     methods = []
-    for name in ('command117', 'command121', 'command205', 'command322', 'command224', 'command225', 'command250', 'command357'):
+    for name in ('clear', 'setup', 'loadImages', 'command117', 'command121', 'command205', 'command322', 'command224', 'command225', 'command250', 'command357'):
         start = source.index(f'Game_Interpreter.prototype.{name} = function(')
         methods.append(source[start:source.index('\n};', start) + 3])
     print(json.dumps(methods))

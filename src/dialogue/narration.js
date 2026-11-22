@@ -4,6 +4,7 @@ const cues = require('./narration-cues.json');
 const { renderedSprite } = require('../runtime/rendered-sprite');
 const { finaleVisible, captureFinale } = require('./finale-visuals');
 const { finaleBattleReady, bossFlash, combinedStones } = require('./finale-battle');
+const commonReactions = require('./reaction-common');
 const environmentVisuals = require('./environment-visuals');
 const { idleBeats } = require('./idle-narration');
 
@@ -14,10 +15,12 @@ for (const id of clipIds) {
         beats[map] ??= Object.create(null);
         beats[map][event] ??= Object.create(null);
         // Separate pages can reuse a command index for different reactions.
-        (beats[map][event][index] ??= []).push({ id, page, actor, switchId: switchId ?? undefined, visual });
+        (beats[map][event][index] ??= []).push({ id, page, actor, switchId: switchId ?? undefined, visual,
+            balloonAnchor: cues[id].balloonAnchors?.some(key => key.join('/') === [map,event,page,index].join('/')),
+            waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-const PACK_LIMIT = 1496 * 1024;
+const PACK_LIMIT = 1664 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -45,6 +48,9 @@ function createNarration(root, host, preferences) {
     let failed = false;
     let owner = null;
     let environment = null;
+    let reactions = [];
+    let seenBalloons = new WeakSet();
+    let sequence = 0;
     let clip = null;
 
     function ready(scene) {
@@ -106,7 +112,20 @@ function createNarration(root, host, preferences) {
         root.URL.revokeObjectURL(url);
     }
 
-    function leave(scene, keepEnvironment = false) {
+    function leave(scene, keepEnvironment = false, keepReactions = false) {
+        if (keepReactions && owner && (!scene || owner.scene === scene)) {
+            for (const state of owner.queue) {
+                if (!(state.visual > 0) || state.confirmed || reactions.some(receipt => receipt.order === state.order)) continue;
+                if (reactions.length >= QUEUE_LIMIT) break;
+                if (state.balloon) seenBalloons.delete(state.balloon);
+                reactions.push({ ...state, frame: state.requestedFrame });
+                state.scene._wqaReactionReceipts = true;
+            }
+        }
+        if (!keepReactions) {
+            for (const receipt of reactions) receipt.scene._wqaReactionReceipts = false;
+            reactions = [];seenBalloons = new WeakSet();
+        }
         if (!keepEnvironment && environment && (!scene || environment.scene === scene)) {
             environment.scene._wqaEnvironmentPending = false;
             environment = null;
@@ -126,18 +145,35 @@ function createNarration(root, host, preferences) {
     function accepted(scene, interpreter, actor, switched, visual, commandIndex = interpreter._index) {
         if (!pack || !enabled() || !ready(scene)) return;
         const map = root.$gameMap;
+        const common = commonReactions.resolve(root, interpreter, visual);
+        if (common) { interpreter = common.parent; commandIndex = common.index; }
         const candidates = beats[interpreter._mapId]?.[interpreter._eventId]?.[commandIndex];
-        const candidate = candidates?.find(beat =>
+        const candidate = common?.cue || candidates?.find(beat =>
             root.$dataMap?.events?.[interpreter._eventId]?.pages[beat.page]?.list === interpreter._list);
         if (!candidate) return;
         const page = root.$dataMap?.events?.[interpreter._eventId]?.pages[candidate.page];
-        if (interpreter !== map._interpreter || interpreter._mapId !== map._mapId ||
+        if ((interpreter !== map._interpreter && map._events?.[interpreter._eventId]?._interpreter !== interpreter) || interpreter._mapId !== map._mapId ||
             page?.list !== interpreter._list || candidate.switchId !== switched || !switched && candidate.visual !== visual) return;
         const source = candidate.actor === -1 ? root.$gamePlayer : map._events[candidate.actor];
         if (!source || source._erased || (switched ? !root.$gameSwitches.value(switched) : actor !== source)) return;
         actor = source;
         visual = candidate.visual;
         const prior = scene._wqaNarrationSeen;
+        if (visual > 0) {
+            if (prior?.list === interpreter._list && prior.index === commandIndex &&
+                (reactions.length || owner?.scene === scene)) return;
+            if (reactions.length + (owner?.queue.length || 0) >= QUEUE_LIMIT) return;
+            // Keep a bounded intent until the native balloon exists. The game
+            // can terminate this script and load its next page in the same
+            // frame before the first balloon is drawn. No game object is
+            // modified or serialized, and no worker runs during that loading.
+            scene._wqaNarrationSeen = { list: interpreter._list, index: commandIndex };
+            reactions.push({ scene, mapId: map._mapId, actor, actorId: candidate.actor,
+                visual, id: candidate.id, frame: host.graphics.frameCount,
+                balloonAnchor: candidate.balloonAnchor, requestedFrame: host.graphics.frameCount, order: ++sequence });
+            scene._wqaReactionReceipts = true;
+            return true;
+        }
         // Guard one command within its active narration context. A later
         // real activation of the same NPC/list can show the balloon again.
         if (owner?.scene === scene && owner.list === interpreter._list &&
@@ -158,11 +194,17 @@ function createNarration(root, host, preferences) {
             item.worldTransform.ty <= host.graphics.height + 16).slice(0, 8).map(item =>
                 ({ sprite: item, actor: item._character })) : null;
         if (visual === -5 && !companions.length) return;
-        if (owner && (owner.scene !== scene || owner.list !== interpreter._list)) leave(owner.scene);
+        if (owner && (owner.scene !== scene || owner.list !== interpreter._list)) {
+            if (owner.scene === scene && owner.hasReactions) { owner.interpreter = interpreter;owner.list = interpreter._list; }
+            else leave(owner.scene);
+        }
         const context = owner ?? begin(scene, interpreter);
+        if (interpreter !== map._interpreter) context.joltBase = interpreter;
         if (context.queue.length >= QUEUE_LIMIT) return;
         scene._wqaNarrationSeen = { list: interpreter._list, index: commandIndex };
-        context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions,
+        context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions, order: ++sequence,
+            script: interpreter, scriptList: interpreter._list,
+            balloonAnchor: candidate.balloonAnchor, waitFrames: candidate.waitFrames,
             screenX: scene._spriteset.x, screenY: scene._spriteset.y,
             x: actor._realX, y: actor._realY, mapY: map._displayY, mapX: map._displayX, direction: actor._direction, id: candidate.id,
             finale: visual === -6 ? captureFinale(root, scene, candidate.id) : null });
@@ -196,14 +238,17 @@ function createNarration(root, host, preferences) {
         if (!paired) return;
         // The named Elder Tater shout and finale destruction already own voices.
         if (interpreter._mapId === 13 && interpreter._eventId === 5 && interpreter._index === 63) return;
-        if (owner && (owner.scene !== scene || owner.list !== base._list)) leave(owner.scene);
+        if (owner && (owner.scene !== scene || owner.list !== base._list)) {
+            if (owner.scene === scene && owner.hasReactions) { owner.interpreter = base;owner.list = base._list; }
+            else leave(owner.scene);
+        }
         const context = owner ?? begin(scene, base);
         if (context.queue.length >= QUEUE_LIMIT) return;
         const prior = context.lastJolt;
         if (prior?.interpreter === interpreter && prior.list === interpreter._list && prior.index === interpreter._index) return;
         context.lastJolt = { interpreter, list: interpreter._list, index: interpreter._index };
         context.joltBase = base;
-        context.queue.push({ id: 'screen-jolt', visual: -7,
+        context.queue.push({ id: 'screen-jolt', visual: -7, order: ++sequence,
             screenX: scene._spriteset.x, screenY: scene._spriteset.y, frame: host.graphics.frameCount });
     }
 
@@ -212,6 +257,7 @@ function createNarration(root, host, preferences) {
         const state = environmentVisuals.capture(root, scene, interpreter, host.graphics.frameCount);
         if (!state) return;
         if (environment?.list === state.list && environment.index === state.index) return;
+        state.order = ++sequence;
         environment = state;
         scene._wqaEnvironmentPending = true;
     }
@@ -226,7 +272,10 @@ function createNarration(root, host, preferences) {
         // No processing during flood-fill/resource work. Resume at the same
         // native-ready site only after tile refresh and preload gates reopen.
         if (!ready(scene)) return;
-        if (owner && (owner.scene !== scene || owner.list !== state.list)) leave(owner.scene, true);
+        if (owner && (owner.scene !== scene || owner.list !== state.list)) {
+            if (owner.scene === scene && owner.hasReactions) { owner.interpreter = state.interpreter;owner.list = state.list; }
+            else leave(owner.scene, true);
+        }
         const context = owner ?? begin(scene, state.interpreter);
         if (context.queue.length >= QUEUE_LIMIT) return;
         context.queue.push(state);environment = null;scene._wqaEnvironmentPending = false;
@@ -245,8 +294,48 @@ function createNarration(root, host, preferences) {
 
     function begin(scene, interpreter = null) {
         scene._wqaNarrationActive = true;
-        owner = { scene, interpreter, list: interpreter?._list, queue: [], paintPending: false };
+        owner = { scene, interpreter, list: interpreter?._list, mapId: root.$gameMap?._mapId, queue: [], paintPending: false };
         return owner;
+    }
+
+    function entry(scene, interpreter, list, eventId) {
+        // This exact beach page is a repeating wait-only continuation, not a
+        // fresh cutscene/resource phase. Its native loadImages sees no image
+        // commands. Retire on first entry; later ready iterations must not
+        // stop an already rendered reaction every frame.
+        const sameWait = Array.isArray(list) && root.$gameMap?._mapId === 13 && eventId === 5 &&
+            interpreter === root.$gameMap._interpreter &&
+            list === root.$dataMap?.events?.[5]?.pages?.[3]?.list;
+        const repeat = sameWait && scene?._wqaNarrationWaitLoop === list;
+        if (scene) scene._wqaNarrationWaitLoop = sameWait ? list : null;
+        if (repeat && ready(scene)) return;
+        // Native event setup still closes all playback and async work before
+        // loading images. Only the inert, bounded balloon intents survive this
+        // same-map handoff; transfers/fades/focus loss clear them normally.
+        leave(scene, false, true);
+        if (scene) scene._wqaNarrationSeen = null;
+    }
+
+    function harvestReactions(scene) {
+        if (!reactions.length || !ready(scene) || !enabled()) return;
+        const map = root.$gameMap, balloons = scene._spriteset?._balloonSprites;
+        if (!Array.isArray(balloons) || balloons.length > 32) return;
+        reactions = reactions.filter(receipt => {
+            if (receipt.scene !== scene || receipt.mapId !== map._mapId ||
+                host.graphics.frameCount - receipt.frame > 240 ||
+                (receipt.actorId === -1 ? root.$gamePlayer : map._events[receipt.actorId]) !== receipt.actor) return false;
+            const balloon = balloons.find(balloon => !seenBalloons.has(balloon) &&
+                balloon.targetObject === receipt.actor && balloon._balloonId === receipt.visual);
+            if (!balloon) return true;
+            if (owner && owner.scene !== scene) leave(owner.scene, false, true);
+            const context = owner ?? begin(scene);
+            if (context.queue.length >= QUEUE_LIMIT) return true;
+            context.hasReactions = true;seenBalloons.add(balloon);
+            context.queue.push({ ...receipt, sprite: balloon._target, balloon, frame: host.graphics.frameCount });
+            context.queue.sort((a,b) => (a.order || 0) - (b.order || 0));
+            return false;
+        });
+        scene._wqaReactionReceipts = reactions.length > 0;
     }
 
     function idleReady(scene) {
@@ -302,7 +391,10 @@ function createNarration(root, host, preferences) {
         const beat = actor ? combinedStones(root, scene, actor, sprite, stones) : bossFlash(root, scene, interpreter);
         if (!beat) return;
         interpreter = root.$gameTroop._interpreter;
-        if (owner && (owner.scene !== scene || owner.list !== interpreter._list)) leave(owner.scene);
+        if (owner && (owner.scene !== scene || owner.list !== interpreter._list)) {
+            if (owner.scene === scene && owner.hasReactions) { owner.interpreter = interpreter;owner.list = interpreter._list; }
+            else leave(owner.scene);
+        }
         const context = owner ?? begin(scene, interpreter);
         context.battle = true;
         if (context.queue.length >= QUEUE_LIMIT) return;
@@ -314,6 +406,7 @@ function createNarration(root, host, preferences) {
 
     function mayPresent(context) {
         const { scene, interpreter, list } = context;
+        if (context.hasReactions) return ready(scene) && enabled() && context.mapId === root.$gameMap?._mapId;
         if (context.battle) return enabled() && finaleBattleReady(root, host, scene) &&
             interpreter === root.$gameTroop._interpreter && interpreter._list === list;
         return interpreter ? ready(scene) && enabled() &&
@@ -366,7 +459,7 @@ function createNarration(root, host, preferences) {
         // Dave's authored light bulbs and music use blank map anchors.
         // For those cataloged cues
         // the actual rendered balloon owns visibility, including its pose.
-        const blankAnchor = (visual === 9 || visual === 3) && actor._characterName === '' && !actor._tileId;
+        const blankAnchor = (visual === 9 || visual === 3 || state.balloonAnchor) && actor._characterName === '' && !actor._tileId;
         const onScreen = (pose, allowance = 0) => pose && pose.tx >= 0 && pose.tx <= host.graphics.width &&
             pose.ty >= 0 && pose.ty <= host.graphics.height + allowance;
         if (!blankAnchor && (!actor._characterName || !renderedSprite(sprite, parent) ||
@@ -374,7 +467,7 @@ function createNarration(root, host, preferences) {
         if (visual > 0) {
             const balloons = spriteset._balloonSprites;
             return Array.isArray(balloons) && balloons.length <= 32 && balloons.some(balloon =>
-                balloon.targetObject === actor && balloon._target === sprite && balloon._balloonId === visual &&
+                (!state.balloon || balloon === state.balloon) && balloon.targetObject === actor && balloon._target === sprite && balloon._balloonId === visual &&
                 balloon._duration > 0 && renderedSprite(balloon, spriteset._effectsContainer) &&
                 (!blankAnchor || onScreen(balloon.worldTransform)));
         }
@@ -385,24 +478,25 @@ function createNarration(root, host, preferences) {
     }
 
     function present(scene) {
+        harvestReactions(scene);
         environmentPresent(scene);
         const context = owner;
         if (!context || context.scene !== scene) return;
-        if (!mayPresent(context)) return leave(scene, true);
+        if (!mayPresent(context)) return leave(scene, true, true);
         if (context.paintPending || (clip && context.queue.every(state => state.confirmed))) return;
         const frame = host.graphics.frameCount;
         // Keep already rendered descriptions even after the effect disappears.
         // Only unpainted effects expire on the short native presentation budget.
         context.queue = context.queue.filter(state => state.confirmed ||
-            frame - state.frame <= (state.id === 'chomps-sacrifice' || (state.visual === -6 || state.visual === -8) ? FLASH_LIMIT : state.visual === -4 ? REWARD_LIMIT : FRAME_LIMIT));
-        if (!clip && !context.queue.length) return leave(scene);
+            (!state.script || state.script._list === state.scriptList) && frame - state.frame <= (state.waitFrames || (state.id === 'chomps-sacrifice' || (state.visual === -6 || state.visual === -8) ? FLASH_LIMIT : state.visual === -4 ? REWARD_LIMIT : FRAME_LIMIT)));
+        if (!clip && !context.queue.length) return leave(scene, true, true);
         const renderer = host.graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return leave(scene);
         context.paintPending = true;
         renderer.once('postrender', () => {
             if (owner !== context) return;
             context.paintPending = false;
-            if (!mayPresent(context)) return leave(scene, true);
+            if (!mayPresent(context)) return leave(scene, true, true);
             if (host.graphics.frameCount - frame > FRAME_LIMIT) return;
             for (const state of context.queue) {
                 if (state.confirmed) continue;
@@ -415,7 +509,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { accepted, jolt, environmentStart, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, entry, jolt, environmentStart, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

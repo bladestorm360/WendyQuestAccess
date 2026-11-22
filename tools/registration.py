@@ -137,9 +137,9 @@ BATTLE_LOG_LEAVING = (b'SceneManager._scene?._wqaBattleLogActive&&'
                       b'globalThis.WendyQuestAccessBattleLogLeaving?.(SceneManager._scene)')
 BATTLE_RADIAL_LEAVING = (b'SceneManager._scene?._wqaRadialActive&&'
                          b'globalThis.WendyQuestAccessBattleRadialLeaving?.(SceneManager._scene)')
-def narration_leaving(scene=b'SceneManager._scene'):
-    return (b'if(' + scene + b'?._wqaNarrationActive||' + scene + b'?._wqaNarrationLoading||' + scene + b'?._wqaEnvironmentPending)'
-            b'globalThis.WendyQuestAccessNarrationLeaving?.(' + scene + b');')
+def narration_leaving(scene=b'SceneManager._scene', event_entry=False):
+    return (b'if(' + scene + b'?._wqaNarrationActive||' + scene + b'?._wqaNarrationLoading||' + scene + b'?._wqaEnvironmentPending||' + scene + b'?._wqaReactionReceipts)'
+            + (b'globalThis.WendyQuestAccessNarrationEventEntry?.(' if event_entry else b'globalThis.WendyQuestAccessNarrationLeaving?.(') + scene + (b',this,list,eventId' if event_entry else b'') + b');')
 
 
 SCENE_LEAVING = (narration_leaving(b'this._scene') + b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
@@ -497,7 +497,7 @@ def objects_notification(original):
                 b'SceneManager._scene._wqaRouteActive||SceneManager._scene._wqaInteractionActive||'
                 b'SceneManager._scene._wqaIceRoute))'
                 b'globalThis.WendyQuestAccessFieldEvent?.(SceneManager._scene,this);\n        ',  # Accepted event start
-        255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + narration_leaving() +
+        255063: b'\n    if(this===$gameMap?._interpreter||this===$gameTroop?._interpreter){' + narration_leaving(event_entry=True) +
                 MAP_LEAVING.replace(b'?.(SceneManager._scene);', b'?.(SceneManager._scene,this===$gameMap?._interpreter?eventId:0);') +
                 b'if(SceneManager._scene?._wqaBattleFocusActive)'
                 b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);' +
@@ -535,8 +535,8 @@ def objects_notification(original):
                 b'this._mapId===63&&this._eventId===19||this._mapId===188||this._mapId===115||'
                 b'this._mapId===39||this._mapId===13&&this._eventId===5&&[70,77].includes(this._index))?-6:undefined);',
         # Native emotes, Frostyna's flash, and the two identical door approaches.
-        287095: b'\n        if(Graphics._wqaNarrationEnabled&&this===$gameMap?._interpreter&&'
-                b'(params[1]>=1&&params[1]<=9))'
+        287095: b'\n        if(Graphics._wqaNarrationEnabled&&'
+                b'(params[1]>=1&&params[1]<=10))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,params[1]);',
         288646: b'\n    if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._eventId===2&&this._index===15)'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,this.character(0),undefined,-1);'
@@ -742,7 +742,7 @@ def map_notification(original):
     }
     if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 13 && !this._wqaArrivalObserved)
         globalThis.WendyQuestAccessProloguePresent?.(this);
-    if (this._wqaNarrationActive || this._wqaEnvironmentPending) globalThis.WendyQuestAccessNarrationPresent?.(this);
+    if (this._wqaNarrationActive || this._wqaEnvironmentPending || this._wqaReactionReceipts) globalThis.WendyQuestAccessNarrationPresent?.(this);
     // The opening has no controllable field before its first visual beat.
     // Warm asynchronously only after the normal map/resource readiness gates.
     if (Graphics._wqaNarrationEnabled && !Graphics._wqaNarrationPackFinished && !this._wqaNarrationLoading &&
