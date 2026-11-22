@@ -49,6 +49,8 @@ def bundle():
         './runtime/audio': 'runtime/audio.js',
         './dialogue/narration': 'dialogue/narration.js',
         './idle-narration': 'dialogue/idle-narration.js',
+        './finale-visuals': 'dialogue/finale-visuals.js',
+        './finale-battle': 'dialogue/finale-battle.js',
         './narration-cues.json': 'dialogue/narration-cues.json',
         './character-art': 'dialogue/character-art.js',
         '../dialogue/character-art': 'dialogue/character-art.js',

@@ -14,7 +14,7 @@ const read = file => fs.readFileSync(path.join(game, file), 'utf8');
 const system = JSON.parse(read('data/System.json'));
 const mapData = id => JSON.parse(read(`data/Map${String(id).padStart(3, '0')}.json`));
 const custom = JSON.parse(execFileSync('python', ['-W', 'ignore::SyntaxWarning',
-    path.join(__dirname, 'map-producers.py'), game], { encoding: 'utf8', timeout: 6000, maxBuffer: 64000 }));
+    path.join(__dirname, 'map-producers.py'), game], { encoding: 'utf8', timeout: 6000, maxBuffer: 80 * 1024 }));
 const stock = {
     managers: {
         SceneManager: ['goto', 'changeScene', 'updateScene', 'onSceneTerminate', 'onSceneCreate',
