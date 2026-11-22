@@ -236,7 +236,7 @@ function iceOpensPassage(entry, page) {
 function concealedDestination(map, event) {
     if (event?._pageIndex !== 0) return false;
     const id = event._eventId;
-    return map === 128 && id === 11 || map === 133 && id === 4 || map === 87 && id === 91;
+    return map === 128 && id === 11 || map === 133 && id === 4;
 }
 
 function visibleChestBarrier(root, map, id, spoilers) {
@@ -300,6 +300,8 @@ function localDestination(root, event, page) {
     const id = event._eventId;
     const trigger = event._trigger;
     const list = page.list;
+    if (map === 106 && id === 19 && event._pageIndex === 0 && trigger === 0)
+        return { name: 'Crowned skeleton', category: 'objects' };
     const townExit = chillcrestExit(root, event, page);
     if (townExit) return townExit;
     if (map === 134 && id === 10 && trigger === 0 && (event._pageIndex === 0 || event._pageIndex === 1))

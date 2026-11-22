@@ -151,7 +151,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (scene._wqaArrivalSpeech) arrivalScene = scene;
         } else if (record && scene === host.manager._scene) command('navigationReport', record);
         else retire(scene);
-    }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true));
+    }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true), rerouteAutowalk);
 
     function guideFor(scene) {
         if (salt.available(scene)) return salt;
@@ -268,9 +268,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             // position notifications must leave its path narration admitted.
             job.scene._wqaRouteActive = false;
             if (job.caveWalk) announceCaveWalk(job);
-            else if (result.distance > 0 && !(result.autowalkStop && result.distance === 1))
+            else if (!job.quietAutowalk && result.distance > 0 && !(result.autowalkStop && result.distance === 1))
                 present(job, { kind: 'fieldStatus', name: 'Walking.' }, true);
-            if (speech && preferences().speakAutowalkPath) {
+            if (!job.quietAutowalk && speech && preferences().speakAutowalkPath) {
                 if (result.autowalkStop) {
                     const legs = record.legs.slice();
                     if (!record.more) {
@@ -281,6 +281,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                         directionsOnly: true, append: true });
                 } else notifications.focus(speech, { ...record, directionsOnly: true, append: true });
             }
+            job.scene._wqaInteractionDeferred = false;
             return;
         }
         // A distant event can move before the speech helper reads this
@@ -929,6 +930,18 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             job.caveWalk.announced = true;
             present(job, { kind: 'fieldStatus', name: 'Walking.' }, true);
         }
+    }
+
+    function rerouteAutowalk(job) {
+        const { scene } = job;
+        if (!preferences().autowalk || !ready(scene)) return false;
+        retire(scene);
+        host.beacon?.stop(scene);
+        // Preserve the selected destination and journey owners. Timed caves
+        // still use their native-state patrol solver, never an ordinary route.
+        queue({ scene, action: 'directions', changes: [], retries: 0, controller: job.controller,
+            quietAutowalk: true, caveWalk: job.caveWalk });
+        return true;
     }
 
     function resumeCaveWalk(job, chase) {
@@ -1799,6 +1812,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 scene._wqaCaveReview || sequence >= 0x7ffffffe) return retire(scene, steppedActor === root.$gamePlayer);
             if (job.ambientStatus || job.line?.refs.some(ref => ref.actor === steppedActor)) return;
             if (!navigationRequest(job)) return retire(scene);
+            // Actor motion must not starve an automatic route worker. Every
+            // resulting step rechecks native collision; a moved destination
+            // or newly occupied tile silently starts one fresh worker route.
+            if (job.autowalk || job.quietAutowalk) return;
             if (inFlight !== job) {
                 // A fresh capture already sees the next pose. Once browse
                 // speech starts, ordinary ambient steps need no new result.

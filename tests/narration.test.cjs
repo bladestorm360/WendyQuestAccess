@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 89);
+assert.equal(Object.keys(clips).length, 91);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -36,7 +36,7 @@ for (const [id, { beats }] of Object.entries(cues)) {
         }
     }
 }
-assert.equal(locators.size, 161);
+assert.equal(locators.size, 169);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
     const list = data?.events[e].pages[page].list;
@@ -115,6 +115,27 @@ function commandContext(f) {
     for(const method of sceneCommands)vm.runInContext(method,c,{timeout:100});
     return c;
 }
+for (const id of ['double-first-entrance', 'elder-tater-freed']) {
+    for (const [m, e, p, i, a, switched] of cues[id].beats) {
+        const f = fixture(m, e, p), { candidate, sprite } = f.actor(a);
+        Object.assign(candidate, { _realX: 3, _realY: 3, forceMoveRoute(route) { this._moveRoute = route; } });
+        if (switched) candidate._characterName = sprite._characterName = '';
+        Object.assign(f.interpreter, { _index: i, character: () => candidate, setWaitMode() {} });
+        f.nativeMap.refreshIfNeeded = () => {};
+        f.root.$gameSwitches.setValue = (key, value) => value ? f.switches.add(key) : f.switches.delete(key);
+        const c = commandContext(f), row = f.interpreter._list[i];
+        assert(c.Game_Interpreter.prototype['command' + row.code].call(f.interpreter, row.parameters));
+        f.frame(); assert.equal(f.played.length, 0, 'the authored command alone is not a rendered change');
+        if (switched) candidate._characterName = sprite._characterName = '~ElderTater';
+        else candidate._realY++;
+        f.frame(false); assert.equal(f.played.length, 0);
+        f.renderer.emit('postrender'); assert.equal(f.played[0]?.id, id);
+        assert.equal(f.played[0].playbackRate, 2);
+        f.narration.leave(f.scene); assert(f.played[0].paused);
+    }
+}
+console.log('Verified all four first-Mech entrances and cell-opening branches through native commands and actual rendered movement/reveal.');
+
 for(const visible of [false,true]) {
     const f=fixture(98,19,0),player=f.actor(-1),follower=f.actor(3);
     follower.candidate._memberIndex=1;follower.sprite.worldVisible=visible;
@@ -488,4 +509,4 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 89 clips, 161 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 91 clips, 169 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');

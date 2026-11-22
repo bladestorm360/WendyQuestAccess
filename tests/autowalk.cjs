@@ -5,6 +5,7 @@ const { performance } = require('node:perf_hooks');
 const { EventEmitter } = require('node:events');
 const { createRenderer } = require('../src/runtime/renderer');
 const { createAutowalk } = require('../src/world/autowalk');
+const { createField } = require('../src/world/field');
 const { captureWorld } = require('../src/world/snapshot');
 const { DIRECTIONS } = require('../src/world/geometry.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
@@ -59,7 +60,9 @@ async function verifyAutowalk(c, load, verifyWorker) {
     const preferences = { autowalk: false, speakAutowalkPath: false };
     const reports = [];
     const ready = () => scene._wqaFieldReady && !c.$gamePlayer.isMoving() && !c.$gamePlayer._transferring;
-    const walk = createAutowalk(c, ready, () => preferences, (_scene, record, failed, arrived) => reports.push({ record, failed, arrived }));
+    let reroute;
+    const walk = createAutowalk(c, ready, () => preferences, (_scene, record, failed, arrived) => reports.push({ record, failed, arrived }),
+        undefined, job => reroute?.(job) === true);
     c.WendyQuestAccessAutowalkInput = walk.input;
     c.WendyQuestAccessFieldMove = walk.moved;
     c.WendyQuestAccessFieldEvent = current => { walk.stop(current); };
@@ -163,6 +166,57 @@ async function verifyAutowalk(c, load, verifyWorker) {
     tick(player);
     assert.deepEqual(position(player), [x, y]);
     player._transferring = false;
+
+    // A real native actor moves into the next cell. The fresh production
+    // worker must route around it, with no stale step, stop speech or arrival.
+    const resumes = [];
+    reroute = job => { resumes.push(job); return true; };
+    player.setPosition(x, y);
+    exit._priorityType = 1;
+    arm();
+    exit.setPosition(...expected);
+    const before = reports.length;
+    tick(player);
+    assert.equal(resumes.length, 1);
+    assert.equal(resumes[0], statue.job);
+    assert.equal(reports.length, before, 'a continuation is silent and is not an arrival');
+    assert.deepEqual(position(player), [x, y], 'never enter the newly blocked cell');
+    let refreshed = await route(chamber, 11);
+    assert.notEqual(DIRECTIONS[refreshed.result.course[0] & 3], first, 'fresh native collision changes the route');
+    assert(walk.start(refreshed.job, refreshed.result, refreshed.record));
+    for (let count = 0; walk.active(scene) && count <= refreshed.result.distance; count++) tick(player);
+    assert.equal(reports.at(-1).arrived, true);
+    exit.setPosition(...previous);
+
+    // Repeated changes have no arbitrary two-refresh stop budget. Each one
+    // gets a new bounded worker result from the current accepted position.
+    for (let count = 0; count < 4; count++) {
+        player.setPosition(x, y);
+        refreshed = await route(chamber, 11);
+        assert(walk.start(refreshed.job, refreshed.result, refreshed.record));
+        walk.dirty(scene);
+        tick(player);
+        assert.equal(resumes.length, count + 2);
+    }
+    const target = gameMap._events[11];
+    const targetPosition = position(target);
+    refreshed = await route(chamber, 11);
+    assert(walk.start(refreshed.job, refreshed.result, refreshed.record));
+    target.setPosition(target._x + 1, target._y);
+    tick(player);
+    assert.equal(resumes.length, 6, 'a moving destination also requests a fresh approach');
+    target.setPosition(...targetPosition);
+    refreshed = await route(chamber, 11);
+    assert(walk.start(refreshed.job, refreshed.result, refreshed.record));
+    walk.dirty(scene);
+    c.Input.dir4 = manual;
+    tick(player);
+    assert.equal(resumes.length, 6, 'manual movement cancels instead of restarting');
+    c.Input.dir4 = 0;
+    reroute = null;
+    console.log('Verified native moving blockers/targets, fresh worker detour, four silent refreshes and manual cancellation.');
+
+    await verifyFieldRefresh(c, load, verifyWorker, statue.result.arrival);
 
     // The reported prop is already one tile away. Arrival has to turn
     // without another step or an automatic action-button event.
@@ -282,3 +336,67 @@ async function verifyAutowalk(c, load, verifyWorker) {
 
 if (require.main === module) verifyArrivalQueue();
 module.exports = { verifyAutowalk };
+
+// Integrate the automatic continuation with the real field worker dispatcher:
+// selection, native collision, silent re-entry and stale-response cancellation.
+async function verifyFieldRefresh(c, load, verifyWorker, arrival) {
+    const saved = Object.fromEntries(['addEventListener', '$gameScreen', '$gameMessage', 'WendyQuestAccessAutowalkInput',
+        'WendyQuestAccessFieldMove', 'WendyQuestAccessFieldChanged'].map(key => [key, c[key]]));
+    const previousScene = c.SceneManager._scene, app = c.Graphics.app;
+    const run = load(197); run.player.setPosition(14, 16); run.gameMap.inactiveTime = 0;
+    run.player._followers = { areGathering: () => false, updateMove() {} };
+    const renderer = new EventEmitter(), packets = [], records = [];
+    const scene = { _wqaFieldReady: true, _wqaMapRestored: true, _mapLoaded: true, _started: true,
+        _prevCanMove: true, srcWendy: {}, srcStones: {}, _active: true, _fadeDuration: 0, _fadeOpacity: 0 };
+    const bookmark = { id: 'refresh', revision: 1, kind: 'point', map: 197, mode: 'walk', name: 'Test approach',
+        x: arrival.x, y: arrival.y };
+    const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
+    c.SceneManager._scene = scene; c.Graphics.app = { stage: scene, renderer };
+    c.addEventListener = () => {}; c.$gameScreen = { _brightness: 255 }; c.$gameMessage = { isBusy: () => false };
+    const field = createField(c, { manager: c.SceneManager, graphics: c.Graphics, hasFocus: () => true,
+        screenFading: () => false, navigationPreferences: () => ({ autowalk: true }), bookmarks: () => [bookmark],
+        makeWord: () => new Int32Array(new SharedArrayBuffer(4)), createRouteWorker: () => worker }, {
+        open(record) { records.push(record); return records.length; }, close() {},
+        arrive(record) { records.push(record); return records.length; }, endArrival() {}
+    });
+    c.WendyQuestAccessAutowalkInput = field.autowalk.input;
+    c.WendyQuestAccessFieldMove = field.autowalk.moved;
+    c.WendyQuestAccessFieldChanged = field.changed;
+    const frame = () => renderer.emit('postrender');
+    const tick = () => { run.player.moveByInput(); run.player._realX = run.player._x; run.player._realY = run.player._y; };
+    async function reply() {
+        const packet = packets.at(-1); assert(packet);
+        await verifyWorker(run, packet.request, packet.live, result => worker.emit('message', {
+            epoch: packet.epoch, sequence: packet.sequence, map: packet.map, result }));
+        frame(); return packet;
+    }
+    scene._wqaSettingsActive = true; assert(field.selectBookmark(scene, bookmark)); scene._wqaSettingsActive = false;
+    assert(field.command('directions')); frame(); await reply();
+    assert(field.autowalk.active(scene));
+    const blocker = run.gameMap._events[10], original = [blocker._x, blocker._y];
+    // Find the accepted first step, then restore only the fixture player to
+    // place an actor there before a fresh copy of the same course executes.
+    tick(); const occupied = [run.player._x, run.player._y];
+    field.autowalk.stop(scene); run.player.setPosition(14, 16);
+    assert(field.command('directions')); frame(); await reply();
+    const startingSpeech = records.length;
+    blocker._priorityType = 1; blocker.setPosition(...occupied); field.changed(scene, blocker);
+    tick(); frame(); const refreshed = packets.at(-1);
+    assert(!field.autowalk.active(scene));
+    assert(field.controlOwner(scene).autowalkActive, 'pending reroute still owns navigation');
+    assert.deepEqual([run.player._x, run.player._y], [14, 16]);
+    await reply(); assert(field.autowalk.active(scene));
+    assert.equal(records.length, startingSpeech, 'production continuation repeats neither Walking nor the route');
+    for (let limit = 0; field.autowalk.active(scene) && limit < 80; limit++) { tick(); frame(); }
+    assert.equal(records.at(-1).name, 'Arrived.');
+    assert.deepEqual([run.player._x, run.player._y], [arrival.x, arrival.y]);
+    blocker.setPosition(...original); run.player.setPosition(14, 16);
+    assert(field.command('directions')); frame(); await reply();
+    blocker.setPosition(...occupied); tick(); frame();
+    const stale = packets.at(-1); assert.notEqual(stale, refreshed);
+    field.cancelAutowalk(scene); await reply();
+    assert(!field.autowalk.active(scene), 'cancelled pending work cannot restart autowalk');
+    blocker.setPosition(...original);
+    Object.assign(c, saved); c.SceneManager._scene = previousScene; c.Graphics.app = app;
+    console.log('Verified production field silent reroute, retained destination, one final arrival and cancelled-worker rejection.');
+}

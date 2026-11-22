@@ -514,7 +514,8 @@ def objects_notification(original):
         # These authored story switches reveal actual character sprites.
         274031: b'if(Graphics._wqaNarrationEnabled&&params[0]===params[1]&&params[2]===0&&'
                 b'(this._mapId===63&&params[0]===419||this._mapId===107&&params[0]===131||'
-                b'this._mapId===114&&params[0]===23||this._mapId===134&&params[0]===77))'
+                b'this._mapId===114&&params[0]===23||this._mapId===134&&params[0]===77||'
+                b'this._mapId===106&&params[0]===115))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,null,params[0]);\n    ',
         # After acceptance of an authored actor's route. The rendered actor,
         # current event list and resource gates are checked in the observer.

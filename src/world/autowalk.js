@@ -11,9 +11,8 @@ const { inactiveFloorScene } = require('./local-destinations');
 const { admitPatrolLine, patrolStepReady } = require('./puzzles/patrol-line-playback');
 
 const TOUCH_TRIGGERS = [1, 2];
-const MAX_CAVE_REPLANS = 2;
 
-function createAutowalk(root, ready, preferences, report, refreshReady = () => false) {
+function createAutowalk(root, ready, preferences, report, refreshReady = () => false, reroute = () => false) {
     let active = null;
     const targetAt = (map, job) => job.vehicle ? parkedVehicle(map, job.vehicle.type) : map._events?.[job.target];
 
@@ -100,6 +99,17 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
     }
 
     function changed(state, name = 'Autowalk stopped. Route changed. Request directions again.') {
+        const { scene, map, player, job } = state;
+        // Retire the stale course before asking the existing asynchronous
+        // router to recapture. Native input never searches or waits for it.
+        // A transfer, quest replacement or manual displacement cannot inherit
+        // this continuation. The normal cancellation sites still own those.
+        if (!state.pending && ready(scene) && preferences().autowalk && map === root.$gameMap &&
+            player === root.$gamePlayer && player._x === state.x && player._y === state.y &&
+            travelMode(map, player) === job.mode && (!job.quest || questDestinationCurrent(root, scene, job.quest))) {
+            stop(scene);
+            if (reroute(job)) return 0;
+        }
         return end(state, { kind: 'fieldStatus', name }, true);
     }
 
@@ -161,9 +171,6 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             // A completed distraction can change a remote event page during
             // an ordinary course. Retire it and ask the existing worker for a
             // fresh route; never reuse a dirtied course or a timed forecast.
-            const cave = state.job.caveWalk;
-            if ((cave.replans || 0) >= MAX_CAVE_REPLANS) return changed(state);
-            cave.replans = (cave.replans || 0) + 1;
             state.job.caveContinue = true;
             return end(state, null, false, true);
         }
@@ -197,7 +204,7 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             return changed(state, 'Autowalk stopped. Guard timing changed. Request directions again.');
         if (!player.canPass(player._x, player._y, step)) {
             if (job.mode === 'walk' && player.findEventsAt(x, y).some(event => activeMovingEnemy(root, event)))
-                return end(state, { kind: 'fieldStatus', name: 'Autowalk stopped. Blocked by an enemy.' });
+                return changed(state, 'Autowalk stopped. Blocked by an enemy.');
             return changed(state, 'Autowalk stopped. The next tile is blocked.');
         }
         if (player.canStartLocalEvents()) {

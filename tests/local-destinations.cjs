@@ -480,7 +480,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     transfer(load(203), 1, [12, 11], 'First floor', 132, [12, 2]);
     const concealedCave = load(87);
     concealedCave.player.setPosition(12, 64);
-    assert(!captureWorld(c).objects.some(item => item.id === 91));
+    assert(captureWorld(c).objects.some(item => item.id === 91 && item.name === 'Hidden cave entrance'),
+        'native first-use tunnel has no discovery/map-piece gate and is available without Spoiler mode');
     assert(captureWorld(c).live.events.some(item => item.id === 91 && item.normal && item.action));
     transfer(concealedCave, 91, [12, 64], 'Hidden cave entrance', 205, [14, 4]);
     const foundCave = load(87, { self: ['87,91,A'] });
@@ -756,6 +757,11 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     assert.deepEqual(closedDock.map(item => item.category), ['events'], 'an active floor touch does not promise boarding');
     c.$dataCommonEvents = common;
     console.log('Verified all audited solid transfers, native approach directions, and the generic Cauldron and dock entries.');
+
+    load(106);
+    assert.equal(mapPlace(c), 'Mech Jail');
+    const skeleton = c.$gameMap._events[19];
+    assert.equal(eventTarget(c, 'walk', skeleton, c.$dataMap.events[19], skeleton.page())?.name, 'Crowned skeleton');
 
     delete c.$gameSwitches.setValue;
     delete c.$gameSelfSwitches.setValue;

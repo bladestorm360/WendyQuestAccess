@@ -1529,11 +1529,11 @@
     "beats": []
   },
   "idle-hud-slides": {
-    "text": "Wendy\u2019s status display slides away.",
+    "text": "Wendy’s status display slides away.",
     "beats": []
   },
   "idle-dozes": {
-    "text": "Zs drift over Wendy\u2019s head as she dozes.",
+    "text": "Zs drift over Wendy’s head as she dozes.",
     "beats": []
   },
   "idle-map-dark": {
@@ -1826,6 +1826,76 @@
         1,
         56,
         -1
+      ]
+    ]
+  },
+  "double-first-entrance": {
+    "text": "A mech walks in through the open door.",
+    "beats": [
+      [
+        106,
+        3,
+        0,
+        86,
+        4
+      ],
+      [
+        106,
+        6,
+        0,
+        87,
+        4
+      ],
+      [
+        106,
+        7,
+        0,
+        85,
+        4
+      ],
+      [
+        106,
+        8,
+        0,
+        88,
+        4
+      ]
+    ]
+  },
+  "elder-tater-freed": {
+    "text": "The cell opens, freeing Elder Tater.",
+    "beats": [
+      [
+        106,
+        3,
+        0,
+        175,
+        11,
+        115
+      ],
+      [
+        106,
+        6,
+        0,
+        176,
+        11,
+        115
+      ],
+      [
+        106,
+        7,
+        0,
+        174,
+        11,
+        115
+      ],
+      [
+        106,
+        8,
+        0,
+        177,
+        11,
+        115
       ]
     ]
   }

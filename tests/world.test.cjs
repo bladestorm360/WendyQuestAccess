@@ -1323,6 +1323,10 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if (process.argv.includes('--autowalk-only')) {
+        await verifyAutowalk(c, load, verifyWorker);
+        return;
+    }
     const catalog = bake(game, derived);
     if (process.argv.includes('--airship-foot')) {
         await require('./airship-foot.cjs').verifyAirshipFoot(c, load, read, verifyWorker);
