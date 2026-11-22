@@ -37,7 +37,8 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
                 return data;
             };
             let reveal;
-            if (id.startsWith('stone-')) {
+            if (id === 'elder-tater-shout') { f.spriteset.x = f.spriteset.y = 0;reveal = () => f.spriteset.x = 3; }
+            else if (id.startsWith('stone-')) {
                 const slots = { 'stone-frygor': [21, 'Fries'], 'stone-frostyna': [22, 'Frosty'],
                     'stone-sir-chicken': [20, 'Nugget'], 'stone-baconator': [23, 'Bacon'] };
                 const [slot, type] = slots[id];reveal = image(slot, 'img/UI/CORNER STONE - ' + type + '.json', true);

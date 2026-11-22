@@ -554,15 +554,20 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-4);'
                 b'else if(this._mapId===107&&this._eventId===3&&this._index===81||'
                 b'this._mapId===190&&this._eventId===24&&this._index===33||'
-                b'this._mapId===83&&this._eventId===38&&this._index===32)'
-                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,(this._mapId===190||this._mapId===83)?this.character(0):$gamePlayer,undefined,-6);}',
+                b'this._mapId===83&&this._eventId===38&&this._index===32||'
+                b'this._mapId===13&&this._eventId===5&&this._index===67)'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,(this._mapId===190||this._mapId===83||this._mapId===13)?this.character(0):$gamePlayer,undefined,-6);}',
         # ShowRewardTokens synchronously appends exactly one reward sprite.
         # Record it after the native call, before any later event command.
-        305132: b'const wqaRewardScene=pluginName==="WendyQuest"&&params[1]==="ShowRewardTokens"?SceneManager._scene:null;'
+        305132: b'if(Graphics._wqaNarrationEnabled&&pluginName==="ShakeScreen"&&params[1]==="CreateImpulse")'
+                b'globalThis.WendyQuestAccessScreenJolt?.(SceneManager._scene,this,Number(params[3]?.Duration));'
+                b'const wqaRewardScene=pluginName==="WendyQuest"&&params[1]==="ShowRewardTokens"?SceneManager._scene:null;'
                 b'const wqaRewardChildren=wqaRewardScene?._spriteset?.children;'
                 b'const wqaRewardBefore=wqaRewardChildren?.length;\n    ',
         305198: b'\n    if(wqaRewardBefore!==undefined&&wqaRewardChildren.length===wqaRewardBefore+1)'
                 b'globalThis.WendyQuestAccessTreasureStarted?.(wqaRewardScene,wqaRewardChildren[wqaRewardBefore]);',
+        288800: b'    if(Graphics._wqaNarrationEnabled&&params[0]>0&&params[1]>0&&params[2]>0)'
+                b'globalThis.WendyQuestAccessScreenJolt?.(SceneManager._scene,this,params[2]/60);\n',
         258782: b'\n    if(waitMode==="message"&&SceneManager._scene?._wqaBattleStarted)'
                 b'SceneManager._scene._wqaBattleInterpreter=this;',
     })

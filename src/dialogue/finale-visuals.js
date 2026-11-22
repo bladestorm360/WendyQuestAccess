@@ -45,6 +45,8 @@ function captureFinale(root, scene, id) {
 
 function finaleVisible(root, host, scene, state) {
     const { id } = state;
+    if (id === 'elder-tater-shout') return renderedSprite(state.sprite, scene._spriteset._tilemap) &&
+        (scene._spriteset.x !== state.screenX || scene._spriteset.y !== state.screenY);
     if (id === 'wendy-arrival-ripple') {
         const params = root.$gameMap.getFilterController?.('ref')?.currentParams;
         return params?.[1] > 0 && params[2] > 0 &&

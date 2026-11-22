@@ -16,7 +16,7 @@ for (const id of clipIds) {
         (beats[map][event][index] ??= []).push({ id, page, actor, switchId: switchId ?? undefined, visual });
     }
 }
-const PACK_LIMIT = 1432 * 1024;
+const PACK_LIMIT = 1464 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -157,9 +157,36 @@ function createNarration(root, host, preferences) {
         if (context.queue.length >= QUEUE_LIMIT) return;
         scene._wqaNarrationSeen = { list: interpreter._list, index: commandIndex };
         context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions,
+            screenX: scene._spriteset.x, screenY: scene._spriteset.y,
             x: actor._realX, y: actor._realY, mapY: map._displayY, mapX: map._displayX, direction: actor._direction, id: candidate.id,
             finale: visual === -6 ? captureFinale(root, scene, candidate.id) : null });
         return true;
+    }
+
+    function jolt(scene, interpreter, duration) {
+        if (!pack || !enabled() || !ready(scene)) return;
+        // Only the currently executing map/common-event chain can own a jolt.
+        // Parallel events qualify through their own native event interpreter.
+        const map = root.$gameMap;
+        const base = map._interpreter?._list ? map._interpreter :
+            map._events?.[interpreter._eventId]?._interpreter;
+        let current = base, depth = 0;
+        while (current && current !== interpreter && depth++ < 8) current = current._childInterpreter;
+        if (current !== interpreter || !base?._list) return;
+        const row = interpreter._list?.[interpreter._index];
+        const impulse = row?.code === 357 && row.parameters?.[0] === 'ShakeScreen' && row.parameters[1] === 'CreateImpulse';
+        if (!impulse && row?.code !== 225 || !(duration > 0 && duration <= 60)) return;
+        // The named Elder Tater shout and finale destruction already own voices.
+        if (interpreter._mapId === 13 && interpreter._eventId === 5 && interpreter._index === 63) return;
+        if (owner && (owner.scene !== scene || owner.list !== base._list)) leave(owner.scene);
+        const context = owner ?? begin(scene, base);
+        if (context.queue.length >= QUEUE_LIMIT) return;
+        const prior = context.lastJolt;
+        if (prior?.interpreter === interpreter && prior.list === interpreter._list && prior.index === interpreter._index) return;
+        context.lastJolt = { interpreter, list: interpreter._list, index: interpreter._index };
+        context.joltBase = base;
+        context.queue.push({ id: duration > 1 ? 'screen-shake' : 'screen-jolt', visual: -7,
+            screenX: scene._spriteset.x, screenY: scene._spriteset.y, frame: host.graphics.frameCount });
     }
 
     function prologue(scene) {
@@ -247,7 +274,9 @@ function createNarration(root, host, preferences) {
         if (context.battle) return enabled() && finaleBattleReady(root, host, scene) &&
             interpreter === root.$gameTroop._interpreter && interpreter._list === list;
         return interpreter ? ready(scene) && enabled() &&
-            interpreter === root.$gameMap._interpreter && interpreter._list === list : idleReady(scene);
+            (interpreter === root.$gameMap._interpreter || context.joltBase === interpreter &&
+                root.$gameMap._events?.[interpreter._eventId]?._interpreter === interpreter) &&
+            interpreter._list === list : idleReady(scene);
     }
 
     function visibleRewardGlow(scene) {
@@ -273,6 +302,8 @@ function createNarration(root, host, preferences) {
     }
 
     function visibleActorCue(scene, state) {
+        if (state.visual === -7) return scene._spriteset._tilemap?.worldVisible === true &&
+            (scene._spriteset.x !== state.screenX || scene._spriteset.y !== state.screenY);
         if (state.visual === -6) return finaleVisible(root, host, scene, state);
         // The finale paints a white full-screen picture over this change.
         if (state.id === 'chomps-sacrifice' && root.$gameScreen?._pictures?.[29]?._opacity > 20) return false;
@@ -339,7 +370,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { accepted, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, jolt, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

@@ -2456,5 +2456,27 @@
         -6
       ]
     ]
+  },
+  "elder-tater-shout": {
+    "text": "Elder Tater's shout jolts the screen.",
+    "beats": [
+      [
+        13,
+        5,
+        0,
+        67,
+        5,
+        null,
+        -6
+      ]
+    ]
+  },
+  "screen-jolt": {
+    "text": "The screen jolts.",
+    "beats": []
+  },
+  "screen-shake": {
+    "text": "The screen shakes.",
+    "beats": []
   }
 }
