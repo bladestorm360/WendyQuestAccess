@@ -751,6 +751,9 @@ def map_notification(original):
         globalThis.WendyQuestAccessProloguePresent?.(this);
     if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 16 && this._wqaMechDoubleNarrationMask !== 3)
         globalThis.WendyQuestAccessMechEntryPresent?.(this);
+    if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 181 &&
+        $gameMap._events?.[15]?._pageIndex === 2 && !this._wqaTylerEntryObserved)
+        globalThis.WendyQuestAccessTylerEntryPresent?.(this);
     if (Graphics._wqaNarrationEnabled && (this._spriteset?._balloonSprites?.length ||
         $gameMap._mapId === 16 && !this._wqaAssistanceReveal))
         globalThis.WendyQuestAccessQuestionsPresent?.(this);

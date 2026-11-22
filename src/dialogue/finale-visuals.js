@@ -65,7 +65,25 @@ function finaleVisible(root, host, scene, state) {
         (id === 'wendy-wakes' ? root.$gameSwitches.value(22) : state.actor._direction !== state.direction);
     if (id === 'tyler-arrives' || id === 'tyler-departs') {
         const pos = state.sprite.worldTransform;
-        return !state.actor._transparent && state.actor._jumpCount > 0 &&
+        const script = root.$gameMap?._interpreter;
+        const list = root.$dataMap?.events?.[15]?.pages?.[2]?.list;
+        const spawn = root.$dataMap?.events?.[7];
+        // The exact first-shop route may finish before native readiness. Its
+        // following30-frame wait still displays the freshly landed arrival.
+        // Prove that native route's identity, actual destination and painted
+        // Tyler; ordinary standing/dialogue or a remote actor cannot qualify.
+        const balloons = scene._spriteset?._balloonSprites;
+        const recentMusic = state.sourceKey === '181/15/2/0' && Array.isArray(balloons) && balloons.length <= 32 &&
+            balloons.some(balloon => balloon.targetObject === state.actor && balloon._balloonId === 3 &&
+                renderedSprite(balloon, scene._spriteset._effectsContainer));
+        const landed = state.sourceKey === '181/15/2/0' && root.$gameMap._mapId === 181 &&
+            state.actor === root.$gameMap._events[7] && script?._eventId === 15 && script._list === list &&
+            (script._index === 8 && script._waitCount > 0 || script._index >= 8 && script._index <= 14 && recentMusic) &&
+            list?.[0]?.code === 205 &&
+            list[0].parameters[0] === 7 && list[0].parameters[1]?.list?.[3]?.code === 14 &&
+            list[0].parameters[1].list[3].parameters.join(',') === '-4,0' &&
+            state.actor._x === spawn.x - 4 && state.actor._y === spawn.y;
+        return !state.actor._transparent && (state.actor._jumpCount > 0 || landed) &&
             renderedSprite(state.sprite, scene._spriteset._tilemap) &&
             pos?.tx >= 0 && pos.tx <= host.graphics.width && pos.ty >= 0 && pos.ty <= host.graphics.height;
     }

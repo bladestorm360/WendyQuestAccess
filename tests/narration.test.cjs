@@ -525,3 +525,5 @@ require('./reaction-audit.cjs')(fixture, commandContext, stock, emoteMethods);
 require('./question-narration.cjs')(fixture, commandContext, stock, emoteMethods);
 
 require('./narration-continuity.cjs')(fixture, commandContext, emoteMethods);
+
+require('./tyler-entry.cjs')(fixture, commandContext, stock, emoteMethods);

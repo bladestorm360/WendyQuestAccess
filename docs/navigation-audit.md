@@ -268,3 +268,8 @@ The connected `tests/world-detour-field.cjs` check passes actual field selection
 
 
 Owner gameplay correction, November 21, 2026: Cracked Cove already listed multiple world-map exits, including the Caffeine Caverns connection; the owner found it after browsing farther. Withdraw the claim that this particular connection was missing or broken. The owner confirms the installed cross-map routing is working in actual play. This confirms the exercised navigation, not every possible route or the unrelated pending speech/cave checks. No routing changes, rebuild or deployment are made for this feedback.
+
+
+## Russetwood workshop upper-floor barrel check
+
+November22 owner check. Map122 events4,5 and9 all use BARREL U CAN OPEN for both closed and open pages. Direct inspection of the installed character sheet confirms wooden barrels with metal hoops and opening lids. Event5 at5,7 calls Common19 and grants Crispy Fries; the reward does not make the visible container a chest. Its existing Barrel label is retained, without revealing contents through navigation. Event14 is a separately displayed baked-potato pickup; the four anvils remain objects. No runtime or geometry change was required.

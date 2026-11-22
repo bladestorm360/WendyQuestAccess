@@ -844,6 +844,10 @@ function boot(root, nodeRequire, nodeProcess) {
         try { narration?.questionsPresent(scene); } catch { narration?.leave(scene); }
     };
 
+    root.WendyQuestAccessTylerEntryPresent = function (scene) {
+        try { narration?.tylerEntry(scene); } catch { narration?.leave(scene); }
+    };
+
     root.WendyQuestAccessMechEntryPresent = function (scene) {
         try { narration?.mechEntry(scene); } catch { narration?.leave(scene); }
     };

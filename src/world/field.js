@@ -16,7 +16,7 @@ const { tileKey, DIRECTIONS } = require('./geometry.cjs');
 const { browse, createDestinationBrowser, activeMovingEnemy } = require('./destinations');
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
-const { CONTROLS } = require('./terrain-control-labels.cjs');
+const { CONTROLS, TERRAIN_PAGES, simpleTerrainControl } = require('./terrain-control-labels.cjs');
 const { createTerrainJourney, BRIDGE_REASON, CRYSTAL_REASON, PULL_REASON, STONE_ISLAND } = require('./terrain-journey');
 const { saltControlName } = require('./puzzles/salt-state.cjs');
 const { mapPlace } = require('./map-banner');
@@ -140,6 +140,15 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             resumeCaveWalk(job, job.caveExit);
             return;
         }
+        if (job?.controlPrerequisite && !arrived) clearIceRoute(scene);
+        if (arrived && job?.controlPrerequisite) {
+            // This is an intermediate interaction, not the selected arrival.
+            // Choice-free buttons start natively in Autowalk.arrive; other
+            // controls keep their concise manual activation instruction.
+            retire(scene);
+            if (record) command('navigationReport', record);
+            return;
+        }
         if (failed) host.beacon?.stop(scene);
         if (arrived) {
             const previousSpeech = speech;
@@ -207,6 +216,29 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return true;
     }
 
+    function retainControlRoute(job, result) {
+        const map = root.$gameMap, block = map._events[result.event];
+        if (!job.autowalk || !block || block._erased || ![0,1].includes(block._trigger)) return null;
+        // Reuse the existing narrowly gated native interaction continuation.
+        // The browser remains on the original destination throughout the detour.
+        iceRoute = { kind: 'control', scene: job.scene, map, block, browser: owner.browser,
+            player: root.$gamePlayer, page: block._pageIndex, list: block.list(), gate: result.gate,
+            source: TERRAIN_PAGES[job.map]?.[result.event]?.[0] ?? result.event,
+            pullStage: [53,55].includes(job.map) ? root.$gameVariables?.value?.(4) : undefined,
+            controller: job.controller, quest: job.quest, started: false };
+        job.scene._wqaIceRoute = true;
+        return iceRoute;
+    }
+
+    function controlRouteCurrent(scene, eventId) {
+        const route = iceRoute;
+        if (route?.kind !== 'control' || route.scene !== scene || route.map !== root.$gameMap ||
+            route.player !== root.$gamePlayer || route.player._transferring || host.manager._nextScene) return false;
+        const id = eventId ?? route.map._interpreter?._eventId;
+        return route.started && (id === route.block._eventId || id === route.source) &&
+            (eventId !== undefined || route.block.isStarting() || route.map._interpreter?._list === route.list);
+    }
+
     function clearIceRoute(scene) {
         if (iceRoute?.scene !== scene) return;
         scene._wqaIceRoute = false;
@@ -269,7 +301,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             // position notifications must leave its path narration admitted.
             job.scene._wqaRouteActive = false;
             if (job.caveWalk) announceCaveWalk(job);
-            else if (!job.quietAutowalk && result.distance > 0 && !(result.autowalkStop && result.distance === 1))
+            else if (!job.quietAutowalk && (result.distance > 0 || walkingJob.controlPrerequisite) &&
+                !(result.autowalkStop && result.distance === 1))
                 present(job, { kind: 'fieldStatus', name: 'Walking.' }, true);
             if (!job.quietAutowalk && speech && preferences().speakAutowalkPath) {
                 if (result.autowalkStop) {
@@ -680,9 +713,19 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     145: 'The crystal opens the passage.'
                 }[result.gate];
                 startBeaconApproach(job, result, result.event);
-                presentRoute(job, { kind: 'routeDirections', name: job.label, legs: result.legs, facing: result.arrival.facing,
-                    guide: reason, more: result.more === true, prerequisite,
-                    prerequisiteMove: result.step ? result.boundary : undefined });
+                const retained = retainControlRoute(job, result);
+                const entry = root.$dataMap.events[result.event];
+                const automatic = retained && simpleTerrainControl(job.map, retained.block, entry);
+                // Numeric terrain gate IDs are not timed-patrol callbacks.
+                // Keep that completion condition only on the inert handoff.
+                follow(job, { ...result, gate: undefined }, { kind: 'routeDirections', name: job.label,
+                    legs: result.legs, facing: result.arrival.facing, guide: reason,
+                    more: result.more === true, prerequisite,
+                    prerequisiteMove: result.step ? result.boundary : undefined },
+                { ...job, target: result.event, quest: null, point: false, vehicle: undefined,
+                    nearestLanding: false, controlPrerequisite: !!retained,
+                    prerequisiteAction: automatic ? event => iceRoute === retained && event === retained.block &&
+                        event._pageIndex === retained.page && event.list() === retained.list : undefined });
             }
             else if (result?.status === 'saltRoute') {
                 const event = result.actions?.[0];
@@ -1511,6 +1554,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         shoreJourney = null;
         clearCaveEvent();
         autowalk.stop();
+        if (iceRoute?.kind === 'control') clearIceRoute(iceRoute.scene);
         if (owner) { clearIceRoute(owner.scene); retire(owner.scene); }
     });
     function queue(job) {
@@ -1720,14 +1764,30 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         clearIceRoute,
         iceEventStarted(scene, event) {
             if (iceRoute?.scene !== scene) return;
-            if (iceRoute.block === event && !event._erased && event._trigger === 0) iceRoute.started = true;
-            else clearIceRoute(scene);
+            if (iceRoute.block === event && !event._erased &&
+                (event._trigger === 0 || iceRoute.kind === 'control' && event._trigger === 1)) iceRoute.started = true;
+            else if (!controlRouteCurrent(scene, event._eventId)) clearIceRoute(scene);
         },
         iceRouteReady(scene) {
             if (iceRoute?.scene !== scene || !ready(scene)) return;
             const { map, block, browser: selection, started } = iceRoute;
             if (map !== root.$gameMap || browser !== selection) return clearIceRoute(scene);
-            if (!started || !block._erased) return;
+            if (!started) return;
+            if (iceRoute.kind === 'control') {
+                if (!preferences().autowalk || iceRoute.player !== root.$gamePlayer ||
+                    iceRoute.quest && !questDestinationCurrent(root, scene, iceRoute.quest)) return clearIceRoute(scene);
+                const complete = iceRoute.gate ? root.$gameSwitches?.value?.(iceRoute.gate) === true :
+                    iceRoute.pullStage !== undefined ? root.$gameVariables?.value?.(4) > iceRoute.pullStage :
+                    block._erased || block._pageIndex !== iceRoute.page;
+                if (!complete) return;
+                const controller = iceRoute.controller;
+                clearIceRoute(scene);
+                // Native work is over. The existing worker now plans from
+                // current terrain, with no intermediate Arrived or Walking.
+                browserOwner(scene);
+                return rerouteAutowalk({ scene, controller });
+            }
+            if (!block._erased) return;
             clearIceRoute(scene);
             command('directions');
         },
@@ -1815,6 +1875,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         command,
         cancelAutowalk(scene) {
             clearCleanupWalk();
+            if (iceRoute?.kind === 'control') clearIceRoute(scene);
             // Revoke pending directions as well as movement, without a second stop announcement.
             const pending = pendingAutowalk(scene);
             clearCaveResume();
@@ -1942,8 +2003,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (caveEvent?.scene === scene && !queuedAutomatic && (!caveEvent.accepted || !sameCaveAction(caveEvent, scene, mapEventId)))
                 clearCaveEvent();
             retireArrival(scene, true);
-            if (!(iceRoute?.scene === scene && iceRoute.started && iceRoute.block._eventId === mapEventId))
-                clearIceRoute(scene);
+            if (!(iceRoute?.scene === scene && iceRoute.started && iceRoute.block._eventId === mapEventId) &&
+                !controlRouteCurrent(scene, mapEventId)) clearIceRoute(scene);
             transfers.leave(scene);
             autowalk.stop(scene);
             if (scene) scene._wqaFieldReady = false;

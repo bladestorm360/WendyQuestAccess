@@ -193,6 +193,10 @@ function createNarration(root, host, preferences) {
     function accepted(scene, interpreter, actor, switched, visual, commandIndex = interpreter._index) {
         if (!pack || !enabled() || !ready(scene)) return;
         const map = root.$gameMap;
+        // At the exact first-shop music command, recover the preceding arrival
+        // before queuing music if readiness opened during this native update.
+        if (map._mapId === 181 && interpreter._eventId === 15 && commandIndex === 8 && visual === 3 &&
+            interpreter._list === root.$dataMap?.events?.[15]?.pages?.[2]?.list) tylerEntry(scene);
         const common = commonReactions.resolve(root, interpreter, visual);
         if (common) { interpreter = common.parent; commandIndex = common.index; }
         const candidates = beats[interpreter._mapId]?.[interpreter._eventId]?.[commandIndex];
@@ -251,7 +255,13 @@ function createNarration(root, host, preferences) {
         if (interpreter !== map._interpreter) context.joltBase = interpreter;
         if (pendingCount() >= QUEUE_LIMIT) return;
         scene._wqaNarrationSeen = { list: interpreter._list, index: commandIndex };
-        context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions, order: ++sequence,
+        const order = ++sequence;
+        // A native portrait preload can drop the unpainted jump while keeping
+        // the later music receipt. Retain only this source ordinal so a fresh
+        // rendered recovery stays before that receipt, never interrupts it.
+        if (sourceKey === '181/15/2/0') scene._wqaTylerEntryOrder ||= order;
+        context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions,
+            order: sourceKey === '181/15/2/0' ? scene._wqaTylerEntryOrder : order,
             script: interpreter, scriptList: interpreter._list, sourceKey,
             balloonAnchor: candidate.balloonAnchor, waitFrames: candidate.waitFrames,
             screenX: scene._spriteset.x, screenY: scene._spriteset.y,
@@ -373,6 +383,22 @@ function createNarration(root, host, preferences) {
         const mask = scene._wqaMechDoubleNarrationMask || 0;
         if (!(mask & 1) && !pending('16/39/0/0')) accepted(scene,interpreter,root.$gamePlayer,undefined,1,0);
         if (!(mask & 2) && !pending('16/39/0/6')) accepted(scene,interpreter,map._events[39],undefined,undefined,6);
+    }
+
+    function tylerEntry(scene) {
+        const map = root.$gameMap, interpreter = map?._interpreter;
+        const list = root.$dataMap?.events?.[15]?.pages?.[2]?.list;
+        // Shop entry may execute the first route while portrait/HUD resources
+        // are still gated. Recover only its current native route/landing wait
+        // after readiness; no observation or work is started during loading.
+        if (!pack || !enabled() || !ready(scene) || map?._mapId !== 181 || scene._wqaTylerEntryObserved ||
+            interpreter?._eventId !== 15 || interpreter._list !== list ||
+            interpreter._index < 1 || interpreter._index > 14) return;
+        const actor = map._events[7], spawn = root.$dataMap.events[7];
+        if (!actor || !(actor._jumpCount > 0) && !(actor._x === spawn.x - 4 && actor._y === spawn.y)) return;
+        const key = '181/15/2/0';
+        if (owner?.scene === scene && owner.queue.some(state => state.sourceKey === key)) return;
+        accepted(scene, interpreter, actor, undefined, -6, 0);
     }
 
     function prologue(scene) {
@@ -615,6 +641,7 @@ function createNarration(root, host, preferences) {
                 state.confirmed = state.battleVisible ? state.battleVisible() : state.idle ? map.inactiveTime < state.idle.end &&
                     state.idle.visible(scene, map, root.$gamePlayer) : visibleActorCue(scene, state);
                 if (state.confirmed && state.bit) scene._wqaIdleNarrationMask |= state.bit;
+                if (state.confirmed && state.sourceKey === '181/15/2/0') scene._wqaTylerEntryObserved = true;
                 if (state.confirmed && state.id === 'assistance-chest') scene._wqaAssistanceReveal = true;
                 if (state.confirmed && map?._mapId === 16) {
                     if (state.sourceKey === '16/39/0/0') scene._wqaMechDoubleNarrationMask = (scene._wqaMechDoubleNarrationMask || 0) | 1;
@@ -625,7 +652,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { accepted, entry, pause, jolt, environmentStart, questionsPresent, mechEntry, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, entry, pause, jolt, environmentStart, questionsPresent, mechEntry, tylerEntry, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

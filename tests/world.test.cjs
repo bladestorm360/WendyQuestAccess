@@ -1323,6 +1323,10 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if (process.argv.includes('--controls-only')) {
+        await require('./control-autowalk.cjs')(c,load,verifyWorker,read,snapshot);
+        return;
+    }
     if (process.argv.includes('--ice-only')) {
         await require('./ice-routes.cjs')(c,load,snapshot,read,verifyWorker);
         return;
