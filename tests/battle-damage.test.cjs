@@ -286,3 +286,18 @@ console.log('Verified basic actor, companion and enemy attribution, miss, and na
 console.log('Verified the installed damage popup for HP, recovery, miss, block, visible modifiers and unsigned FP, with repeated events and animation gating.');
 console.log('Throttled completed popup to formatted receipt', delay.toFixed(2), 'ms. 250 stable updates',
     baseline.toFixed(2), 'ms native,', stable.toFixed(2), 'ms enabled.');
+
+// The same story action uses the existing native numeric popup pipeline.
+{
+    const troops=c.$dataTroops=data('Troops.json');
+    c.$gameTroop={_troopId:14,_interpreter:{_list:troops[14].pages[0].list,_index:12,_waitMode:'action'}};
+    right._battler._enemyId=9;right._battler.originalName=()=> 'Mech Double';
+    const scripted=battle._action={_forcing:true,isSkill:()=>true,item:()=>skills[55],subject:()=>right._battler};
+    battle._phase='action';const before=seen.length;
+    log.startAbility(scene,scripted,right);renderer.emit('postrender');assert.equal(seen.at(-1),'Mech Double uses Double Laser.');
+    result(ally,{used:true,hpAffected:true,hpDamage:239});advance(40);
+    assert.deepEqual(seen.slice(before),['Mech Double uses Double Laser.','Wendy, 239 HP damage.']);
+    assert.equal(c.$gameTroop._interpreter._index,12,'observation never advances the story');
+    c.$gameTroop={_interpreter:{}};
+    console.log('Verified Double Laser followed by actual native glyph-painted Wendy damage while the forced-action interpreter remains active.');
+}

@@ -160,6 +160,15 @@ if sys.argv[2:] == ['log']:
     methods.append(battle[start:end + 1] + ';')
     start = stock.index('Window_BattleLog.prototype.displayItemMessage = function(')
     methods.append(stock[start:stock.index('\n};', start) + 3])
+    objects = (installed / 'package.nw/js/rmmz_objects.js').read_text(encoding='utf-8-sig')
+    for name in ('executeCommand', 'command339'):
+        start = objects.index(f'Game_Interpreter.prototype.{name} = function(')
+        methods.append(objects[start:objects.index('\n};', start) + 3])
+    start = objects.index('Game_Battler.prototype.forceAction = function(')
+    methods.append(objects[start:objects.index('\n};', start) + 3])
+    native_managers = (installed / 'package.nw/js/rmmz_managers.js').read_text(encoding='utf-8-sig')
+    start = native_managers.index('BattleManager.processForcedAction = function(')
+    methods.append(native_managers[start:native_managers.index('\n};', start) + 3])
     print(json.dumps(methods))
     sys.exit(0)
 

@@ -12,6 +12,7 @@ const { createBattleTiming } = require('./battle/timing');
 const { createBattleCues } = require('./battle/timing-cues');
 const { createAutomaticTiming } = require('./battle/automatic-timing');
 const { createBattleLog } = require('./battle/action-log');
+const { scriptedBattleAction } = require('./battle/presentation');
 const { createBattleSpeech } = require('./battle/speech');
 const { createSkillEffects } = require('./battle/skill-effects');
 const { attackSource, abilitySource, expectLethalDamage } = require('./battle/damage-popup');
@@ -712,7 +713,7 @@ function boot(root, nodeRequire, nodeProcess) {
         const manager = root.SceneManager;
         return scene?._wqaBattleStarted && scene._started && scene._active &&
             !scene._fadeDuration && !scene._fadeOpacity && !scene._wqaSettingsActive &&
-            !scene._wqaBattleInterpreter?._list && !root.$gameTroop?._interpreter?._list &&
+            (scriptedBattleAction(root, scene) || !scene._wqaBattleInterpreter?._list && !root.$gameTroop?._interpreter?._list) &&
             !root.$gameMessage?.isBusy() && !manager._nextScene && !manager._exiting &&
             !manager._wqaNativeAutosaves && !root.Graphics._wqaResize && root.Graphics.app?.stage === scene &&
             root.document.hasFocus() ? scene : null;

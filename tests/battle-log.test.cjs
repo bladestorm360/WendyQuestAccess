@@ -7,6 +7,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const { createBattleLog } = require('../src/battle/action-log');
+const { battleScenePresented } = require('../src/battle/presentation');
 const { recordCollapse, recordCondition, recordResistance, recordMomentum } = require('../src/battle/outcomes');
 const { abilitySource } = require('../src/battle/damage-popup');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
@@ -27,7 +28,7 @@ const painted = [];
 const active = new Map();
 const battle = { _phase: 'action', _spriteset: { isBusy: () => spritesBusy }, _logWindow: { isBusy: () => true } };
 const c = vm.createContext({
-    Scene_Battle: function () {}, Scene_Message: function () {}, Window_BattleActionLog: function () {},
+    Game_Battler: function () {}, Game_Interpreter: function () {}, Scene_Battle: function () {}, Scene_Message: function () {}, Window_BattleActionLog: function () {},
     Window_Base: function () {}, Window_BattleLog: function () {}, Sprite_Enemy: function () {},
     Point: function(x,y){this.x=x;this.y=y;}, BattleHelper: { IsBattleScene: () => true }, BattleAnimations: {}, Sprite_BattleScreenParticipant: function () {},
     a2_0x990531() { throw Error('Unresolved battle property'); },
@@ -321,3 +322,49 @@ for (const [id, animation, expected, waits] of [
     const after = lines.length;observer.startAbility(scene, action, freezer);renderer.emit('postrender');assert.equal(lines.length, after);
 }
 console.log('Verified missing BigMech punch/gun and Big Booster callouts at native animation entry, repeated actions, exact action ownership and unchanged effects/waits.');
+
+// Execute the authored forced-action command and native forced-action setup.
+// The interpreter remains active throughout the attack; normal target/menu
+// admission must stay closed while action/log output becomes available.
+{
+    const troops=c.$dataTroops=gameData('Troops.json'),item=skills[55];
+    const subject=Object.assign(new c.Game_Battler(),{_enemyId:9,_lastTargetIndex:0,
+        originalName:()=> 'Mech Double',name:()=> 'Mech Double',isDeathStateAffected:()=>false,
+        clearActions(){this._actions=[];},removeCurrentAction(){this._actions.shift();}});
+    c.Game_Action=function(owner,forced){this._forcing=forced;this.subject=()=>owner;this.isSkill=()=>true;
+        this.setSkill=id=>this.item=()=>skills[id];this.setTarget=id=>this.targetIndex=id;};
+    const script=Object.assign(new c.Game_Interpreter(),{_list:troops[14].pages[0].list,_index:11,
+        currentCommand(){return this._list[this._index];},
+        iterateBattler(kind,index,visit){assert.deepEqual([kind,index],[0,0]);visit(subject);},
+        setWaitMode(mode){this._waitMode=mode;}});
+    c.$gameTroop={_troopId:14,_interpreter:script};
+    battle._subject=null;battle._phase='turn';battle.forceAction=battler=>battle._actionForcedBattler=battler;
+    battle.startAction=()=>{battle._action=battle._subject._actions[0];battle._phase='action';};
+    assert(script.executeCommand());assert.equal(script._index,12);assert.equal(script._waitMode,'action');
+    battle.processForcedAction();const action=battle._action;
+    assert.equal(action._forcing,true);assert.equal(action.item(),item);assert.equal(action.targetIndex,0);
+    freezer._enemy=freezer._battler=subject;scene._spriteset._enemySprites=[freezer];
+    c.BattleHelper.GetBattlerSprite=()=>({x:300,y:80,width:32,height:64,anchor:{x:.5,y:1},GetTargetPosition:()=>({x:300,y:80})});
+    const host={manager:c.SceneManager,graphics:c.Graphics,hasFocus:()=>true,screenFading:()=>false};
+    assert.equal(battleScenePresented(c,host,scene),false,'target/menu admission remains closed');
+    assert.equal(battleScenePresented(c,host,scene,true),true);
+    c.fixtureAbility=item;c.fixtureSubject=subject;
+    vm.runInContext('fixtureLog.displayItemMessage(fixtureAbility.message1,fixtureSubject,fixtureAbility);',c);
+    let effects=0;c.BattleAnimations.MechDoubleLaserBlast=()=>effects++;
+    const before=lines.length,waits=freezer.ActionTargetAnimation(action,'MechDoubleLaser',{});
+    assert.deepEqual(Array.from(waits),[160,100]);assert.equal(effects,1);assert.equal(lines.length,before);
+    renderer.emit('postrender');assert.equal(lines.at(-1),'Mech Double uses Double Laser.');
+    const announced=lines.length;observer.startAbility(scene,action,freezer);renderer.emit('postrender');assert.equal(lines.length,announced);
+    // Check that identical data without the exact native story ownership
+    // cannot admit the line or bypass a native/loading boundary.
+    for(const change of [()=>c.$gameTroop._troopId=15,()=>script._index=13,()=>script._waitMode='message',
+        ()=>action._forcing=false,()=>scene._fadeDuration=1]){
+        const save={troop:c.$gameTroop._troopId,index:script._index,mode:script._waitMode,forcing:action._forcing};
+        change();assert.equal(battleScenePresented(c,host,scene,true),false);
+        Object.assign(c.$gameTroop,{_troopId:save.troop});Object.assign(script,{_index:save.index,_waitMode:save.mode});
+        action._forcing=save.forcing;scene._fadeDuration=0;
+    }
+    log.cooldown=0;for(let n=0;n<100;n++)frame();assert.deepEqual(lines.slice(announced),[],'the painted native row belongs to the one already-announced action');
+    c.$gameTroop={_interpreter:{}};battle._action=null;
+    console.log('Verified original Troop14 command339/forced-action dispatch, Double Laser at native animation entry, exact message label, unchanged160/100 waits/effect, no duplicate row and closed ordinary menu/target gates.');
+}

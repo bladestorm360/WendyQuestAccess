@@ -87,6 +87,7 @@ def bundle():
         './battle/radial-result': 'battle/radial-result.js',
         './enemy-state': 'battle/enemy-state.js',
         './presentation': 'battle/presentation.js',
+        './battle/presentation': 'battle/presentation.js',
         '../battle/presentation': 'battle/presentation.js',
         './party-vitals': 'battle/party-vitals.js',
         './battle/party-vitals': 'battle/party-vitals.js',

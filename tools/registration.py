@@ -581,7 +581,7 @@ def windows_notification(original):
         172025: b'        if (state.iconIndex > 0 && !state.message4) '
                 b'globalThis.WendyQuestAccessBattleCondition?.(this,target,state,false,true);\n',
         # Carry the source of the native ability line as a separate queue argument.
-        166632: b', (item?.id===31||item?.id===32||item?.id===102||item?.id===103||item?.id===112||item?.id===113||item?.id===115)?'
+        166632: b', (item?.id===31||item?.id===32||item?.id===55||item?.id===102||item?.id===103||item?.id===112||item?.id===113||item?.id===115)?'
                 b'globalThis.WendyQuestAccessAbilitySource?.(item,fmt):undefined',
         162511: b'    if(SceneManager._scene?._wqaBattleStarted&&SceneManager._scene._logWindow===this){'
                 b'BattleManager._wqaBattleSpritesBusy=undefined;'
@@ -1024,13 +1024,13 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
     attack_source = (b'wqaAction===this._action&&globalThis.WendyQuestAccessAttackSource?.('
                      b'_0x5a64fd,wqaPerformer,_0x15034e,wqaAction),')
     # Exact native target-animation entry owns Freezer Burn and the three
-    # blank boss action messages. No effect or wait is replaced.
+    # blank boss action messages and the forced intro Double Laser. No effect or wait is replaced.
     freezer_token = b'function(_0x545edf,_0x4eadf5,_0x1f43a8,_0x3accfc={}){'
     freezer_entry = original.index(freezer_token) + len(freezer_token)
     stones_entry = original.index(b"],$gameScreen['startTint']", original.index(b'_0x348760=[')) + 2
     return insert(original, BATTLE_SHA, {
         stones_entry: b'globalThis.WendyQuestAccessFinaleStones?.(SceneManager._scene,_0x37cee4,_0xffdf2,_0x348760),',
-        freezer_entry: b'if(_0x4eadf5==="FreezerBurn"||_0x4eadf5==="BigMechPunch"||_0x4eadf5==="BigMechGun"||_0x4eadf5==="BigMechBoosterBash")'
+        freezer_entry: b'if(_0x4eadf5==="MechDoubleLaser"||_0x4eadf5==="FreezerBurn"||_0x4eadf5==="BigMechPunch"||_0x4eadf5==="BigMechGun"||_0x4eadf5==="BigMechBoosterBash")'
                        b'globalThis.WendyQuestAccessAbilityAnimation?.(_0x545edf,this);',
         # Preserve the exact overlay returned after the native coroutine attaches it.
         57087: b'const wqaBeefOverlay=',

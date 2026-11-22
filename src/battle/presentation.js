@@ -2,12 +2,24 @@
 
 const { renderedSprite } = require('../runtime/rendered-sprite');
 
-function battleScenePresented(root, host, scene) {
+// This one story action runs while its native troop interpreter waits at339.
+// Only action/log observers opt in; menu/target readers keep their usual gate.
+function scriptedBattleAction(root, scene) {
+    const troop = root.$gameTroop, script = troop?._interpreter, action = root.BattleManager?._action;
+    return troop?._troopId === 14 && script?._list === root.$dataTroops?.[14]?.pages?.[0]?.list &&
+        script?._index === 12 && script._waitMode === 'action' && action?._forcing === true &&
+        root.BattleManager._phase === 'action' && action.isSkill?.() && action.item?.()?.id === 55 &&
+        action.subject?.()?._enemyId === 9 &&
+        (!scene?._wqaBattleInterpreter?._list || scene._wqaBattleInterpreter === script);
+}
+
+function battleScenePresented(root, host, scene, scripted = false) {
     return !!(scene?._wqaBattleStarted && scene._started && scene._active && scene._fadeDuration === 0 &&
         scene._fadeOpacity === 0 && scene === host.manager._scene && host.graphics.app?.stage === scene &&
         !host.manager._nextScene && !host.manager._exiting && !host.manager._wqaNativeAutosaves &&
         !host.graphics._wqaResize && !scene._wqaSettingsActive && !host.screenFading() && host.hasFocus() &&
-        !root.$gameTroop?._interpreter?._list && !scene._wqaBattleInterpreter?._list && !root.$gameMessage?.isBusy?.());
+        (scripted && scriptedBattleAction(root, scene) ||
+            !root.$gameTroop?._interpreter?._list && !scene._wqaBattleInterpreter?._list) && !root.$gameMessage?.isBusy?.());
 }
 
 function battlePresented(root, host, scene, itemOverlay = false) {
@@ -65,4 +77,4 @@ function statusAppearance(art) {
     ].filter(Boolean);
 }
 
-module.exports = { battleScenePresented, battlePresented, visibleSprite, drawnText, enemyName, statusAppearance };
+module.exports = { scriptedBattleAction, battleScenePresented, battlePresented, visibleSprite, drawnText, enemyName, statusAppearance };
