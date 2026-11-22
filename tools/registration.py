@@ -138,7 +138,7 @@ BATTLE_LOG_LEAVING = (b'SceneManager._scene?._wqaBattleLogActive&&'
 BATTLE_RADIAL_LEAVING = (b'SceneManager._scene?._wqaRadialActive&&'
                          b'globalThis.WendyQuestAccessBattleRadialLeaving?.(SceneManager._scene)')
 def narration_leaving(scene=b'SceneManager._scene'):
-    return (b'if(' + scene + b'?._wqaNarrationActive||' + scene + b'?._wqaNarrationLoading)'
+    return (b'if(' + scene + b'?._wqaNarrationActive||' + scene + b'?._wqaNarrationLoading||' + scene + b'?._wqaEnvironmentPending)'
             b'globalThis.WendyQuestAccessNarrationLeaving?.(' + scene + b');')
 
 
@@ -559,15 +559,13 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,(this._mapId===190||this._mapId===83||this._mapId===13)?this.character(0):$gamePlayer,undefined,-6);}',
         # ShowRewardTokens synchronously appends exactly one reward sprite.
         # Record it after the native call, before any later event command.
-        305132: b'if(Graphics._wqaNarrationEnabled&&pluginName==="ShakeScreen"&&params[1]==="CreateImpulse")'
+        305132: b'if(Graphics._wqaNarrationEnabled&&(pluginName==="ShakeScreen"&&params[1]==="CreateImpulse"||pluginName==="MapScene"&&params[1]==="FloodFill"||[51,53,55].includes(this._mapId)&&pluginName==="Tyruswoo_TileControl"&&params[1]==="set_tile"))'
                 b'globalThis.WendyQuestAccessScreenJolt?.(SceneManager._scene,this,Number(params[3]?.Duration));'
                 b'const wqaRewardScene=pluginName==="WendyQuest"&&params[1]==="ShowRewardTokens"?SceneManager._scene:null;'
                 b'const wqaRewardChildren=wqaRewardScene?._spriteset?.children;'
                 b'const wqaRewardBefore=wqaRewardChildren?.length;\n    ',
         305198: b'\n    if(wqaRewardBefore!==undefined&&wqaRewardChildren.length===wqaRewardBefore+1)'
                 b'globalThis.WendyQuestAccessTreasureStarted?.(wqaRewardScene,wqaRewardChildren[wqaRewardBefore]);',
-        288800: b'    if(Graphics._wqaNarrationEnabled&&params[0]>0&&params[1]>0&&params[2]>0)'
-                b'globalThis.WendyQuestAccessScreenJolt?.(SceneManager._scene,this,params[2]/60);\n',
         258782: b'\n    if(waitMode==="message"&&SceneManager._scene?._wqaBattleStarted)'
                 b'SceneManager._scene._wqaBattleInterpreter=this;',
     })
@@ -744,7 +742,7 @@ def map_notification(original):
     }
     if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 13 && !this._wqaArrivalObserved)
         globalThis.WendyQuestAccessProloguePresent?.(this);
-    if (this._wqaNarrationActive) globalThis.WendyQuestAccessNarrationPresent?.(this);
+    if (this._wqaNarrationActive || this._wqaEnvironmentPending) globalThis.WendyQuestAccessNarrationPresent?.(this);
     // The opening has no controllable field before its first visual beat.
     // Warm asynchronously only after the normal map/resource readiness gates.
     if (Graphics._wqaNarrationEnabled && !Graphics._wqaNarrationPackFinished && !this._wqaNarrationLoading &&

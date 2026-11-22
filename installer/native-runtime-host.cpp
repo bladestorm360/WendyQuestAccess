@@ -16,6 +16,20 @@ static std::string utf8(const wchar_t* text) {
 }
 int wmain(int argc, wchar_t** argv) {
     if (argc < 3) { std::fputs("Expected supported game directory and mod script.\n", stderr); return 2; }
+    // The standalone utility has finite process-tree memory and CPU budgets.
+    // This job is local to the installer, independent of development admission.
+    HANDLE budget = CreateJobObjectW(nullptr, nullptr);
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION memory{};
+    memory.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_JOB_MEMORY | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    memory.JobMemoryLimit = 512ull * 1000 * 1000;
+    JOBOBJECT_CPU_RATE_CONTROL_INFORMATION cpu{};
+    cpu.ControlFlags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+    cpu.CpuRate = 2500;
+    if (!budget || !SetInformationJobObject(budget, JobObjectExtendedLimitInformation, &memory, sizeof(memory)) ||
+        !SetInformationJobObject(budget, JobObjectCpuRateControlInformation, &cpu, sizeof(cpu)) ||
+        !AssignProcessToJobObject(budget, GetCurrentProcess()) ||
+        !SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS)) return 6;
+    // Keep the job handle until normal process exit; closing it early kills us.
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
     if (!SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32 | LOAD_LIBRARY_SEARCH_USER_DIRS) ||
         !AddDllDirectory(argv[1])) return 3;

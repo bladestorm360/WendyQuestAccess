@@ -4,6 +4,7 @@ const cues = require('./narration-cues.json');
 const { renderedSprite } = require('../runtime/rendered-sprite');
 const { finaleVisible, captureFinale } = require('./finale-visuals');
 const { finaleBattleReady, bossFlash, combinedStones } = require('./finale-battle');
+const environmentVisuals = require('./environment-visuals');
 const { idleBeats } = require('./idle-narration');
 
 const beats = Object.create(null);
@@ -16,7 +17,7 @@ for (const id of clipIds) {
         (beats[map][event][index] ??= []).push({ id, page, actor, switchId: switchId ?? undefined, visual });
     }
 }
-const PACK_LIMIT = 1464 * 1024;
+const PACK_LIMIT = 1496 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -43,6 +44,7 @@ function createNarration(root, host, preferences) {
     let loading = null;
     let failed = false;
     let owner = null;
+    let environment = null;
     let clip = null;
 
     function ready(scene) {
@@ -104,7 +106,11 @@ function createNarration(root, host, preferences) {
         root.URL.revokeObjectURL(url);
     }
 
-    function leave(scene) {
+    function leave(scene, keepEnvironment = false) {
+        if (!keepEnvironment && environment && (!scene || environment.scene === scene)) {
+            environment.scene._wqaEnvironmentPending = false;
+            environment = null;
+        }
         if (loading && (!scene || loading.scene === scene)) {
             const { scene: field, xhr } = loading;
             loading = null;
@@ -163,7 +169,7 @@ function createNarration(root, host, preferences) {
         return true;
     }
 
-    function jolt(scene, interpreter, duration) {
+    function jolt(scene, interpreter) {
         if (!pack || !enabled() || !ready(scene)) return;
         // Only the currently executing map/common-event chain can own a jolt.
         // Parallel events qualify through their own native event interpreter.
@@ -175,7 +181,14 @@ function createNarration(root, host, preferences) {
         if (current !== interpreter || !base?._list) return;
         const row = interpreter._list?.[interpreter._index];
         const impulse = row?.code === 357 && row.parameters?.[0] === 'ShakeScreen' && row.parameters[1] === 'CreateImpulse';
-        if (!impulse && row?.code !== 225 || !(duration > 0 && duration <= 60)) return;
+        const effect = row?.parameters?.[3];
+        if (!impulse || Number(effect?.Power) !== 4 || Number(effect?.Duration) !== 1 ||
+            ![50, 80].includes(Number(effect?.Frequency))) return;
+        // Match the exact shout/reaction sound in the same authored beat.
+        // Nine fixed command slots cover either sound-before or sound-after.
+        const paired = interpreter._list.slice(Math.max(0, interpreter._index - 4), interpreter._index + 5)
+            .some(command => command.code === 250 && command.parameters?.[0]?.name === 'WQ/Emote/SFX_ScreenShake');
+        if (!paired) return;
         // The named Elder Tater shout and finale destruction already own voices.
         if (interpreter._mapId === 13 && interpreter._eventId === 5 && interpreter._index === 63) return;
         if (owner && (owner.scene !== scene || owner.list !== base._list)) leave(owner.scene);
@@ -185,8 +198,33 @@ function createNarration(root, host, preferences) {
         if (prior?.interpreter === interpreter && prior.list === interpreter._list && prior.index === interpreter._index) return;
         context.lastJolt = { interpreter, list: interpreter._list, index: interpreter._index };
         context.joltBase = base;
-        context.queue.push({ id: duration > 1 ? 'screen-shake' : 'screen-jolt', visual: -7,
+        context.queue.push({ id: 'screen-jolt', visual: -7,
             screenX: scene._spriteset.x, screenY: scene._spriteset.y, frame: host.graphics.frameCount });
+    }
+
+    function environmentStart(scene, interpreter) {
+        if (!pack || !enabled() || !ready(scene)) return;
+        const state = environmentVisuals.capture(root, scene, interpreter, host.graphics.frameCount);
+        if (!state) return;
+        if (environment?.list === state.list && environment.index === state.index) return;
+        environment = state;
+        scene._wqaEnvironmentPending = true;
+    }
+
+    function environmentPresent(scene) {
+        const state = environment;
+        if (!state || state.scene !== scene) return;
+        if (!enabled() || state.interpreter !== root.$gameMap?._interpreter ||
+            state.interpreter._list !== state.list || host.graphics.frameCount - state.frame > 600) {
+            scene._wqaEnvironmentPending = false;environment = null;return;
+        }
+        // No processing during flood-fill/resource work. Resume at the same
+        // native-ready site only after tile refresh and preload gates reopen.
+        if (!ready(scene)) return;
+        if (owner && (owner.scene !== scene || owner.list !== state.list)) leave(owner.scene, true);
+        const context = owner ?? begin(scene, state.interpreter);
+        if (context.queue.length >= QUEUE_LIMIT) return;
+        context.queue.push(state);environment = null;scene._wqaEnvironmentPending = false;
     }
 
     function prologue(scene) {
@@ -302,6 +340,7 @@ function createNarration(root, host, preferences) {
     }
 
     function visibleActorCue(scene, state) {
+        if (state.visual === -8) return environmentVisuals.visible(root, scene, state);
         if (state.visual === -7) return scene._spriteset._tilemap?.worldVisible === true &&
             (scene._spriteset.x !== state.screenX || scene._spriteset.y !== state.screenY);
         if (state.visual === -6) return finaleVisible(root, host, scene, state);
@@ -341,15 +380,16 @@ function createNarration(root, host, preferences) {
     }
 
     function present(scene) {
+        environmentPresent(scene);
         const context = owner;
         if (!context || context.scene !== scene) return;
-        if (!mayPresent(context)) return leave(scene);
+        if (!mayPresent(context)) return leave(scene, true);
         if (context.paintPending || (clip && context.queue.every(state => state.confirmed))) return;
         const frame = host.graphics.frameCount;
         // Keep already rendered descriptions even after the effect disappears.
         // Only unpainted effects expire on the short native presentation budget.
         context.queue = context.queue.filter(state => state.confirmed ||
-            frame - state.frame <= (state.id === 'chomps-sacrifice' || state.visual === -6 ? FLASH_LIMIT : state.visual === -4 ? REWARD_LIMIT : FRAME_LIMIT));
+            frame - state.frame <= (state.id === 'chomps-sacrifice' || (state.visual === -6 || state.visual === -8) ? FLASH_LIMIT : state.visual === -4 ? REWARD_LIMIT : FRAME_LIMIT));
         if (!clip && !context.queue.length) return leave(scene);
         const renderer = host.graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return leave(scene);
@@ -357,7 +397,7 @@ function createNarration(root, host, preferences) {
         renderer.once('postrender', () => {
             if (owner !== context) return;
             context.paintPending = false;
-            if (!mayPresent(context)) return leave(scene);
+            if (!mayPresent(context)) return leave(scene, true);
             if (host.graphics.frameCount - frame > FRAME_LIMIT) return;
             for (const state of context.queue) {
                 if (state.confirmed) continue;
@@ -370,7 +410,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { accepted, jolt, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, jolt, environmentStart, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

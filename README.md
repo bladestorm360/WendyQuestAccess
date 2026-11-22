@@ -1,58 +1,99 @@
-# WendyQuest accessibility mod
+# Wendy Quest Access
 
-Launch WendyQuest through Steam. Press **F8** to open accessibility settings. Use the **arrow keys**, **Enter** and **Escape** to navigate. **Help** has sections for menus, the pathfinder, battle and controller controls.
+An accessibility mod for **WendyQuest: Legend of the Four Corner Stones** on Windows. It provides spoken menus and dialogue, destination browsing, directions, optional autowalk, spatial navigation sounds, battle timing assistance and optional voiced animation descriptions.
 
-## Field controls
+This repository and the current preparation build remain private. Public release is pending.
 
-- Use the game’s arrow keys or WASD to move. Use Enter or Space to interact when the game shows its prompt.
-- In the default Letters layout, press **J** or **L** to browse destinations. Use **Shift+J** or **Shift+L** to change category, **K** to read the selection and **P** for route instructions. Entering a category selects its nearest destination and sorts it by distance to Wendy. Its order and your selection stay fixed as you move, until you switch categories again.
-- Press **Ctrl+Backslash** in either keyboard layout, or use **F8 → Navigation → Autowalk**, to toggle Autowalk. The setting is saved. When on, the same directions control walks you to the selected destination. Hear “Walking,” then “Arrived.” Wendy faces the interaction when a direction is required. Use Confirm to interact and follow any final exit instruction. Manual movement or **Shift+V** stops autowalk.
-- **All** combines available destinations and saved bookmarks. **NPC** lists available characters. **Shift+P** (Letters) or **Shift+Backslash** (Brackets and backslash) switches between All destinations and Reachable only. You can also change the filter in **Navigation**. **Events** gives directions to reachable scene triggers. Follow a marked trigger from **Quests**. Books, barrels and treasure use type labels. Caffeine Caverns map boards say “already obtained directions” when their pathway type is already on your map, including matching directions learned from another board. The French Fry Forest gate switches are in **Objects**. Press the action button at a switch. If a Crispy Beach route stops at a floor event, take the final step manually and request directions again after control returns. Save and load bookmarks under **Navigation → Bookmarks**.
-- **F8 → Navigation → Spoiler mode** starts off. With it off, the overworld list follows the game's known quest and discovery state. Turn it on to include concealed discoveries and later regions. The game’s normal interaction prompts are still spoken.
-- The mod announces boarding and landing with “On boat,” “On airship,” or “On foot.” While flying, “Can land” marks entry into a landable area. Consecutive landable tiles share one announcement. Use **Vehicles** to find the quay at Float Fort or a parked craft. **Exits** includes discovered Lost Ruins while sailing with All destinations selected. Follow the named dock, then request directions again on foot. Exits to the overworld say **World map**, with a direction where available.
-- Press **M** for the current map name, **Shift+M** for a short description of the terrain, visible landmarks and weather where applicable. The mod also announces named maps as you enter them.
-- Press **R** to repeat dialogue. In Salt Caverns and the Secret Cave, **Shift+G** gives the next puzzle step. In the patrol rooms, **Enemies** reports the Mech Guards. With **Cave timing cues** on, you can hear nearby guards' deeper footsteps. For continuous crossings in the second patrol room, wait for the first ping. The ping repeats at walking cadence while the opening is safe. Hold each announced direction and switch when the step ping turns. Release movement at the centered thud as Wendy takes the last step. Guarded routes announce only the current leg and continue automatically after each wait or crystal. Directions repeats the remaining steps on that leg. For crossings with timed pauses, release at each thud and wait for the next directional ping. If the timing expires, the cues go quiet. After a capture, guidance restarts at the checkpoint. Use ordinary walking speed throughout the cave. Follow the chase directions continuously until the next trigger. **Ctrl+G** stops guidance.
-- In the distraction room, Directions leads to the required crystal before approaching the barrel. Repeating Directions keeps guiding you to that crystal until you activate it. Use the action button when prompted. The manual guide resumes when movement returns. Follow the pings, release movement at the thud, then request directions again. With Autowalk on, Wendy activates the required crystals and continues toward the selected destination. The first barrel can only be opened from a guard lane. Follow its timed approach, open it when prompted, then immediately move one tile north as instructed.
-- In the chase room, manual guidance speaks one short leg at a time, such as “3 north.” The next leg is spoken at the turn. The directions key repeats only the distance remaining on the current leg.
-- With **Autowalk** on, use the directions control on the selected Secret Cave destination. Wendy waits for checked openings and continues through recognized patrol triggers and crystal prerequisites. In the distraction room, Puzzle guide also follows the Autowalk setting. Selected cave barrels and chests open automatically. Close their native reward message; Wendy then leaves any exposed approach for a checked protected stop. Other final objects use Confirm. A changed route or a lost opening can stop Autowalk. Request directions again to resume from your current tile.
-- If directions give a prerequisite, take the named exit or use the named control, then request directions again after movement returns. The mod keeps the original selection through the Breakfast Isles bridge detour, Frosty Peak cave crystal and Cauldron side passage, and Nuggedor mine detour. World-map directions also keep the selected destination through verified town and mine connections. Request directions after each map change to continue. Walking directions name the exit at the end of the route. Browsing to another destination cancels that route.
-- **F8 → Audio** has separate switches for **Navigation beacon**, **Wall sounds**, **Wall bump**, and **Footstep sounds**. The beacon pans toward the next movement key and speeds up from 1.5 seconds to 0.3 seconds between pings. Three rising notes confirm arrival. With a beacon route active, spoken instructions cover required interactions and obstructions. Turn on **Speak full path with beacon** in Navigation to also hear the route. **Speak beacon destination on controller directions** reads the selected name when you request a beacon route with Left Trigger. Both options start off. Each blocked direction plays its own wall tone at the same time. The four pitches follow the movement keys even when Wendy turns. After three seconds without a step, the tone fades over half a second. Enable **Wall bump** for a short impact sound when held movement stays blocked. Footstep sounds play at each completed step. Wall tones, wall bump, footsteps and the beacon pulse use the Final Fantasy Pixel Remaster Core mod’s samples. Hear examples in **F8 → Audio → Sound previews**.
-- Press **H** for Wendy’s visible status on the field, in pause and Inventory, or in battle including Bag and Special. This includes HP, FP and the other gauges or conditions that are shown. On the field, HP and FP are read as percentages. The gold diamonds beside Wendy’s portrait show filled Momentum pips. H includes “critical” while the field low-health warning is active. Press **G** to read the gold shown in the pause menu or shop.
-- On a default Xbox-style controller, use the **right stick** to browse and **left trigger** for directions. Press and release **View**, then press **A** to read the selected destination or **Menu** for settings. Left Trigger also takes a request during a step. “Mod mode” confirms entry.
+## Installation
 
-Enable **Cutscene descriptions** in **F8 → Audio** to hear short descriptions of selected story animations and Wendy’s long-idle sequence in a separate voice. Adjust its volume and speed in the same menu. The default speed is 200 percent.
+Requires 64-bit Windows 10 or 11, .NET Framework 4.8, and the English Steam game, App 3339970, **build 26578620**. The installer checks the actual files and stops on an unsupported build. No separate Node.js or Python installation is needed.
 
-## Battle
+1. Extract the entire release ZIP to a folder outside the game.
+2. Save and close Wendy Quest. Let Steam finish any updates.
+3. Run **WendyQuestAccessSetup.exe**. Review the detected game folder, or use Browse to select the folder containing WendyQuest.exe.
+4. Select **Install or update**, then Continue. Wait for Installation complete.
+5. Start the game normally through Steam with your screen reader running. Press **F8** for mod settings and Help.
 
-At the start of battle, the mod reads the enemy formation before the first focused command. Highlight a target to hear its name and visible HP percentage. Target review distinguishes enemies that share a name by position. Basic attacks name the attacker as the animation starts, followed by the displayed damage. A defeat follows its damage announcement. Special attacks use their existing text.
+The installer generates navigation data from your own game files. It preserves saves and preferences, and retains the original scripts for removal. Keep the installer ZIP for updates or repair. If the selected game folder requires administrator access, run the installer as administrator only when needed.
 
-Confirm to start the timing meter. Confirm again for power, then for accuracy. **F8 → Audio → Battle timing assist** adds one note for each perfect window. Press Confirm when you hear it. Battle timing assist and Cave timing cues start on for new profiles and retain saved choices. The game’s wind-up sounds provide the rest of the timing. When the game shows its resistance popup, speech reports that Wendy resisted a status effect.
+For an update or repair, close the game and run the newer installer using Install or update. **Verify installed files** checks an existing installation. **Remove mod** restores the original scripts and removes the mod's files while retaining saves and preferences. Changed or unrecognized files are preserved; an interrupted update is recovered on the next run. Do not delete the game's `.wendyquest-access-recovery` folder while the mod is installed. Steam verification may replace patched scripts; reinstall the mod afterward.
 
-## Read details with I
+## First steps
 
-**I** reads the details for the screen or selection you’re on. You can change it under **F8 → Keyboard bindings → Read details**.
+Use the game's normal controls: arrows or WASD to move, Enter or Space to confirm/interact, and Escape to back out. There is no confirmed keyboard dash; navigation guidance uses normal walking speed.
 
-- **On the field** reads the visible quest tracker, including objectives, progress counts and the quest title when available.
-- **Dialogue** describes the current speaker’s visible portrait or sprite, including Dave’s statues. On an acquisition message it describes or identifies the item icon.
-- **Maps and diagrams** describe the open World Atlas, Cavern Map, Ruins Map or map board. The Atlas includes your position, the quest pin, the current objective and nearby landmarks when shown.
-- **Inventory and Equipment** read the selected item’s description and any displayed equipment comparison.
-- **Battle Bag** reads the selected item’s description and effects.
-- **Battle commands** describe the active fighter’s appearance and visible conditions, and read the command’s help and cost where shown. In **Special**, move down through the rows to hear any locked ability's required level. **I** repeats the shown level or reads the highlighted ability's help. **Shift+I** describes the fighter or companion.
-- **Battle targets** describe the selected enemies and read their shown HP percentages and conditions.
-- **Shops** read the item description, owned count, gold balance and equipment comparison where shown. While choosing a quantity, **I** also repeats the amount and total price.
-- **Pause menu Save** reviews the latest manual save result when Save is selected.
-- **Coupon responses** read the displayed instructions and spell out a displayed code.
-- **Ending and credits** reread the visible cards.
+The default navigation layout is **Letters**, leaving the right hand free for movement. Select **Brackets** in F8 settings if preferred. Keyboard bindings and controller bindings can be changed separately. Help in F8 lists the current controls.
 
-[Complete controls and navigation](docs/navigation.md) · [Installation and recovery](docs/deployment.md) · [Puzzle and secret guidance](docs/puzzles-and-secrets.md)
+| Action | Letters layout | Brackets layout |
+| --- | --- | --- |
+| Previous / next destination | J / L | [ / ] |
+| Previous / next category | Shift+J / Shift+L | Shift+[ / Shift+] |
+| Read selected destination | K | P |
+| Request directions, or start autowalk | P | Backslash |
+| Change destination filter | Shift+P | Shift+Backslash |
 
-Open **F8 → Audio → Soundscape** for nearby cues. Nearby cues have staggered starts. Longer samples can finish while the next cue plays. Adjacent tiles for the same exit share a cue, and the sound follows the map directions as Wendy turns. Browse save and autosave points in the pathfinder’s **Checkpoints** category.
+Common shortcuts:
 
+| Key | Action |
+| --- | --- |
+| F8 | Mod settings, Help and keyboard/controller bindings |
+| R | Repeat current dialogue or battle feedback |
+| I | Details for the current screen or selection; see below |
+| Shift+I | Fighter or companion appearance in battle |
+| H | Current visible HP, FP and other displayed meters |
+| G | Gold in pause/shop screens |
+| M / Shift+M | Current map name / visual description |
+| Ctrl+Backslash | Toggle autowalk; initially off |
+| Shift+B | Toggle route beacon |
+| Shift+H | Toggle wall tones |
+| Shift+V | Stop navigation |
+| Shift+G / Ctrl+G | Start or review / stop puzzle guidance |
+| Shift+Up / Shift+Down | Previous / next review line where available |
+| Shift+Left / Shift+Right | First / last review line where available |
 
-Automatic perfect timing is under **F8 → Battle** and starts off. When enabled, choose an action and start the meter normally; the mod confirms its perfect power/accuracy windows and breaks Frozen ice. Native statuses and scoring still apply. Navigation settings contain navigation choices and bookmarks. Remap its keys under **Keyboard bindings → Navigation bindings**; current control instructions remain in **Help**.
+## What I reads
 
-Regional Breakfast Stone Island quest entries announce Quests on category changes and give a local bearing via the next verified exit. Request Directions for the walking route; browsing the entry does not start Autowalk.
+I follows the current context. It reads:
 
-Frozen timing assist cues the ice-breaking press first. After the game’s pause, follow the next note for the normal timing window.
+- The field's displayed quest title, objective and progress.
+- The current dialogue speaker's appearance, or a displayed acquisition icon.
+- The selected inventory, equipment, battle item or shop item's description; comparisons and quantity/price information where displayed.
+- Battle target appearance, visible HP percentage and conditions; Special help or the required unlock level. A Special without help says No description available.
+- The displayed atlas, cavern map, ruins map or map-board directions, including relevant visible position/quest markers.
+- The latest manual-save result on the pause Save screen, coupon instructions/codes, and supported prologue/ending cards.
 
-When the unlocked airship is parked and reachable on the world map, directions from on foot can include boarding it, flying to a valid landing and continuing toward the selected destination. A shorter valid walking route is kept. Use the game’s action button when asked to board or land. Battle announcements queue in order, so later attacks and turn announcements do not cut off earlier ones.
+## Navigation and puzzles
+
+Choose a category, then a destination. Categories include NPCs, merchants, objects, treasure, exits, events, checkpoints, vehicles, quests and bookmarks. Each category starts with its nearest destination. Its order stays fixed while you browse or follow a route; switching categories sorts again. Quest markers belong to Quests.
+
+The filter switches between all current-map destinations and reachable destinations. Directions explain known blockers and guide you to required conversations, crystals or exits. Spoiler mode is initially off. Save locations or selected destinations under F8, Navigation, Bookmarks. Bookmarks persist between sessions and can route across supported maps and unlocked vehicles.
+
+Autowalk is optional. With it enabled, the directions key says Walking and moves toward the selected destination. It silently recalculates around changing actors, faces an interaction when arriving, and says Arrived. Manual movement or Shift+V cancels navigation. Follow native dialogue and interaction prompts when they appear.
+
+Shift+G enables state-aware guidance for supported puzzles. Cave guidance provides the current movement leg, directional pings and wait feedback. The directions key repeats the remaining leg. Autowalk also handles supported patrol, chase and distraction-crystal sequences. Guidance follows the selected destination, including treasure; it does not skip the game's prerequisites.
+
+Vehicle announcements identify boarding and returning on foot. The airship says Can land over an available landing area. Vehicle routes use only vehicles actually unlocked.
+
+## Battle and audio
+
+Enemy focus reads the name and visible HP percentage. Repeated enemy types receive their own numbers, such as Conehead 1 and Conehead 2. H reads Wendy's displayed numeric vitals where the game provides them. Attack and damage messages are queued; defeat follows damage.
+
+Battle timing cues and cave timing cues start **on for new profiles**. Updates retain your choices. Battle cues support normal, spicy, frosty and Frozen ice-breaking states. Optional **automatic perfect timing**, under F8, Battle, starts off. Begin an attack normally; this option then confirms the meter in its valid range. Native battle conditions still apply.
+
+F8, Audio groups adjustable navigation sounds and volumes. **Sound previews** has its own submenu. Speech and sounds have independent master switches. HRTF provides spatial playback; stereo playback uses left/right placement and a lower rear cue. Wall tones, bumps, footsteps, beacons and the entity soundscape can be adjusted independently.
+
+Optional **Cutscene descriptions** in Audio use a separate recorded voice for supported visible animations, including named reactions and idle actions. They start off; speed and volume are adjustable. Descriptions queue without interrupting another description.
+
+## Controller
+
+Normal controller movement remains native. The right stick browses destinations/categories; LT/L2 requests directions. **View/Share** toggles mod mode. In field mod mode, A reads the destination, Y reads the quest, X reads vitals and Menu opens settings; LB starts/reviews puzzle guidance and RB stops it. In dialogue/battle mod mode, A reads Details and the D-pad reviews text. View/Share leaves mod mode. Press both stick buttons together to toggle controller support if recovery is needed. Settings use the D-pad or left stick, A to confirm and B to go back. Labels adapt to supported controller types; see F8, Help for the full current mapping.
+
+## Troubleshooting and credits
+
+If speech stops, check F8 speech settings and your screen reader. If sounds stop, check the sound master, individual volumes and output device. Use the installer's Verify option for missing files. Report the map, selected destination, action and exact spoken result with WendyQuestAccess-field.log from the game folder; do not share saves unless requested.
+
+The mod's settings and bookmarks live in its local user profile and are retained by updates/removal. The installer never launches the game. The mod preserves the native achievement, save and story logic.
+
+Original accessibility implementation by bladestorm360. Wendy Quest and its artwork, text and runtime belong to their respective owners and are not included. Navigation samples are reused from the author's FFPR Core mod. PRISM, SDL3, OpenAL Soft and their required notices ship with the mod; see ThirdPartyNotices.txt and the installed LICENSES/audio-deps folders. The OpenAL Soft source and HRTF dataset attribution are included there.
+
+Developer build, verification and release instructions: [release procedure](docs/release.md). Feature and engine evidence is indexed in [project memory](CODEX_MEMORY.md).

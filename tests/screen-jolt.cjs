@@ -27,11 +27,17 @@ module.exports = function(fixture, commandContext, stock) {
         f.frame();assert.equal(f.played.length,0,'command alone never announces');
         f.spriteset.x=3;f.frame();
         const duration=row.code===225 ? row.parameters[2]/60 : Number(row.parameters[3].Duration);
-        assert.equal(f.played[0]?.id,duration>1?'screen-shake':'screen-jolt',[m,e,p,i].join('/'));
-        f.narration.leave(f.scene);count++;
+        const list=interpreter._list, effect=row.parameters[3];
+        const paired=list.slice(Math.max(0,i-4),i+5).some(command=>command.code===250 &&
+            command.parameters[0]?.name==='WQ/Emote/SFX_ScreenShake');
+        const qualifies=row.code===357 && Number(effect.Power)===4 && Number(effect.Duration)===1 &&
+            [50,80].includes(Number(effect.Frequency)) && paired;
+        assert.equal(f.played[0]?.id, qualifies?'screen-jolt':undefined,[m,e,p,i].join('/'));
+        if(qualifies) count++;
+        f.narration.leave(f.scene);
     }
     const f=fixture(14,5,1);f.spriteset.x=f.spriteset.y=0;f.spriteset._tilemap.worldVisible=true;
     f.interpreter._index=22;f.scene._wqaPreloads=new Set([{}]);f.narration.jolt(f.scene,f.interpreter,1);
     f.spriteset.x=4;f.frame();assert.equal(f.played.length,0,'resource gate stays closed');
-    console.log('Native screen jolt producers:',count,'map/common events; source-only camera changes stay silent');
+    console.log('Native screen jolt producers:',count,'matching sound/jolt pairs; earthquakes, terrain shifts and other shakes stay silent');
 };

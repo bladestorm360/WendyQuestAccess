@@ -2475,8 +2475,20 @@
     "text": "The screen jolts.",
     "beats": []
   },
-  "screen-shake": {
-    "text": "The screen shakes.",
+  "ground-trembles": {
+    "text": "The ground trembles.",
+    "beats": []
+  },
+  "tremors-strengthen": {
+    "text": "The tremors grow stronger.",
+    "beats": []
+  },
+  "cave-floor-shifts": {
+    "text": "The cave floor shifts.",
+    "beats": []
+  },
+  "sauce-drains": {
+    "text": "The sauce recedes, exposing the floor.",
     "beats": []
   }
 }

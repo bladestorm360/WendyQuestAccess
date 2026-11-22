@@ -834,7 +834,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessScreenJolt = function (scene, interpreter, duration) {
-        try { narration?.jolt(scene, interpreter, duration); } catch { narration?.leave(scene); }
+        try { narration?.jolt(scene, interpreter); narration?.environmentStart(scene, interpreter); } catch { narration?.leave(scene); }
     };
 
     root.WendyQuestAccessProloguePresent = function (scene) {
