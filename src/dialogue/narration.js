@@ -2,6 +2,8 @@
 
 const cues = require('./narration-cues.json');
 const { renderedSprite } = require('../runtime/rendered-sprite');
+const { finaleVisible, captureFinale } = require('./finale-visuals');
+const { finaleBattleReady, bossFlash, combinedStones } = require('./finale-battle');
 const { idleBeats } = require('./idle-narration');
 
 const beats = Object.create(null);
@@ -14,7 +16,7 @@ for (const id of clipIds) {
         (beats[map][event][index] ??= []).push({ id, page, actor, switchId: switchId ?? undefined, visual });
     }
 }
-const PACK_LIMIT = 1144 * 1024;
+const PACK_LIMIT = 1412 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -60,8 +62,9 @@ function createNarration(root, host, preferences) {
     }
 
     function warm(scene) {
-        if (!enabled() || pack || loading || failed || !ready(scene) || root.$gameMap._interpreter?._list ||
-            (!scene._wqaFieldReady && !idleReady(scene))) return;
+        const prologue = [188, 115].includes(root.$gameMap?._mapId);
+        if (!enabled() || pack || loading || failed || !ready(scene) || !prologue &&
+            (root.$gameMap._interpreter?._list || !scene._wqaFieldReady && !idleReady(scene))) return;
         // Chromium reads the fixed package path asynchronously in a settled
         // field frame. Native boundaries retire the request before loading.
         const xhr = new root.XMLHttpRequest();
@@ -123,10 +126,11 @@ function createNarration(root, host, preferences) {
         if (!candidate) return;
         const page = root.$dataMap?.events?.[interpreter._eventId]?.pages[candidate.page];
         if (interpreter !== map._interpreter || interpreter._mapId !== map._mapId ||
-            page?.list !== interpreter._list || candidate.switchId !== switched || candidate.visual !== visual) return;
+            page?.list !== interpreter._list || candidate.switchId !== switched || !switched && candidate.visual !== visual) return;
         const source = candidate.actor === -1 ? root.$gamePlayer : map._events[candidate.actor];
         if (!source || source._erased || (switched ? !root.$gameSwitches.value(switched) : actor !== source)) return;
         actor = source;
+        visual = candidate.visual;
         const prior = scene._wqaNarrationSeen;
         // Guard one command within its active narration context. A later
         // real activation of the same NPC/list can show the balloon again.
@@ -153,7 +157,8 @@ function createNarration(root, host, preferences) {
         if (context.queue.length >= QUEUE_LIMIT) return;
         scene._wqaNarrationSeen = { list: interpreter._list, index: interpreter._index };
         context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions,
-            x: actor._realX, y: actor._realY, mapY: map._displayY, id: candidate.id });
+            x: actor._realX, y: actor._realY, mapY: map._displayY, mapX: map._displayX, direction: actor._direction, id: candidate.id,
+            finale: visual === -6 ? captureFinale(root, scene, candidate.id) : null });
     }
 
     function begin(scene, interpreter = null) {
@@ -210,8 +215,25 @@ function createNarration(root, host, preferences) {
         } catch { leave(context.scene); }
     }
 
+    function battleAccepted(scene, interpreter, actor, sprite, stones) {
+        if (!pack || !enabled() || !finaleBattleReady(root, host, scene)) return;
+        const beat = actor ? combinedStones(root, scene, actor, sprite, stones) : bossFlash(root, scene, interpreter);
+        if (!beat) return;
+        interpreter = root.$gameTroop._interpreter;
+        if (owner && (owner.scene !== scene || owner.list !== interpreter._list)) leave(owner.scene);
+        const context = owner ?? begin(scene, interpreter);
+        context.battle = true;
+        if (context.queue.length >= QUEUE_LIMIT) return;
+        const token = actor ? sprite : interpreter._index;
+        if (context.lastBattleToken === token) return;
+        context.lastBattleToken = token;
+        context.queue.push({ id: beat.id, battleVisible: beat.visible, frame: host.graphics.frameCount, visual: -6 });
+    }
+
     function mayPresent(context) {
         const { scene, interpreter, list } = context;
+        if (context.battle) return enabled() && finaleBattleReady(root, host, scene) &&
+            interpreter === root.$gameTroop._interpreter && interpreter._list === list;
         return interpreter ? ready(scene) && enabled() &&
             interpreter === root.$gameMap._interpreter && interpreter._list === list : idleReady(scene);
     }
@@ -239,6 +261,7 @@ function createNarration(root, host, preferences) {
     }
 
     function visibleActorCue(scene, state) {
+        if (state.visual === -6) return finaleVisible(root, host, scene, state);
         // The finale paints a white full-screen picture over this change.
         if (state.id === 'chomps-sacrifice' && root.$gameScreen?._pictures?.[29]?._opacity > 20) return false;
         const { actor, sprite, switched, visual } = state;
@@ -283,7 +306,7 @@ function createNarration(root, host, preferences) {
         // Keep already rendered descriptions even after the effect disappears.
         // Only unpainted effects expire on the short native presentation budget.
         context.queue = context.queue.filter(state => state.confirmed ||
-            frame - state.frame <= (state.id === 'chomps-sacrifice' ? FLASH_LIMIT : state.visual === -4 ? REWARD_LIMIT : FRAME_LIMIT));
+            frame - state.frame <= (state.id === 'chomps-sacrifice' || state.visual === -6 ? FLASH_LIMIT : state.visual === -4 ? REWARD_LIMIT : FRAME_LIMIT));
         if (!clip && !context.queue.length) return leave(scene);
         const renderer = host.graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return leave(scene);
@@ -296,7 +319,7 @@ function createNarration(root, host, preferences) {
             for (const state of context.queue) {
                 if (state.confirmed) continue;
                 const map = root.$gameMap;
-                state.confirmed = state.idle ? map.inactiveTime < state.idle.end &&
+                state.confirmed = state.battleVisible ? state.battleVisible() : state.idle ? map.inactiveTime < state.idle.end &&
                     state.idle.visible(scene, map, root.$gamePlayer) : visibleActorCue(scene, state);
                 if (state.confirmed && state.bit) scene._wqaIdleNarrationMask |= state.bit;
             }
@@ -304,7 +327,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { accepted, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, battleAccepted, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

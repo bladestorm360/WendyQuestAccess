@@ -118,7 +118,7 @@ const ENEMIES = new Map([
         "Metal fins rise behind its shoulders, with a heavy fist on one arm and a barrel on the other."
     ]],
     ["BigMech2", [
-        "A bulky orange burger-shaped machine with a visible pilot in an open cockpit.",
+        "A bulky orange burger-shaped machine with a visible pilot and small colored balls in its open cockpit.",
         "Branching yellow pipes frame it, and loose wires and a broken arm hang beneath it."
     ]],
     ["BigMech2Gun", [

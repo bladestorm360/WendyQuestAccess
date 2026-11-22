@@ -148,7 +148,7 @@ function createBattleLog(root, host, notifications, appendToFocus) {
 
     function abilityTicket(scene, item, format) {
         const action = root.BattleManager._action;
-        if (![102, 103].includes(item?.id) || item.message1 !== format || action?.item?.() !== item ||
+        if (![102, 103, 112, 113, 115].includes(item?.id) || item.message1 !== format || action?.item?.() !== item ||
             !actionReady(scene)) return null;
         let ticket = abilityStarts.get(action);
         if (!ticket) {
@@ -174,7 +174,8 @@ function createBattleLog(root, host, notifications, appendToFocus) {
                 if (root.BattleManager._action !== action || !actionReady(scene) || ticket.scene !== scene ||
                     enemyLabel(scene, performer) !== name) return;
                 ticket.announced = true;
-                speak(scene, scene._actionLogWindow, [name + ' uses ' + item.name + '.'], true, true);
+                speak(scene, scene._actionLogWindow, [item.id === 112 ? name + ' punches.' : item.id === 113 ? name + ' fires its gun.' :
+                    name + ' uses ' + (item.id === 115 ? 'Booster Bash' : item.name) + '.'], true, true);
             });
         },
         startAttack(scene, action, name) {

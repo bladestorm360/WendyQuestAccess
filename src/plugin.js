@@ -833,6 +833,13 @@ function boot(root, nodeRequire, nodeProcess) {
         try { narration?.accepted(scene, interpreter, actor, switched, visual); } catch { narration?.leave(scene); }
     };
 
+    root.WendyQuestAccessFinaleBattle = function (scene, interpreter) {
+        try { narration?.battleAccepted(scene, interpreter); } catch { narration?.leave(scene); }
+    };
+    root.WendyQuestAccessFinaleStones = function (scene, actor, sprite, stones) {
+        try { narration?.battleAccepted(scene, null, actor, sprite, stones); } catch { narration?.leave(scene); }
+    };
+
     root.WendyQuestAccessIdleNarration = function (scene) {
         try { narration?.idle(scene); } catch { narration?.leave(scene); }
     };

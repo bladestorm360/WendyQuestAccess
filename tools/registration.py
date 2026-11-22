@@ -410,7 +410,9 @@ def objects_notification(original):
         companions_entry: b'\n        if(Graphics._wqaNarrationEnabled&&params[0]===65&&'
                           b'this._mapId===98&&this._eventId===19&&this._index===34&&'
                           b'this._childInterpreter?._list===commonEvent.list)'
-                          b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-5);',
+                          b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-5);'
+                          b'if(Graphics._wqaNarrationEnabled&&params[0]===40&&this._mapId===224&&this._eventId===1&&this._index===66)'
+                          b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,this.character(0),undefined,-6);',
 
         2915: b'        if(SceneManager._scene?._wqaBattleStarted){BattleManager._wqaBattleSpritesBusy=undefined;'
               + BATTLE_LOG_LEAVING + b';}\n',
@@ -516,21 +518,30 @@ def objects_notification(original):
         274031: b'if(Graphics._wqaNarrationEnabled&&params[0]===params[1]&&params[2]===0&&'
                 b'(this._mapId===63&&params[0]===419||this._mapId===107&&params[0]===131||'
                 b'this._mapId===114&&params[0]===23||this._mapId===134&&params[0]===77||'
-                b'this._mapId===106&&params[0]===115))'
+                b'this._mapId===106&&params[0]===115||'
+                b'this._mapId===107&&[127,130,132,143,165,383,384,385,386].includes(params[0])||'
+                b'this._mapId===190&&params[0]===500||this._mapId===109&&params[0]===20))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,null,params[0]);\n    ',
         # After acceptance of an authored actor's route. The rendered actor,
         # current event list and resource gates are checked in the observer.
         286102: b'\n        if(Graphics._wqaNarrationEnabled&&'
                 b'(this._mapId===16||this._mapId===20||this._mapId===63||this._mapId===77||'
                 b'this._mapId===103||this._mapId===106||this._mapId===107||this._mapId===108||'
-                b'this._mapId===110||this._mapId===134||this._mapId===197||this._mapId===97))'
-                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character);',
+                b'this._mapId===110||this._mapId===134||this._mapId===197||this._mapId===97||'
+                b'this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
+                b'this._mapId===188||this._mapId===115||this._mapId===39||this._mapId===13))'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,'
+                b'(this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
+                b'this._mapId===63&&this._eventId===19||this._mapId===188||this._mapId===115||'
+                b'this._mapId===39||this._mapId===13&&this._eventId===5&&[70,77].includes(this._index))?-6:undefined);',
         # Native emotes, Frostyna's flash, and the two identical door approaches.
         287095: b'\n        if(Graphics._wqaNarrationEnabled&&this===$gameMap?._interpreter&&'
                 b'(params[1]>=1&&params[1]<=9))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,params[1]);',
         288646: b'\n    if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._eventId===2&&this._index===15)'
-                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,this.character(0),undefined,-1);',
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,this.character(0),undefined,-1);'
+                b'if(Graphics._wqaNarrationEnabled&&this===$gameTroop?._interpreter&&$gameTroop._troopId===96)'
+                b'globalThis.WendyQuestAccessFinaleBattle?.(SceneManager._scene,this);',
         291911: b'\n    if(Graphics._wqaNarrationEnabled){'
                 b'if(this._mapId===134&&this._index===1&&(this._eventId===8||this._eventId===9)&&'
                 b'params[0]?.name==="WQ/SFX_LowRumble")'
@@ -540,7 +551,11 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-3);'
                 b'else if(this._mapId===197&&this._eventId===18&&this._index===151&&'
                 b'params[0]?.name==="WQ/Attack/SFX_RiseAndShine")'
-                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-4);}',
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-4);'
+                b'else if(this._mapId===107&&this._eventId===3&&this._index===81||'
+                b'this._mapId===190&&this._eventId===24&&this._index===33||'
+                b'this._mapId===83&&this._eventId===38&&this._index===32)'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,(this._mapId===190||this._mapId===83)?this.character(0):$gamePlayer,undefined,-6);}',
         # ShowRewardTokens synchronously appends exactly one reward sprite.
         # Record it after the native call, before any later event command.
         305132: b'const wqaRewardScene=pluginName==="WendyQuest"&&params[1]==="ShowRewardTokens"?SceneManager._scene:null;'
@@ -563,7 +578,7 @@ def windows_notification(original):
         172025: b'        if (state.iconIndex > 0 && !state.message4) '
                 b'globalThis.WendyQuestAccessBattleCondition?.(this,target,state,false,true);\n',
         # Carry the source of the native ability line as a separate queue argument.
-        166632: b', (item?.id===31||item?.id===32||item?.id===102||item?.id===103)?'
+        166632: b', (item?.id===31||item?.id===32||item?.id===102||item?.id===103||item?.id===112||item?.id===113||item?.id===115)?'
                 b'globalThis.WendyQuestAccessAbilitySource?.(item,fmt):undefined',
         162511: b'    if(SceneManager._scene?._wqaBattleStarted&&SceneManager._scene._logWindow===this){'
                 b'BattleManager._wqaBattleSpritesBusy=undefined;'
@@ -723,6 +738,11 @@ def map_notification(original):
         this._wqaIdleNarrationMask = 0;
     }
     if (this._wqaNarrationActive) globalThis.WendyQuestAccessNarrationPresent?.(this);
+    // The opening has no controllable field before its first visual beat.
+    // Warm asynchronously only after the normal map/resource readiness gates.
+    if (Graphics._wqaNarrationEnabled && !Graphics._wqaNarrationPackFinished && !this._wqaNarrationLoading &&
+        ($gameMap._mapId === 188 || $gameMap._mapId === 115))
+        globalThis.WendyQuestAccessNarrationWarm?.(this);
     if (this._wqaFieldReady) {
         if (Graphics._wqaNarrationEnabled && !Graphics._wqaNarrationPackFinished && !this._wqaNarrationLoading &&
             !$gameMap._interpreter?._list)
@@ -996,12 +1016,14 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
 '''
     attack_source = (b'wqaAction===this._action&&globalThis.WendyQuestAccessAttackSource?.('
                      b'_0x5a64fd,wqaPerformer,_0x15034e,wqaAction),')
-    # This exact target-animation entry precedes the native Freezer Burn
-    # ice-spike effect and its 60/120-frame waits. Other skills do no mod work.
+    # Exact native target-animation entry owns Freezer Burn and the three
+    # blank boss action messages. No effect or wait is replaced.
     freezer_token = b'function(_0x545edf,_0x4eadf5,_0x1f43a8,_0x3accfc={}){'
     freezer_entry = original.index(freezer_token) + len(freezer_token)
+    stones_entry = original.index(b"],$gameScreen['startTint']", original.index(b'_0x348760=[')) + 2
     return insert(original, BATTLE_SHA, {
-        freezer_entry: b'if(_0x4eadf5==="FreezerBurn")'
+        stones_entry: b'globalThis.WendyQuestAccessFinaleStones?.(SceneManager._scene,_0x37cee4,_0xffdf2,_0x348760),',
+        freezer_entry: b'if(_0x4eadf5==="FreezerBurn"||_0x4eadf5==="BigMechPunch"||_0x4eadf5==="BigMechGun"||_0x4eadf5==="BigMechBoosterBash")'
                        b'globalThis.WendyQuestAccessAbilityAnimation?.(_0x545edf,this);',
         # Preserve the exact overlay returned after the native coroutine attaches it.
         57087: b'const wqaBeefOverlay=',
@@ -1052,7 +1074,8 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         200118: attack_source,
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=BattleManager._wqaBattleSpritesBusy=undefined;',
-        242214: target_update + bag_update + timing_update + radial_update + log_update + dialogue_update(ready, victory=True),
+        242214: target_update + bag_update + timing_update + radial_update + log_update +
+                b'if(this._wqaNarrationActive)globalThis.WendyQuestAccessNarrationPresent?.(this);' + dialogue_update(ready, victory=True),
         # Optional speaker metadata stays on its native row through queuing and paint.
         239515: b',wqaSource',  # Scene_Battle.logAction
         239613: b',wqaSource',

@@ -6,7 +6,8 @@ const { moveReview } = require('../menus/review');
 const SLOTS = Object.freeze([3, 4, 5, 6, 7, 25, 26, 30, 31, 32]);
 const TITLES = Object.freeze({
     'pictures/Ending': 'In a very different location...',
-    'pictures/TheEnd': 'The end'
+    'pictures/TheEnd': 'The end',
+    'Credits/029 MECHBORG abb153': "MechBorg sits in the ruined robot's cockpit, with small colored balls beside him."
 });
 
 function panelText(container, sprite, picture, graphics) {

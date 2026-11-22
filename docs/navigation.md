@@ -366,3 +366,14 @@ Reproduce with tests/world.test.cjs and the stock external fixture. Its --autowa
 ## Caffeine Caverns tunnel discovery
 
 Map 087 event 91 at (12,65) is an unconditional first-use touch interaction. It presents Wendy noticing the tunnel, transfers to 205 and latches its own self switch; its repeat page is an action-button transfer. Neither page checks map pieces, story flags or board directions. Items 37 and 42–45 are the five Ruins Map pieces; item 40 is the separate Cavern Map. The prior mod-only concealed filter hid this entrance’s first page. It is now an Exits destination named Hidden cave entrance with Spoiler mode either off or on, including an unvisited save. Native approach/collision, touch versus action-button behavior and repeat-entry state are unchanged. The local-destination fixture verifies both entrance pages and actual transfer landings. The two authored house buttons retain their separate spoiler rules.
+
+
+### Autowalk across passive cleanup events
+
+November22. Burgenburg Map94's completed glitch events50/52/53/54/55/57 erase themselves when stepped on; they must not cancel the selected route. A single cleanup continuation token retains the exact scene/map/player/native event list, expected step, mode, quest and route owner. Native interpreter acceptance relinquishes input and all normal native event/resource gates remain closed; a normal ready field sample resumes by silently recalculating. A ready frame before floor-touch acceptance retains the token. Cancellation, new route/category/quest, blur or transfer retires it. Child interpreter setup retains only its accepted root list. No movement is injected during the event and no worker delays native cleanup.
+
+The all-map audit found80 erase-only floor pages across16 maps. A further36 short silent pages change flags or move NPCs. Ordinary automatic route snapshots alone copy those safe passive event records as traversable; manual graphs and timed cave guides retain their owners. Qualification rejects dialogue, common events, transfers, reward/encounter/plugin calls, script conditions/operands and player-forced movement. It permits at most128 commands and64 simple NPC-route instructions and caches page classification weakly. Native collision is still checked for every accepted step. Actual Map94 erasures and Map16 event50's menu-onboarding flag are exercised with native setup, floor touch, completion, cancellation and silent final arrival. Moving-enemy worker results can refresh repeatedly without an arbitrary two-refresh stop; one worker/job owner remains.
+
+### Workshop terminals
+
+Map105 events18/70/71/72/73 are Computer in Objects. Native interaction scripts explicitly search files/code and the MechBorgLab tile artwork is a keyboard/terminal. Events66/69 are actual paper notes on a desk and retain their document labels. Map104 computers were already correctly named.

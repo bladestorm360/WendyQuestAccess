@@ -52,6 +52,13 @@ def animated_text_methods():
     return methods
 
 
+if sys.argv[2:] == ['finale']:
+    start = battle.index("BattleAnimations['CornerStone']=function(")
+    end = battle.index("},BattleAnimations['IceCreamSelfDestruct']", start)
+    print(json.dumps([battle[start:end + 1] + ';']))
+    sys.exit(0)
+
+
 if sys.argv[2:] == ['damage']:
     methods = [sprite_method(battle, 'Scene_Battle', 'update'), manager_method(battle, 'isBusy'),
                manager_method(battle, 'invokeNormalAction')]

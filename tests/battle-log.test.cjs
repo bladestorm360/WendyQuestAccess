@@ -305,3 +305,19 @@ console.log('Verified native Momentum retirement, displayed count, and battle re
 console.log('Verified native log paint, repeated events, animation cancellation, written and icon-only conditions, enemy KO, and review.');
 console.log('Throttled battle log paint through synthetic postrender and formatted receipt', first.toFixed(2), 'ms.');
 console.log('Throttled 250 stable paint frames', baseline.toFixed(2), 'ms native,', stable.toFixed(2), 'ms enabled.');
+for (const [id, animation, expected, waits] of [
+    [112, 'BigMechPunch', 'BigMech punches.', [10, 80]],
+    [113, 'BigMechGun', 'BigMech fires its gun.', [120, 120]],
+    [115, 'BigMechBoosterBash', 'Big Booster uses Booster Bash.', [15, 60]],
+    [112, 'BigMechPunch', 'BigMech punches.', [10, 80]]
+]) {
+    freezer._enemy.originalName = () => id === 115 ? 'Big Booster' : 'BigMech';
+    let nativeCalls = 0;c.BattleAnimations[animation] = () => nativeCalls++;
+    const item = skills[id], action = { item: () => item, isSkill: () => true, subject: () => freezer._battler };
+    battle._phase = 'action';battle._action = action;
+    const before = lines.length, actual = freezer.ActionTargetAnimation(action, animation, {});
+    assert.equal(nativeCalls, 1);if (waits) assert.deepEqual(Array.from(actual), waits);
+    assert.equal(lines.length, before);renderer.emit('postrender');assert.equal(lines.at(-1), expected);
+    const after = lines.length;observer.startAbility(scene, action, freezer);renderer.emit('postrender');assert.equal(lines.length, after);
+}
+console.log('Verified missing BigMech punch/gun and Big Booster callouts at native animation entry, repeated actions, exact action ownership and unchanged effects/waits.');

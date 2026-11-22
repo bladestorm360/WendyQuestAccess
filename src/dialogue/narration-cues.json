@@ -905,6 +905,15 @@
         -1,
         null,
         2
+      ],
+      [
+        13,
+        5,
+        0,
+        92,
+        -1,
+        null,
+        2
       ]
     ]
   },
@@ -1529,11 +1538,11 @@
     "beats": []
   },
   "idle-hud-slides": {
-    "text": "Wendy’s status display slides away.",
+    "text": "Wendy\u2019s status display slides away.",
     "beats": []
   },
   "idle-dozes": {
-    "text": "Zs drift over Wendy’s head as she dozes.",
+    "text": "Zs drift over Wendy\u2019s head as she dozes.",
     "beats": []
   },
   "idle-map-dark": {
@@ -2053,6 +2062,384 @@
         15,
         null,
         4
+      ]
+    ]
+  },
+  "big-mech-reveal": {
+    "text": "A curtain rises, revealing a giant burger-shaped robot.",
+    "beats": [
+      [
+        107,
+        3,
+        0,
+        56,
+        -1,
+        165,
+        -6
+      ]
+    ]
+  },
+  "companions-take-stones": {
+    "text": "Wendy's companions move toward the Corner Stones.",
+    "beats": [
+      [
+        107,
+        3,
+        1,
+        33,
+        -1,
+        127,
+        -6
+      ]
+    ]
+  },
+  "stone-frygor": {
+    "text": "A Corner Stone appears above Frygor.",
+    "beats": [
+      [
+        107,
+        3,
+        2,
+        3,
+        5,
+        383,
+        -6
+      ]
+    ]
+  },
+  "stone-frostyna": {
+    "text": "A Corner Stone appears above Frostyna.",
+    "beats": [
+      [
+        107,
+        3,
+        2,
+        7,
+        6,
+        384,
+        -6
+      ]
+    ]
+  },
+  "stone-sir-chicken": {
+    "text": "A Corner Stone appears above Sir Chicken.",
+    "beats": [
+      [
+        107,
+        3,
+        2,
+        11,
+        7,
+        385,
+        -6
+      ]
+    ]
+  },
+  "stone-baconator": {
+    "text": "A Corner Stone appears above Baconator.",
+    "beats": [
+      [
+        107,
+        3,
+        2,
+        15,
+        8,
+        386,
+        -6
+      ]
+    ]
+  },
+  "chomps-arms": {
+    "text": "Chomps spreads his arms.",
+    "beats": [
+      [
+        107,
+        3,
+        3,
+        80,
+        9,
+        130,
+        -6
+      ]
+    ]
+  },
+  "chomps-flash": {
+    "text": "A blinding flash fills the room.",
+    "beats": [
+      [
+        107,
+        3,
+        3,
+        81,
+        -1,
+        null,
+        -6
+      ]
+    ]
+  },
+  "double-mech-transform": {
+    "text": "The Big Mech shudders and flashes as it transforms.",
+    "beats": [
+      [
+        107,
+        3,
+        3,
+        132,
+        -1,
+        132,
+        -6
+      ]
+    ]
+  },
+  "double-mech-crumble": {
+    "text": "The Double Big Mech crumbles into wreckage.",
+    "beats": [
+      [
+        107,
+        3,
+        3,
+        175,
+        -1,
+        143,
+        -6
+      ]
+    ]
+  },
+  "wendy-departure-light": {
+    "text": "Rays of light shine down around Wendy.",
+    "beats": [
+      [
+        190,
+        24,
+        0,
+        33,
+        24,
+        null,
+        -6
+      ]
+    ]
+  },
+  "wendy-ascends": {
+    "text": "Wendy rises into the light.",
+    "beats": [
+      [
+        190,
+        24,
+        1,
+        17,
+        24,
+        500,
+        -6
+      ]
+    ]
+  },
+  "epilogue-glitch": {
+    "text": "The epilogue image briefly glitches.",
+    "beats": [
+      [
+        224,
+        1,
+        0,
+        66,
+        1,
+        null,
+        -6
+      ]
+    ]
+  },
+  "double-mech-explosion": {
+    "text": "An explosion rocks the Double Big Mech.",
+    "beats": []
+  },
+  "double-mech-explosion-again": {
+    "text": "A second explosion rocks the Double Big Mech.",
+    "beats": []
+  },
+  "stones-unite": {
+    "text": "The Corner Stones whirl together and flare with brilliant light.",
+    "beats": []
+  },
+  "tyler-arrives": {
+    "text": "Tyler leaps into view.",
+    "beats": [
+      [
+        26,
+        12,
+        1,
+        5,
+        12,
+        null,
+        -6
+      ],
+      [
+        63,
+        19,
+        1,
+        6,
+        19,
+        null,
+        -6
+      ],
+      [
+        86,
+        35,
+        1,
+        2,
+        35,
+        null,
+        -6
+      ],
+      [
+        181,
+        15,
+        2,
+        0,
+        7,
+        null,
+        -6
+      ],
+      [
+        239,
+        1,
+        0,
+        262,
+        7,
+        null,
+        -6
+      ]
+    ]
+  },
+  "tyler-departs": {
+    "text": "Tyler leaps away.",
+    "beats": [
+      [
+        26,
+        12,
+        1,
+        29,
+        12,
+        null,
+        -6
+      ],
+      [
+        63,
+        19,
+        1,
+        34,
+        19,
+        null,
+        -6
+      ],
+      [
+        86,
+        35,
+        1,
+        22,
+        35,
+        null,
+        -6
+      ],
+      [
+        239,
+        1,
+        0,
+        297,
+        7,
+        null,
+        -6
+      ]
+    ]
+  },
+  "prologue-islands": {
+    "text": "The view glides across the islands of Savoria.",
+    "beats": [
+      [
+        188,
+        1,
+        0,
+        32,
+        -1,
+        null,
+        -6
+      ],
+      [
+        115,
+        2,
+        0,
+        32,
+        -1,
+        null,
+        -6
+      ]
+    ]
+  },
+  "prologue-emblem": {
+    "text": "MechBorg's emblem flashes onto the screen.",
+    "beats": [
+      [
+        83,
+        38,
+        0,
+        32,
+        38,
+        null,
+        -6
+      ]
+    ]
+  },
+  "prologue-march": {
+    "text": "Rows of Mech Grunts march together.",
+    "beats": [
+      [
+        109,
+        6,
+        0,
+        15,
+        7,
+        20,
+        -6
+      ]
+    ]
+  },
+  "prologue-ruins": {
+    "text": "The view glides through the ruins.",
+    "beats": [
+      [
+        39,
+        3,
+        0,
+        8,
+        -1,
+        null,
+        -6
+      ]
+    ]
+  },
+  "wendy-wakes": {
+    "text": "Wendy wakes up on the beach.",
+    "beats": [
+      [
+        13,
+        5,
+        0,
+        70,
+        -1,
+        null,
+        -6
+      ]
+    ]
+  },
+  "wendy-looks-around": {
+    "text": "Wendy looks around.",
+    "beats": [
+      [
+        13,
+        5,
+        0,
+        77,
+        -1,
+        null,
+        -6
       ]
     ]
   }
