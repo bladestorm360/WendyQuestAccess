@@ -2,7 +2,7 @@
 
 // The map-specific records are derived from the installed tile-edit commands.
 // Only an active, reachable native control can become a prerequisite.
-const { composeWorld, indexOf, step } = require('./geometry.cjs');
+const { composeWorld, indexOf, step, MAX_EVENTS } = require('./geometry.cjs');
 const { solveRoute, solveWorldRoute, encounterObstacles } = require('./routes.cjs');
 
 function routeThroughControl(geometry, live, request, controls, cancelled, remoteAccess) {
@@ -104,6 +104,34 @@ function routeThroughControl(geometry, live, request, controls, cancelled, remot
     return best || null;
 }
 
+// Native melt effects are copied IDs/coordinates, never game objects. The
+// revealed chest stays solid, while an encounter actor retires only in this
+// planning copy. Real movement and each next request use fresh native state.
+function meltedEvents(geometry, events, ice, removed) {
+    if (!removed) return events;
+    const clears = new Set(), moved = new Map();
+    for (const [slot, block] of ice.entries()) {
+        if (!(removed & (1 << slot))) continue;
+        clears.add(block.id);
+        const change = block.meltChanges;
+        if (change?.clears) {
+            if (!Array.isArray(change.clears) || change.clears.length > 1 ||
+                !change.clears.every(id => Number.isInteger(id) && id > 0 && id <= MAX_EVENTS))
+                throw Error('Invalid melt actor');
+            for (const id of change.clears) clears.add(id);
+        }
+        if (change?.relocate) {
+            if (!Array.isArray(change.relocate)) throw Error('Invalid melt placement');
+            const [id,x,y] = change.relocate;
+            if (change.relocate.length !== 3 || !Number.isInteger(id) || id < 1 || id > MAX_EVENTS ||
+                indexOf(geometry,x,y) < 0 || moved.has(id)) throw Error('Invalid melt placement');
+            moved.set(id,{x,y});
+        }
+    }
+    return events.filter(event => !clears.has(event.id)).map(event =>
+        moved.has(event.id) ? {...event,...moved.get(event.id)} : event);
+}
+
 function routeThroughIce(geometry, live, request, cancelled, terrain = []) {
     if (live.mode !== 'walk' || request.entrances || request.vehicle || request.area || request.motion) return null;
     const ice = live.events.filter(event => event.meltable && !event.erased && event.id !== request.event);
@@ -116,23 +144,30 @@ function routeThroughIce(geometry, live, request, cancelled, terrain = []) {
     for (let index = 0; index < queue.length && index < 64; index++) {
         if (cancelled()) return { status: 'cancelled' };
         const { x, y, removed, first } = queue[index];
-        const events = removed ? live.events.filter(event =>
-            !ice.some((block, slot) => block === event && (removed & (1 << slot)))) : live.events;
+        const events = meltedEvents(geometry, live.events, ice, removed);
         const world = composeWorld(geometry, { ...live, events }, cancelled);
         if (!world) return { status: 'cancelled' };
         for (const [cell, flags] of terrain) world.cells[cell] = (world.cells[cell] & 240) | flags;
         if (first) {
             const goal = solveWorldRoute(world, { ...request, x, y }, cancelled);
             if (goal.status === 'cancelled') return goal;
-            if (goal.status === 'ready' || goal.status === 'interrupted') return { ...first, status: 'iceRoute' };
+            if (goal.status === 'ready' || goal.status === 'interrupted')
+                return first.status === 'interrupted' ? first : { ...first, status: 'iceRoute' };
         }
         for (const [slot, block] of ice.entries()) {
             if (removed & (1 << slot)) continue;
             const approach = solveWorldRoute(world, { x, y, event: block.id, field: true }, cancelled);
             if (approach.status === 'cancelled') return approach;
-            if (approach.status !== 'ready') continue;
+            if (!['ready','interrupted'].includes(approach.status)) continue;
+            // Verify physical continuation to this ice on the worker, while
+            // retaining the original safe prefix to the earlier floor event.
+            // Nothing past that event is sent as immediately walkable.
+            const planned = approach.status === 'interrupted' ?
+                solveWorldRoute(world,{x,y,event:block.id,field:false},cancelled) : approach;
+            if (planned.status === 'cancelled') return planned;
+            if (planned.status !== 'ready') continue;
             const next = removed | (1 << slot);
-            const { x: arrivalX, y: arrivalY } = approach.arrival;
+            const { x: arrivalX, y: arrivalY } = planned.arrival;
             const key = next + ':' + arrivalX + ':' + arrivalY;
             if (visited.has(key) || queue.length >= 64) continue;
             visited.add(key);
@@ -158,6 +193,11 @@ function routeThroughTerrain(geometry, live, request, controls, cancelled, remot
     if (!obstacles.size) return preferProjection ? plan(live) : null;
     const candidate = plan({ ...live, events: live.events.filter(event => !obstacles.has(event)) });
     if (candidate?.status === 'cancelled') return candidate;
+    if (candidate?.status === 'interrupted') {
+        const prefix = solveRoute(geometry,live,{x:request.x,y:request.y,event:candidate.boundaryEvent,
+            field:true,stopBeforeEvent:true},cancelled);
+        return ['interrupted','enemyBlocked','cancelled'].includes(prefix.status) ? prefix : null;
+    }
     if (!candidate || !['controlRoute', 'iceRoute'].includes(candidate.status)) return preferProjection ? plan(live) : null;
     if (candidate.step) {
         const first = solveRoute(geometry, live, { x: request.x, y: request.y, event: candidate.event,
@@ -172,4 +212,4 @@ function routeThroughTerrain(geometry, live, request, controls, cancelled, remot
     return ['interrupted', 'cancelled'].includes(prefix.status) ? prefix : null;
 }
 
-module.exports = { routeThroughTerrain, routeThroughControl, routeThroughIce };
+module.exports = { routeThroughTerrain, routeThroughControl, routeThroughIce, meltedEvents };

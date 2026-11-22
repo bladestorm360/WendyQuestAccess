@@ -1323,6 +1323,10 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if (process.argv.includes('--ice-only')) {
+        await require('./ice-routes.cjs')(c,load,snapshot,read,verifyWorker);
+        return;
+    }
     if (process.argv.includes('--autowalk-only')) {
         await verifyAutowalk(c, load, verifyWorker);
         return;
@@ -1509,7 +1513,7 @@ async function main() {
             for (const page of entry.pages)
                 if (iceOpensPassage(entry, page)) verifiedIce++;
     }
-    assert.equal(verifiedIce, 40);
+    assert.equal(verifiedIce, 46);
     const chillcrest = load(25, { self: [26, 27, 28].map(id => '25,' + id + ',A') });
     const { gameMap, player, geometry } = chillcrest;
     player.setPosition(28, 34);

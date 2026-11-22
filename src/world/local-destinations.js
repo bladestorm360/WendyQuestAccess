@@ -227,13 +227,11 @@ function inactiveFloorScene(root, event, page) {
 const icePages = new WeakMap();
 
 function iceOpensPassage(entry, page) {
-    if (!/^Ice(?:Block|$)/.test(entry?.name || '') || page?.trigger !== 0) return false;
+    if (!/^Ice(?:Block|ChestIce|$)/.test(entry?.name || '') || page?.trigger !== 0) return false;
     if (!icePages.has(page)) {
         const gameplay = page.list.filter(({ code }) => ![0, 108, 408, 657].includes(code));
-        // The beach rescue uses the same one-use melt, preceded by Wendy's
-        // two lines about the visibly trapped elder. Its splash relocates
-        // event6 to the ice position; that actor owns the later conversation.
-        // Qualify this exact producer, never arbitrary story/choice scripts.
+        // This exact visible rescue has two introductory lines before the
+        // ordinary melt. Its separate actor owns the later conversation.
         const rescue = entry.id === 8 && entry.x === 28 && entry.y === 5 && page === entry.pages[1] &&
             entry.pages[0]?.list[0]?.parameters?.[3]?.animationPath === 'ICE WITH PERSON' &&
             entry.pages[3]?.list[11]?.code === 203 &&
@@ -243,22 +241,58 @@ function iceOpensPassage(entry, page) {
         if (rescue) gameplay.splice(0,3);
         const [sound, animation, done] = gameplay;
         const next = entry.pages[entry.pages.indexOf(page) + 1];
-        // Verify the ordinary melt followed by an erase-only page. Other
-        // variants can stage a chest, a cutscene or combat as part of melting.
-        const opens = gameplay.length === 3 && sound.code === 250 &&
-            sound.parameters[0]?.name === 'WQ/SFX_IceBlockMelt' &&
-            animation.code === 357 && animation.parameters[0] === 'MapScene' &&
+        const melts = sound?.code === 250 && sound.parameters[0]?.name === 'WQ/SFX_IceBlockMelt' &&
+            animation?.code === 357 && animation.parameters[0] === 'MapScene' &&
             animation.parameters[1] === 'AnimatedObjectSetState' &&
-            animation.parameters[3]?.animationState === 'melt' && animation.parameters[3]?.wait === 'true' &&
-            done.code === 123 && done.indent === 0 && done.parameters[1] === 0 &&
+            animation.parameters[3]?.animationState === 'melt' && animation.parameters[3]?.wait === 'true';
+        const switchPage = done?.code === 123 && done.indent === 0 && done.parameters[1] === 0 &&
             next?.trigger === 4 && next.conditions?.selfSwitchValid === true &&
             !next.conditions.switch1Valid && !next.conditions.switch2Valid && !next.conditions.variableValid &&
             !next.conditions.itemValid && !next.conditions.actorValid &&
-            next.conditions.selfSwitchCh === done.parameters[0] &&
-            next.list.length === 2 && next.list[0]?.code === 214 && next.list[1]?.code === 0;
-        icePages.set(page, opens);
+            next.conditions.selfSwitchCh === done.parameters[0];
+        let plan = melts && gameplay.length === 3 && switchPage && next.list.length === 2 &&
+            next.list[0]?.code === 214 && next.list[1]?.code === 0 ? {} : false;
+        // Melting object ice replaces its wide collider with the actual chest
+        // collider at the authored position. Never project that space as empty
+        // or reveal the hidden chest in the destination browser.
+        const chest = entry.name === 'IceChestIce' && page === entry.pages[1] &&
+            entry.pages[0]?.list[0]?.parameters?.[3]?.animationPath === 'ICE WITH OBJECT';
+        if (chest && melts && gameplay.length === 3) {
+            const rows = next?.list.filter(({ code }) => ![0, 108, 408, 505, 657].includes(code)) || [];
+            const [graphic, position, erase] = rows;
+            const moves = graphic?.parameters?.[1]?.list;
+            if (switchPage && rows.length === 3 && graphic?.code === 205 && position?.code === 203 &&
+                erase?.code === 214 && graphic.parameters[0] === position.parameters[0] &&
+                moves?.length === 2 && moves[0].code === 41 && moves[0].parameters?.join(',') === 'Chest,0' &&
+                moves[1].code === 0 && graphic.parameters[1].wait === true && position.parameters[1] === 0) {
+                plan = { relocate: [position.parameters[0],position.parameters[2],position.parameters[3]] };
+            }
+            // One chest variant erases directly after the awaited animation;
+            // its separate splash callback moves/unhides the existing chest.
+            const splashMove = next?.list[11], splashRoute = next?.list[12];
+            if (done?.code === 214 && next?.conditions.selfSwitchValid && next.conditions.selfSwitchCh === 'B' &&
+                splashMove?.code === 203 && splashMove.parameters[1] === 0 && splashRoute?.code === 205 &&
+                splashRoute.parameters[0] === splashMove.parameters[0] &&
+                splashRoute.parameters[1]?.list.map(move => move.code).join(',') === '15,40,14,0' &&
+                splashRoute.parameters[1].list[2].parameters?.join(',') === '0,0') {
+                plan = { relocate: [splashMove.parameters[0],splashMove.parameters[2],splashMove.parameters[3]] };
+            }
+        }
+        // This audited melt runs a non-escapable native encounter and then
+        // retires actor11 via switch446. Name only the visible ice prerequisite;
+        // the original script/battle owns all progression and player control.
+        if (melts && entry.id === 7 && page === entry.pages[1] && page.list[19]?.code === 123 &&
+            page.list[19].parameters.join(',') === 'C,0' && page.list[20]?.code === 301 &&
+            page.list[20].parameters.join(',') === '0,76,false,false' && page.list[27]?.code === 121 &&
+            page.list[27].parameters.join(',') === '446,446,0' && next?.list.length === 2 &&
+            next.list[0].code === 214) plan = { clears: [11] };
+        icePages.set(page, plan);
     }
-    return icePages.get(page);
+    return !!icePages.get(page);
+}
+
+function iceMeltChanges(entry, page) {
+    return iceOpensPassage(entry, page) ? icePages.get(page) : undefined;
 }
 
 // Hand-audited discovery pages. The authored cave return page and the
@@ -290,8 +324,9 @@ function closedRuinsDoorReason(root, target) {
     const page = root.$dataMap?.events?.[target]?.pages?.[event?._pageIndex];
     return door && !door._erased && door._pageIndex === 2 && door._priorityType === 1 &&
         door._through === false && door._characterName === '!$AnimatedDoors' &&
-        root.$gamePlayer?._y < door._y && !event?._erased && page?.list.some(command =>
-            command.code === 201 && command.parameters[0] === 0 && command.parameters[1] === 13)
+        root.$gamePlayer?._y < door._y && !event?._erased && page &&
+        (target === 19 && root.$dataMap.events[19].x === 41 && root.$dataMap.events[19].y === 32 ||
+            page.list.some(command => command.code === 201 && command.parameters[0] === 0 && command.parameters[1] === 13))
         ? 'Blocked by the closed ruins door.' : '';
 }
 
@@ -508,6 +543,6 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, passiveFloorPage, concealedDestination,
+module.exports = { localDestination, localHandoffName, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
     visibleChestBarrier, closedRuinsDoorReason, npcPassage,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

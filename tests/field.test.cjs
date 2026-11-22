@@ -222,6 +222,7 @@ async function main() {
     await verifyIceHandback(flags);
     await verifyVisibleChestBarriers(flags);
     await verifyClosedRuinsDoor(flags);
+    await require('./ice-field.cjs')(fixture,mapData,flags);
     await require('./frozen-elder.cjs')(fixture,mapData,flags);
     await verifyRuinsHandback();
     await verifyChompsHandback(flags);
@@ -237,7 +238,7 @@ async function verifyClosedRuinsDoor(tilesets) {
     c.$dataTilesets = tilesets;
     Object.assign(map, { _mapId: 16, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
         _vehicles: [], _nameDisplay: false });
-    for (const [id, index] of [[1, 0], [37, 2]]) {
+    for (const [id, index] of [[1, 0], [19, 0], [37, 2]]) {
         const entry = data.events[id], page = entry.pages[index];
         const event = Object.assign(f.event(id, index), { _x: entry.x, _y: entry.y, _pageIndex: index,
             _trigger: page.trigger, _priorityType: page.priorityType, _through: page.through,
@@ -274,6 +275,7 @@ async function verifyClosedRuinsDoor(tilesets) {
     f.routeReply({ epoch: request.epoch, sequence: request.sequence, map: request.map, result });
     frame();
     assert.equal(formatSpeech(f.packets.at(-1)), 'Blocked by the closed ruins door.');
+    assert.equal(closedRuinsDoorReason(c, 19), 'Blocked by the closed ruins door.', 'the southern chest shares the actual door barrier');
     assert.equal(closedRuinsDoorReason(c, 37), '', 'a different target gets no beach-specific claim');
     player._y = 19;
     assert.equal(closedRuinsDoorReason(c, 1), '', 'the beach side of the door is not blocked');

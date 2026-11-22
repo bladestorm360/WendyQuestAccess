@@ -2,7 +2,7 @@
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
-const { localDestination, iceOpensPassage, inactiveFloorScene, concealedDestination,
+const { localDestination, iceOpensPassage, iceMeltChanges, inactiveFloorScene, concealedDestination,
     chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, npcPassage } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit,
     worldEntranceRevealed } = require('./world-destinations');
@@ -127,11 +127,14 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             const box = event.blockerProperties;
             const rectangle = box ? [x + box.x1, y + box.y1, x + box.x2, y + box.y2] : undefined;
             if (rectangle && !rectangle.every(Number.isFinite)) return null;
+            const meltable = mode === 'walk' && action && trigger === 0 && (rectangle || event._priorityType === 1) &&
+                iceOpensPassage(entry, page);
+            const meltChanges = meltable && iceMeltChanges(entry, page);
             events.push({ id: eventId, x, y, normal: event._priorityType === 1, through: event._through === true,
                 tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action,
                 erased: event._erased === true,
-                meltable: mode === 'walk' && action && trigger === 0 && (rectangle || event._priorityType === 1) &&
-                    iceOpensPassage(entry, page),
+                meltable: !!meltable,
+                ...(meltChanges?.relocate || meltChanges?.clears ? { meltChanges } : {}),
                 movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
                 discoveryFor: mode === 'airship' || airshipAvailable ? discoveryEntrance(id, event) : undefined });
         }
