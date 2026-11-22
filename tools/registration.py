@@ -742,6 +742,8 @@ def map_notification(original):
     }
     if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 13 && !this._wqaArrivalObserved)
         globalThis.WendyQuestAccessProloguePresent?.(this);
+    if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 16 && this._wqaMechDoubleNarrationMask !== 3)
+        globalThis.WendyQuestAccessMechEntryPresent?.(this);
     if (this._wqaNarrationActive || this._wqaEnvironmentPending || this._wqaReactionReceipts) globalThis.WendyQuestAccessNarrationPresent?.(this);
     // The opening has no controllable field before its first visual beat.
     // Warm asynchronously only after the normal map/resource readiness gates.

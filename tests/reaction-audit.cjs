@@ -90,5 +90,29 @@ module.exports=function(fixture,commandContext,stock,methods){
   c.Game_Interpreter.prototype.setup.call(f.interpreter,f.root.$dataMap.events[5].pages[1].list,5);
   assert(f.played[0].paused,'a genuine different entry still retires playback before image work');
  }
- console.log('Reaction audit: all89 native map surprise/ellipsis/Zzz locators and54 exact common-event callers; named blank anchors; visible balloons; native script/image-load handoff; delayed Mech Double descent; cancellation.');
+ // Run original setup/loadImages with a first-use Mech Double face. The
+ // actual cue commands execute while the preload mark is still outstanding.
+ {
+  const f=fixture(16,39,0),wendy=f.actor(-1),mech=f.actor(39),c=commandContext(f);
+  f.nativeMap.mapId=()=>16;f.nativeMap.refreshIfNeeded=()=>{};
+  f.interpreter.clear=c.Game_Interpreter.prototype.clear;f.interpreter.loadImages=c.Game_Interpreter.prototype.loadImages;
+  c.WendyQuestAccessNarrationEventEntry=f.narration.entry;
+  c.ImageManager={loadFace(name){if(name==='MechDouble'){f.narration.leave(f.scene);f.scene._wqaPreloads=new Set([{}]);}},loadPicture(){}};
+  c.$gameTemp={requestBalloon(){}};for(const method of methods)vm.runInContext(method,c);
+  c.Game_Interpreter.prototype.setup.call(f.interpreter,f.root.$dataMap.events[39].pages[0].list,39);
+  assert(f.scene._wqaPreloads.size,'the original list preloads the new Mech Double portrait');
+  f.interpreter.character=id=>id===-1?wendy.candidate:mech.candidate;
+  f.interpreter.setWaitMode=mode=>f.interpreter._waitMode=mode;f.interpreter.isOnCurrentMap=()=>true;
+  mech.candidate._realX=mech.candidate._realY=0;mech.candidate.forceMoveRoute=()=>{};mech.sprite.worldTransform.ty=-80;
+  f.interpreter._index=0;c.Game_Interpreter.prototype.command213.call(f.interpreter,[-1,1,false]);
+  f.interpreter._index=6;c.Game_Interpreter.prototype.command205.call(f.interpreter,f.interpreter._list[6].parameters);
+  f.interpreter._index=7;f.balloon(1,wendy.candidate,wendy.sprite);
+  for(let n=0;n<5;n++){f.narration.mechEntry(f.scene);f.frame();}assert.equal(f.played.length,0,'loading never admits mod work');
+  f.scene._wqaPreloads.clear();f.narration.mechEntry(f.scene);f.frame();assert.equal(f.played[0]?.id,'startled-wendy');
+  assert(!f.played[0].paused);mech.candidate._realY=1;mech.sprite.worldTransform.ty=100;
+  f.narration.mechEntry(f.scene);f.frame();assert.equal(f.played.length,1,'descent queues behind the surprise voice');
+  assert.equal(f.scene._wqaMechDoubleNarrationMask,3);f.played[0].emit('ended');f.frame();assert.equal(f.played[1]?.id,'mechs-descend');
+  f.narration.mechEntry(f.scene);f.frame();assert.equal(f.played.length,2,'one recovery per actually confirmed effect');f.narration.leave(f.scene);
+ }
+ console.log('Reaction audit: all89 native map surprise/ellipsis/Zzz locators and54 exact common-event callers; named blank anchors; visible balloons; native script/image-load handoff; delayed Mech Double descent; original cold portrait preload and ordered pair recovery; cancellation.');
 };

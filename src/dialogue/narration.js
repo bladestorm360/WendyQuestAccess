@@ -158,6 +158,7 @@ function createNarration(root, host, preferences) {
         if (!source || source._erased || (switched ? !root.$gameSwitches.value(switched) : actor !== source)) return;
         actor = source;
         visual = candidate.visual;
+        const sourceKey = [map._mapId,interpreter._eventId,candidate.page,commandIndex].join('/');
         const prior = scene._wqaNarrationSeen;
         if (visual > 0) {
             if (prior?.list === interpreter._list && prior.index === commandIndex &&
@@ -170,7 +171,7 @@ function createNarration(root, host, preferences) {
             scene._wqaNarrationSeen = { list: interpreter._list, index: commandIndex };
             reactions.push({ scene, mapId: map._mapId, actor, actorId: candidate.actor,
                 visual, id: candidate.id, frame: host.graphics.frameCount,
-                balloonAnchor: candidate.balloonAnchor, requestedFrame: host.graphics.frameCount, order: ++sequence });
+                balloonAnchor: candidate.balloonAnchor, sourceKey, requestedFrame: host.graphics.frameCount, order: ++sequence });
             scene._wqaReactionReceipts = true;
             return true;
         }
@@ -203,7 +204,7 @@ function createNarration(root, host, preferences) {
         if (context.queue.length >= QUEUE_LIMIT) return;
         scene._wqaNarrationSeen = { list: interpreter._list, index: commandIndex };
         context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions, order: ++sequence,
-            script: interpreter, scriptList: interpreter._list,
+            script: interpreter, scriptList: interpreter._list, sourceKey,
             balloonAnchor: candidate.balloonAnchor, waitFrames: candidate.waitFrames,
             screenX: scene._spriteset.x, screenY: scene._spriteset.y,
             x: actor._realX, y: actor._realY, mapY: map._displayY, mapX: map._displayX, direction: actor._direction, id: candidate.id,
@@ -279,6 +280,22 @@ function createNarration(root, host, preferences) {
         const context = owner ?? begin(scene, state.interpreter);
         if (context.queue.length >= QUEUE_LIMIT) return;
         context.queue.push(state);environment = null;scene._wqaEnvironmentPending = false;
+    }
+
+    function mechEntry(scene) {
+        const map = root.$gameMap, interpreter = map?._interpreter;
+        if (!pack || !enabled() || !ready(scene) || map?._mapId !== 16 ||
+            interpreter?._eventId !== 39 || interpreter._index < 7 || interpreter._index > 22 ||
+            interpreter._list !== root.$dataMap?.events?.[39]?.pages?.[0]?.list) return;
+        // Native setup preloads the first Mech Double portrait before running
+        // its opening commands. Those commands may execute while the bitmap
+        // gate is closed. Catch only this exact still-running entrance on its
+        // first safe frame; actual balloon/sprite paint must still confirm it.
+        const pending = key => reactions.some(state => state.sourceKey === key) ||
+            owner?.scene === scene && owner.queue.some(state => state.sourceKey === key);
+        const mask = scene._wqaMechDoubleNarrationMask || 0;
+        if (!(mask & 1) && !pending('16/39/0/0')) accepted(scene,interpreter,root.$gamePlayer,undefined,1,0);
+        if (!(mask & 2) && !pending('16/39/0/6')) accepted(scene,interpreter,map._events[39],undefined,undefined,6);
     }
 
     function prologue(scene) {
@@ -504,12 +521,16 @@ function createNarration(root, host, preferences) {
                 state.confirmed = state.battleVisible ? state.battleVisible() : state.idle ? map.inactiveTime < state.idle.end &&
                     state.idle.visible(scene, map, root.$gamePlayer) : visibleActorCue(scene, state);
                 if (state.confirmed && state.bit) scene._wqaIdleNarrationMask |= state.bit;
+                if (state.confirmed && map?._mapId === 16) {
+                    if (state.sourceKey === '16/39/0/0') scene._wqaMechDoubleNarrationMask = (scene._wqaMechDoubleNarrationMask || 0) | 1;
+                    if (state.id === 'mechs-descend') scene._wqaMechDoubleNarrationMask = (scene._wqaMechDoubleNarrationMask || 0) | 2;
+                }
             }
             playNext(context);
         });
     }
 
-    return { accepted, entry, jolt, environmentStart, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, entry, jolt, environmentStart, mechEntry, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };
