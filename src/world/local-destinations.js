@@ -171,6 +171,25 @@ function localHandoffName(map, event) {
 // Duplicate trigger tiles can retain their original page after another tile
 // has consumed the shared dialogue. Read the native guards, without running
 // commands or predicting changes to collision.
+// Automatic walking can cross short native bookkeeping/NPC-route triggers.
+// Never classify dialogue, common events, transfers, rewards, battles, plugin
+// commands or script operands as passive. Cache at most the live page keys.
+const passiveFloors = new WeakMap();
+const PASSIVE_COMMANDS = new Set([0, 108, 111, 121, 122, 123, 205, 214, 230, 408, 411, 412, 505, 657]);
+function passiveFloorPage(page) {
+    if (!page || ![1, 2].includes(page.trigger) || page.priorityType === 1 || page.list.length > 128) return false;
+    if (!passiveFloors.has(page)) passiveFloors.set(page, page.list.every(command => {
+        const p = command.parameters;
+        if (!PASSIVE_COMMANDS.has(command.code)) return false;
+        if (command.code === 111) return [0, 1, 2].includes(p[0]);
+        if (command.code === 122) return p[3] >= 0 && p[3] <= 3;
+        if (command.code === 205) return p[0] > 0 && p[1]?.list?.length <= 64 &&
+            p[1].list.every(move => Number.isInteger(move.code) && move.code >= 0 && move.code < 45);
+        return true;
+    }));
+    return passiveFloors.get(page);
+}
+
 function inactiveFloorScene(root, event, page) {
     if (event._trigger !== 1 || event._pageIndex !== 0) return false;
     const map = root.$gameMap._mapId;
@@ -300,6 +319,10 @@ function localDestination(root, event, page) {
     const id = event._eventId;
     const trigger = event._trigger;
     const list = page.list;
+    // The five terminals use the LAB A5 computer tile. The two papers
+    // on the workshop desk have different art and keep document labels.
+    if (map === 105 && [18, 70, 71, 72, 73].includes(id) && event._pageIndex === 0 && trigger === 0)
+        return { name: 'Computer', category: 'objects' };
     if (map === 106 && id === 19 && event._pageIndex === 0 && trigger === 0)
         return { name: 'Crowned skeleton', category: 'objects' };
     const townExit = chillcrestExit(root, event, page);
@@ -458,6 +481,6 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, concealedDestination,
+module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, passiveFloorPage, concealedDestination,
     visibleChestBarrier, npcPassage,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

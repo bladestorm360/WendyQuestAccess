@@ -6,7 +6,7 @@ const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName, worldEntranceRevealed, FLOAT_FORT_ENTRANCE } = require('./world-destinations');
 const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination,
-    visibleChestBarrier, BREAKFAST_HANDOFFS, npcPassage } = require('./local-destinations');
+    visibleChestBarrier, BREAKFAST_HANDOFFS, npcPassage, passiveFloorPage } = require('./local-destinations');
 const { transferOptions } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
@@ -126,6 +126,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     let iceRoute = null;
     let caveEvent = null;
     let caveResume = null;
+    let cleanupWalk = null;
     let manualAction = null;
     let manualWait = null;
     let manualCrossing = null;
@@ -151,7 +152,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (scene._wqaArrivalSpeech) arrivalScene = scene;
         } else if (record && scene === host.manager._scene) command('navigationReport', record);
         else retire(scene);
-    }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true), rerouteAutowalk);
+    }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true), rerouteAutowalk, cleanupAutowalk);
 
     function guideFor(scene) {
         if (salt.available(scene)) return salt;
@@ -354,6 +355,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             host.beacon.refreshResult(state, state.revision, state.player._x, state.player._y, null);
             return true;
         }
+        if (autowalk.active(state.scene)) automaticSnapshot(snapshot);
         const job = { scene: state.scene, sequence: ++sequence, beaconState: state, revision: state.revision };
         state.waiting = true;
         submit(job, snapshot, state.request);
@@ -706,8 +708,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             }
             else if (result?.status === 'enemyBlocked') {
                 if (!currentEnemy(root, result)) {
-                    if (job.retries < ACTOR_RETRIES) {
-                        job.retries++;
+                    if (job.autowalk || job.retries < ACTOR_RETRIES) {
+                        if (!job.autowalk) job.retries++;
                         job.performed = false;
                         return afterRender();
                     }
@@ -876,10 +878,24 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return destination;
     }
 
+    function automaticSnapshot(snapshot) {
+        // Only numeric copied rows are altered. Bookkeeping floor triggers do
+        // not block the worker's automatic course; the native input owner
+        // still stops at each touch and resumes after its exact event ends.
+        if (snapshot.mode !== 'walk' || timedCave(snapshot.map)) return;
+        for (const row of snapshot.live?.events || []) {
+            if (!row.action || row.normal || ![1, 2].includes(row.trigger)) continue;
+            const event = root.$gameMap._events[row.id];
+            const page = root.$dataMap?.events[row.id]?.pages[event?._pageIndex];
+            if (event?._x === row.x && event._y === row.y && passiveFloorPage(page)) row.action = false;
+        }
+    }
+
     function route(job, snapshot, target, area, motion) {
         const destination = setRouteTarget(job, target);
         job.area = area;
         job.autowalk = job.action !== 'puzzleGuide' && !job.journey && preferences().autowalk;
+        if (job.autowalk) automaticSnapshot(snapshot);
         if (job.autowalk && timedCave(snapshot.map)) {
             job.caveWalk ||= { destination: target, attempt: 0, acted: new Set(), announced: false };
             if (job.caveWalk.x !== snapshot.x || job.caveWalk.y !== snapshot.y)
@@ -930,6 +946,32 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             job.caveWalk.announced = true;
             present(job, { kind: 'fieldStatus', name: 'Walking.' }, true);
         }
+    }
+
+    function clearCleanupWalk() {
+        if (cleanupWalk) cleanupWalk.scene._wqaAutowalkCleanup = false;
+        cleanupWalk = null;
+    }
+
+    function cleanupCurrent(pending) {
+        return pending && pending.scene === host.manager._scene && pending.map === root.$gameMap &&
+            pending.player === root.$gamePlayer && !host.manager._nextScene && !pending.player._transferring &&
+            pending.player._x === pending.x && pending.player._y === pending.y &&
+            pending.map._events[pending.event._eventId] === pending.event && preferences().autowalk &&
+            travelMode(pending.map, pending.player) === pending.job.mode &&
+            (!pending.job.quest || questDestinationCurrent(root, pending.scene, pending.job.quest));
+    }
+
+    function cleanupAutowalk(job, event, page, x, y) {
+        if (!ready(job.scene) || !preferences().autowalk ||
+            event.list() !== page.list || root.$dataMap?.events?.[event._eventId]?.pages[event._pageIndex] !== page) return false;
+        // Retain one exact same-map cleanup identity, not a movement lease.
+        // Native event acceptance closes all work gates as usual. Nothing is
+        // resumed until the same scene publishes normal field readiness.
+        job.scene._wqaAutowalkCleanup = true;
+        cleanupWalk = { scene: job.scene, map: root.$gameMap, player: root.$gamePlayer,
+            event, list: page.list, owner, job, x, y, accepted: false };
+        return true;
     }
 
     function rerouteAutowalk(job) {
@@ -1456,6 +1498,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     }
 
     for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+        clearCleanupWalk();
         chaseGuide.stop();
         setManualAction(null); manualCrossing = manualWait = null;
         clearCaveResume();
@@ -1491,6 +1534,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return active?.scene === scene && active.action === 'directions' && preferences().autowalk;
     }
     function command(action, text, controller = false, keepCaveTiming = false) {
+        if (BROWSE.has(action) || ['directions', 'puzzleGuide', 'puzzleStop'].includes(action)) clearCleanupWalk();
         const scene = host.manager._scene;
         if ((action === 'beaconStop' || action === 'puzzleStop') && caveResume) {
             clearCaveResume();
@@ -1515,13 +1559,15 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         }
         if (action === 'beaconStop') {
             if (!ready(scene, true)) return false;
+            const cleaning = cleanupCurrent(cleanupWalk);
+            clearCleanupWalk();
             const waitingForIce = iceRoute?.scene === scene;
             localDetour.clear();
             airshipJourney.clear();
             terrainJourney.clear();
             shoreJourney = null;
             clearIceRoute(scene);
-            const walking = autowalk.stop(scene) || pendingAutowalk(scene);
+            const walking = autowalk.stop(scene) || pendingAutowalk(scene) || cleaning;
             const beaming = host.beacon?.stop(scene);
             if (!walking && !beaming && !waitingForIce) return false;
             transfers.clear();
@@ -1631,6 +1677,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return true;
         },
         questRefresh(scene) {
+            clearCleanupWalk();
             airshipJourney.questChanged();
             if (host.beacon?.questActive(scene)) host.beacon.stop(scene);
             if (active?.scene !== scene || !scene._wqaQuestNavigation) return;
@@ -1647,7 +1694,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             control.puzzle = !!guideFor(scene);
             control.puzzleActive = salt.active(scene) || cave.active(scene) || !!host.caveTiming?.active(scene) ||
                 (active?.scene === scene && active.action === 'directions' && timedCave(root.$gameMap._mapId));
-            control.autowalkActive = autowalk.active(scene) || pendingAutowalk(scene);
+            control.autowalkActive = autowalk.active(scene) || pendingAutowalk(scene) || !!cleanupCurrent(cleanupWalk);
             control.beaconActive = control.autowalkActive || host.beacon?.active(scene);
             return control;
         },
@@ -1689,6 +1736,15 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         },
         observeReady(scene) {
             if (!ready(scene)) return;
+            if (cleanupWalk) {
+                const pending = cleanupWalk;
+                if (cleanupCurrent(pending) && !pending.accepted) return;
+                clearCleanupWalk();
+                if (pending.accepted && cleanupCurrent(pending)) {
+                    owner = pending.owner;
+                    return rerouteAutowalk(pending.job);
+                }
+            }
             if (manualAction?.action) {
                 const manual = manualAction;
                 setManualAction(null);
@@ -1756,6 +1812,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         },
         command,
         cancelAutowalk(scene) {
+            clearCleanupWalk();
             // Revoke pending directions as well as movement, without a second stop announcement.
             const pending = pendingAutowalk(scene);
             clearCaveResume();
@@ -1804,6 +1861,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             afterRender();
         },
         changed(scene, steppedActor) {
+            if (cleanupWalk && !cleanupCurrent(cleanupWalk)) clearCleanupWalk();
             if (!steppedActor || steppedActor === root.$gamePlayer) autowalk.dirty(scene);
             const job = active;
             if (steppedActor && job?.scene === scene && job.chaseLeg &&
@@ -1845,6 +1903,16 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (control?.scene === scene) control = null;
         },
         leave(scene, mapEventId) {
+            if (cleanupWalk) {
+                const pending = cleanupWalk;
+                const child = mapEventId === 0 && pending.accepted && pending.map._interpreter?._list === pending.list;
+                if (!cleanupCurrent(pending) || pending.scene !== scene ||
+                    (mapEventId !== undefined && mapEventId !== pending.event._eventId && !child) ||
+                    (!pending.accepted && pending.event.list() !== pending.list) ||
+                    (mapEventId === undefined && !pending.event.isStarting() &&
+                        pending.map._interpreter?._list !== pending.list)) clearCleanupWalk();
+                else if (mapEventId === pending.event._eventId) pending.accepted = true;
+            }
             // Interpreter.setup is the definitive native acceptance site.
             // A cold resource/prompt gate may suppress the earlier field-ready
             // notification; preserve only this exact queued crystal or loot action.

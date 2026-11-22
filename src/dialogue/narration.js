@@ -14,7 +14,7 @@ for (const id of clipIds) {
         (beats[map][event][index] ??= []).push({ id, page, actor, switchId: switchId ?? undefined, visual });
     }
 }
-const PACK_LIMIT = 1064 * 1024;
+const PACK_LIMIT = 1144 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;

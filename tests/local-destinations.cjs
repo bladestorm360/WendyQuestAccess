@@ -758,6 +758,13 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     c.$dataCommonEvents = common;
     console.log('Verified all audited solid transfers, native approach directions, and the generic Cauldron and dock entries.');
 
+    load(105);
+    for (const id of [18, 70, 71, 72, 73]) {
+        const terminal = c.$gameMap._events[id];
+        assert.equal(eventTarget(c, 'walk', terminal, c.$dataMap.events[id], terminal.page())?.name, 'Computer');
+    }
+    const papers = c.$gameMap._events[66];
+    assert.equal(eventTarget(c, 'walk', papers, c.$dataMap.events[66], papers.page())?.name, 'Notes');
     load(106);
     assert.equal(mapPlace(c), 'Mech Jail');
     const skeleton = c.$gameMap._events[19];

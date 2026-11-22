@@ -141,8 +141,9 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         for (const self of [[], ['87,91,A']]) {
             const cave = load(87, { self });
             cave.player.setPosition(12, 64);
-            assert.equal(transfers.candidates().entrances.some(candidate => candidate.event === 91), self.length > 0);
-            spoilers = !self.length;
+            assert(transfers.candidates().entrances.some(candidate => candidate.event === 91),
+                'the unconditional Caffeine tunnel is available before and after discovery');
+            spoilers = false;
             const edge = reserveSpecial(cave, 91, [12, 64], 205);
             cave.gameMap._mapId = edge.map;
             cave.player.setPosition(edge.x, edge.y);

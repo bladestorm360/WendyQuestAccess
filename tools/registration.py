@@ -151,7 +151,8 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
-                 b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaArrivalSpeech||'
+                 b'SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaAutowalkCleanup||'
+                 b'SceneManager._scene?._wqaArrivalSpeech||'
                  b'SceneManager._scene?._wqaSoundscapeActive||SceneManager._scene?._wqaCaveChaseActive||'
                  b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance||'
                  b'SceneManager._scene?._wqaBookmarkLanding||SceneManager._scene?._wqaVehicleNotice)')
@@ -526,7 +527,7 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character);',
         # Native emotes, Frostyna's flash, and the two identical door approaches.
         287095: b'\n        if(Graphics._wqaNarrationEnabled&&this===$gameMap?._interpreter&&'
-                b'((params[1]>=1&&params[1]<=3)||(params[1]>=5&&params[1]<=9)))'
+                b'(params[1]>=1&&params[1]<=9))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,params[1]);',
         288646: b'\n    if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._eventId===2&&this._index===15)'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,this.character(0),undefined,-1);',

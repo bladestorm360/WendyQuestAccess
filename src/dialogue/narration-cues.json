@@ -1804,7 +1804,7 @@
     ]
   },
   "party-vanishes": {
-    "text": "Wendy's companions disappear.",
+    "text": "Wendy's companions gather into her so the whole party fits on the elevator.",
     "beats": [
       [
         98,
@@ -1896,6 +1896,163 @@
         177,
         11,
         115
+      ]
+    ]
+  },
+  "heart-elder-tater": {
+    "text": "A heart appears over Elder Tater.",
+    "beats": [
+      [
+        13,
+        6,
+        2,
+        3,
+        6,
+        null,
+        4
+      ]
+    ]
+  },
+  "heart-wendy": {
+    "text": "A heart appears over Wendy.",
+    "beats": [
+      [
+        57,
+        5,
+        0,
+        59,
+        -1,
+        null,
+        4
+      ],
+      [
+        63,
+        13,
+        0,
+        82,
+        -1,
+        null,
+        4
+      ]
+    ]
+  },
+  "heart-mech-grunt": {
+    "text": "A heart appears over the Mech Grunt.",
+    "beats": [
+      [
+        25,
+        37,
+        0,
+        0,
+        37,
+        null,
+        4
+      ],
+      [
+        105,
+        77,
+        0,
+        49,
+        77,
+        null,
+        4
+      ],
+      [
+        105,
+        77,
+        2,
+        15,
+        77,
+        null,
+        4
+      ]
+    ]
+  },
+  "heart-jarren": {
+    "text": "A heart appears over Jarren.",
+    "beats": [
+      [
+        77,
+        29,
+        1,
+        3,
+        29,
+        null,
+        4
+      ]
+    ]
+  },
+  "heart-leggslie": {
+    "text": "A heart appears over Leggslie.",
+    "beats": [
+      [
+        85,
+        26,
+        1,
+        1,
+        26,
+        null,
+        4
+      ]
+    ]
+  },
+  "heart-tyler": {
+    "text": "A heart appears over Tyler.",
+    "beats": [
+      [
+        105,
+        5,
+        0,
+        31,
+        10,
+        null,
+        4
+      ]
+    ]
+  },
+  "heart-kitty": {
+    "text": "A heart appears over Kitty.",
+    "beats": [
+      [
+        186,
+        15,
+        0,
+        1,
+        16,
+        null,
+        4
+      ],
+      [
+        186,
+        16,
+        0,
+        1,
+        16,
+        null,
+        4
+      ]
+    ]
+  },
+  "heart-jay": {
+    "text": "A heart appears over Jay.",
+    "beats": [
+      [
+        186,
+        15,
+        0,
+        5,
+        15,
+        null,
+        4
+      ],
+      [
+        186,
+        16,
+        0,
+        5,
+        15,
+        null,
+        4
       ]
     ]
   }

@@ -6,13 +6,13 @@ const { questDestinationCurrent } = require('./quest-destinations');
 const { atApproach, atBoardingApproach } = require('./interaction-approach');
 
 const { activeMovingEnemy, pageHasInteraction } = require('./destinations');
-const { inactiveFloorScene } = require('./local-destinations');
+const { inactiveFloorScene, passiveFloorPage } = require('./local-destinations');
 
 const { admitPatrolLine, patrolStepReady } = require('./puzzles/patrol-line-playback');
 
 const TOUCH_TRIGGERS = [1, 2];
 
-function createAutowalk(root, ready, preferences, report, refreshReady = () => false, reroute = () => false) {
+function createAutowalk(root, ready, preferences, report, refreshReady = () => false, reroute = () => false, cleanup = () => false) {
     let active = null;
     const targetAt = (map, job) => job.vehicle ? parkedVehicle(map, job.vehicle.type) : map._events?.[job.target];
 
@@ -219,7 +219,12 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
                 const page = root.$dataMap?.events?.[floor._eventId]?.pages?.[floor._pageIndex];
                 // Even an invisible cleanup page starts the native interpreter.
                 // Hand the step back to the player before the native event gate.
-                if (page && (!pageHasInteraction(page) || inactiveFloorScene(root, floor, page))) {
+                if (page && (!pageHasInteraction(page) || inactiveFloorScene(root, floor, page) ||
+                    !job.caveWalk && passiveFloorPage(page))) {
+                    if (cleanup(job, floor, page, x, y)) {
+                        stop(scene);
+                        return step;
+                    }
                     return end(state, { kind: 'routeDirections', name: 'Autowalk paused', legs: [],
                         boundary: step, boundaryName: 'Map cleanup', manualHandoff: true }, true);
                 }

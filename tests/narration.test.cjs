@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 91);
+assert.equal(Object.keys(clips).length, 99);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -36,7 +36,8 @@ for (const [id, { beats }] of Object.entries(cues)) {
         }
     }
 }
-assert.equal(locators.size, 169);
+assert.equal(locators.size, 182);
+assert.match(cues['party-vanishes'].text, /gather into her.*party fits on the elevator/);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
     const list = data?.events[e].pages[page].list;
@@ -173,7 +174,7 @@ const emoteMethods = JSON.parse(execFileSync('python', ['-B', path.join(__dirnam
 let musicCost = 0, faceCost = 0, faceCases = 0;
 assert(!Object.values(cues).some(cue => /anger mark/i.test(cue.text)));
 for (const [id, { beats, text }] of Object.entries(cues).filter(([name, cue]) =>
-    name.startsWith('music-') || cue.beats.some(beat => beat[6] === 5))) {
+    name.startsWith('music-') || name.startsWith('heart-') || cue.beats.some(beat => beat[6] === 5))) {
     if (beats[0][6] === 5) assert.match(text, /^A spiral-eyed face appears over .+\.$/);
     for (const [m, e, p, i, a, , visual] of beats) {
         const f = fixture(m, e, p), { candidate, sprite } = f.actor(a);
@@ -197,7 +198,7 @@ for (const [id, { beats, text }] of Object.entries(cues).filter(([name, cue]) =>
         f.frame(false);assert.equal(f.played.length, 0);f.renderer.emit('postrender');
         assert.equal(f.played[0]?.id, id, 'the named clip follows its actual painted balloon');
         if (visual === 5) { faceCost += performance.now() - at;faceCases++; }
-        else musicCost += performance.now() - at;
+        else if (visual === 3) musicCost += performance.now() - at;
         f.narration.accepted(f.scene, f.interpreter, candidate, undefined, visual);f.frame();
         assert.equal(f.played.length, 1, 'one accepted-command guard within the active context');
         f.played[0].emit('ended');f.frame();
@@ -229,6 +230,8 @@ console.log('Throttled 24 separate spiral-face description episodes', faceCost.t
     assert(!f.played[0].paused, 'the next reaction does not interrupt the playing description');
     f.played[0].emit('ended');f.frame();assert.equal(f.played[1]?.id, 'music-toby');
 }
+assert.equal(Object.values(cues).flatMap(cue => cue.beats).filter(beat => beat[6] === 4).length, 13);
+console.log('Verified all 13 heart locators and eight named clips through native command213 and actual rendered heart balloons.');
 console.log('Verified every authored musical-note locator through native command213, actual balloon visibility, repeat activation, page identity and uninterrupted named queue.');
 console.log('Throttled eleven complete music description episodes', musicCost.toFixed(2), 'ms.');
 
@@ -509,4 +512,4 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 91 clips, 169 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 99 clips, 182 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');

@@ -217,6 +217,7 @@ async function verifyAutowalk(c, load, verifyWorker) {
     console.log('Verified native moving blockers/targets, fresh worker detour, four silent refreshes and manual cancellation.');
 
     await verifyFieldRefresh(c, load, verifyWorker, statue.result.arrival);
+    await require('./autowalk-cleanup.cjs').verifyCleanupField(c, load, verifyWorker);
 
     // The reported prop is already one tile away. Arrival has to turn
     // without another step or an automatic action-button event.
@@ -371,7 +372,17 @@ async function verifyFieldRefresh(c, load, verifyWorker, arrival) {
         frame(); return packet;
     }
     scene._wqaSettingsActive = true; assert(field.selectBookmark(scene, bookmark)); scene._wqaSettingsActive = false;
-    assert(field.command('directions')); frame(); await reply();
+    assert(field.command('directions')); frame();
+    // Moving enemies may invalidate more than two worker prefixes. Keep one
+    // request in flight, recapture silently, and speak Walking only at start.
+    for (let count = 0; count < 4; count++) {
+        const packet = packets.at(-1);
+        worker.emit('message', { epoch: packet.epoch, sequence: packet.sequence, map: packet.map,
+            result: { status: 'enemyBlocked', enemy: 0, arrival: { x: 14, y: 16 }, boundary: 6 } });
+        frame(); assert.notEqual(packets.at(-1), packet);
+        assert.equal(records.length, 0, 'stale enemy prefixes never ask for another directions key');
+    }
+    await reply();
     assert(field.autowalk.active(scene));
     const blocker = run.gameMap._events[10], original = [blocker._x, blocker._y];
     // Find the accepted first step, then restore only the fixture player to
