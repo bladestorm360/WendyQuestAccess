@@ -11,7 +11,7 @@ function resolve(root,interpreter,visual){
     const map=root.$gameMap,parent=map?._interpreter;
     if(parent?._childInterpreter!==interpreter||parent._mapId!==map._mapId||
         parent._eventId!==interpreter._eventId||interpreter._mapId!==map._mapId)return null;
-    for(const common of [102,140]){
+    for(const common of [102,140,200]){
         if(root.$dataCommonEvents?.[common]?.list!==interpreter._list)continue;
         const entries=table[[map._mapId,interpreter._eventId,common,interpreter._index].join('/')];
         const cue=entries?.find(cue=>cue.visual===visual&&parent._index===cue.call+1&&

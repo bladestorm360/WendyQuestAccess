@@ -840,6 +840,10 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessNarrationEventEntry = function (scene, interpreter, list, eventId) { narration?.entry(scene, interpreter, list, eventId); };
 
+    root.WendyQuestAccessQuestionsPresent = function (scene) {
+        try { narration?.questionsPresent(scene); } catch { narration?.leave(scene); }
+    };
+
     root.WendyQuestAccessMechEntryPresent = function (scene) {
         try { narration?.mechEntry(scene); } catch { narration?.leave(scene); }
     };

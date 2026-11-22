@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 143);
+assert.equal(Object.keys(clips).length, 145);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -36,7 +36,7 @@ for (const [id, { beats }] of Object.entries(cues)) {
         }
     }
 }
-assert.equal(locators.size, 262);
+assert.equal(locators.size, 294);
 assert.match(cues['party-vanishes'].text, /gather into her.*party fits on the elevator/);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
@@ -113,7 +113,8 @@ const sceneCommands=JSON.parse(execFileSync('python',['-B',path.join(__dirname,'
 function commandContext(f) {
     const c=vm.createContext({...f.root,Game_Interpreter:function(){},SceneManager:{_scene:f.scene},Graphics:f.graphics,
         WendyQuestAccessNarrationAccepted:f.narration.accepted});
-    for(const method of sceneCommands)vm.runInContext(method,c,{timeout:100});
+    // Definitions run under the shared CPU cap; this is a fixture watchdog, not a game-frame budget.
+    for(const method of sceneCommands)vm.runInContext(method,c,{timeout:500});
     return c;
 }
 for (const id of ['double-first-entrance', 'elder-tater-freed']) {
@@ -512,9 +513,11 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 143 clips, 262 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 145 clips, 294 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
 
 require('./finale-narration.cjs')(fixture, commandContext, stock);
 require('./screen-jolt.cjs')(fixture, commandContext, stock);
 require('./environment-narration.cjs')(fixture, commandContext, stock);
 require('./reaction-audit.cjs')(fixture, commandContext, stock, emoteMethods);
+
+require('./question-narration.cjs')(fixture, commandContext, stock, emoteMethods);

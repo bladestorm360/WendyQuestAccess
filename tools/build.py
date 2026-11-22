@@ -31,10 +31,10 @@ def stage_narration():
     cues = json.loads(source.read_text(encoding='utf8'))
     folder = source.parent / 'clips'
     clips = [(folder / f'{name}.webm').read_bytes() for name in cues]
-    if not clips or len(clips) > 143 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
+    if not clips or len(clips) > 145 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
         raise ValueError('Malformed narration clips')
     pack = struct.pack('<' + 'I' * len(clips), *(len(clip) for clip in clips)) + b''.join(clips)
-    if len(pack) > 1664 * 1024:
+    if len(pack) > 1675 * 1024:
         raise ValueError('Narration clips exceed their playback budget')
     target = OUT / 'wendyquest-access/narration.webmpack'
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -51,6 +51,7 @@ def bundle():
         './idle-narration': 'dialogue/idle-narration.js',
         './reaction-common': 'dialogue/reaction-common.js',
         './environment-visuals': 'dialogue/environment-visuals.js',
+        './question-visuals': 'dialogue/question-visuals.js',
         './finale-visuals': 'dialogue/finale-visuals.js',
         './finale-battle': 'dialogue/finale-battle.js',
         './narration-cues.json': 'dialogue/narration-cues.json',

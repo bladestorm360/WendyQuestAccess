@@ -2228,6 +2228,7 @@ const interval = setInterval(() => {
             narrationStarted = performance.now();
             narrationFrame = () => {
                 Graphics.frameCount++;
+                WendyQuestAccessQuestionsPresent(scene);
                 WendyQuestAccessNarrationPresent(scene);
                 Graphics.app.renderer.emit('postrender');
             };
@@ -2252,7 +2253,72 @@ const interval = setInterval(() => {
             if (SceneManager._scene._wqaNarrationActive || !narrationAudio.paused || narrationAudio.getAttribute('src'))
                 throw Error('Native transfer failed to retire narration');
             fs.writeFileSync(receipt + '.cutscene-narration-ms', String(performance.now() - narrationStarted));
-            endingStep = 196;
+            endingStep = 296;
+        } else if (endingStep === 296) {
+            const scene = SceneManager._scene;
+            $gamePlayer._transferring = false;
+            $gamePlayer._characterName = 'WendyWorld';
+            $gameMap._interpreter._list = null;
+            $gameMap.inactiveTime = 0;
+            const effects = scene._spriteset._effectsContainer = {};
+            const playerSprite = { _character: $gamePlayer, _characterName: 'WendyWorld',
+                parent: scene._spriteset._tilemap, worldVisible: true, worldAlpha: 1, texture: { valid: true },
+                worldTransform: { tx: 100, ty: 100 } };
+            scene._spriteset._characterSprites = [playerSprite];
+            scene._spriteset._balloonSprites = [{ parent: effects, worldVisible: true, worldAlpha: 1,
+                texture: { valid: true }, worldTransform: { tx: 100, ty: 100 },
+                targetObject: $gamePlayer, _target: playerSprite, _balloonId: 2, _duration: 30 }];
+            scene._wqaPreloads = new Set([{}]);narrationAudio = null;narrationFrame();
+            if (narrationAudio) throw Error('Question observation crossed a native bitmap gate');
+            scene._wqaPreloads.clear();narrationFrame();
+            if (!narrationAudio) throw Error('Rendered question did not recover after native readiness');
+            narrationStarted = performance.now();endingStep = 297;
+        } else if (endingStep === 297 && narrationAudio?.currentTime > 0.005) {
+            const previous = narrationAudio;narrationFrame();
+            if (narrationAudio !== previous) throw Error('The same native question was described twice');
+            fs.writeFileSync(receipt + '.question-narration-ms', String(performance.now() - narrationStarted));
+            WendyQuestAccessNarrationLeaving(SceneManager._scene);endingStep = 396;
+        } else if (endingStep === 396) {
+            const scene = SceneManager._scene;
+            const list = [];
+            $dataMap.events[54] = { pages: [{ list }] };
+            window.$dataCommonEvents = [];$dataCommonEvents[200] = { list: [] };
+            $gameMap._interpreter = { _mapId: 16, _eventId: 54, _index: 1, _list: list,
+                _childInterpreter: { _list: $dataCommonEvents[200].list, _index: 28 } };
+            const chest = { _eventId: 52, _pageIndex: 1, _characterName: 'TREASURE CHEST SPECIAL' };
+            $gameMap._events[52] = chest;
+            scene._spriteset._characterSprites.push({ _character: chest, _characterName: chest._characterName,
+                parent: scene._spriteset._tilemap, worldVisible: true, worldAlpha: 1,
+                texture: { valid: true }, worldTransform: { tx: 100, ty: 100 } });
+            window.$gameSwitches ||= { value: () => false };
+            scene._fixtureSwitchValue = $gameSwitches.value;
+            $gameSwitches.value = id => id === 544 || scene._fixtureSwitchValue.call($gameSwitches, id);
+            $gameScreen._pictures = { 44: { _name: 'white', _opacity: 255 } };
+            scene._spriteset._balloonSprites = [];narrationAudio = null;narrationFrame();
+            if (narrationAudio) throw Error('Assistance reveal played through the opaque flash');
+            $gameScreen._pictures[44]._opacity = 100;narrationFrame();
+            if (!narrationAudio || !scene._wqaAssistanceReveal) throw Error('Visible assistance chest did not start its voice');
+            narrationStarted = performance.now();endingStep = 397;
+        } else if (endingStep === 397 && narrationAudio?.currentTime > 0.005) {
+            const scene = SceneManager._scene;
+            fs.writeFileSync(receipt + '.dave-reveal-ms', String(performance.now() - narrationStarted));
+            WendyQuestAccessNarrationLeaving(scene);$gameSwitches.value = scene._fixtureSwitchValue;
+            delete $gameScreen._pictures;$gameMap._interpreter._list = null;endingStep = 496;
+        } else if (endingStep === 496) {
+            const scene = SceneManager._scene, actor = { _eventId: 91, _characterName: '' };
+            const sprite = { _character: actor, _characterName: '', parent: scene._spriteset._tilemap,
+                worldVisible: false, worldAlpha: 1, texture: { valid: false } };
+            $gameMap._mapId = 113;$gameMap._events = [];$gameMap._events[91] = actor;
+            scene._spriteset._characterSprites.push(sprite);
+            scene._spriteset._balloonSprites = [{ parent: scene._spriteset._effectsContainer,
+                worldVisible: true, worldAlpha: 1, texture: { valid: true }, worldTransform: { tx: 100, ty: 100 },
+                _target: sprite, targetObject: actor, _balloonId: 2, _duration: 30 }];
+            narrationAudio = null;narrationFrame();
+            if (!narrationAudio) throw Error('The actual discovery balloon did not start its voice');
+            narrationStarted = performance.now();endingStep = 497;
+        } else if (endingStep === 497 && narrationAudio?.currentTime > 0.005) {
+            fs.writeFileSync(receipt + '.discovery-question-ms', String(performance.now() - narrationStarted));
+            WendyQuestAccessNarrationLeaving(SceneManager._scene);$gameMap._mapId = 16;endingStep = 196;
         } else if (endingStep === 196) {
             const scene = SceneManager._scene;
             $gamePlayer._transferring = false;
@@ -2266,7 +2332,8 @@ const interval = setInterval(() => {
             scene._spriteset._effectsContainer = effects;
             scene._spriteset._balloonSprites = [{
                 parent: effects, worldVisible: true, worldAlpha: 1, texture: { valid: true },
-                targetObject: $gamePlayer, _balloonId: 2, _duration: 30
+                targetObject: $gamePlayer, _target: scene._spriteset._characterSprites[0],
+                worldTransform: { tx: 100, ty: 100 }, _balloonId: 2, _duration: 30
             }];
             narrationAudio = null;
             WendyQuestAccessIdleNarration(scene);
@@ -2902,6 +2969,11 @@ def main():
             raise RuntimeError(f'Cutscene narration preferences did not survive restart: {reloaded}')
         narration_ms = float(receipt.with_suffix('.json.cutscene-narration-ms').read_text(encoding='utf8'))
         idle_ms = float(receipt.with_suffix('.json.idle-narration-ms').read_text(encoding='utf8'))
+        question_ms = float(receipt.with_suffix('.json.question-narration-ms').read_text(encoding='utf8'))
+        reveal_ms = float(receipt.with_suffix('.json.dave-reveal-ms').read_text(encoding='utf8'))
+        discovery_ms = float(receipt.with_suffix('.json.discovery-question-ms').read_text(encoding='utf8'))
+        print(f'Verified both new Opus recordings decode after rendered chest/blank-anchor confirmation; reveal {reveal_ms:.1f} ms, discovery {discovery_ms:.1f} ms with 40 ms polling.')
+        print(f'Verified native-ready question recovery/Chromium decode, one playback per balloon and separate idle ownership. Observed after {question_ms:.1f} ms with 40 ms polling.')
         print(f'Verified Chromium idle playback and wake retirement. Mock field idle output observed at {idle_ms:.1f} ms.')
         print(f'Verified cutscene clip decode, volume, rate, delay until visible movement, and transfer retirement. '
               f'Throttled progress observed after {narration_ms:.1f} ms with 40 ms polling.')

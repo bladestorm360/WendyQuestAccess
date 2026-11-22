@@ -24,18 +24,18 @@ module.exports=function(fixture,commandContext,stock,methods){
   f.narration.leave(f.scene);assert(f.played[0].paused);
  }
  for(const [id,cue]of Object.entries(cues)){
-  for(const beat of cue.beats)if([1,8,10].includes(beat[6])){verify(id,beat);direct++;}
+  for(const beat of cue.beats)if([1,2,8,10].includes(beat[6])){verify(id,beat);direct++;}
   for(const beat of cue.commonBeats||[]){verify(id,beat,true);children++;}
  }
  // Every native map exclamation/ellipsis/Zzz request has an exact locator.
- const recorded=new Set(Object.values(cues).flatMap(cue=>cue.beats).filter(b=>[1,8,10].includes(b[6])).map(b=>b.slice(0,4).join('/')));
+ const recorded=new Set(Object.values(cues).flatMap(cue=>cue.beats).filter(b=>[1,2,8,10].includes(b[6])).map(b=>b.slice(0,4).join('/')));
  let native=0;
  for(const file of fs.readdirSync(path.join(stock,'package.nw/data')).filter(name=>/^Map\d+\.json$/.test(name))){
   const m=Number(file.slice(3,6)),map=JSON.parse(fs.readFileSync(path.join(stock,'package.nw/data',file)));
   for(const event of map.events||[])if(event)for(const[p,page]of event.pages.entries())for(const[i,row]of page.list.entries())
-   if(row.code===213&&[1,8,10].includes(row.parameters[1])){assert(recorded.has([m,event.id,p,i].join('/')));native++;}
+   if(row.code===213&&[1,2,8,10].includes(row.parameters[1])){assert(recorded.has([m,event.id,p,i].join('/')));native++;}
  }
- assert.equal(native,89);assert.equal(direct,89);assert.equal(children,54);
+ assert.equal(native,133);assert.equal(direct,133);assert.equal(children,56);
  // A descending actor remains offscreen beyond the ordinary balloon window.
  {
   const f=fixture(16,39,0),{candidate,sprite}=f.actor(39);candidate._realX=candidate._realY=0;
@@ -114,5 +114,5 @@ module.exports=function(fixture,commandContext,stock,methods){
   assert.equal(f.scene._wqaMechDoubleNarrationMask,3);f.played[0].emit('ended');f.frame();assert.equal(f.played[1]?.id,'mechs-descend');
   f.narration.mechEntry(f.scene);f.frame();assert.equal(f.played.length,2,'one recovery per actually confirmed effect');f.narration.leave(f.scene);
  }
- console.log('Reaction audit: all89 native map surprise/ellipsis/Zzz locators and54 exact common-event callers; named blank anchors; visible balloons; native script/image-load handoff; delayed Mech Double descent; original cold portrait preload and ordered pair recovery; cancellation.');
+ console.log('Reaction audit: all133 native map question/surprise/ellipsis/Zzz locators and56 exact common-event callers; named blank anchors; visible balloons; native script/image-load handoff; delayed Mech Double descent; original cold portrait preload and ordered pair recovery; cancellation.');
 };

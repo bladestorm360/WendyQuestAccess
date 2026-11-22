@@ -6,6 +6,7 @@ const { finaleVisible, captureFinale } = require('./finale-visuals');
 const { finaleBattleReady, bossFlash, combinedStones } = require('./finale-battle');
 const commonReactions = require('./reaction-common');
 const environmentVisuals = require('./environment-visuals');
+const questionVisuals = require('./question-visuals');
 const { idleBeats } = require('./idle-narration');
 
 const beats = Object.create(null);
@@ -20,7 +21,7 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-const PACK_LIMIT = 1664 * 1024;
+const PACK_LIMIT = 1675 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -282,6 +283,35 @@ function createNarration(root, host, preferences) {
         context.queue.push(state);environment = null;scene._wqaEnvironmentPending = false;
     }
 
+    function questionsPresent(scene) {
+        if (!pack || !enabled() || !ready(scene)) return;
+        // Preserve native request order when its receipt survived. A bounded
+        // rendered-state pass then covers questions requested during loading
+        // or tile work; no observation/playback runs inside those phases.
+        harvestReactions(scene);
+        const balloons = scene._spriteset?._balloonSprites;
+        if (Array.isArray(balloons) && balloons.length <= 32) for (const balloon of balloons) {
+            if (seenBalloons.has(balloon)) continue;
+            const state = questionVisuals.question(root, scene, balloon);
+            if (!state || !visibleActorCue(scene, state)) continue;
+            // Idle owns Wendy's timed question and its wake cancellation.
+            if (state.actorId === -1 && idleReady(scene)) { seenBalloons.add(balloon); continue; }
+            if (owner && owner.scene !== scene) leave(owner.scene);
+            const context = owner ?? begin(scene);
+            if (reactions.length + context.queue.length >= QUEUE_LIMIT) break;
+            context.hasReactions = true;seenBalloons.add(balloon);
+            context.queue.push({ ...state, frame: host.graphics.frameCount, order: ++sequence });
+        }
+        if (scene._wqaAssistanceReveal || owner?.queue.some(state => state.id === 'assistance-chest')) return;
+        const state = questionVisuals.assistance(root, scene);
+        if (!state) return;
+        if (owner && owner.scene !== scene) leave(owner.scene);
+        const context = owner ?? begin(scene);
+        if (reactions.length + context.queue.length >= QUEUE_LIMIT) return;
+        context.hasReactions = true;
+        context.queue.push({ ...state, frame: host.graphics.frameCount, order: ++sequence });
+    }
+
     function mechEntry(scene) {
         const map = root.$gameMap, interpreter = map?._interpreter;
         if (!pack || !enabled() || !ready(scene) || map?._mapId !== 16 ||
@@ -488,6 +518,11 @@ function createNarration(root, host, preferences) {
                 balloon._duration > 0 && renderedSprite(balloon, spriteset._effectsContainer) &&
                 (!blankAnchor || onScreen(balloon.worldTransform)));
         }
+        if (visual === -12) {
+            const white = root.$gameScreen._pictures?.[44];
+            return actor._pageIndex === 1 && actor._characterName === 'TREASURE CHEST SPECIAL' &&
+                root.$gameSwitches.value(544) && (!white || white._name === 'white' && white._opacity < 200);
+        }
         if (visual === -1) return root.$gameScreen._flashColor?.[3] > 0;
         if (visual !== undefined) return true;
         if (switched) return root.$gameSwitches.value(switched);
@@ -521,6 +556,7 @@ function createNarration(root, host, preferences) {
                 state.confirmed = state.battleVisible ? state.battleVisible() : state.idle ? map.inactiveTime < state.idle.end &&
                     state.idle.visible(scene, map, root.$gamePlayer) : visibleActorCue(scene, state);
                 if (state.confirmed && state.bit) scene._wqaIdleNarrationMask |= state.bit;
+                if (state.confirmed && state.id === 'assistance-chest') scene._wqaAssistanceReveal = true;
                 if (state.confirmed && map?._mapId === 16) {
                     if (state.sourceKey === '16/39/0/0') scene._wqaMechDoubleNarrationMask = (scene._wqaMechDoubleNarrationMask || 0) | 1;
                     if (state.id === 'mechs-descend') scene._wqaMechDoubleNarrationMask = (scene._wqaMechDoubleNarrationMask || 0) | 2;
@@ -530,7 +566,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { accepted, entry, jolt, environmentStart, mechEntry, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, entry, jolt, environmentStart, questionsPresent, mechEntry, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };
