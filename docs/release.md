@@ -4,6 +4,8 @@ This procedure prepares a local release for review. Publishing, uploading artifa
 
 The workflow follows Blackmoon Prophecy's canonical README/plain-text guide and accessible standalone installer, and FFPR's frozen source/dependency, exact artifact, scanner and recovery checks. Their project-specific publication and storage rules do not replace Wendy Quest's own permissions or build policy.
 
+Routine local fixes use the focused payload build, exact affected checks and scans, and the established local deployment path. **Do not rebuild or package the standalone installer for each deployment.** Package it only when preparing the designated release candidate. Reuse unchanged installer evidence; a local fix does not itself reopen release packaging. This is the owner's November22 clarification.
+
 ## 1. Freeze source and inputs
 
 - Confirm the actual C: checkout, main branch, user-controlled origin and private visibility. Update README.md, affected feature documents and the single feature checkpoint. Commit and push all repository-eligible changes; verify origin/main contains that commit.
@@ -52,7 +54,7 @@ Use the trusted installed Microsoft Defender scanner on the exact final ZIP, ins
 
 ## 6. Install locally and close preparation
 
-With Wendy Quest closed, use this exact standalone installer's Install or update action at the established Steam target. The installer holds the Steam manifest stable and denies new launcher opens. Check all resulting files, canonical originals and the unchanged save/config set. Verify the sole optional recovery against the new installation, then retire its old contents. Do not launch the game automatically.
+For a designated release-candidate rehearsal, with Wendy Quest closed, use this exact standalone installer's Install or update action at the established Steam target. Routine fixes instead use the verified local installation functions and their closed-game lease, without packaging another installer. The installer holds the Steam manifest stable and denies new launcher opens. Check all resulting files, canonical originals and the unchanged save/config set. Verify the sole optional recovery against the new installation, then retire its old contents. Do not launch the game automatically.
 
 Consolidate the receipt in docs/deployment.md and the single checkpoint. Retain the requested final ZIP and at most one optional build recovery. Remove expanded staging, mirrored game links, test runtimes, recordings, build output and disposable logs. Keep at most20 long-term development logs and the separately retained gameplay captures. Preserve saves/settings, installed files, unique research and required canonical original recovery. Commit/push the closure and verify the remote ref and private visibility again.
 
