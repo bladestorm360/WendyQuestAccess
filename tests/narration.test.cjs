@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 123);
+assert.equal(Object.keys(clips).length, 124);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -29,14 +29,14 @@ for (const [id, { beats }] of Object.entries(cues)) {
         const key = [m, e, p, i].join('/');
         assert(!locators.has(key));
         locators.add(key);
-        assert.equal(row.code, visual === -6 ? switched ? 121 : [117, 205, 250].find(code => code === row.code) : visual > 0 ? 213 : visual === -1 ? 224 : [-2, -3, -4].includes(visual) ? 250 : visual === -5 ? 117 : switched ? 121 : 205, key);
+        assert.equal(row.code, visual === -6 ? switched ? 121 : [117, 205, 232, 250].find(code => code === row.code) : visual > 0 ? 213 : visual === -1 ? 224 : [-2, -3, -4].includes(visual) ? 250 : visual === -5 ? 117 : switched ? 121 : 205, key);
         if (visual > 0) {
             assert.equal(row.parameters[0] || e, actor, key);
             assert.equal(row.parameters[1], visual, key);
         }
     }
 }
-assert.equal(locators.size, 212);
+assert.equal(locators.size, 213);
 assert.match(cues['party-vanishes'].text, /gather into her.*party fits on the elevator/);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
@@ -512,6 +512,6 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 123 clips, 212 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 124 clips, 213 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
 
 require('./finale-narration.cjs')(fixture, commandContext, stock);

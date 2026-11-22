@@ -42,7 +42,7 @@ function createCredits(root, host, notifications, preferences) {
     function ready(scene) {
         const map = root.$gameMap;
         const id = map?._mapId;
-        return !!((id === 188 || id === 189 || id >= 210 && id <= 239) && map._interpreter?._list &&
+        return !!((id === 39 || id === 188 || id === 189 || id >= 210 && id <= 239) && map._interpreter?._list &&
             scene?._wqaMapRestored && scene._mapLoaded && scene._started && scene._active && scene === host.manager._scene &&
             host.graphics.app?.stage === scene && !host.manager._nextScene && !host.manager._exiting &&
             !host.manager._wqaNativeAutosaves && !host.graphics._wqaResize && !host.screenFading() &&

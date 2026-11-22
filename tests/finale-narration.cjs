@@ -13,7 +13,7 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
     let count = 0;
     for (const [id, cue] of Object.entries(cues)) {
         for (const [m, e, p, i, a, switched, visual] of cue.beats) {
-            if (visual !== -6) continue;
+            if (visual !== -6 || id === 'wendy-arrival-ripple') continue;
             const f = fixture(m, e, p), source = f.actor(a);
             const actor = source.candidate;
             Object.assign(actor, { _realX: 2, _realY: 2, _direction: 2, forceMoveRoute(route) { this.route = route; } });
@@ -143,6 +143,23 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
         const combined = effects[0];combined.worldVisible = false;f.frame();assert.equal(f.played.length, 0);
         combined.worldVisible = true;f.frame(false);assert.equal(f.played.length, 0);f.renderer.emit('postrender');
         assert.equal(f.played[0]?.id, 'stones-unite');
+        f.narration.leave(f.scene);assert(f.played[0].paused);
+    }
+    {
+        const f = fixture(13, 5, 0), sleeper = f.actor(17);
+        sleeper.candidate._characterName = sleeper.sprite._characterName = 'WendyWorld';
+        sleeper.candidate._characterIndex = 3;
+        Object.assign(f.interpreter, { _index: 38, _waitCount: 120 });
+        f.status._pictures = { 1: { _opacity: 255 }, 2: { _opacity: 255 } };
+        f.nativeMap.filters.ref = { currentParams: [0, 16, 16, 30, 30, 0, 0] };
+        f.scene._wqaPreloads = new Set([{}]);f.narration.prologue(f.scene);assert(!f.scene._wqaArrivalObserved);
+        f.scene._wqaPreloads.clear();f.narration.prologue(f.scene);assert(f.scene._wqaArrivalObserved);
+        f.frame();assert.equal(f.played.length, 0, 'opaque native pictures still hide the beach');
+        f.status._pictures[1]._opacity = f.status._pictures[2]._opacity = 150;
+        sleeper.sprite.worldVisible = false;f.frame();assert.equal(f.played.length, 0);
+        sleeper.sprite.worldVisible = true;f.frame(false);assert.equal(f.played.length, 0);f.renderer.emit('postrender');
+        assert.equal(f.played[0]?.id, 'wendy-arrival-ripple');
+        f.narration.prologue(f.scene);f.frame();assert.equal(f.played.length, 1);
         f.narration.leave(f.scene);assert(f.played[0].paused);
     }
     console.log('Verified ' + count + ' finale, prologue and Tyler locators through native commands, delayed rendered effects, cold prologue loading, two queued native boss flashes and transition cancellation.');

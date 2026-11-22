@@ -737,6 +737,8 @@ def map_notification(original):
         this._wqaIdleNarrationSample = 0;
         this._wqaIdleNarrationMask = 0;
     }
+    if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 13 && !this._wqaArrivalObserved)
+        globalThis.WendyQuestAccessProloguePresent?.(this);
     if (this._wqaNarrationActive) globalThis.WendyQuestAccessNarrationPresent?.(this);
     // The opening has no controllable field before its first visual beat.
     // Warm asynchronously only after the normal map/resource readiness gates.
@@ -791,7 +793,7 @@ def map_notification(original):
     {
         const wqaMap = $gameMap._mapId;
         const wqaSlots = globalThis.WendyQuestAccessCreditSlots;
-        if ((wqaMap === 188 || wqaMap === 189 || (wqaMap >= 210 && wqaMap <= 239)) &&
+        if ((wqaMap === 39 || wqaMap === 188 || wqaMap === 189 || (wqaMap >= 210 && wqaMap <= 239)) &&
             wqaSlots && !this._wqaCreditsPending && this._wqaMapRestored && this._mapLoaded &&
             this._started && this._active && this._fadeDuration === 0 && this._fadeOpacity === 0 &&
             !this._wqaPreloads?.size && !this._wqaPreloadOverflow &&

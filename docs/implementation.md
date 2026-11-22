@@ -162,3 +162,6 @@ The installed-method fixture exercises the actual two splash timing paths, hidde
 ## In-game help
 
 Open **F8 → Help** and choose Menus and reading, Pathfinder, Battle or Controller. Use the arrow keys to move and Enter to read a selected instruction. Escape returns to the section list and then to the Help button. Battle Help gives the confirm sequence taught by the game. The menu uses the saved keyboard layout and controller bindings already available to settings. The first session before settings finish loading shows defaults and refreshes after the stored values arrive. [Help implementation](../src/settings/menu.js) · [ReadMe](../README.md)
+
+
+November 22 save confirmation follow-up. The deletePrompt transport kind now uses the same bounded literal-label formatting as fileLabel. Its former invented question mark and Choose Delete or Cancel sentence are removed. No native cursor, input, deletion or storage behavior changes. The file fixture verifies each initially selected native option, changed focus, exact text for the native out-of-range fallback, unchanged deletion-progress retirement and no save deletion merely from observation.

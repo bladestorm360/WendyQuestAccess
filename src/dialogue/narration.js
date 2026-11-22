@@ -16,7 +16,7 @@ for (const id of clipIds) {
         (beats[map][event][index] ??= []).push({ id, page, actor, switchId: switchId ?? undefined, visual });
     }
 }
-const PACK_LIMIT = 1412 * 1024;
+const PACK_LIMIT = 1428 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -117,10 +117,10 @@ function createNarration(root, host, preferences) {
         stopClip();
     }
 
-    function accepted(scene, interpreter, actor, switched, visual) {
+    function accepted(scene, interpreter, actor, switched, visual, commandIndex = interpreter._index) {
         if (!pack || !enabled() || !ready(scene)) return;
         const map = root.$gameMap;
-        const candidates = beats[interpreter._mapId]?.[interpreter._eventId]?.[interpreter._index];
+        const candidates = beats[interpreter._mapId]?.[interpreter._eventId]?.[commandIndex];
         const candidate = candidates?.find(beat =>
             root.$dataMap?.events?.[interpreter._eventId]?.pages[beat.page]?.list === interpreter._list);
         if (!candidate) return;
@@ -135,7 +135,7 @@ function createNarration(root, host, preferences) {
         // Guard one command within its active narration context. A later
         // real activation of the same NPC/list can show the balloon again.
         if (owner?.scene === scene && owner.list === interpreter._list &&
-            prior?.list === interpreter._list && prior.index === interpreter._index) return;
+            prior?.list === interpreter._list && prior.index === commandIndex) return;
         // Sample only the authored actor, and only once at the accepted
         // command. The frame callback verifies the same sprite and ownership.
         const sprites = scene._spriteset?._characterSprites;
@@ -155,10 +155,22 @@ function createNarration(root, host, preferences) {
         if (owner && (owner.scene !== scene || owner.list !== interpreter._list)) leave(owner.scene);
         const context = owner ?? begin(scene, interpreter);
         if (context.queue.length >= QUEUE_LIMIT) return;
-        scene._wqaNarrationSeen = { list: interpreter._list, index: interpreter._index };
+        scene._wqaNarrationSeen = { list: interpreter._list, index: commandIndex };
         context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions,
             x: actor._realX, y: actor._realY, mapY: map._displayY, mapX: map._displayX, direction: actor._direction, id: candidate.id,
             finale: visual === -6 ? captureFinale(root, scene, candidate.id) : null });
+        return true;
+    }
+
+    function prologue(scene) {
+        const map = root.$gameMap, interpreter = map?._interpreter;
+        // Map13's fade-in is already running when command232 accepts the
+        // moving black pictures. Observe only its later, native-ready wait;
+        // never mutate interpreter progress or start work during map entry.
+        if (scene?._wqaArrivalObserved || map?._mapId !== 13 || interpreter?._eventId !== 5 ||
+            interpreter._index !== 38 || !(interpreter._waitCount > 0) ||
+            interpreter._list !== root.$dataMap?.events?.[5]?.pages?.[0]?.list || !ready(scene)) return;
+        if (accepted(scene, interpreter, map._events[17], undefined, -6, 37)) scene._wqaArrivalObserved = true;
     }
 
     function begin(scene, interpreter = null) {
@@ -327,7 +339,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { accepted, battleAccepted, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

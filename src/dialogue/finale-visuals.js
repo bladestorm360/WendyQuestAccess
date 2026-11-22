@@ -45,6 +45,13 @@ function captureFinale(root, scene, id) {
 
 function finaleVisible(root, host, scene, state) {
     const { id } = state;
+    if (id === 'wendy-arrival-ripple') {
+        const params = root.$gameMap.getFilterController?.('ref')?.currentParams;
+        return params?.[1] > 0 && params[2] > 0 &&
+            [1, 2].every(slot => (root.$gameScreen._pictures?.[slot]?._opacity || 0) < 200) &&
+            state.actor._characterName === 'WendyWorld' && state.actor._characterIndex === 3 &&
+            !state.actor._transparent && renderedSprite(state.sprite, scene._spriteset._tilemap);
+    }
     if (id === 'prologue-islands' || id === 'prologue-ruins') return scene._spriteset._tilemap.worldVisible === true &&
         (root.$gameMap._displayY !== state.mapY || root.$gameMap._displayX !== state.mapX);
     if (id === 'prologue-emblem') return !!picture(root, host, scene, 4, 'pictures/MECHBORGLOGO');
