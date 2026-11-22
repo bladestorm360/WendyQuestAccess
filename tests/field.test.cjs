@@ -222,6 +222,7 @@ async function main() {
     await verifyIceHandback(flags);
     await verifyVisibleChestBarriers(flags);
     await verifyClosedRuinsDoor(flags);
+    await require('./frozen-elder.cjs')(fixture,mapData,flags);
     await verifyRuinsHandback();
     await verifyChompsHandback(flags);
     await verifyBeachHandoffs(flags);

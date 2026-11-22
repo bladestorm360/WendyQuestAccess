@@ -82,7 +82,7 @@ Battle timing cues and cave timing cues start **on for new profiles**. Updates r
 
 F8, Audio groups adjustable navigation sounds and volumes. **Sound previews** has its own submenu. Speech and sounds have independent master switches. HRTF provides spatial playback; stereo playback uses left/right placement and a lower rear cue. Wall tones, bumps, footsteps, beacons and the entity soundscape can be adjusted independently.
 
-Optional **Cutscene descriptions** in Audio use a separate recorded voice for supported visible animations, including named reactions and idle actions. They start off; speed and volume are adjustable. Descriptions queue without interrupting another description.
+Optional **Cutscene descriptions** in Audio use a separate recorded voice for supported visible animations, including named reactions and idle actions. They start off; speed and volume are adjustable. Descriptions queue without interrupting another description. They continue through visual fades; loading pauses and resumes them at the same position.
 
 ## Controller
 

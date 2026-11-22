@@ -230,6 +230,17 @@ function iceOpensPassage(entry, page) {
     if (!/^Ice(?:Block|$)/.test(entry?.name || '') || page?.trigger !== 0) return false;
     if (!icePages.has(page)) {
         const gameplay = page.list.filter(({ code }) => ![0, 108, 408, 657].includes(code));
+        // The beach rescue uses the same one-use melt, preceded by Wendy's
+        // two lines about the visibly trapped elder. Its splash relocates
+        // event6 to the ice position; that actor owns the later conversation.
+        // Qualify this exact producer, never arbitrary story/choice scripts.
+        const rescue = entry.id === 8 && entry.x === 28 && entry.y === 5 && page === entry.pages[1] &&
+            entry.pages[0]?.list[0]?.parameters?.[3]?.animationPath === 'ICE WITH PERSON' &&
+            entry.pages[3]?.list[11]?.code === 203 &&
+            entry.pages[3].list[11].parameters.join(',') === '6,0,28,5,0' &&
+            gameplay[0]?.code === 101 && gameplay[0].parameters[0] === 'Wendy' &&
+            gameplay[1]?.code === 401 && gameplay[2]?.code === 401;
+        if (rescue) gameplay.splice(0,3);
         const [sound, animation, done] = gameplay;
         const next = entry.pages[entry.pages.indexOf(page) + 1];
         // Verify the ordinary melt followed by an erase-only page. Other
