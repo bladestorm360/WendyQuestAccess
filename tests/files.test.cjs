@@ -661,7 +661,7 @@ for (const imagesBeforeStage of [false, true]) {
     window._handlers.delete = scene.onDelete.bind(scene);
     c.SceneManager.onSceneStart();
     readyFrame(f);
-    assert.match(formatSpeech(f.messages[0]), /Remove test slot\?/);
+    assert.equal(formatSpeech(f.messages[0]), 'Remove test slot');
     window.select(0);
     readyFrame(f);
     assert.equal(formatSpeech(f.messages[1]), 'Remove test slot');
@@ -675,5 +675,17 @@ for (const imagesBeforeStage of [false, true]) {
     coroutine.next();
     assert.equal(f.deleted(), 1);
     assert.equal(f.epoch(), 0);
+}
+for (const [index, expected] of [[0, 'Delete Save Slot 1'], [1, 'Cancel']]) {
+    const f = fixture(), c = f.context, window = new c.Window_Selectable();
+    const scene = f.show(new c.Scene_DeleteGame(), window);
+    Object.assign(scene, { _wqaFileKind: 3, _optionsWindow: window, _deleteCount: 0 });
+    Object.assign(window, { _index: index, _list: [{ name: 'Delete Save Slot 1', symbol: 'delete' },
+        { name: 'Cancel', symbol: 'cancel' }] });
+    c.SceneManager.onSceneStart();readyFrame(f);
+    assert.equal(formatSpeech(f.messages[0]), expected, 'the initially focused native option is read verbatim');
+    window.select(1 - index);readyFrame(f);
+    assert.equal(formatSpeech(f.messages[1]), index === 0 ? 'Cancel' : 'Delete Save Slot 1');
+    assert.equal(f.deleted(), 0, 'observing the confirmation never deletes a save');
 }
 console.log('Verified native file, Options and retry presentation, fullscreen settlement, and close-before-entry.');

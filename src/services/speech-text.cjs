@@ -56,6 +56,7 @@ function formatSpeech(message) {
         case 'fileControl':
             text = Object.prototype.hasOwnProperty.call(fileControls, message.label) ? fileControls[message.label] : '';
             break;
+        case 'deletePrompt':
         case 'fileLabel':
         case 'controllerStatus':
         case 'fieldStatus': text = label(message); break;
@@ -349,11 +350,6 @@ function formatSpeech(message) {
             const focus = `Digit ${position} of ${length}, ${digit}`;
             text = first && typeof digits === 'string' && /^[0-9]{1,16}$/.test(digits) && digits.length === length
                 ? `Number entry. ${digits.split('').join(', ')}. ${focus}` : focus;
-            break;
-        }
-        case 'deletePrompt': {
-            const name = label(message);
-            text = name && `${name}? Choose Delete or Cancel`;
             break;
         }
         default: return '';
