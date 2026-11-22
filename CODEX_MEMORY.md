@@ -1,5 +1,7 @@
 # WendyQuest project memory
 
+November22 active combined update: the [complete question audit/Dave chest narration](docs/cutscene-description.md#complete-question-mark-audit-and-daves-assistance-reveal) and [post-Mech Double beach diagnosis](docs/navigation.md#closed-return-from-crispy-ruins-after-mech-double) are implemented and offline-verified. The beach return is blocked by the game's closed ruins door; failed directions now explain that.145 recordings,294 direct locators,46 question paths, both chest branches, native field checks and final NW pass. Combined exact security/local install/cleanup is pending in the [single checkpoint](docs/feature-checkpoint.md#question-mark-audit-dave-offer-then-post-mech-beach-reachability). Keep the private installer ZIP unchanged; source checkpoints are private.
+
 November 14. [Shift+M map descriptions](docs/navigation.md#map-descriptions) and [resisted-status speech](docs/battle.md#enemy-defeat-and-status-effects) are in the latest verified candidate. The capture scene and voice size tradeoffs are recorded in [cutscene audio description](docs/cutscene-description.md). Voice implementation is on hold for discussion.
 
 November 14 follow-up. The [combined beacon, forest switches, World Atlas and battle update](docs/deployment.md#beacon-forest-switches-world-atlas-and-battle-attribution) passed the native fixtures, packaged checks and exact scan. Follow the deployment record for the pending closed-game installer check. The previous Steam payload is the verified single-key Wendy status build.

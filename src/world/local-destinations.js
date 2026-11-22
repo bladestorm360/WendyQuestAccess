@@ -268,6 +268,22 @@ function visibleChestBarrier(root, map, id, spoilers) {
     return '';
 }
 
+// Mech Double closes this actual entrance; it is not an unlockable gate.
+// Explain a failed beach route only from the enclosed side, using the live
+// solid door and the selected native transfer. Never change reachability.
+function closedRuinsDoorReason(root, target) {
+    const map = root.$gameMap;
+    if (map?._mapId !== 16) return '';
+    const door = map._events?.[37];
+    const event = map._events?.[target];
+    const page = root.$dataMap?.events?.[target]?.pages?.[event?._pageIndex];
+    return door && !door._erased && door._pageIndex === 2 && door._priorityType === 1 &&
+        door._through === false && door._characterName === '!$AnimatedDoors' &&
+        root.$gamePlayer?._y < door._y && !event?._erased && page?.list.some(command =>
+            command.code === 201 && command.parameters[0] === 0 && command.parameters[1] === 13)
+        ? 'Blocked by the closed ruins door.' : '';
+}
+
 function eventSwitchPage(entry, index, switchId, destination) {
     const page = entry?.pages?.[index];
     return page?.trigger === 3 && page.conditions.switch1Valid && page.conditions.switch1Id === switchId &&
@@ -482,5 +498,5 @@ function localDestination(root, event, page) {
 }
 
 module.exports = { localDestination, localHandoffName, iceOpensPassage, inactiveFloorScene, passiveFloorPage, concealedDestination,
-    visibleChestBarrier, npcPassage,
+    visibleChestBarrier, closedRuinsDoorReason, npcPassage,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

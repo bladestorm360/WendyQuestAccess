@@ -221,11 +221,70 @@ async function main() {
     await verifyOpeningField(flags);
     await verifyIceHandback(flags);
     await verifyVisibleChestBarriers(flags);
+    await verifyClosedRuinsDoor(flags);
     await verifyRuinsHandback();
     await verifyChompsHandback(flags);
     await verifyBeachHandoffs(flags);
     await verifySurfaceField(flags);
     console.log('Verified native field admission, spoken object selection and route, restored tiles, and stale-route retirement.');
+}
+
+async function verifyClosedRuinsDoor(tilesets) {
+    const { closedRuinsDoorReason } = require('../src/world/local-destinations');
+    const data = mapData(16), f = fixture(data), { c, frame } = f;
+    const map = c.$gameMap, player = c.$gamePlayer;
+    c.$dataTilesets = tilesets;
+    Object.assign(map, { _mapId: 16, _tilesetId: data.tilesetId, _events: [], _tileEvents: [],
+        _vehicles: [], _nameDisplay: false });
+    for (const [id, index] of [[1, 0], [37, 2]]) {
+        const entry = data.events[id], page = entry.pages[index];
+        const event = Object.assign(f.event(id, index), { _x: entry.x, _y: entry.y, _pageIndex: index,
+            _trigger: page.trigger, _priorityType: page.priorityType, _through: page.through,
+            _characterName: page.image.characterName });
+        map._events[id] = event;
+        map.fixtureEvents.push(event);
+    }
+    player._vehicleType = 'walk';
+    player.setPosition(13, 17);
+    player.reserveTransfer(16, 13, 17, 2, 0);
+    c.SceneManager.goto(c.Scene_Map);
+    c.SceneManager.changeScene();
+    c.DataManager.ready = c.ImageManager.ready = true;
+    c.SceneManager.updateScene();
+    await new Promise(setImmediate);
+    const scene = c.Graphics.app.stage;
+    scene._fadeDuration = scene._fadeOpacity = 0;
+    c.SceneManager.updateScene();
+    f.idleCallbacks.shift()();
+    c.SceneManager.updateScene();
+    frame();
+    await new Promise(setImmediate);
+    const key = (value, shiftKey = false) => {
+        f.dispatchWindowEvent('keydown', { key: value, keyCode: value.toUpperCase().charCodeAt(0), shiftKey });
+        f.dispatchWindowEvent('keyup', { key: value });
+        frame();
+    };
+    for (let n = 0; n < 12 && f.packets.at(-1)?.category !== 'Exits'; n++) key('l', true);
+    key('p');
+    const request = f.routePackets.at(-1);
+    assert.equal(request.request.event, 1);
+    const result = solveRoute(bakeMap(data, tilesets[data.tilesetId].flags), request.live, request.request);
+    assert.equal(result.status, 'unreachable', 'the actual native closed door separates the beach');
+    f.routeReply({ epoch: request.epoch, sequence: request.sequence, map: request.map, result });
+    frame();
+    assert.equal(formatSpeech(f.packets.at(-1)), 'Blocked by the closed ruins door.');
+    assert.equal(closedRuinsDoorReason(c, 37), '', 'a different target gets no beach-specific claim');
+    player._y = 19;
+    assert.equal(closedRuinsDoorReason(c, 1), '', 'the beach side of the door is not blocked');
+    player._y = 17;
+    for (const property of ['_through', '_erased']) {
+        map._events[37][property] = true;
+        assert.equal(closedRuinsDoorReason(c, 1), '');
+        map._events[37][property] = false;
+    }
+    map._events[37]._pageIndex = 1;
+    assert.equal(closedRuinsDoorReason(c, 1), '', 'the earlier prophecy reminder is a different page');
+    console.log('Verified the closed ruins door explains the blocked beach route without opening native collision.');
 }
 
 async function verifyVisibleChestBarriers(tilesets) {

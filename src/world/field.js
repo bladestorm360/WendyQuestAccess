@@ -6,7 +6,7 @@ const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName, worldEntranceRevealed, FLOAT_FORT_ENTRANCE } = require('./world-destinations');
 const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination,
-    visibleChestBarrier, BREAKFAST_HANDOFFS, npcPassage, passiveFloorPage } = require('./local-destinations');
+    visibleChestBarrier, closedRuinsDoorReason, BREAKFAST_HANDOFFS, npcPassage, passiveFloorPage } = require('./local-destinations');
 const { transferOptions } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
@@ -773,6 +773,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     return status(job, 'This cave mouth is separate from the main cavern. It is reached from the east side of Cracked Cove.');
                 if (job.map === 191 && job.target === 2)
                     return status(job, 'The west cave entrance is on a separate shore.');
+                const closedDoor = job.mode === 'walk' && closedRuinsDoorReason(root, job.target);
+                if (closedDoor) return status(job, closedDoor);
                 const reason = job.mode === 'walk' ? 'Not currently reachable' : job.mode === 'airship' ?
                     'No connected landing' : 'No sailing route';
                 status(job, job.nearestLanding ? 'No landing site is available' : reason);
