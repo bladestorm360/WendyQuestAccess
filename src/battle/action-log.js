@@ -112,9 +112,14 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             row._wqaLogSeen = true;
             const text = readable(paint);
             const source = row._wqaSource;
-            // Only the exact native action row transfers ownership to its
-            // animation-entry announcement; identical later actions still speak.
-            if (source?.abilityStart && (source.announced || source.pending)) continue;
+            // Only the exact native action row shares heading ownership with
+            // its animation entry; identical later actions still speak.
+            if (source?.abilityStart) {
+                if (source.announced || source.pending) continue;
+                // The legacy log can paint before per-target FX starts.
+                // Its rendered heading then owns this exact action ticket.
+                if (text) source.announced = true;
+            }
             if (text) lines.push(typeof source === 'string' && source ? source + ' uses ' + text : text);
         }
         for (const sprite of damage) {

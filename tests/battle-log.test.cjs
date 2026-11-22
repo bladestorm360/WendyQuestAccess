@@ -365,6 +365,29 @@ console.log('Verified missing BigMech punch/gun and Big Booster callouts at nati
         action._forcing=save.forcing;scene._fadeDuration=0;
     }
     log.cooldown=0;for(let n=0;n<100;n++)frame();assert.deepEqual(lines.slice(announced),[],'the painted native row belongs to the one already-announced action');
+    // The real startAction writes its native heading through displayAction
+    // and the legacy method queue. Its showAnimation calls ActionAnimation,
+    // which does not start the per-target laser effect. The number/laser
+    // dispatch happens later, so the heading can finish painting first.
+    const target={x:300,y:80,width:32,height:64,anchor:{x:.5,y:1},GetTargetPosition:()=>({x:300,y:80})};
+    c.BattleHelper.GetBattlerSprite=owner=>owner===subject?freezer:target;
+    c.SkillUtility={ExtractMetaData:entry=>JSON.parse(entry.note.slice(entry.note.indexOf('{')))};
+    c.DataManager={isSkill:entry=>skills.includes(entry)};
+    subject.performActionStart=subject.performAction=()=>{};
+    Object.assign(legacyLog,{_methods:[],push:c.Window_BattleLog.prototype.push,
+        showAnimation:c.Window_BattleLog.prototype.fixtureStoryAnimation,
+        setWaitMode(){},showAttackAnimation(){},waitForTime(value){assert.equal(value,0);}});
+    vm.runInContext('Array.prototype.clone=function(){return this.slice();};',c);
+    for(let cast=0;cast<2;cast++) {
+        subject.forceAction(55,-2);battle._action=subject._actions[0];
+        c.fixtureAction=battle._action;const beforeCast=lines.length;
+        vm.runInContext('fixtureLog.startAction(fixtureSubject,fixtureAction,[{}]);',c);
+        let budget=16;while(legacyLog._methods.length&&budget-->0)legacyLog.callNextMethod();
+        assert(budget>0);log.cooldown=0;for(let n=0;n<100;n++)frame();
+        assert.deepEqual(lines.slice(beforeCast),['Mech Double uses Double Laser.'],'the actual native queue can paint before per-target FX');
+        freezer.ActionTargetAnimation(battle._action,'MechDoubleLaser',{});renderer.emit('postrender');
+        assert.deepEqual(lines.slice(beforeCast),['Mech Double uses Double Laser.'],'one heading for the same action in either producer order');
+    }
     c.$gameTroop={_interpreter:{}};battle._action=null;
-    console.log('Verified original Troop14 command339/forced-action dispatch, Double Laser at native animation entry, exact message label, unchanged160/100 waits/effect, no duplicate row and closed ordinary menu/target gates.');
+    console.log('Verified original Troop14 command339/forced-action dispatch, Double Laser at native animation entry, exact message label, unchanged160/100 waits/effect, native-log-first and animation-first single headings, distinct repeated casts, and closed ordinary menu/target gates.');
 }

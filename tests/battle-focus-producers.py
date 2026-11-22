@@ -169,6 +169,12 @@ if sys.argv[2:] == ['log']:
     native_managers = (installed / 'package.nw/js/rmmz_managers.js').read_text(encoding='utf-8-sig')
     start = native_managers.index('BattleManager.processForcedAction = function(')
     methods.append(native_managers[start:native_managers.index('\n};', start) + 3])
+    methods.append(sprite_method(battle, 'Window_BattleLog', 'startAction'))
+    methods.append(sprite_method(battle, 'Window_BattleLog', 'showAnimation').replace("['showAnimation']", "['fixtureStoryAnimation']", 1))
+    methods.append(sprite_method(battle, 'Sprite_BattleScreenParticipant', 'ActionAnimation'))
+    for name in ('displayAction', 'push', 'callNextMethod', 'performActionStart', 'performAction', 'waitForMovement'):
+        start = stock.index(f'Window_BattleLog.prototype.{name} = function(')
+        methods.append(stock[start:stock.index('\n};', start) + 3])
     print(json.dumps(methods))
     sys.exit(0)
 
