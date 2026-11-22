@@ -174,10 +174,15 @@ function createNarration(root, host, preferences) {
         // Only the currently executing map/common-event chain can own a jolt.
         // Parallel events qualify through their own native event interpreter.
         const map = root.$gameMap;
-        const base = map._interpreter?._list ? map._interpreter :
+        let base = map._interpreter?._list ? map._interpreter :
             map._events?.[interpreter._eventId]?._interpreter;
         let current = base, depth = 0;
         while (current && current !== interpreter && depth++ < 8) current = current._childInterpreter;
+        if (current !== interpreter) {
+            base = map._events?.[interpreter._eventId]?._interpreter;
+            current = base;depth = 0;
+            while (current && current !== interpreter && depth++ < 8) current = current._childInterpreter;
+        }
         if (current !== interpreter || !base?._list) return;
         const row = interpreter._list?.[interpreter._index];
         const impulse = row?.code === 357 && row.parameters?.[0] === 'ShakeScreen' && row.parameters[1] === 'CreateImpulse';

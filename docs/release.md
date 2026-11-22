@@ -22,7 +22,7 @@ Check dependency identities, Windows x64 binaries, required licenses and source 
 
 From a clean committed tree, run tools/package-release.py with --version, --stage and --output. Stage must be a fresh C: analysis directory outside Git; output should be a new versioned ZIP under the ignored dist folder. Example names are WendyQuestAccess-1.0.0.zip and an analysis staging folder ending in release-1.0.0. The tool does not overwrite an existing release, tag, push or publish. The --development switch permits a dirty-tree rehearsal only with a -dev version; those artifacts are not publishable.
 
-The builder generates ReadMe.txt from README.md, checks ASCII compatibility, freezes the source commit, fingerprints the game/runtime/map inputs, writes source-free copy/literal recipes and embeds the package in WendyQuestAccessSetup.exe. Its .NET Framework4.8 x64 compilation uses the bounded runner. The ZIP contains exactly:
+The builder generates ReadMe.txt from README.md, checks ASCII compatibility, freezes the source commit, fingerprints the game/runtime/map inputs, writes source-free copy/literal recipes and embeds the package in WendyQuestAccessSetup.exe. Its .NET Framework4.8 x64 compilation uses the bounded runner. ZIP entries have explicit compressed-package, file-count, declared-size and actual-copy bounds; inherited Node options/path are cleared. The ZIP contains exactly:
 
 - WendyQuestAccessSetup.exe
 - ReadMe.txt

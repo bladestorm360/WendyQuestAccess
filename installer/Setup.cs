@@ -88,6 +88,7 @@ namespace WendyQuestAccessInstaller {
       Arguments=Arg(game)+" "+Arg(Path.Combine(work,"engine.cjs"))+" "+action+" "+Arg(game)+" "+Arg(work),
       WorkingDirectory=work,UseShellExecute=false,CreateNoWindow=true
      };
+     start.EnvironmentVariables.Remove("NODE_OPTIONS");start.EnvironmentVariables.Remove("NODE_PATH");
      using(var process=Process.Start(start)) {
       var clock=Stopwatch.StartNew();string prior="";
       while(!process.WaitForExit(200)) {
@@ -128,7 +129,13 @@ namespace WendyQuestAccessInstaller {
        throw new InvalidDataException("Unsafe installer file.");
      total+=item.Length;if(item.Length>33554432||total>67108864)throw new InvalidDataException("Installer exceeds its size limit.");
      string dest=Path.Combine(folder,key.Replace('/',Path.DirectorySeparatorChar));Directory.CreateDirectory(Path.GetDirectoryName(dest));
-     using(var input=item.Open())using(var output=new FileStream(dest,FileMode.CreateNew,FileAccess.Write,FileShare.None))input.CopyTo(output);
+     using(var input=item.Open())using(var output=new FileStream(dest,FileMode.CreateNew,FileAccess.Write,FileShare.None)) {
+      var buffer=new byte[65536];long copied=0;int count;
+      while((count=input.Read(buffer,0,buffer.Length))!=0){copied+=count;
+       if(copied>item.Length)throw new InvalidDataException("Installer entry exceeded its declared size.");
+       output.Write(buffer,0,count);}
+      if(copied!=item.Length)throw new InvalidDataException("Installer entry was truncated.");
+     }
      if(FileSha(dest)!=(string)files[key])throw new InvalidDataException("Installer file verification failed: "+key);
     }
    }

@@ -39,5 +39,11 @@ module.exports = function(fixture, commandContext, stock) {
     const f=fixture(14,5,1);f.spriteset.x=f.spriteset.y=0;f.spriteset._tilemap.worldVisible=true;
     f.interpreter._index=22;f.scene._wqaPreloads=new Set([{}]);f.narration.jolt(f.scene,f.interpreter,1);
     f.spriteset.x=4;f.frame();assert.equal(f.played.length,0,'resource gate stays closed');
+    {
+        const f=fixture(14,5,1), parallel={...f.interpreter,_index:22};
+        f.nativeMap._events[5]={_interpreter:parallel};f.spriteset.x=f.spriteset.y=0;f.spriteset._tilemap.worldVisible=true;
+        f.narration.jolt(f.scene,parallel);f.spriteset.x=3;f.frame();assert.equal(f.played[0]?.id,'screen-jolt');
+        f.narration.leave(f.scene);
+    }
     console.log('Native screen jolt producers:',count,'matching sound/jolt pairs; earthquakes, terrain shifts and other shakes stay silent');
 };
