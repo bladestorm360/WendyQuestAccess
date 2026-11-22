@@ -872,6 +872,12 @@ function boot(root, nodeRequire, nodeProcess) {
         try { narration.warm(scene); } catch { narration.leave(scene); }
     };
 
+    root.WendyQuestAccessNarrationPausing = function (scene) { narration?.pause(scene); };
+    root.WendyQuestAccessNarrationFading = function (scene) { narration?.pause(scene, true); };
+    root.WendyQuestAccessNarrationTransition = function (scene, next) {
+        if (next && (next === root.Scene_Map || next === root.Scene_Battle)) narration?.pause(scene);
+        else narration?.leave();
+    };
     root.WendyQuestAccessNarrationLeaving = function (scene) { narration?.leave(scene); };
 
     root.WendyQuestAccessStepNavigationReady = function (scene) { field?.stepReady(scene); };

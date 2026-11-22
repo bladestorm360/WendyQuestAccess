@@ -68,6 +68,16 @@ def fixture(runtime, installed):
 <script src="run.js"></script>
 ''', encoding='utf8')
     objects = objects_notification((installed / OBJECTS_REL).read_bytes()).decode('utf8')
+    sleep_map = json.loads((installed / 'package.nw/data/Map013.json').read_text(encoding='utf8'))
+    (app / 'sleep-pages.json').write_text(json.dumps(sleep_map['events'][5]['pages']), encoding='utf8')
+    sleep_native = []
+    for name in ('clear', 'setup', 'loadImages', 'command213', 'command230', 'wait', 'updateWaitCount', 'command221'):
+        start = objects.index('Game_Interpreter.prototype.' + name + ' = function(')
+        sleep_native.append(objects[start:objects.index('\n};', start) + 3])
+    start = objects.index('Game_Screen.prototype.startFadeOut = function(')
+    sleep_native.append(objects[start:objects.index('\n};', start) + 3])
+    (app / 'sleep-native.js').write_text('\n'.join(sleep_native), encoding='utf8')
+
     movement = ['function Game_CharacterBase() {}', 'function Game_Player() {}',
                 'Object.setPrototypeOf(Game_Player.prototype, Game_CharacterBase.prototype)',
                 'function Game_Map() {}', 'function Game_Interpreter() {}']
@@ -2228,8 +2238,9 @@ const interval = setInterval(() => {
             narrationStarted = performance.now();
             narrationFrame = () => {
                 Graphics.frameCount++;
-                WendyQuestAccessQuestionsPresent(scene);
-                WendyQuestAccessNarrationPresent(scene);
+                const current = SceneManager._scene;
+                WendyQuestAccessQuestionsPresent(current);
+                WendyQuestAccessNarrationPresent(current);
                 Graphics.app.renderer.emit('postrender');
             };
             WendyQuestAccessNarrationWarm(scene);
@@ -2250,8 +2261,9 @@ const interval = setInterval(() => {
             endingStep++;
         } else if (endingStep === 96 && narrationAudio?.currentTime > 0.005) {
             $gamePlayer.reserveTransfer(2, 0, 0, 2, 0);
-            if (SceneManager._scene._wqaNarrationActive || !narrationAudio.paused || narrationAudio.getAttribute('src'))
-                throw Error('Native transfer failed to retire narration');
+            if (SceneManager._scene._wqaNarrationActive || !narrationAudio.paused || !narrationAudio.getAttribute('src') || !Graphics._wqaNarrationContinuation)
+                throw Error('Native transfer failed to pause confirmed narration');
+            WendyQuestAccessNarrationLeaving(SceneManager._scene);
             fs.writeFileSync(receipt + '.cutscene-narration-ms', String(performance.now() - narrationStarted));
             endingStep = 296;
         } else if (endingStep === 296) {
@@ -2318,7 +2330,80 @@ const interval = setInterval(() => {
             narrationStarted = performance.now();endingStep = 497;
         } else if (endingStep === 497 && narrationAudio?.currentTime > 0.005) {
             fs.writeFileSync(receipt + '.discovery-question-ms', String(performance.now() - narrationStarted));
-            WendyQuestAccessNarrationLeaving(SceneManager._scene);$gameMap._mapId = 16;endingStep = 196;
+            WendyQuestAccessNarrationLeaving(SceneManager._scene);$gameMap._mapId = 16;endingStep = 596;
+        } else if (endingStep === 596) {
+            const scene = SceneManager._scene;
+            // Original authored pages and original patched setup/balloon/wait/fade
+            // producers are fixture inputs outside Git. Confirmed audio must
+            // continue across the fade, pause only for actual loading, then
+            // finish naturally in the next scene without delaying the game.
+            window.Game_Screen ||= function () {};
+            window.Scene_Map ||= function FixtureMap() {};
+            window.eval(fs.readFileSync('sleep-native.js', 'utf8'));
+            const pages = JSON.parse(fs.readFileSync('sleep-pages.json', 'utf8'));
+            window.$dataMap = { events: [] };$dataMap.events[5] = { pages };
+            $gameMap._mapId = 13;$gameMap.mapId = () => 13;$gameMap.inactiveTime = 0;
+            const sleeper = { _eventId: 17, _characterName: 'WendyWorld', _characterIndex: 3 };
+            const sprite = { _character: sleeper, _characterName: 'WendyWorld', parent: scene._spriteset._tilemap,
+                worldVisible: true, worldAlpha: 1, texture: { valid: true }, worldTransform: { tx: 100, ty: 100 } };
+            $gameMap._events = [];$gameMap._events[17] = sleeper;
+            scene._spriteset._characterSprites = [sprite];scene._spriteset._balloonSprites = [];
+            window.$gameTemp ||= {};$gameTemp.requestBalloon = (actor, id) => {
+                scene._spriteset._balloonSprites.push({ parent: scene._spriteset._effectsContainer,
+                    worldVisible: true, worldAlpha: 1, texture: { valid: true },
+                    targetObject: actor, _target: sprite, _balloonId: id, _duration: 76 });
+            };
+            const interpreter = $gameMap._interpreter = Object.assign(new Game_Interpreter(),
+                { _mapId: 13, _eventId: 5, _list: pages[6].list, _index: 16,
+                  character: () => sleeper, setWaitMode() {}, fadeSpeed: () => 24 });
+            narrationAudio = null;interpreter.command213(pages[6].list[16].parameters);
+            interpreter.setup(pages[7].list, 5);narrationFrame();
+            if (!narrationAudio) throw Error('Sleep balloon did not recover through the actual next-page setup');
+            // The earlier settings test deliberately chose210 percent. Exercise
+            // continuation at the slowest supported80-percent playback rate.
+            narrationAudio.playbackRate = 0.8;
+            let ended = false, frames = 0;const started = performance.now();
+            scene._fixtureSleepAudio = narrationAudio;
+            narrationAudio.addEventListener('ended', () => { ended = true;narrationAudio._fixtureNaturallyEnded = true; }, { once: true });
+            interpreter.command230(pages[7].list[0].parameters);
+            $gameScreen.startFadeOut = Game_Screen.prototype.startFadeOut;
+            const timer = setInterval(() => {
+                frames++;interpreter.updateWaitCount();
+                if (interpreter._waitCount > 0) return;
+                clearInterval(timer);
+                interpreter.command221();narrationFrame();
+                scene._fixtureSleepResult = { endedBeforeFade: ended, frames, elapsedMs: performance.now() - started };
+            }, 1000 / 60);
+            endingStep = 597;
+        } else if (endingStep === 597 && SceneManager._scene._fixtureSleepResult) {
+            const scene = SceneManager._scene, result = scene._fixtureSleepResult, audio = scene._fixtureSleepAudio;
+            if (result.frames !== 30 || audio.paused || audio.currentTime < 0.01)
+                throw Error('The original slow sleep voice did not continue across the native fade');
+            $gameScreen._brightness = 128;narrationFrame();
+            if (audio.paused) throw Error('Visual fade interrupted the existing description');
+            $gamePlayer.reserveTransfer(116,8,4,0,0);
+            WendyQuestAccessNarrationTransition(scene,Scene_Map);
+            if (!audio.paused || !audio.getAttribute('src')) throw Error('Resource entry lost the native audio playhead');
+            const next = Object.assign(Object.create(Object.getPrototypeOf(scene)),scene,
+                { _wqaMapRestored:false,_wqaNarrationActive:false,_wqaReactionReceipts:false,
+                  _wqaPreloads:new Set(),_fixtureSleepPosition:audio.currentTime });
+            SceneManager._scene = Graphics.app.stage = next;$gameMap._mapId = 116;
+            narrationFrame();if (!audio.paused) throw Error('Sleep voice resumed before the house was ready');
+            narrationStarted=performance.now();endingStep=598;
+        } else if (endingStep === 598 && performance.now()-narrationStarted > 160) {
+            const scene=SceneManager._scene,audio=scene._fixtureSleepAudio;
+            if (!audio.paused || Math.abs(audio.currentTime-scene._fixtureSleepPosition)>0.02)
+                throw Error('Loading advanced the paused sleep recording');
+            $gamePlayer._transferring=false;$gameScreen._brightness=255;$gameScreen._fadeOutDuration=0;
+            scene._wqaMapRestored=true;narrationFrame();
+            if (audio.paused || audio.currentTime+0.02<scene._fixtureSleepPosition || audio.playbackRate!==0.8)
+                throw Error('The new sleep scene did not resume the original voice at the saved position/rate');
+            endingStep=599;
+        } else if (endingStep === 599 && SceneManager._scene._fixtureSleepAudio._fixtureNaturallyEnded) {
+            const scene=SceneManager._scene;
+            fs.writeFileSync(receipt+'.sleep-fade',JSON.stringify({frames:30,rate:0.8,
+                continuedAcrossFade:true,pausedDuringLoading:true,resumedPosition:scene._fixtureSleepPosition,naturalEnd:true}));
+            WendyQuestAccessNarrationLeaving(scene);$gameMap._mapId=16;endingStep=196;
         } else if (endingStep === 196) {
             const scene = SceneManager._scene;
             $gamePlayer._transferring = false;
@@ -2342,6 +2427,9 @@ const interval = setInterval(() => {
             narrationStarted = performance.now();
             endingStep++;
         } else if (endingStep === 197 && narrationAudio?.currentTime > 0.005) {
+            WendyQuestAccessNarrationTransition(SceneManager._scene,function FixtureTitle() {});
+            if (Graphics._wqaNarrationContinuation || !narrationAudio.paused || narrationAudio.getAttribute('src'))
+                throw Error('Leaving gameplay for another scene retained an old description');
             $gameMap.inactiveTime = 0;
             narrationFrame();
             if (!narrationAudio.paused || narrationAudio.getAttribute('src')) throw Error('Leaving idle kept the description active');
@@ -2358,10 +2446,10 @@ setTimeout(() => {
         crossMapLeg, crossMapRequested: crossMapStarted > 0, lastTransferMessage: fs.existsSync(last) ? fs.readFileSync(last, 'utf8') : '',
         narrationState: narrationAudio && { paused: narrationAudio.paused, ready: narrationAudio.readyState,
             time: narrationAudio.currentTime, error: narrationAudio.error?.message },
-        autowalkStep, walkPresented, walkReceipts: fs.readdirSync(require('path').dirname(receipt)).filter(name =>
+        autowalkStep, footstepContact, dialogueShown, repeated, walkPresented, walkReceipts: fs.readdirSync(require('path').dirname(receipt)).filter(name =>
             name.startsWith('receipt.json.autowalk')), status: menuStatus(), focus: document.activeElement?.tagName === 'BUTTON' ? document.activeElement.textContent : '' });
     nw.App.quit();
-}, 18000);
+}, 24000);
 ''', encoding='utf8')
     service = app / 'wendyquest-access'
     service.mkdir()
@@ -2967,6 +3055,10 @@ def main():
                 'Increase cutscene description volume, 55 percent', 'Decrease cutscene description speed, 210 percent',
                 'Increase cutscene description speed, 210 percent']:
             raise RuntimeError(f'Cutscene narration preferences did not survive restart: {reloaded}')
+        sleep = json.loads(receipt.with_suffix('.json.sleep-fade').read_text(encoding='utf8'))
+        if not sleep.get('naturalEnd') or not sleep.get('pausedDuringLoading'):
+            raise RuntimeError('Incomplete slow sleep continuation')
+        print('Verified the full original sleep recording at80 percent across the actual30-frame fade, native transfer, paused loading and the next ready scene, retaining its playhead through natural completion.')
         narration_ms = float(receipt.with_suffix('.json.cutscene-narration-ms').read_text(encoding='utf8'))
         idle_ms = float(receipt.with_suffix('.json.idle-narration-ms').read_text(encoding='utf8'))
         question_ms = float(receipt.with_suffix('.json.question-narration-ms').read_text(encoding='utf8'))

@@ -53,14 +53,16 @@ function createNarration(root, host, preferences) {
     let seenBalloons = new WeakSet();
     let sequence = 0;
     let clip = null;
+    let carried = [];
 
-    function ready(scene) {
+    function ready(scene, fading = false, continuation = false) {
         const { graphics, manager } = host;
-        return !!(scene?._wqaMapRestored && scene._mapLoaded && scene._started && scene._active &&
-            scene.srcWendy && scene.srcStones && scene._fadeDuration === 0 && scene._fadeOpacity === 0 &&
+        return !!(scene && (continuation && scene._wqaBattleStarted ||
+            scene._wqaMapRestored && scene._mapLoaded && scene.srcWendy && scene.srcStones) &&
+            scene._started && scene._active && (fading || scene._fadeDuration === 0 && scene._fadeOpacity === 0) &&
             !scene._wqaPreloads?.size && !scene._wqaPreloadOverflow && !scene._wqaTerrainWork &&
-            !scene._wqaSettingsActive && !root.$gamePlayer?._transferring && root.$gameScreen?._brightness === 255 &&
-            !host.screenFading() && scene === manager._scene && graphics.app?.stage === scene &&
+            !scene._wqaSettingsActive && !root.$gamePlayer?._transferring && (fading || root.$gameScreen?._brightness === 255) &&
+            (fading || !host.screenFading()) && scene === manager._scene && graphics.app?.stage === scene &&
             !graphics._wqaResize && !manager._nextScene && !manager._exiting && !manager._wqaNativeAutosaves &&
             !!root.$gameMap && !root.$gameMap._needsTilemapRefresh && host.hasFocus());
     }
@@ -113,7 +115,11 @@ function createNarration(root, host, preferences) {
         root.URL.revokeObjectURL(url);
     }
 
-    function leave(scene, keepEnvironment = false, keepReactions = false) {
+    function leave(scene, keepEnvironment = false, keepReactions = false, keepPlayback = false) {
+        if (!keepPlayback) {
+            carried = [];host.graphics._wqaNarrationContinuation = false;
+            if (!owner || !scene || clip?.scene === scene) stopClip();
+        }
         if (keepReactions && owner && (!scene || owner.scene === scene)) {
             for (const state of owner.queue) {
                 if (!(state.visual > 0) || state.confirmed || reactions.some(receipt => receipt.order === state.order)) continue;
@@ -140,7 +146,48 @@ function createNarration(root, host, preferences) {
         if (!owner || scene && owner.scene !== scene) return;
         owner.scene._wqaNarrationActive = false;
         owner = null;
-        stopClip();
+        if (!keepPlayback) stopClip();
+    }
+
+    function pendingCount() { return reactions.length + carried.length + (owner?.queue.length || 0); }
+
+    // A confirmed description is already visible information. Keep only its
+    // caption ID after its source scene retires; actor/interpreter pointers and
+    // unconfirmed effects never travel to another map. A paused Audio retains
+    // its actual playhead, so readiness resumes the word rather than restarting.
+    function pause(scene, playing = false, keepReactions = false) {
+        if (owner && (!scene || owner.scene === scene)) {
+            for (const state of owner.queue) {
+                if (state.confirmed && carried.length < QUEUE_LIMIT) carried.push(state.id);
+            }
+        }
+        leave(scene, false, keepReactions, true);
+        if (clip && !playing) { clip.audio.pause();clip.suspended = true; }
+        host.graphics._wqaNarrationContinuation = !!clip || carried.length > 0;
+    }
+
+    function resume(scene) {
+        if (!host.graphics._wqaNarrationContinuation) return true;
+        if (!enabled() || !host.hasFocus() || host.manager._exiting) { leave();return false; }
+        if (!ready(scene, false, true)) {
+            // A pure visual fade may finish an already playing voice. Actual
+            // map/resource/scene work pauses it before entry and never waits.
+            if (!ready(scene, true, true) && clip && !clip.suspended) {
+                clip.audio.pause();clip.suspended = true;
+            }
+            return false;
+        }
+        if (clip?.finishedPending) stopClip();
+        const context = owner ?? begin(scene);
+        context.carried = context.hasReactions = true;
+        context.queue.unshift(...carried.map(id => ({ id, confirmed: true })));
+        carried = [];
+        if (clip) {
+            clip.scene = scene;
+            if (clip.suspended) { clip.suspended = false;clip.audio.play()?.catch(clip.finished); }
+        }
+        host.graphics._wqaNarrationContinuation = false;
+        return true;
     }
 
     function accepted(scene, interpreter, actor, switched, visual, commandIndex = interpreter._index) {
@@ -164,7 +211,7 @@ function createNarration(root, host, preferences) {
         if (visual > 0) {
             if (prior?.list === interpreter._list && prior.index === commandIndex &&
                 (reactions.length || owner?.scene === scene)) return;
-            if (reactions.length + (owner?.queue.length || 0) >= QUEUE_LIMIT) return;
+            if (pendingCount() >= QUEUE_LIMIT) return;
             // Keep a bounded intent until the native balloon exists. The game
             // can terminate this script and load its next page in the same
             // frame before the first balloon is drawn. No game object is
@@ -202,7 +249,7 @@ function createNarration(root, host, preferences) {
         }
         const context = owner ?? begin(scene, interpreter);
         if (interpreter !== map._interpreter) context.joltBase = interpreter;
-        if (context.queue.length >= QUEUE_LIMIT) return;
+        if (pendingCount() >= QUEUE_LIMIT) return;
         scene._wqaNarrationSeen = { list: interpreter._list, index: commandIndex };
         context.queue.push({ frame: host.graphics.frameCount, sprite, actor, switched, visual, companions, order: ++sequence,
             script: interpreter, scriptList: interpreter._list, sourceKey,
@@ -245,7 +292,7 @@ function createNarration(root, host, preferences) {
             else leave(owner.scene);
         }
         const context = owner ?? begin(scene, base);
-        if (context.queue.length >= QUEUE_LIMIT) return;
+        if (pendingCount() >= QUEUE_LIMIT) return;
         const prior = context.lastJolt;
         if (prior?.interpreter === interpreter && prior.list === interpreter._list && prior.index === interpreter._index) return;
         context.lastJolt = { interpreter, list: interpreter._list, index: interpreter._index };
@@ -279,7 +326,7 @@ function createNarration(root, host, preferences) {
             else leave(owner.scene, true);
         }
         const context = owner ?? begin(scene, state.interpreter);
-        if (context.queue.length >= QUEUE_LIMIT) return;
+        if (pendingCount() >= QUEUE_LIMIT) return;
         context.queue.push(state);environment = null;scene._wqaEnvironmentPending = false;
     }
 
@@ -298,7 +345,7 @@ function createNarration(root, host, preferences) {
             if (state.actorId === -1 && idleReady(scene)) { seenBalloons.add(balloon); continue; }
             if (owner && owner.scene !== scene) leave(owner.scene);
             const context = owner ?? begin(scene);
-            if (reactions.length + context.queue.length >= QUEUE_LIMIT) break;
+            if (pendingCount() >= QUEUE_LIMIT) break;
             context.hasReactions = true;seenBalloons.add(balloon);
             context.queue.push({ ...state, frame: host.graphics.frameCount, order: ++sequence });
         }
@@ -307,7 +354,7 @@ function createNarration(root, host, preferences) {
         if (!state) return;
         if (owner && owner.scene !== scene) leave(owner.scene);
         const context = owner ?? begin(scene);
-        if (reactions.length + context.queue.length >= QUEUE_LIMIT) return;
+        if (pendingCount() >= QUEUE_LIMIT) return;
         context.hasReactions = true;
         context.queue.push({ ...state, frame: host.graphics.frameCount, order: ++sequence });
     }
@@ -359,7 +406,7 @@ function createNarration(root, host, preferences) {
         // Native event setup still closes all playback and async work before
         // loading images. Only the inert, bounded balloon intents survive this
         // same-map handoff; transfers/fades/focus loss clear them normally.
-        leave(scene, false, true);
+        pause(scene, false, true);
         if (scene) scene._wqaNarrationSeen = null;
     }
 
@@ -376,7 +423,7 @@ function createNarration(root, host, preferences) {
             if (!balloon) return true;
             if (owner && owner.scene !== scene) leave(owner.scene, false, true);
             const context = owner ?? begin(scene);
-            if (context.queue.length >= QUEUE_LIMIT) return true;
+            if (context.queue.length + carried.length >= QUEUE_LIMIT) return true;
             context.hasReactions = true;seenBalloons.add(balloon);
             context.queue.push({ ...receipt, sprite: balloon._target, balloon, frame: host.graphics.frameCount });
             context.queue.sort((a,b) => (a.order || 0) - (b.order || 0));
@@ -406,7 +453,7 @@ function createNarration(root, host, preferences) {
                 map.inactiveTime >= beat.end || !beat.visible(scene, map, root.$gamePlayer) ||
                 context?.queue.some(state => state.bit === bit)) continue;
             context ??= begin(scene);
-            if (context.queue.length >= QUEUE_LIMIT) break;
+            if (pendingCount() >= QUEUE_LIMIT) break;
             context.queue.push({ id: beat.id, bit, idle: beat, frame: host.graphics.frameCount });
         }
     }
@@ -419,10 +466,18 @@ function createNarration(root, host, preferences) {
             const audio = new root.Audio();
             if (!audio.canPlayType(MIME)) return leave(context.scene);
             const url = root.URL.createObjectURL(new root.Blob([pack[id]], { type: 'audio/webm' }));
-            clip = { audio, url };
+            clip = { audio, url, scene: context.scene };
             // Native frame presentation starts the next confirmed clip. An
             // ended/error handler only releases its own playback resources.
-            const finished = () => { if (clip?.audio === audio) stopClip(); };
+            const finished = () => {
+                if (clip?.audio !== audio) return;
+                // A late decoder/end task can arrive after the native pause.
+                // Defer media cleanup until readiness rather than doing work
+                // inside the protected resource phase.
+                if (clip.suspended) clip.finishedPending = true;
+                else stopClip();
+            };
+            clip.finished = finished;
             audio.addEventListener('ended', finished, { once: true });
             audio.addEventListener('error', finished, { once: true });
             audio.volume = setting.volume / 100;
@@ -444,7 +499,7 @@ function createNarration(root, host, preferences) {
         }
         const context = owner ?? begin(scene, interpreter);
         context.battle = true;
-        if (context.queue.length >= QUEUE_LIMIT) return;
+        if (pendingCount() >= QUEUE_LIMIT) return;
         const token = actor ? sprite : interpreter._index;
         if (context.lastBattleToken === token) return;
         context.lastBattleToken = token;
@@ -453,6 +508,7 @@ function createNarration(root, host, preferences) {
 
     function mayPresent(context) {
         const { scene, interpreter, list } = context;
+        if (context.carried) return ready(scene, false, true) && enabled();
         if (context.hasReactions) return ready(scene) && enabled() && context.mapId === root.$gameMap?._mapId;
         if (context.battle) return enabled() && finaleBattleReady(root, host, scene) &&
             interpreter === root.$gameTroop._interpreter && interpreter._list === list;
@@ -530,11 +586,13 @@ function createNarration(root, host, preferences) {
     }
 
     function present(scene) {
+        if (!resume(scene)) return;
         harvestReactions(scene);
         environmentPresent(scene);
         const context = owner;
         if (!context || context.scene !== scene) return;
-        if (!mayPresent(context)) return leave(scene, true, true);
+        if (!mayPresent(context)) return !context.interpreter && !context.hasReactions && !context.carried
+            ? leave(scene) : pause(scene, ready(scene, true, true) && !ready(scene, false, true), true);
         if (context.paintPending || (clip && context.queue.every(state => state.confirmed))) return;
         const frame = host.graphics.frameCount;
         // Keep already rendered descriptions even after the effect disappears.
@@ -548,7 +606,8 @@ function createNarration(root, host, preferences) {
         renderer.once('postrender', () => {
             if (owner !== context) return;
             context.paintPending = false;
-            if (!mayPresent(context)) return leave(scene, true, true);
+            if (!mayPresent(context)) return !context.interpreter && !context.hasReactions && !context.carried
+            ? leave(scene) : pause(scene, ready(scene, true, true) && !ready(scene, false, true), true);
             if (host.graphics.frameCount - frame > FRAME_LIMIT) return;
             for (const state of context.queue) {
                 if (state.confirmed) continue;
@@ -566,7 +625,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { accepted, entry, jolt, environmentStart, questionsPresent, mechEntry, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { accepted, entry, pause, jolt, environmentStart, questionsPresent, mechEntry, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

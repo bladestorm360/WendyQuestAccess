@@ -76,14 +76,14 @@ function fixture(m, e, page, warm = true) {
         Audio: class extends EventEmitter {
             canPlayType() { return true; }
             addEventListener(event, listener) { this.once(event, listener); }
-            play() { this.id = this.src; played.push(this); }
+            play() { this.id = this.src; this.paused = false; if (!this.started) played.push(this);this.started = true; }
             pause() { this.paused = true; }
             removeAttribute() { this.src = ''; }
             load() {}
         }
     };
-    const narration = createNarration(root, { graphics, manager: { _scene: scene },
-        screenFading: () => false, hasFocus: () => true }, () => playback);
+    const host = { graphics, manager: { _scene: scene }, screenFading: () => status._fadeOutDuration > 0, hasFocus: () => true };
+    const narration = createNarration(root, host, () => playback);
     if (warm) narration.warm(scene);
     interpreter._list = list;
     function actor(id) {
@@ -104,7 +104,7 @@ function fixture(m, e, page, warm = true) {
         narration.present(scene);
         if (paint) renderer.emit('postrender');
     }
-    return { scene, graphics, root, interpreter, nativeMap, renderer, spriteset, status, switches,
+    return { scene, graphics, root, host, interpreter, nativeMap, renderer, spriteset, status, switches,
         played, playback, narration, actor, balloon, frame };
 }
 
@@ -112,7 +112,9 @@ const sceneCommands=JSON.parse(execFileSync('python',['-B',path.join(__dirname,'
     path.join(stock,'package.nw'),'narration-commands'],{encoding:'utf8',timeout:5000}));
 function commandContext(f) {
     const c=vm.createContext({...f.root,Game_Interpreter:function(){},SceneManager:{_scene:f.scene},Graphics:f.graphics,
-        WendyQuestAccessNarrationAccepted:f.narration.accepted});
+        WendyQuestAccessNarrationAccepted:f.narration.accepted,
+        WendyQuestAccessNarrationPausing:f.narration.pause,
+        WendyQuestAccessNarrationFading:scene=>f.narration.pause(scene,true)});
     // Definitions run under the shared CPU cap; this is a fixture watchdog, not a game-frame budget.
     for(const method of sceneCommands)vm.runInContext(method,c,{timeout:500});
     return c;
@@ -521,3 +523,5 @@ require('./environment-narration.cjs')(fixture, commandContext, stock);
 require('./reaction-audit.cjs')(fixture, commandContext, stock, emoteMethods);
 
 require('./question-narration.cjs')(fixture, commandContext, stock, emoteMethods);
+
+require('./narration-continuity.cjs')(fixture, commandContext, emoteMethods);

@@ -137,12 +137,18 @@ BATTLE_LOG_LEAVING = (b'SceneManager._scene?._wqaBattleLogActive&&'
                       b'globalThis.WendyQuestAccessBattleLogLeaving?.(SceneManager._scene)')
 BATTLE_RADIAL_LEAVING = (b'SceneManager._scene?._wqaRadialActive&&'
                          b'globalThis.WendyQuestAccessBattleRadialLeaving?.(SceneManager._scene)')
-def narration_leaving(scene=b'SceneManager._scene', event_entry=False):
-    return (b'if(' + scene + b'?._wqaNarrationActive||' + scene + b'?._wqaNarrationLoading||' + scene + b'?._wqaEnvironmentPending||' + scene + b'?._wqaReactionReceipts)'
-            + (b'globalThis.WendyQuestAccessNarrationEventEntry?.(' if event_entry else b'globalThis.WendyQuestAccessNarrationLeaving?.(') + scene + (b',this,list,eventId' if event_entry else b'') + b');')
+def narration_leaving(scene=b'SceneManager._scene', event_entry=False, mode='pause'):
+    handler = b'EventEntry' if event_entry else {
+        'pause': b'Pausing', 'fade': b'Fading', 'cancel': b'Leaving', 'transition': b'Transition'
+    }[mode]
+    args = b',this,list,eventId' if event_entry else b',sceneClass' if mode == 'transition' else b''
+    return (b'if(' + scene + b'?._wqaNarrationActive||' + scene + b'?._wqaNarrationLoading||'
+            + scene + b'?._wqaEnvironmentPending||' + scene + b'?._wqaReactionReceipts||Graphics._wqaNarrationContinuation)'
+            + b'globalThis.WendyQuestAccessNarration' + handler + b'?.(' + scene + args + b');')
 
 
-SCENE_LEAVING = (narration_leaving(b'this._scene') + b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
+
+SCENE_LEAVING = (narration_leaving(b'this._scene', mode='cancel') + b'if(this._scene?._wqaPresentation){this._scene._wqaPresentation=false;'
                  b'globalThis.WendyQuestAccessSceneLeaving?.(this._scene);}')
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
                  b'SceneManager._scene?._wqaAutosaveNotice||SceneManager._scene?._wqaCreditsActive||'
@@ -365,7 +371,8 @@ def managers_notification(original):
         # These entry sites precede Chromium reload or the next scene constructor.
         54263: SCENE_LEAVING + b'\n        ',
         57606: b'\n' + files_ready('this._scene'),
-        58080: b'\n    ' + SCENE_LEAVING,
+        58080: b'\n    ' + SCENE_LEAVING.replace(
+            narration_leaving(b'this._scene', mode='cancel'), narration_leaving(b'this._scene', mode='transition')),
         59505: b'\n    ' + narration_leaving() + MAP_LEAVING,
         62230: b'\n    if(SceneManager._scene?._wqaBattleFocusActive&&this._phase!=="input")'
                b'globalThis.WendyQuestAccessBattleFocusLeaving?.(SceneManager._scene);'
@@ -382,7 +389,7 @@ def managers_notification(original):
 def scenes_notification(original):
     return insert(original, SCENES_SHA, {
         106138: b'    if(this._wqaBattleBagActive)globalThis.WendyQuestAccessMenuLeaving?.(this);\n',
-        2349: b'\n    ' + narration_leaving() + MAP_LEAVING,
+        2349: b'\n    ' + narration_leaving(mode='fade') + MAP_LEAVING,
         3177: b'\n' + files_ready('this'),
         33497: b'\n    if(this._wqaShop&&this._started&&this._active&&this._fadeDuration===0&&this._fadeOpacity===0&&'
                b'!this._wqaSettingsActive&&!SceneManager._nextScene&&!SceneManager._exiting&&'
@@ -474,7 +481,7 @@ def objects_notification(original):
                 b'(SceneManager._scene?._wqaCaveTimingActive||SceneManager._scene?._wqaPreviewUntil))'
                 b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);\n        ',  # Distraction wait boundary
         249865: ROUTE_DIRTY + b'\n        ',  # Active event page replacement
-        21807: b'\n    ' + narration_leaving() + MAP_LEAVING,  # Game_Screen fade-out
+        21807: b'\n    ' + narration_leaving(mode='fade') + MAP_LEAVING,  # Game_Screen fade-out
         217381: b'\n    if(this===$gamePlayer&&Graphics._wqaBookmarkTransferPending)'
                 b'globalThis.WendyQuestAccessBookmarkTransferReserved?.(SceneManager._scene,this,mapId,x,y,d);\n    '
                 + narration_leaving() + MAP_LEAVING,  # Accepted transfer reservation
@@ -747,7 +754,7 @@ def map_notification(original):
     if (Graphics._wqaNarrationEnabled && (this._spriteset?._balloonSprites?.length ||
         $gameMap._mapId === 16 && !this._wqaAssistanceReveal))
         globalThis.WendyQuestAccessQuestionsPresent?.(this);
-    if (this._wqaNarrationActive || this._wqaEnvironmentPending || this._wqaReactionReceipts) globalThis.WendyQuestAccessNarrationPresent?.(this);
+    if (this._wqaNarrationActive || this._wqaEnvironmentPending || this._wqaReactionReceipts || Graphics._wqaNarrationContinuation) globalThis.WendyQuestAccessNarrationPresent?.(this);
     // The opening has no controllable field before its first visual beat.
     // Warm asynchronously only after the normal map/resource readiness gates.
     if (Graphics._wqaNarrationEnabled && !Graphics._wqaNarrationPackFinished && !this._wqaNarrationLoading &&
@@ -1085,7 +1092,7 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=BattleManager._wqaBattleSpritesBusy=undefined;',
         242214: target_update + bag_update + timing_update + radial_update + log_update +
-                b'if(this._wqaNarrationActive)globalThis.WendyQuestAccessNarrationPresent?.(this);' + dialogue_update(ready, victory=True),
+                b'if(this._wqaNarrationActive||Graphics._wqaNarrationContinuation)globalThis.WendyQuestAccessNarrationPresent?.(this);' + dialogue_update(ready, victory=True),
         # Optional speaker metadata stays on its native row through queuing and paint.
         239515: b',wqaSource',  # Scene_Battle.logAction
         239613: b',wqaSource',
