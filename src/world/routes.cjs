@@ -253,7 +253,7 @@ function airshipEntranceRoute(world, start, request, area, cancelled) {
     return result;
 }
 
-function trace(world, start, goal, facing, parents, cancelled, stops) {
+function trace(world, start, goal, facing, parents, cancelled, stops, measure = false) {
     const legs = [];
     let cell = goal;
     let arrival = goal;
@@ -285,10 +285,11 @@ function trace(world, start, goal, facing, parents, cancelled, stops) {
         arrival: { x: arrival % world.width, y: Math.floor(arrival / world.width),
             facing: !boundary && facing !== 1 ? facing : null } };
     if (boundary) Object.assign(result, { boundary, boundaryEvent });
+    if(measure)result.plannedDistance=traced;
     return result;
 }
 
-function route(world, start, goals, cancelled, area, stops, crossStops = false, preference, terminalStops) {
+function route(world, start, goals, cancelled, area, stops, crossStops = false, preference, terminalStops, measure = false) {
     const parents = new Uint8Array(world.cells.length);
     const frontier = new Uint16Array(world.cells.length);
     parents[start] = 255;
@@ -302,7 +303,7 @@ function route(world, start, goals, cancelled, area, stops, crossStops = false, 
         const facing = goals[cell];
         if (facing) {
             const rank = preference?.ranks[cell];
-            if (!preference || rank === preference.best) return trace(world, start, cell, facing, parents, cancelled, crossStops ? stops : null);
+            if (!preference || rank === preference.best) return trace(world, start, cell, facing, parents, cancelled, crossStops ? stops : null, measure);
             if (rank < bestRank) {
                 preferred = cell;
                 bestRank = rank;
@@ -588,7 +589,8 @@ function npcPassageRoute(geometry, live, world, request, cancelled) {
     const onward = solveWorldRoute(opened, { ...request, x, y }, cancelled);
     if (onward.status === 'cancelled') return onward;
     if (onward.status === 'ready' || onward.status === 'interrupted' &&
-        (onward.boundaryEvent === request.event || request.handoffs?.includes(onward.boundaryEvent)))
+        (onward.boundaryEvent === request.event || request.handoffs?.includes(onward.boundaryEvent) ||
+            opened.events.some(event=>event.id===onward.boundaryEvent&&!event.mapTransfer&&event.clearsOnUse)))
         return { ...approach, status: 'npcBlocked', npc: gate.event };
     return null;
 }
@@ -783,7 +785,9 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
     if (request.field !== true || world.mode === 'airship') {
         // A detached prerequisite proof can pass ordinary same-map floor
         // events, but cannot invent transit through any native map entrance.
-        const terminals=request.terminalTransfers ? Uint16Array.from(tiles.touch,id=>tiles.terminals.has(id)?id:0) : undefined;
+        const removable=request.removableOnly ? new Set(world.events.filter(event=>event.clearsOnUse).map(event=>event.id)) : null;
+        const terminals=request.terminalTransfers ? Uint16Array.from(tiles.touch,id=>
+            tiles.terminals.has(id)||removable&&id&&!removable.has(id)?id:0) : undefined;
         return finishEntry(world, route(world, start, goals, cancelled, area, terminals), entry);
     }
     const stops = tiles.touch;
@@ -815,6 +819,18 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
     }
     const clear = route(world, start, goals, cancelled, area, stops);
     if (clear.status !== 'unreachable') {
+        // Prefer a shorter route through a certified one-use scene. Other
+        // floor events and every map entrance remain terminal; return only
+        // the safe prefix, never projected movement beyond that scene.
+        const removable=new Set(world.events.filter(event=>event.clearsOnUse&&!event.mapTransfer).map(event=>event.id));
+        if(clear.status==='ready'&&removable.size&&!request.area&&!request.motion) {
+            const retained=new Set(Array.from(stops).filter(id=>id&&!removable.has(id)));
+            const shorter=route(world,start,goals,cancelled,area,stops,true,undefined,retained,true);
+            if(shorter.status==='cancelled')return shorter;
+            if(shorter.status==='interrupted'&&shorter.plannedDistance<clear.distance) {
+                delete shorter.plannedDistance;return finishEntry(world,shorter,entry);
+            }
+        }
         const result = finishEntry(world, clear, entry);
         if (result.status !== 'ready' || request.stopBeforeEvent !== true || !result.distance) return result;
         const goal = indexOf(world, result.arrival.x, result.arrival.y);

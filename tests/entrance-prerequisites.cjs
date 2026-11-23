@@ -21,6 +21,26 @@ module.exports=async(c,load,read,verifyWorker)=>{
  assert.equal(routeThroughIce(line,empty,{x:0,y:0,targetX:6,targetY:0,field:true},()=>false),null);
  empty.events=[ordinary,ice];
  assert.equal(routeThroughIce(line,empty,{x:0,y:0,targetX:6,targetY:0,field:true},()=>false).boundaryEvent,1);
+ // A physical short route through removable ice wins over a clear detour.
+ const square={width:7,height:2,scrollType:0,cells:new Uint8Array(14).fill(15)};
+ const block={...ice,x:3,rectangle:[3,0,3,0]};
+ const rq={x:0,y:0,targetX:6,targetY:0,field:true};
+ const liveShort={mode:'walk',terrain:[],vehicles:[],events:[block]};
+ const clear=solveRoute(square,liveShort,rq);assert.equal(clear.distance,8);
+ const {shorterIceRoute,prerequisiteLanding}=require('../src/world/terrain-controls.cjs');
+ const shortcut=shorterIceRoute(square,liveShort,rq,()=>false,clear.distance);
+ assert.equal(shortcut.status,'iceRoute');assert.equal(shortcut.event,3);assert.equal(shortcut.plannedDistance,6);
+ const scene={...ordinary,x:3,clearsOnUse:true};liveShort.events=[scene];
+ const throughScene=solveRoute(square,liveShort,rq);assert.equal(throughScene.status,'interrupted');
+ assert.equal(throughScene.boundaryEvent,1);assert.equal(throughScene.distance,2);
+ liveShort.events=[{...scene,clearsOnUse:false}];assert.equal(solveRoute(square,liveShort,rq).distance,8);
+ liveShort.events=[{...scene,mapTransfer:true}];assert.equal(solveRoute(square,liveShort,rq).distance,8);
+ // A certified moving NPC opens only its own passage, including graph proofs.
+ const lane={width:7,height:1,scrollType:0,cells:new Uint8Array(7).fill(15)};
+ liveShort.events=[{id:7,x:3,y:0,normal:true,through:false,trigger:0,action:true}];
+ liveShort.npcPassage={event:7,clears:[7]};
+ assert(prerequisiteLanding(lane,liveShort,0,0).reached[6]);
+ liveShort.npcPassage=null;assert(!prerequisiteLanding(lane,liveShort,0,0).reached[6]);
  const prior=c.$gameParty.members,actors=c.$gameParty._actors;c.$gameParty.members=()=>[1,4];c.$gameParty._actors=[1,4];
  let checks=0;const found=[];
  try{

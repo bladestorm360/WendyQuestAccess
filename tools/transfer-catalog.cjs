@@ -2,7 +2,7 @@
 
 const { DIRECTIONS, PASSAGE, indexOf, tileKey } = require('../src/world/geometry.cjs');
 const { prerequisiteLanding } = require('../src/world/terrain-controls.cjs');
-const {floorClearsOnUse,iceOpensPassage,iceMeltChanges}=require('../src/world/local-destinations');
+const {npcPassage,floorClearsOnUse,iceOpensPassage,iceMeltChanges}=require('../src/world/local-destinations');
 const {bakeControls}=require('./bake-controls.cjs');
 const {GATE_SWITCHES}=require('../src/world/terrain-control-labels.cjs');
 const {CONNECTION_GATES}=require('../src/world/transfer-gates.cjs');
@@ -66,12 +66,16 @@ function transferMap(id, map, geometry, flags, common) {
         const port = id === 113 && shipPort(entry, pages[0], common);
         if (port) portLandings.push(port);
     }
+    const passage=npcPassage({_mapId:id,_events:map.events.map(entry=>{
+        const page=entry?.pages?.[0];return page?{_pageIndex:0,_trigger:page.trigger,_priorityType:page.priorityType,
+            _through:page.through,_characterName:page.image.characterName,_x:entry.x,_y:entry.y}:null;
+    })});
     const terrain = Array.from(barriers, ([cell, mask]) =>
         [cell % geometry.width, Math.floor(cell / geometry.width), geometry.cells[cell] & ~mask]);
     const controls=bakeControls(id,map,flags);
     const opening=controls?.find(([event])=>event===0)?.[1];
     const gate=id===63?CONNECTION_GATES.cauldronTiles:GATE_SWITCHES[id]===97?CONNECTION_GATES.breakfastBridges:undefined;
-    return { geometry, live: { mode: 'walk', terrain, events, vehicles: [],terrainMap:id,terrainSwitch:GATE_SWITCHES[id] },
+    return { geometry, live: { mode: 'walk', terrain, events, vehicles: [],terrainMap:id,terrainSwitch:GATE_SWITCHES[id],npcPassage:passage },
         exits, portLandings, controls, ...(opening&&gate?{conditional:{gate,changes:opening}}:{}) };
 }
 

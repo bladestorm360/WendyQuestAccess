@@ -10,7 +10,7 @@ const { onFootAirshipRoute, onFootAirshipReachable } = require('./airship-route.
 const { MAX_CATALOG_BYTES, MAX_LINKS, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
 const { lineDestination } = require('./puzzles/patrol-line-state.cjs');
-const { prerequisiteLanding, routeThroughTerrain } = require('./terrain-controls.cjs');
+const { shorterIceRoute, prerequisiteLanding, routeThroughTerrain } = require('./terrain-controls.cjs');
 const { solveSaltRoute } = require('./puzzles/salt-route.cjs');
 
 const BUILD = '26578620';
@@ -159,6 +159,13 @@ function transferRoute(base, map, live, request, transfer, cancelled) {
         const rank = entrances.find(edge => edge.event === result.entrance && edge.approach === result.approach)?.rank ?? Infinity;
         return regionalHandoff(base, live, request, transfer, entrances.filter(edge => edge.rank < rank), cancelled) || result;
     }
+    // A longer graph detour must not win merely because the better-ranked
+    // entrance needs a reachable native ice/control/event prerequisite.
+    if(!regional&&live.mode==='walk'&&['ready','enemyBlocked'].includes(result.status)) {
+        const rank=entrances.find(edge=>edge.event===result.entrance&&edge.approach===result.approach)?.rank;
+        const better=Number.isInteger(rank)?entrances.filter(edge=>edge.rank<rank):[];
+        if(better.length){const first=entrancePrerequisite(base,map,live,request,better,cancelled);if(first)return first;}
+    }
     if (!['unreachable', 'unavailable'].includes(result.status)) return result;
     const prerequisite = entrancePrerequisite(base,map,live,request,entrances,cancelled);
     if (prerequisite) return prerequisite;
@@ -186,6 +193,7 @@ function entrancePrerequisite(base,map,live,request,entrances,cancelled) {
             bumpDirections:bump?(edge.approach?1<<DIRECTIONS.indexOf(edge.approach):15):undefined,
             stopBeforeEvent:!target.normal&&target.trigger===1};
         let route=solveRoute(base,live,local,cancelled);
+        if(route.status==='ready')route=shorterIceRoute(base,live,local,cancelled,route.distance)||route;
         if (['unavailable','unreachable','approachBlocked'].includes(route.status))
             route=routeThroughTerrain(base,live,local,manifest.maps[map].controls,cancelled);
         if (route?.status==='cancelled') return route;
@@ -244,7 +252,11 @@ parentPort.on('message', message => {
                 const lineNavigation = lineDestination(map, request.event) &&
                     (request.lineNavigation === true || request.lineNavigation === 'manual') && request.lineNavigation;
                 result = previewCrossing(base, live, { ...request, lineNavigation, pickup: map === 200 && request.event === 3 }, cancelled);
-            } else result = solveRoute(base, live, request, cancelled);
+            } else {
+                result = solveRoute(base, live, request, cancelled);
+                if(result.status==='ready'&&live.mode==='walk'&&request.field===true)
+                    result=shorterIceRoute(base,live,request,cancelled,result.distance)||result;
+            }
             if (map === 113 && live.mode === 'walk' && live.airshipAvailable === true) {
                 if (request.candidates !== undefined)
                     result = onFootAirshipReachable(base, live, request, result, cancelled);

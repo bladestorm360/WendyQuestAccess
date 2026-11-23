@@ -66,6 +66,14 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
     function arrive(state, record) {
         const { facing, ...rest } = record;
         const { player, target, map, job, arrival } = state;
+        // A verified remote journey may enter a native touch door through
+        // the normal movement input site. Action-button doors still wait
+        // for the player's Confirm; no interaction input is synthesized.
+        if(job.remote&&job.mode==='walk'&&job.entrance?.event===job.target&&target?._trigger===1&&
+            job.entrance.action&&DIRECTIONS.includes(facing)) {
+            if(!atApproach(map,player,target,arrival))return changed(state);
+            player.setDirection(facing);stop(state.scene);return facing;
+        }
         // Use the native turn only for the interaction the route verified.
         // An event on the current tile, a nearer event, or a parked vehicle
         // can take priority before the final input.
@@ -89,7 +97,7 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             return 0;
         }
         if (rest.npcBlocker)
-            return end(state, { kind: 'fieldStatus', name: 'Blocked by ' + rest.npcBlocker + '.' });
+            return end(state, { kind: 'fieldStatus', name: 'Blocked by ' + rest.npcBlocker + '.' },false,!!job.controlPrerequisite);
         const turn = facing && player._direction !== facing;
         const needsAction = rest.activate || rest.boundary || rest.prerequisite || rest.bump || rest.enter ||
             rest.conversation || rest.board || rest.land || rest.guideAction || rest.guide || rest.reenter;
@@ -235,6 +243,11 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
                 }
                 if (floor._eventId===job.prerequisiteFloor && index===length-1 &&
                     cleanup(job,floor,page,x,y)) {
+                    stop(scene);
+                    return step;
+                }
+                if(floor===state.target&&index===length-1&&job.remote&&job.mode==='walk'&&
+                    job.entrance?.event===floor._eventId&&!job.entrance.action) {
                     stop(scene);
                     return step;
                 }

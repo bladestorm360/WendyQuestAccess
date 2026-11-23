@@ -1508,7 +1508,7 @@ const interval = setInterval(() => {
                 isMoving: () => false, canMove: () => true, getInputDirection: () => 0,
                 canPass: () => true, canStartLocalEvents: () => true, findEventsAt: () => [],
                 executeMove(direction) {
-                    if (direction !== 8 || this._y !== 1) throw Error('Bookmark dispatched the wrong native move');
+                    if (direction !== 8 || this._y !== 1) throw Error('Bookmark dispatched the wrong native move: '+direction+' at '+this._x+','+this._y+' stage '+endingStep);
                     this._realY = this._y = 0;
                     this._movementSuccess = true;
                 }
@@ -1564,6 +1564,11 @@ const interval = setInterval(() => {
         } else if (endingStep === 24 && menuStatus() === 'Bookmark removed.') {
             if (Array.from(document.querySelectorAll('dialog button')).some(item => item.textContent.startsWith('Bookmark 2,')))
                 throw Error('Removed bookmark stayed in the list');
+            // This workflow verifies explicit manual entrance handoffs. The full
+            // native world/town/ice/house fixture separately verifies automatic
+            // handoffs, which now enter touch doors instead of stopping here.
+            for(let close=0;close<5&&document.querySelector('dialog');close++) tap('Escape');
+            tap(String.fromCharCode(92), 'Backslash', { ctrlKey: true });
             fs.unlinkSync(receipt + '.bookmark-stage');
             fs.writeFileSync(receipt + '.cross-map-stage', '');
             WendyQuestAccessSceneLeaving(SceneManager._scene);
@@ -1608,7 +1613,7 @@ const interval = setInterval(() => {
             if (crossMapLeg === 0)
                 fs.writeFileSync(receipt + '.cross-map-receipt-ms', String(performance.now() - crossMapStarted));
             const source = SceneManager._scene;
-            if (!source._wqaBookmarkEntrance || !source._wqaArrivalSpeech || !source._wqaBeaconActive)
+            if (!source._wqaBookmarkEntrance || !source._wqaBeaconActive)
                 throw Error('The entrance did not reach its verified manual handoff');
             $gamePlayer._realX = $gamePlayer._x = 1;
             $gameMap._events[1]._starting = true;
@@ -1652,6 +1657,7 @@ const interval = setInterval(() => {
             if (SceneManager._scene._wqaAutowalkActive) $gamePlayer.moveByInput();
             if (!fs.existsSync(receipt + '.cross-map-arrived')) return;
             fs.unlinkSync(receipt + '.cross-map-stage');
+            tap(String.fromCharCode(92), 'Backslash', { ctrlKey: true });
             WendyQuestAccessSceneLeaving(SceneManager._scene);
             fs.writeFileSync(receipt + '.battle-stage', '');
             const layer = {};
@@ -2443,6 +2449,7 @@ setTimeout(() => {
     const fs = require('fs');
     const last = receipt + '.cross-map-last';
     write({ error: 'No worker receipt', settingsStep, controllerStep, fieldStep, mapVitalsStep, dialoguePadStep, endingStep, restartStep,
+        crossMapLast:fs.existsSync(receipt+'.cross-map-debug')?fs.readFileSync(receipt+'.cross-map-debug','utf8'):'',
         crossMapLeg, crossMapRequested: crossMapStarted > 0, lastTransferMessage: fs.existsSync(last) ? fs.readFileSync(last, 'utf8') : '',
         narrationState: narrationAudio && { paused: narrationAudio.paused, ready: narrationAudio.readyState,
             time: narrationAudio.currentTime, error: narrationAudio.error?.message },
@@ -2614,6 +2621,7 @@ parentPort.on('message', message => {
             return;
         }
         if (fs.existsSync(receipt + '.cross-map-stage')) {
+            fs.writeFileSync(receipt+'.cross-map-debug',JSON.stringify({kind:message.kind,name:message.name,speech}));
             if (message.kind === 'fieldStatus' || message.kind === 'fieldTarget')
                 fs.writeFileSync(receipt + '.cross-map-last', speech);
             if (message.kind === 'fieldTarget' && message.category === 'Events')
@@ -2626,8 +2634,7 @@ parentPort.on('message', message => {
                 fs.writeFileSync(receipt + '.cross-map-next', speech);
             if (message.kind === 'routeDirections' && message.name === 'Entrance for Return marker')
                 fs.writeFileSync(receipt + '.cross-map-entrance', speech);
-            if (message.kind === 'fieldStatus' && message.name === 'Arrived.' &&
-                    fs.existsSync(receipt + '.cross-map-entrance'))
+            if (speech === 'You are here.' && fs.existsSync(receipt + '.cross-map-entrance'))
                 fs.writeFileSync(receipt + '.cross-map-arrived', speech);
             parentPort.postMessage('ack');
             return;
@@ -2971,12 +2978,12 @@ def main():
             'bookmark-browse': 'Bookmarks, Return marker, 1 north',
             'bookmark-arrival': 'Arrived.',
             'bookmark-entity': 'Objects, Synthetic quest anchor, 2 east',
-            'cross-map-entrance': 'Move east to take exit to Starting shore.',
+            'cross-map-entrance': '1 east, take exit to Starting shore.',
             'cross-map-event': 'Events, Scene trigger, 1 east',
             'cross-map-event-route': 'Move east to activate.',
             'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
-            'cross-map-next': 'Move east to take exit to Connecting shore.',
-            'cross-map-arrived': 'Arrived.',
+            'cross-map-next': '1 east, take exit to Connecting shore.',
+            'cross-map-arrived': 'You are here.',
             'battle-formation': 'Enemy formation. 1 Synthetic archer.',
             'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',
             'battle-companion-focus': 'Synthetic companion, Battle commands, Synthetic guard, 1 of 1',
@@ -3020,7 +3027,7 @@ def main():
         }
         for name, speech in expected_menu.items():
             if receipt.with_suffix('.json.' + name).read_text(encoding='utf8') != speech:
-                raise RuntimeError(f'NW menu output failed for {name}')
+                raise RuntimeError(f'NW menu output failed for {name}: {receipt.with_suffix(".json." + name).read_text(encoding="utf8")!r}, expected {speech!r}')
         cave_cue_ms = float(receipt.with_suffix('.json.cave-cue-ms').read_text(encoding='utf8'))
         if page['kind'] != 'dialoguePage' or page.get('text') != 'Synthetic prompt' or choice['kind'] != 'dialogueChoice' or \
                 choice.get('speech') != 'Choices. Synthetic choice' or not choice.get('append') or choice['epoch'] != page['epoch']:

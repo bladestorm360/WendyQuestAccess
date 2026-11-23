@@ -4,6 +4,25 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {transferOptions,catalogTransferOptions,pageMayTransfer}=require('../src/world/transfer-events.cjs');
 const hash=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
+// Reviewed native ownership families, never permission to infer a walking
+// edge from an arbitrary script or branch. Unknown pages fail the audit.
+function classification(row) {
+ if(row.trigger>2)return 'native lifecycle/cinematic';
+ if(row.live.length)return row.catalog.length?'qualified walking connection':'retired prototype live-only';
+ const m=row.map,e=row.event;
+ if([2,7,29,64,185,187,192].includes(m))return 'developer/prototype';
+ if(m===14&&e===25)return 'retired off-terrain return';
+ if(m===16&&[20,21].includes(e)||m===17&&e===7)return 'early cinematic-stage transfer';
+ if(m===26&&e===5||m===76&&e===64||m===113&&[30,31].includes(e))return 'native vehicle owner';
+ if(m===57||m===58&&![15,37,38,39].includes(e))return 'native rejection/forced departure';
+ if(m===58)return 'one-use rescue/collapse scene';
+ if(m===94||m===103||m===134)return 'same-map story/battle relocation';
+ if(m===128||m===195)return 'conditional reward conversation';
+ if(m===133||m===206)return 'player choice/native cave entry owner';
+ if([196,199,200,201].includes(m))return 'dedicated cave patrol/chase owner';
+ if(m===197&&e===7)return 'jukebox replay';
+ throw Error('Unclassified native transfer '+[m,e,row.page].join('/'));
+}
 function audit(game,geometry) {
  const data=path.join(game,'package.nw/data');
  const read=(name,expected)=>{const bytes=fs.readFileSync(path.join(data,name));
@@ -41,9 +60,11 @@ function audit(game,geometry) {
    }
   }
  }
+ for(const row of rows)row.classification=classification(row);
+ const classifications={};for(const row of rows)classifications[row.classification]=(classifications[row.classification]||0)+1;
  const manual=rows.filter(r=>[0,1,2].includes(r.trigger));
  return {build:manifest.build,maps:Object.keys(manifest.maps).length,events,pages,
-  summary:{transferPages:rows.length,interactable:manual.length,unqualified:manual.filter(r=>!r.live.length).length,
+  classifications,summary:{transferPages:rows.length,interactable:manual.length,unqualified:manual.filter(r=>!r.live.length).length,
    liveOnly:manual.filter(r=>r.live.length&&!r.catalog.length).length,automatic:rows.length-manual.length},transfers:rows};
 }
 if(require.main===module) {

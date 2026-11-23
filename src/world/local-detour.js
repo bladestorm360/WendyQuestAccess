@@ -38,7 +38,7 @@ function createLocalDetour(root, transfers) {
             journey = arrived.trail.length <= 32 ? { player: root.$gamePlayer, map: root.$gameMap._mapId, ticket: arrived } : null;
             return true;
         },
-        resume(job, snapshot, remoteDirections, route) {
+        resume(job, snapshot, remoteDirections, route, missing) {
             if (!journey) return false;
             const { player, map, ticket } = journey;
             if (player !== root.$gamePlayer || map !== snapshot.map || snapshot.mode !== 'walk') { clear(); return false; }
@@ -46,7 +46,7 @@ function createLocalDetour(root, transfers) {
             else {
                 const target = snapshot.objects.find(item => item.id === ticket.detour.target.id &&
                     item.category === ticket.detour.target.category);
-                if (!target) { clear(); return false; }
+                if (!target) { clear(); if(missing){missing();return true;} return false; }
                 route(job, snapshot, target);
             }
             return true;

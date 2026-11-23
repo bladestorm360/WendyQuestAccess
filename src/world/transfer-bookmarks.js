@@ -165,6 +165,13 @@ function createTransferBookmarks(root, host) {
 
     return {
         clear, current, accepted, landingAccepted, reserved, settle,
+        cancelAutomatic(scene) {
+            // Retain the selected destination/ticket for manual guidance,
+            // but blur, explicit stop and takeover must revoke automatic resume.
+            if(approach?.scene===scene&&approach.bookmark?.autowalk)approach.bookmark={...approach.bookmark,autowalk:false};
+            if(pending?.scene===scene&&pending.bookmark?.autowalk)pending.bookmark={...pending.bookmark,autowalk:false};
+        },
+        automatic(scene) { return approach?.scene===scene&&approach.bookmark?.autowalk===true; },
         islandLanding() {
             const map = root.$gameMap;
             return liveEntrances(root, map?._events?.[ISLAND_DOCK], null, travelMode(map, root.$gamePlayer), spoilers())[0] || null;

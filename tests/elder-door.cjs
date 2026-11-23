@@ -26,7 +26,7 @@ async function verifyNative(c,load,snapshot,verifyWorker) {
     assert(f.gameMap.event(13).isStarting(),'the actual native activation starts the note before the door');
     const changed=new Set([8]);c.$gameSwitches.value=id=>changed.has(id);
     c.$gameSwitches.setValue=(id,on)=>on?changed.add(id):changed.delete(id);
-    const interpreter=Object.assign(new c.Game_Interpreter(),{_mapId:house,_eventId:13});
+    const interpreter=Object.assign(new c.Game_Interpreter(),{_mapId:116,_eventId:13});
     const completion=f.map.events[13].pages[0].list.find(row=>row.code===121);
     assert.deepEqual(completion.parameters,[142,142,0]);
     interpreter.command121(completion.parameters);

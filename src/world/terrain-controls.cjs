@@ -147,41 +147,43 @@ function meltedEvents(geometry, events, ice, removed) {
         moved.has(event.id) ? {...event,...moved.get(event.id)} : event);
 }
 
-function routeThroughIce(geometry, live, request, cancelled, terrain = [], control) {
+function routeThroughIce(geometry, live, request, cancelled, terrain = [], control, betterThan) {
     if (live.mode !== 'walk' || request.entrances || request.vehicle || request.area || request.motion) return null;
     const ice = live.events.filter(event => event.meltable && !event.erased && event.id !== request.event);
     if (!ice.length || ice.length > 8) return null;
-    const queue = [{ x: request.x, y: request.y, removed: 0, opened: false, first: null }];
+    const queue = [{ x: request.x, y: request.y, removed: 0, opened: false, first: null, cost: 0 }];
     const visited = new Set();
     // A node clears only verified one-use blockers. Replay normal collision
     // and event ordering for each candidate approach. Copying and search
     // happen on the existing routing worker under its cancellation epoch.
     for (let index = 0; index < queue.length && index < 64; index++) {
         if (cancelled()) return { status: 'cancelled' };
-        const { x, y, removed, opened, first } = queue[index];
+        const { x, y, removed, opened, first, cost } = queue[index];
         const events = meltedEvents(geometry, live.events, ice, removed);
         const world = composeWorld(geometry, { ...live, events }, cancelled);
         if (!world) return { status: 'cancelled' };
         for (const [cell, flags] of terrain) world.cells[cell] = (world.cells[cell] & 240) | flags;
         if (opened) for (const [cell, flags] of control.changes) world.cells[cell] = (world.cells[cell] & 240) | flags;
         if (first) {
-            const goal = solveWorldRoute(world, { ...request, x, y }, cancelled);
+            const goal = solveWorldRoute(world, { ...request, x, y, ...(betterThan!==undefined&&{field:false,terminalTransfers:true,removableOnly:true}) }, cancelled);
             if (goal.status === 'cancelled') return goal;
-            if (goal.status === 'ready' || goal.status === 'interrupted')
-                return ['interrupted','controlRoute'].includes(first.status) ? first : { ...first, status: 'iceRoute' };
+            if ((goal.status === 'ready' || goal.status === 'interrupted') &&
+                (betterThan===undefined||cost+goal.distance<betterThan))
+                return { ...first, status:['interrupted','controlRoute'].includes(first.status)?first.status:'iceRoute',
+                    plannedDistance:cost+(goal.plannedDistance??goal.distance) };
         }
         if (control && !opened) {
             const approach = solveWorldRoute(world, { x, y, event: control.id, field: true }, cancelled);
             if (approach.status === 'cancelled') return approach;
             const planned = approach.status === 'interrupted'
-                ? solveWorldRoute(world, { x, y, event: control.id, field: false, terminalTransfers:true }, cancelled) : approach;
+                ? solveWorldRoute(world, { x, y, event: control.id, field: false, terminalTransfers:true,removableOnly:betterThan!==undefined }, cancelled) : approach;
             if (planned.status === 'cancelled') return planned;
             if (planned.status === 'ready') {
                 const { x: nextX, y: nextY } = planned.arrival;
                 const key = removed + ':true:' + nextX + ':' + nextY;
                 if (!visited.has(key) && queue.length < 64) {
                     visited.add(key);
-                    queue.push({ x: nextX, y: nextY, removed, opened: true,
+                    queue.push({ x: nextX, y: nextY, removed, opened: true, cost:cost+planned.distance,
                         first: first || { ...approach, event: control.id,
                             status: approach.status === 'interrupted' ? 'interrupted' : 'controlRoute' } });
                 }
@@ -197,7 +199,7 @@ function routeThroughIce(geometry, live, request, cancelled, terrain = [], contr
             // retaining the original safe prefix to the earlier floor event.
             // Nothing past that event is sent as immediately walkable.
             const planned = approach.status === 'interrupted' ?
-                solveWorldRoute(world,{x,y,event:block.id,field:false,terminalTransfers:true},cancelled) : approach;
+                solveWorldRoute(world,{x,y,event:block.id,field:false,terminalTransfers:true,removableOnly:betterThan!==undefined},cancelled) : approach;
             if (planned.status === 'cancelled') return planned;
             if (planned.status !== 'ready') continue;
             const next = removed | (1 << slot);
@@ -205,13 +207,32 @@ function routeThroughIce(geometry, live, request, cancelled, terrain = [], contr
             const key = next + ':' + opened + ':' + arrivalX + ':' + arrivalY;
             if (visited.has(key) || queue.length >= 64) continue;
             visited.add(key);
-            queue.push({ x: arrivalX, y: arrivalY, removed: next, opened, first: first || { ...approach, event: block.id } });
+            queue.push({ x: arrivalX, y: arrivalY, removed: next, opened, cost:cost+planned.distance, first: first || { ...approach, event: block.id } });
         }
     }
     return null;
 }
 
+function shorterIceRoute(geometry,live,request,cancelled,distance) {
+    if(!Number.isInteger(distance)||distance<2||request.motion||request.area||request.entrances||request.vehicle)return null;
+    return routeThroughIce(geometry,live,request,cancelled,[],undefined,distance);
+}
+
 function routeThroughTerrain(geometry, live, request, controls, cancelled, remoteAccess) {
+    // A known movable NPC can precede a separate melt or button. Prove
+    // those later effects only on a copy; the real first action is talking.
+    const gate=live.npcPassage;
+    if(gate&&request.event!==gate.event&&!remoteAccess&&!request.motion&&!request.area) {
+        const events=gate.movesTo?live.events.map(event=>event.id===gate.event?
+            {...event,x:gate.movesTo[0],y:gate.movesTo[1]}:event):live.events.filter(event=>!gate.clears.includes(event.id));
+        const proof=routeThroughTerrain(geometry,{...live,events,npcPassage:null},request,controls,cancelled);
+        if(proof?.status==='cancelled')return proof;
+        if(proof&&['iceRoute','controlRoute','interrupted'].includes(proof.status)) {
+            const approach=solveRoute(geometry,live,{x:request.x,y:request.y,event:gate.event,field:true},cancelled);
+            if(approach.status==='cancelled')return approach;
+            if(approach.status==='ready')return {...approach,status:'npcBlocked',npc:gate.event};
+        }
+    }
     const plan = world => routeThroughControl(geometry, world, request, controls, cancelled) ||
         (!request.refresh && routeThroughIce(geometry, world, request, cancelled));
     const canProject = live.mode === 'walk' && !request.refresh && !request.entrances && !request.vehicle &&
@@ -260,7 +281,7 @@ function prerequisiteLanding(geometry,live,x,y,controls=[],cancelled=()=>false) 
         const cell=packed&(MAX_CELLS-1);return [cell%geometry.width,Math.floor(cell/geometry.width),packed>>>CELL_BITS];
     }):live.terrain,available;
     const edits=new Map(Array.from(terrain||[],row=>[row[1]*geometry.width+row[0],row[2]]));
-    const opened=new Set();
+    const opened=new Set();let npcOpened=false;
     for(let pass=0;pass<=64;pass++) {
         if(cancelled()) return null;
         available=walkingLanding(geometry,{...live,events,terrain},x,y,cancelled);
@@ -270,6 +291,13 @@ function prerequisiteLanding(geometry,live,x,y,controls=[],cancelled=()=>false) 
         if(floor) {events=events.filter(event=>event!==floor);continue;}
         const ice=events.find(event=>event.meltable&&!event.erased&&available.events[event.id]);
         if(ice) {events=meltedEvents(geometry,events,[ice],1);continue;}
+        const gate=live.npcPassage;
+        if(!npcOpened&&gate&&available.events[gate.event]) {
+            npcOpened=true;
+            events=gate.movesTo?events.map(event=>event.id===gate.event?{...event,x:gate.movesTo[0],y:gate.movesTo[1]}:event):
+                events.filter(event=>!gate.clears.includes(event.id));
+            continue;
+        }
         const control=controls.find(([id,changes,pull])=>id>0&&!pull&&!opened.has(id)&&available.events[id]&&
             changes.length&&changes.every(([cell,flags])=>(((edits.get(cell)??geometry.cells[cell])&flags&15)===((edits.get(cell)??geometry.cells[cell])&15))));
         if(!control) return available;
@@ -283,4 +311,4 @@ function prerequisiteLanding(geometry,live,x,y,controls=[],cancelled=()=>false) 
     return available;
 }
 
-module.exports = { prerequisiteLanding, routeThroughTerrain, routeThroughControl, routeThroughIce, meltedEvents };
+module.exports = { shorterIceRoute, prerequisiteLanding, routeThroughTerrain, routeThroughControl, routeThroughIce, meltedEvents };

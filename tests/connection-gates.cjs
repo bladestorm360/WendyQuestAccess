@@ -9,7 +9,7 @@ module.exports=async(c,load,read,verifyWorker)=>{
  let gates=0,jobs=0,native=0;
  const retired=load(14,{switches:[12]});retired.player.setPosition(56,32);
  assert.equal(retired.gameMap.event(25)._pageIndex,0,'the retired script really is active after the story flag');
- const targets=captureWorld(c,true,undefined,undefined,[],true).objects;
+ const targets=captureWorld(c).objects;
  assert(!targets.some(e=>e.id===25),'the unreachable retired house return is not an exit or object');
  assert([2,3].every(id=>targets.some(e=>e.id===id&&e.category==='exits')),'real Fry Fields world exits remain listed');
  const states=[{}, {switches:[9]}, {switches:[11]}, {switches:[23]}, {switches:[39]},
@@ -35,7 +35,7 @@ module.exports=async(c,load,read,verifyWorker)=>{
   c.$gameParty.inBattle=()=>false;c.$gameMessage={isBusy:()=>false};
   for(const [map,id,state]of [[14,2,{}],[14,3,{}],[49,12,{}],[63,14,{switches:[54,276]}],[97,18,{switches:[103]}],
    [105,11,{}],[106,12,{switches:[115]}],[106,13,{switches:[115]}],[116,8,{}],[134,10,{self:['134,10,A']}],[181,3,{}],
-   [196,22,{}],[202,4,{}],[128,11,{}],[58,3,{}],[58,4,{}],[58,27,{}],[58,28,{}],[94,12,{variables:{16:5}}],[94,27,{variables:{16:5}}]]){
+   [196,22,{}],[202,4,{}],[193,6,{}],[193,7,{}],[193,8,{}],[197,10,{}],[128,11,{}],[58,3,{}],[58,4,{}],[58,27,{}],[58,28,{}],[94,12,{variables:{16:5}}],[94,27,{variables:{16:5}}]]){
    const f=load(map,state),e=f.gameMap.event(id),p=f.player;p._direction=2;delete p.direction;
    if(map===63||map===106)for(const command of f.map.events[map===63?13:3].pages[0].list) {
     if(command.code!==357||command.parameters[0]!=='Tyruswoo_TileControl'||command.parameters[1]!=='set_tile')continue;
@@ -65,6 +65,6 @@ module.exports=async(c,load,read,verifyWorker)=>{
    }
   }
  }finally{c.$gameParty.inBattle=before.battle;c.$gameMessage=before.message;}
- assert.equal(jobs,40);assert.equal(native,40);
+ assert.equal(jobs,48);assert.equal(native,48);
  console.log(`Verified ${gates} original native conditional page states and ${jobs} packaged manual/automatic wrapper approaches/native reservations.`);
 };

@@ -525,7 +525,10 @@ const WRAPPED_SHAPES = Object.freeze({
         '105:11:0':'250,117,242,221,134,230,121,201,0',
         '128:11:0':'101,401,111,101,401,101,401,0,412,230,250,230,250,121,201,0',
         '196:22:0':'121,117,242,221,201,122,222,0',
-        '202:4:0':'111,281,121,0,411,121,122,0,412,117,121,117,201,0'
+        '202:4:0':'111,281,121,0,411,121,122,0,412,117,121,117,201,0',
+        '193:6:0':'221,235,235,121,201,0', '193:7:0':'221,235,235,121,201,0',
+        '193:8:0':'221,235,235,121,201,0',
+        '197:10:0':'117,242,221,117,230,101,401,101,401,201,222,0'
 });
 function wrappedExit(map, entry, page, index, common) {
     const list = page.list;
@@ -547,7 +550,9 @@ function wrappedExit(map, entry, page, index, common) {
         if (map === 105 && id === 47 && common?.[47]?.list?.length === 2 &&
             rowIs(common[47].list[0],122) && parametersAre(common[47].list[0],[12,12,0,0,1])) continue;
         const haze = common?.[7]?.list;
-        if (map === 63 && id === 7 && haze?.length === 3 && haze[0].code === 357 &&
+        if ((map === 63 && id === 7 || map===197&&id===66&&common?.[66]?.list?.length===58&&
+            common[66].list.every(item=>[117,235,236,223,0].includes(item.code))&&
+            parametersAre(common[66].list[0],[7])) && haze?.length === 3 && haze[0].code === 357 &&
             haze[0].parameters[0] === 'FilterControllerMZ' && haze[0].parameters[1] === 'eraseFilter' && haze[1].code === 657 && haze[2].code === 0) continue;
         return null;
     }

@@ -61,7 +61,50 @@ module.exports=async(c,load,read,verifyWorker)=>{
    assert.equal(records.filter(r=>r.name==='Walking.').length,1,'continuation is silent');
    assert.deepEqual([p._x,p._y],[5,7]);
   }
- }}finally{Object.assign(c,saved);c.SceneManager._scene=prior.scene;c.Graphics.app=prior.app;
+ }
+ // The known officer conversation moves a real collider without erasing it.
+ // Keep the selected floor objective and resume only after native readiness.
+ {
+  const f=load(191),p=f.player,map=f.gameMap;p.setPosition(33,14);delete p.direction;
+  p._followers={areGathering:()=>false,updateMove(){}};map.inactiveTime=0;
+  const scene={_wqaFieldReady:true,_wqaMapRestored:true,_mapLoaded:true,_started:true,_prevCanMove:true,
+   srcWendy:{},srcStones:{},_active:true,_fadeDuration:0,_fadeOpacity:0};
+  const renderer=new EventEmitter(),packets=[],records=[];c.SceneManager._scene=scene;c.Graphics.app={stage:scene,renderer};
+  c.addEventListener=()=>{};c.$gameScreen={_brightness:255};c.$gameMessage={isBusy:()=>false};c.Input={dir4:0};
+  c.ConfigManager={alwaysDash:false};c.$testEvent=null;
+  c.$gameTemp={isDestinationValid:()=>false,isCommonEventReserved:()=>false,clearDestination(){}};
+  const bookmark={id:1,revision:1,kind:'entity',map:191,mode:'walk',event:36,category:'events',name:'Selected crossing'};
+  const worker=Object.assign(new EventEmitter(),{unref(){},postMessage:packet=>packets.push(packet)});
+  const field=createField(c,{manager:c.SceneManager,graphics:c.Graphics,hasFocus:()=>true,screenFading:()=>false,
+   navigationPreferences:()=>({autowalk:true}),bookmarks:()=>[bookmark],makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),
+   createRouteWorker:()=>worker},{open(r){records.push(r);return records.length;},close(){},
+   arrive(r){records.push(r);return records.length;},endArrival(){}});
+  c.WendyQuestAccessAutowalkInput=field.autowalk.input;c.WendyQuestAccessFieldMove=field.autowalk.moved;
+  c.WendyQuestAccessFieldChanged=field.changed;c.WendyQuestAccessFieldEvent=()=>{};c.WendyQuestAccessSceneLeaving=field.leave;
+  const interpreter=map._interpreter=Object.assign(new c.Game_Interpreter(),{loadImages(){},_depth:0,_list:null,
+   _index:0,_branch:{},_waitMode:'',_waitCount:0,_childInterpreter:null});
+  const frame=()=>renderer.emit('postrender');
+  const tick=()=>{p.moveByInput();p._realX=p._x;p._realY=p._y;frame();};
+  scene._wqaSettingsActive=true;assert(field.selectBookmark(scene,bookmark));scene._wqaSettingsActive=false;
+  assert(field.command('directions'));frame();let packet=packets.at(-1);
+  await verifyWorker(f,packet.request,packet.live,r=>{assert.equal(r.status,'npcBlocked');worker.emit('message',
+   {epoch:packet.epoch,sequence:packet.sequence,map:packet.map,result:r});});frame();
+  for(let n=0;n<6;n++)tick();assert.deepEqual([p.x,p.y],[33,16]);assert(!field.autowalk.active(scene));
+  const officer=map.event(3),count=packets.length;
+  for(let n=0;n<10;n++){tick();field.iceRouteReady(scene);}assert.equal(packets.length,count);
+  assert(!officer.isStarting(),'the officer still waits for player Confirm');
+  p.checkEventTriggerThere([0]);assert(officer.isStarting());field.iceEventStarted(scene,officer);
+  for(const e of map.events())e.setupPage=()=>{};assert(map.setupStartingMapEvent());assert.equal(scene._wqaFieldReady,false);
+  field.iceRouteReady(scene);assert.equal(packets.length,count);
+  const jump=f.map.events[3].pages[0].list.find(row=>row.code===205&&row.indent===1).parameters[1].list.find(row=>row.code===14);
+  officer.setPosition(officer.x+jump.parameters[0],officer.y+jump.parameters[1]);officer._pageIndex=1;
+  interpreter.clear();map._needsRefresh=map._needsTilemapRefresh=false;scene._wqaFieldReady=true;
+  field.iceRouteReady(scene);frame();assert.equal(packets.length,count+1);
+  assert.equal(packets.at(-1).request.event,36);assert(!records.some(r=>r.name==='Arrived.'));
+  assert.equal(records.filter(r=>r.name==='Walking.').length,1);
+  console.log('Verified player-confirmed officer passage, actual native jump displacement, event phase suspension and quiet original-target continuation.');
+ }
+ }finally{Object.assign(c,saved);c.SceneManager._scene=prior.scene;c.Graphics.app=prior.app;
   c.$gameSwitches.value=prior.value;c.$gameSwitches.setValue=prior.set;}
  console.log(`Verified original house-note activation/completion, retained exit, native readiness, silent continuation, manual cancellation/one stop report; peak throttled input ${peak.toFixed(3)} ms.`);
 };

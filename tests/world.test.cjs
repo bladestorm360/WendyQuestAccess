@@ -1323,6 +1323,11 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if(process.argv.includes('--connection-pages-only')){await require('./connection-pages.cjs')(c,load,read);return;}
+    if (process.argv.includes('--crossmap-prerequisite-only')) {
+        await require('./crossmap-prerequisite-field.cjs')(c,load,read,verifyWorker);
+        return;
+    }
     if (process.argv.includes('--prerequisite-continuation-only')) {
         await require('./prerequisite-continuation.cjs')(c,load,read,verifyWorker);
         return;
