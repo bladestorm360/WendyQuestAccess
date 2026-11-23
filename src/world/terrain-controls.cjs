@@ -2,8 +2,8 @@
 
 // The map-specific records are derived from the installed tile-edit commands.
 // Only an active, reachable native control can become a prerequisite.
-const { composeWorld, indexOf, step, MAX_EVENTS } = require('./geometry.cjs');
-const { solveRoute, solveWorldRoute, encounterObstacles } = require('./routes.cjs');
+const { composeWorld, indexOf, step, MAX_EVENTS, MAX_CELLS, CELL_BITS } = require('./geometry.cjs');
+const { solveRoute, solveWorldRoute, walkingLanding, encounterObstacles } = require('./routes.cjs');
 
 function routeThroughControl(geometry, live, request, controls, cancelled, remoteAccess) {
     if (live.mode !== 'walk' || !controls || request.entrances || request.vehicle || request.area || request.motion)
@@ -174,7 +174,7 @@ function routeThroughIce(geometry, live, request, cancelled, terrain = [], contr
             const approach = solveWorldRoute(world, { x, y, event: control.id, field: true }, cancelled);
             if (approach.status === 'cancelled') return approach;
             const planned = approach.status === 'interrupted'
-                ? solveWorldRoute(world, { x, y, event: control.id, field: false }, cancelled) : approach;
+                ? solveWorldRoute(world, { x, y, event: control.id, field: false, terminalTransfers:true }, cancelled) : approach;
             if (planned.status === 'cancelled') return planned;
             if (planned.status === 'ready') {
                 const { x: nextX, y: nextY } = planned.arrival;
@@ -191,12 +191,13 @@ function routeThroughIce(geometry, live, request, cancelled, terrain = [], contr
             if (removed & (1 << slot)) continue;
             const approach = solveWorldRoute(world, { x, y, event: block.id, field: true }, cancelled);
             if (approach.status === 'cancelled') return approach;
-            if (!['ready','interrupted'].includes(approach.status)) continue;
+            if (!['ready','interrupted'].includes(approach.status) || approach.status==='interrupted'&&
+                world.events.some(event=>event.id===approach.boundaryEvent&&event.mapTransfer)) continue;
             // Verify physical continuation to this ice on the worker, while
             // retaining the original safe prefix to the earlier floor event.
             // Nothing past that event is sent as immediately walkable.
             const planned = approach.status === 'interrupted' ?
-                solveWorldRoute(world,{x,y,event:block.id,field:false},cancelled) : approach;
+                solveWorldRoute(world,{x,y,event:block.id,field:false,terminalTransfers:true},cancelled) : approach;
             if (planned.status === 'cancelled') return planned;
             if (planned.status !== 'ready') continue;
             const next = removed | (1 << slot);
@@ -218,6 +219,12 @@ function routeThroughTerrain(geometry, live, request, controls, cancelled, remot
     const preferProjection = canProject && live.stableEncounters && !remoteAccess;
     const direct = remoteAccess ? routeThroughControl(geometry, live, request, controls, cancelled, remoteAccess)
         : preferProjection ? null : plan(live);
+    // A remote bridge/crystal gate is not a prerequisite when a local melt
+    // already proves the destination reachable on the unchanged terrain.
+    if (direct && ['terrainGate','terrainExit'].includes(direct.status) && canProject && !remoteAccess) {
+        const local = routeThroughIce(geometry,live,request,cancelled);
+        if (local) return local;
+    }
     if (direct || !canProject || cancelled()) return direct;
     // Ice and a moving encounter can block different parts of the same
     // route. Use the relaxed world only to prove continuation. Verify the
@@ -245,4 +252,35 @@ function routeThroughTerrain(geometry, live, request, controls, cancelled, remot
     return ['interrupted', 'cancelled'].includes(prefix.status) ? prefix : null;
 }
 
-module.exports = { routeThroughTerrain, routeThroughControl, routeThroughIce, meltedEvents };
+// Monotone, reachable native prerequisites for detached graph proofs. The
+// real local route still returns the first interaction/event on unchanged
+// collision. At most64 effects are consumed; no game objects or code execute.
+function prerequisiteLanding(geometry,live,x,y,controls=[],cancelled=()=>false) {
+    let events=live.events,terrain=live.terrain instanceof Uint32Array ? Array.from(live.terrain,packed=>{
+        const cell=packed&(MAX_CELLS-1);return [cell%geometry.width,Math.floor(cell/geometry.width),packed>>>CELL_BITS];
+    }):live.terrain,available;
+    const edits=new Map(Array.from(terrain||[],row=>[row[1]*geometry.width+row[0],row[2]]));
+    const opened=new Set();
+    for(let pass=0;pass<=64;pass++) {
+        if(cancelled()) return null;
+        available=walkingLanding(geometry,{...live,events,terrain},x,y,cancelled);
+        if(!available) return null;
+        if(pass===64) return available;
+        const floor=events.find(event=>event.clearsOnUse&&!event.erased&&available.events[event.id]);
+        if(floor) {events=events.filter(event=>event!==floor);continue;}
+        const ice=events.find(event=>event.meltable&&!event.erased&&available.events[event.id]);
+        if(ice) {events=meltedEvents(geometry,events,[ice],1);continue;}
+        const control=controls.find(([id,changes,pull])=>id>0&&!pull&&!opened.has(id)&&available.events[id]&&
+            changes.length&&changes.every(([cell,flags])=>(((edits.get(cell)??geometry.cells[cell])&flags&15)===((edits.get(cell)??geometry.cells[cell])&15))));
+        if(!control) return available;
+        const [id,changes]=control;opened.add(id);
+        for(const [cell,flags]of changes)edits.set(cell,((edits.get(cell)??geometry.cells[cell])&240)|flags);
+        terrain=Array.from(edits,([cell,flags])=>[cell%geometry.width,Math.floor(cell/geometry.width),flags]);
+        const actor=events.find(event=>event.id===id);
+        if(actor?.trigger===1&&!actor.normal)events=events.filter(event=>!controls.some(([other])=>other===event.id));
+        if(live.terrainSwitch===103)events=events.filter(event=>event.id!==8);
+    }
+    return available;
+}
+
+module.exports = { prerequisiteLanding, routeThroughTerrain, routeThroughControl, routeThroughIce, meltedEvents };

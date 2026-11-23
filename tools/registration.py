@@ -491,7 +491,7 @@ def objects_notification(original):
         232058: b'if(this===$gamePlayer&&SceneManager._scene?._wqaBookmarkLanding)'
                 b'globalThis.WendyQuestAccessBookmarkLandingAccepted?.(SceneManager._scene,this);'
                 + MAP_LEAVING + b'\n        ',  # Native landing after isLandOk
-        222789: b'if(this===$gamePlayer&&SceneManager._scene?._wqaAutowalkActive)'
+        222789: b'if(this===$gamePlayer&&(SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaAutowalkCleanup))'
                 b'direction=globalThis.WendyQuestAccessAutowalkInput?.(SceneManager._scene,this,direction,'
                 b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'

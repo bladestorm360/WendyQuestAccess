@@ -36,12 +36,15 @@ function breakfastSource(id, source, map, controls, common) {
         (id !== 113 || edge.event >= 59 && edge.event <= 71));
     const caveEntries = id === 87 ? [77, 78] : id === 191 ? [1, 2] : [];
     for (const event of caveEntries) {
-        for (const edge of catalogTransferOptions(id, map.events[event], common, true)) exits.push({ event, ...edge });
+        for (const edge of catalogTransferOptions(id, map.events[event], common, true))
+            if(!exits.some(existing=>existing.event===event&&existing.map===edge.map&&existing.x===edge.x&&existing.y===edge.y))
+                exits.push({ event, ...edge });
     }
     const opening = id === 77 || id === 79 || id === 80 || id === 81 || id === 84 || id === 85
         ? controls?.find(([event]) => event === 0)?.[1] : undefined;
     return {
         ...source,
+        conditional:undefined,
         exits,
         portLandings: [],
         opening,

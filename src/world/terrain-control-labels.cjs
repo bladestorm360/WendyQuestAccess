@@ -21,6 +21,7 @@ const CONTROLS = Object.freeze({
 // player's native interaction or encounter. The baker checks these producers.
 const TERRAIN_PAGES = Object.freeze({
     37: { 4: [5, 0, 1] },
+    63: { 0: [13, 0, 0] },
     77: { 0: [28, 0, 0] },
     79: { 0: [12, 0, 0] },
     80: { 0: [27, 0, 0] },
@@ -33,7 +34,7 @@ const TERRAIN_PAGES = Object.freeze({
 });
 
 const GATE_SWITCHES = Object.freeze({
-    37: 145, 77: 97, 79: 97, 80: 97, 81: 97, 84: 97, 85: 97,
+    37: 145, 63: 54, 77: 97, 79: 97, 80: 97, 81: 97, 84: 97, 85: 97,
     97: 103, 105: 119, 106: 115, 204: 145
 });
 

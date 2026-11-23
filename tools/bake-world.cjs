@@ -102,7 +102,7 @@ function bake(installed, destination) {
     fs.writeFileSync(path.join(output, 'breakfast.json'), region, { flag: 'wx' });
     manifest.breakfast = digest(region);
     const index = JSON.stringify(manifest);
-    if (Buffer.byteLength(index) > 136 * 1024) throw Error('Map geometry manifest exceeds its size limit: ' + Buffer.byteLength(index));
+    if (Buffer.byteLength(index) > 168 * 1024) throw Error('Map geometry manifest exceeds its size limit: ' + Buffer.byteLength(index));
     fs.writeFileSync(path.join(output, 'manifest.json'), index, { flag: 'wx' });
     return { maps: maps.length, cells };
 }

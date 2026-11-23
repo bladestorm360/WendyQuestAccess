@@ -672,8 +672,6 @@ function chillcrestReturn(entry) {
 function catalogTransferOptions(map, entry, common, regional = false) {
     const { pages } = entry;
     if (map === 25 && CHILLCREST_RETURNS[entry.id]) return chillcrestReturn(entry);
-    if (!regional && (map === 87 && (entry.id === 77 || entry.id === 78) ||
-        map === 191 && (entry.id === 1 || entry.id === 2))) return [];
     if (map === 61 && entry.id === 1 && pages.length === 2) {
         const variants = pages.map(page => transferOptions(map, entry, page, common));
         return variants.every(options => options.length === 1) ? variants[0] : [];
@@ -696,6 +694,11 @@ function catalogTransferOptions(map, entry, common, regional = false) {
         const variants = pages.map(page => transferOptions(map, entry, page, common));
         return variants.every(options => options.length === 1) ? variants.flat() : [];
     }
+    // The concealed basement button is not a remote shortcut before its
+    // native discovery flag. Its first direct interaction remains available
+    // through the established spoiler-mode/local object owner.
+    if(map===128&&entry.id===11&&pages.length===1)
+        return transferOptions(map,entry,pages[0],common).map(edge=>({...edge,gate:1}));
     const conditional=conditionalCatalog(map,entry,common);
     if (conditional) return conditional;
     return pages.length === 1 && flagsAre(pages[0]) ? transferOptions(map, entry, pages[0], common) : [];

@@ -780,8 +780,12 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
     if (!goals) return { status: 'unavailable' };
     const entry = request.entryDirection === undefined ? null : entryGoal(world, goals, request, area);
     if (request.entryDirection !== undefined && !entry) return { status: 'unreachable' };
-    if (request.field !== true || world.mode === 'airship')
-        return finishEntry(world, route(world, start, goals, cancelled, area), entry);
+    if (request.field !== true || world.mode === 'airship') {
+        // A detached prerequisite proof can pass ordinary same-map floor
+        // events, but cannot invent transit through any native map entrance.
+        const terminals=request.terminalTransfers ? Uint16Array.from(tiles.touch,id=>tiles.terminals.has(id)?id:0) : undefined;
+        return finishEntry(world, route(world, start, goals, cancelled, area, terminals), entry);
+    }
     const stops = tiles.touch;
     const terminalStops = tiles.terminals;
     let blockedApproach = false;

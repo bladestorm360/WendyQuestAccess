@@ -10,7 +10,7 @@ const WORLD_CAULDRON_GATE = 256;
 const CHILLCREST_RETURNS = Object.freeze({14:512,18:513,19:514});
 // Audited native page conditions, captured once with each field request.
 const CONNECTION_GATES = Object.freeze({ beach:768, forest:769, salt:770, nuggedorDoors:771,
-    burgenburg:772, office:773, cafe:774, cauldronReturn:775 });
+    burgenburg:772, office:773, cafe:774, cauldronReturn:775, breakfastBridges:776, cauldronTiles:777 });
 const CONNECTION_OFFSET = HOUSE_SWITCHES.length + 6;
 const WORLD_CAULDRON = Object.freeze({ early: 1, rescued: 2, informed: 4, changed: 8 });
 const STAGE = Object.freeze({ zero: 1, one: 2, two: 4, three: 8, before: 16, after: 32 });
@@ -21,7 +21,7 @@ function cauldronGate(mask) { return CAULDRON_GATE | mask; }
 function worldCauldronGate(mask) { return WORLD_CAULDRON_GATE | mask; }
 
 function validGate(gate) {
-    return Number.isInteger(gate) && (Object.values(CONNECTION_GATES).includes(gate) || Object.values(CHILLCREST_RETURNS).includes(gate) || Math.abs(gate) <= HOUSE_SWITCHES.length ||
+    return Number.isInteger(gate) && (Object.values(CONNECTION_GATES).includes(Math.abs(gate)) || Object.values(CHILLCREST_RETURNS).includes(gate) || Math.abs(gate) <= HOUSE_SWITCHES.length ||
         (gate > CAULDRON_GATE && gate <= (CAULDRON_GATE | ALL_STAGES)) ||
         gate === NUGGEDOR_BEFORE || gate === NUGGEDOR_AFTER ||
         (gate > WORLD_CAULDRON_GATE && gate < WORLD_CAULDRON_GATE + 16));
@@ -36,8 +36,8 @@ function stageFor(value) {
 
 function gateAllows(gate, state) {
     if (gate === 0) return true;
-    const connection = Object.values(CONNECTION_GATES).indexOf(gate);
-    if (connection >= 0) return state?.[CONNECTION_OFFSET + connection] === true;
+    const connection = Object.values(CONNECTION_GATES).indexOf(Math.abs(gate));
+    if (connection >= 0) return state?.[CONNECTION_OFFSET + connection] === (gate>0);
     const west = Object.values(CHILLCREST_RETURNS).indexOf(gate);
     if (west >= 0) return state?.[HOUSE_SWITCHES.length + 3 + west] === true;
     if (gate === NUGGEDOR_BEFORE || gate === NUGGEDOR_AFTER) {
@@ -82,7 +82,7 @@ function transferState(root) {
         switches?.value?.(39) === true, switches?.value?.(424) === false,
         switches?.value?.(404) === true || switches?.value?.(405) === true || root.$gameVariables?.value?.(16) >= 5,
         switches?.value?.(103) === true, root.$gameSelfSwitches?.value?.([134,10,'A']) === true,
-        switches?.value?.(477) === false);
+        switches?.value?.(477) === false, switches?.value?.(97) === true, switches?.value?.(54) === true);
     return state;
 }
 

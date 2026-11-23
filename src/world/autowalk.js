@@ -12,7 +12,7 @@ const { admitPatrolLine, patrolStepReady } = require('./puzzles/patrol-line-play
 
 const TOUCH_TRIGGERS = [1, 2];
 
-function createAutowalk(root, ready, preferences, report, refreshReady = () => false, reroute = () => false, cleanup = () => false) {
+function createAutowalk(root, ready, preferences, report, refreshReady = () => false, reroute = () => false, cleanup = () => false, cancelContinuation = () => null) {
     let active = null;
     const targetAt = (map, job) => job.vehicle ? parkedVehicle(map, job.vehicle.type) : map._events?.[job.target];
 
@@ -145,13 +145,17 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
     }
 
     function input(scene, player, direction, manual) {
+        const continuation=manual&&cancelContinuation(scene);
         const state = active;
-        if (!state || state.scene !== scene || state.player !== player) return direction;
+        if (!state || state.scene !== scene || state.player !== player) {
+            if (continuation) report(scene,{kind:'fieldStatus',name:'Autowalk stopped.',manualAutowalkStop:true},false,false,continuation);
+            return direction;
+        }
         if (manual) {
             stop(scene);
             // Manual input ends automatic movement. The beacon can still
             // follow the player's accepted step toward the same destination.
-            report(scene, { kind: 'fieldStatus', name: 'Autowalk stopped.' }, false, false, state.job);
+            report(scene, { kind: 'fieldStatus', name: 'Autowalk stopped.', manualAutowalkStop:true }, false, false, state.job);
             return direction;
         }
         if (!ready(scene) && holdRefresh(scene)) return 0;
@@ -228,6 +232,11 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
                     }
                     return end(state, { kind: 'routeDirections', name: 'Autowalk paused', legs: [],
                         boundary: step, boundaryName: 'Map cleanup', manualHandoff: true }, true);
+                }
+                if (floor._eventId===job.prerequisiteFloor && index===length-1 &&
+                    cleanup(job,floor,page,x,y)) {
+                    stop(scene);
+                    return step;
                 }
                 if (floor === state.target && index === length - 1) {
                     return arrive(state, { ...record, activate: step });

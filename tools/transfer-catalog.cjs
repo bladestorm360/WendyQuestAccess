@@ -1,7 +1,11 @@
 'use strict';
 
 const { DIRECTIONS, PASSAGE, indexOf, tileKey } = require('../src/world/geometry.cjs');
-const { walkingLanding } = require('../src/world/routes.cjs');
+const { prerequisiteLanding } = require('../src/world/terrain-controls.cjs');
+const {floorClearsOnUse,iceOpensPassage,iceMeltChanges}=require('../src/world/local-destinations');
+const {bakeControls}=require('./bake-controls.cjs');
+const {GATE_SWITCHES}=require('../src/world/terrain-control-labels.cjs');
+const {CONNECTION_GATES}=require('../src/world/transfer-gates.cjs');
 const { catalogTransferOptions, shipPort } = require('../src/world/transfer-events.cjs');
 const { MAX_LANDINGS, validTile, readCatalog } = require('../src/world/walking-catalog.cjs');
 const { timedCave } = require('../src/world/puzzles/cave');
@@ -41,9 +45,15 @@ function transferMap(id, map, geometry, flags, common) {
         const floor = pages.find(page => page.priorityType !== 1 && page.trigger !== 0 && action(page));
         const normal = pages.find(page => page.priorityType === 1 && action(page));
         const interaction = floor || normal || pages.find(action);
-        const rectangle = floor && blocked ? [x, y, x, y] : undefined;
+        const ice=pages.find(page=>iceOpensPassage(entry,page));
+        const box=ice&&pages.flatMap(page=>page.list).find(row=>row.code===357&&row.parameters[0]==='MapScene'&&
+            row.parameters[1]==='SetBlocker')?.parameters[3];
+        const rectangle = box ? [x+(+box.minX),y+(+box.minY),x+(+box.maxX),y+(+box.maxY)] :
+            floor && blocked ? [x, y, x, y] : undefined;
         events.push({ id: event, x, y, normal: !floor && (blocked || !!normal),
-            through: !blocked, rectangle, trigger: interaction?.trigger, action: !!interaction });
+            through: !blocked, rectangle, trigger: interaction?.trigger, action: !!interaction,
+            meltable:!!ice, ...(ice?{meltChanges:iceMeltChanges(entry,ice)}:{}),
+            clearsOnUse:pages.some(page=>floorClearsOnUse(entry,page)) });
         if (rectangle) events[events.length - 1].through = false;
         for (const page of pages) {
             const flag = page.image?.tileId > 0 ? flags[page.image.tileId] : undefined;
@@ -58,7 +68,11 @@ function transferMap(id, map, geometry, flags, common) {
     }
     const terrain = Array.from(barriers, ([cell, mask]) =>
         [cell % geometry.width, Math.floor(cell / geometry.width), geometry.cells[cell] & ~mask]);
-    return { geometry, live: { mode: 'walk', terrain, events, vehicles: [] }, exits, portLandings };
+    const controls=bakeControls(id,map,flags);
+    const opening=controls?.find(([event])=>event===0)?.[1];
+    const gate=id===63?CONNECTION_GATES.cauldronTiles:GATE_SWITCHES[id]===97?CONNECTION_GATES.breakfastBridges:undefined;
+    return { geometry, live: { mode: 'walk', terrain, events, vehicles: [],terrainMap:id,terrainSwitch:GATE_SWITCHES[id] },
+        exits, portLandings, controls, ...(opening&&gate?{conditional:{gate,changes:opening}}:{}) };
 }
 
 function encodePoints(reached) {
@@ -85,15 +99,30 @@ function bakeCatalog(sources, maps) {
         }
     }
     const landings = origins.map(([map, x, y]) => {
-        const { geometry, live, exits } = sources.get(map);
-        const { reached, events, approaches } = walkingLanding(geometry, live, x, y);
-        const links = [];
-        for (const edge of exits) {
-            if (edge.approach ? !(approaches[edge.event] & (1 << DIRECTIONS.indexOf(edge.approach))) : !events[edge.event]) continue;
-            const next = byTile.get(tileKey(edge.map, edge.x, edge.y));
-            if (next !== undefined) links.push(next, edge.gate);
+        const {geometry,live,exits,controls,conditional}=sources.get(map);
+        const available=prerequisiteLanding(geometry,live,x,y,controls);
+        const links=[];
+        function append(reached,gate) {
+            for(const edge of exits) {
+                if(edge.approach?!(reached.approaches[edge.event]&(1<<DIRECTIONS.indexOf(edge.approach))):!reached.events[edge.event])continue;
+                const next=byTile.get(tileKey(edge.map,edge.x,edge.y));
+                if(next===undefined)continue;
+                if(gate&&edge.gate!==0)throw Error('Unverified compound conditional connection');
+                const value=gate||edge.gate;
+                if(!links.some((item,i)=>i%2===0&&item===next&&links[i+1]===value))links.push(next,value);
+            }
         }
-        return [map, x, y, encodePoints(reached), links];
+        append(available,conditional?-conditional.gate:0);
+        const row=[map,x,y,encodePoints(available.reached),links];
+        if(conditional){
+            const edits=new Map(live.terrain.map(([tx,ty,value])=>[ty*geometry.width+tx,value]));
+            for(const [cell,flags]of conditional.changes)edits.set(cell,((edits.get(cell)??geometry.cells[cell])&240)|flags);
+            const terrain=Array.from(edits,([cell,value])=>[cell%geometry.width,Math.floor(cell/geometry.width),value]);
+            const opened=prerequisiteLanding(geometry,{...live,terrain},x,y,controls);
+            append(opened,conditional.gate);
+            row.push([conditional.gate,encodePoints(opened.reached)]);
+        }
+        return row;
     });
     const catalog = { version: 1, landings };
     readCatalog(catalog, maps);

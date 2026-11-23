@@ -224,6 +224,37 @@ function inactiveFloorScene(root, event, page) {
     return false;
 }
 
+const floorCompletions=new WeakMap();
+const FLOOR_COMPLETION_ROWS=new Set([0,108,408,101,401,205,505,213,250,230,121,123,214,241,242,223,224,225]);
+// Only linear, same-map presentation/dialogue followed by one native flag
+// qualifies. Choices, scripts, battles and unknown plugin calls stay opaque.
+function floorClearsOnUse(entry,page) {
+    if (!page || page.list.length>256 || page.priorityType!==0 || ![1,2].includes(page.trigger) || page.image?.tileId ||
+        page.image?.characterName) return false;
+    if (!floorCompletions.has(page)) {
+        const rows=page.list.filter(row=>!([0,108,408].includes(row.code)));
+        const flags=rows.filter(row=>[121,123].includes(row.code));
+        let clears=rows.length>0 && rows.every(row=>row.indent===0&&FLOOR_COMPLETION_ROWS.has(row.code)&&
+            (row.code!==205 || row.parameters[1]?.repeat===false && row.parameters[1].list?.length<=64 &&
+                row.parameters[1].list.every(move=>move.code===0||move.code>=15&&move.code<=44)));
+        if (clears && rows.some(row=>row.code===214)) clears=true;
+        else {
+            clears=clears&&flags.length===1;
+            const flag=flags[0], index=entry.pages.indexOf(page);
+            clears=clears&&entry.pages.slice(index+1).some(next=>{
+                const q=next.conditions;
+                const active=Object.keys(q).filter(key=>key.endsWith('Valid')&&q[key]);
+                const matches=flag.code===123 ? flag.parameters[1]===0&&active.length===1&&q.selfSwitchValid&&
+                    q.selfSwitchCh===flag.parameters[0] : flag.parameters[0]===flag.parameters[1]&&flag.parameters[2]===0&&
+                    active.length===1&&q.switch1Valid&&q.switch1Id===flag.parameters[0];
+                return matches&&next.priorityType===0&&next.list.length===2&&next.list[0].code===214&&next.list[1].code===0;
+            });
+        }
+        floorCompletions.set(page,!!clears);
+    }
+    return floorCompletions.get(page);
+}
+
 const icePages = new WeakMap();
 
 function iceOpensPassage(entry, page) {
@@ -472,7 +503,6 @@ function localDestination(root, event, page) {
                 command.parameters.join(',') === '483,483,0') &&
             eventSwitchPage(root.$dataMap?.events?.[id], 1, 483, 98))
             return { name: 'Elevator to the lower landing', category: 'exits', eventAction: 'step' };
-        if (map === 14 && id === 25 && to(117)) return { name: "Return to Frygor's house", category: 'exits', eventAction: 'step' };
         if (map === 64 && id === 1 && to(59, 1) && to(45, 1)) return { name: 'Return to Nuggedor', category: 'exits', eventAction: 'step' };
         if (map === 192 && id === 1 && to(98, 1))
             return root.$gameSwitches?.value?.(404) === true
@@ -560,6 +590,6 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { localDestination, localHandoffName, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
+module.exports = { floorClearsOnUse, localDestination, localHandoffName, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
     visibleChestBarrier, closedRuinsDoorReason, npcPassage,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

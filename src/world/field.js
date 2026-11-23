@@ -7,7 +7,7 @@ const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName, worldEntranceRevealed, FLOAT_FORT_ENTRANCE } = require('./world-destinations');
 const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination,
     visibleChestBarrier, closedRuinsDoorReason, BREAKFAST_HANDOFFS, npcPassage, passiveFloorPage } = require('./local-destinations');
-const { transferOptions } = require('./transfer-events.cjs');
+const { transferOptions, pageMayTransfer } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { createLocalDetour } = require('./local-detour');
@@ -161,7 +161,14 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (scene._wqaArrivalSpeech) arrivalScene = scene;
         } else if (record && scene === host.manager._scene) command('navigationReport', record);
         else retire(scene);
-    }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true), rerouteAutowalk, cleanupAutowalk);
+    }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true), rerouteAutowalk, cleanupAutowalk, scene => {
+        const pending=cleanupWalk;
+        if (!pending || pending.scene!==scene) return null;
+        owner=pending.owner;
+        clearCleanupWalk();
+        retire(scene);
+        return pending.job;
+    });
 
     function guideFor(scene) {
         if (salt.available(scene)) return salt;
@@ -789,11 +796,20 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const useExit = !!exit && (job.target === result.boundaryEvent ||
                     job.request.handoffs?.includes(result.boundaryEvent));
                 const activate = job.eventAction === 'step' && job.target === result.boundaryEvent ? result.boundary : undefined;
-                follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
+                const record={ kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
                     guide: job.guide, activate, exit, useExit,
                     boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent, preferences().spoilers === true)),
                     manualHandoff: !!handoff || !!boundaryName && (job.action === 'puzzleGuide' || job.mode === 'ship' || timedCave(job.map)),
-                    more: result.more === true });
+                    more: result.more === true };
+                const prefix=result.floorPrerequisite;
+                if (job.autowalk && prefix && result.course?.length===result.distance) {
+                    const course=new Uint8Array(result.distance+1);course.set(result.course);
+                    course[result.distance]=4|DIRECTIONS.indexOf(result.boundary);
+                    return follow(job,{...result,course,distance:course.length,
+                        arrival:{x:prefix.x,y:prefix.y,facing:null}},record,
+                        {...job,target:prefix.event,prerequisiteFloor:prefix.event,point:false,vehicle:undefined});
+                }
+                follow(job,result,record);
             }
             else if (job.remote && ['unreachable', 'approachBlocked', 'unavailable'].includes(result?.status))
                 status(job, 'No verified reachable entrance');
@@ -990,7 +1006,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     function cleanupCurrent(pending) {
         return pending && pending.scene === host.manager._scene && pending.map === root.$gameMap &&
             pending.player === root.$gamePlayer && !host.manager._nextScene && !pending.player._transferring &&
-            pending.player._x === pending.x && pending.player._y === pending.y &&
+            (pending.prerequisite && pending.accepted || pending.player._x === pending.x && pending.player._y === pending.y) &&
             pending.map._events[pending.event._eventId] === pending.event && preferences().autowalk &&
             travelMode(pending.map, pending.player) === pending.job.mode &&
             (!pending.job.quest || questDestinationCurrent(root, pending.scene, pending.job.quest));
@@ -999,12 +1015,16 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     function cleanupAutowalk(job, event, page, x, y) {
         if (!ready(job.scene) || !preferences().autowalk ||
             event.list() !== page.list || root.$dataMap?.events?.[event._eventId]?.pages[event._pageIndex] !== page) return false;
-        // Retain one exact same-map cleanup identity, not a movement lease.
+        const prerequisite=job.prerequisiteFloor===event._eventId;
+        if (prerequisite && pageMayTransfer(page,root.$dataCommonEvents)) return false;
+        // Retain one exact same-map event identity, not a movement lease.
+        // A proved prerequisite may move Wendy natively before completion;
+        // explicit manual takeover cancels this token before it can resume.
         // Native event acceptance closes all work gates as usual. Nothing is
         // resumed until the same scene publishes normal field readiness.
         job.scene._wqaAutowalkCleanup = true;
         cleanupWalk = { scene: job.scene, map: root.$gameMap, player: root.$gamePlayer,
-            event, list: page.list, owner, job, x, y, accepted: false };
+            event, list: page.list, owner, job, x, y, prerequisite, accepted: false };
         return true;
     }
 
@@ -1916,6 +1936,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (cleanupWalk && !cleanupCurrent(cleanupWalk)) clearCleanupWalk();
             if (!steppedActor || steppedActor === root.$gamePlayer) autowalk.dirty(scene);
             const job = active;
+            // Manual takeover is reported before native movement. Its own
+            // accepted step must not cancel that one pending announcement.
+            if (steppedActor===root.$gamePlayer && job?.scene===scene && job.action==='navigationReport' &&
+                job.text?.manualAutowalkStop && ready(scene,true)) return;
             if (steppedActor && job?.scene === scene && job.chaseLeg &&
                 job.chaseLeg.x === root.$gamePlayer._x && job.chaseLeg.y === root.$gamePlayer._y && ready(scene, true)) return;
             if (!steppedActor || steppedActor === root.$gamePlayer || job?.scene !== scene ||

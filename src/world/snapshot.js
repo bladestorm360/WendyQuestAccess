@@ -2,7 +2,7 @@
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
-const { localDestination, iceOpensPassage, iceMeltChanges, inactiveFloorScene, concealedDestination,
+const { floorClearsOnUse, localDestination, iceOpensPassage, iceMeltChanges, inactiveFloorScene, concealedDestination,
     chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, npcPassage } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit,
     worldEntranceRevealed } = require('./world-destinations');
@@ -27,7 +27,7 @@ function eventTarget(root, mode, event, entry, page, spoilers = false, questMark
     const patrol = mode === 'walk' && patrolDestination(map, event, page);
     if (patrol) return patrol;
     if ((!spoilers && concealedDestination(map, event)) || !pageHasInteraction(page) ||
-        inactiveFloorScene(root, event, page) || excludedDestination(entry, page) ||
+        inactiveFloorScene(root, event, page) || excludedDestination(entry, page, map) ||
         (map === 113 && !worldEntranceRevealed(root, event._eventId, spoilers, questMarker))) return null;
     let target = worldDestination(root, mode, event, entry, page);
     if (target === undefined) target = localDestination(root, event, page);
@@ -134,6 +134,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action,
                 erased: event._erased === true,
                 meltable: !!meltable,
+                clearsOnUse: action && floorClearsOnUse(entry,page),
                 ...(meltChanges?.relocate || meltChanges?.clears ? { meltChanges } : {}),
                 movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
                 // Keep discovery identity before aircraft ownership; every native

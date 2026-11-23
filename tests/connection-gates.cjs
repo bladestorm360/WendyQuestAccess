@@ -7,6 +7,11 @@ const {routeApproachPoints}=require('../src/world/routes.cjs');
 module.exports=async(c,load,read,verifyWorker)=>{
  c.$dataCommonEvents=read('CommonEvents.json');
  let gates=0,jobs=0,native=0;
+ const retired=load(14,{switches:[12]});retired.player.setPosition(56,32);
+ assert.equal(retired.gameMap.event(25)._pageIndex,0,'the retired script really is active after the story flag');
+ const targets=captureWorld(c,true,undefined,undefined,[],true).objects;
+ assert(!targets.some(e=>e.id===25),'the unreachable retired house return is not an exit or object');
+ assert([2,3].every(id=>targets.some(e=>e.id===id&&e.category==='exits')),'real Fry Fields world exits remain listed');
  const states=[{}, {switches:[9]}, {switches:[11]}, {switches:[23]}, {switches:[39]},
   {switches:[517]}, {switches:[39,517]}, {switches:[424]}, {variables:{5:3}}, {variables:{5:4}},
   {variables:{5:5}}, {variables:{16:4}}, {variables:{16:5}}, {switches:[404]}, {switches:[405]},

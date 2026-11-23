@@ -5,7 +5,7 @@ const { validGate, gateAllows } = require('./transfer-gates.cjs');
 
 const MAX_LANDINGS = 1024;
 const MAX_LINKS = 16384;
-const MAX_CATALOG_BYTES = 84 * 1024;
+const MAX_CATALOG_BYTES = 116 * 1024;
 
 function validTile(map, x, y, maps) {
     const bounds = maps[map];
@@ -22,13 +22,21 @@ function readCatalog(data, maps) {
     const byTile = new Map();
     const incoming = data.landings.map(() => []);
     let linkCount = 0;
-    const landings = data.landings.map(([map, x, y, encoded, exits], index) => {
+    const landings = data.landings.map(([map, x, y, encoded, exits, conditional], index) => {
         const key = tileKey(map, x, y);
         if (!validTile(map, x, y, maps) || byTile.has(key) || typeof encoded !== 'string' || encoded.length > 2732 ||
             !Array.isArray(exits) || exits.length % 2 || exits.length > MAX_EVENTS * 4)
             throw Error('Invalid walking landing');
         const points = Buffer.from(encoded, 'base64');
         if (points.length !== Math.ceil(maps[map].width * maps[map].height / 8)) throw Error('Invalid walking mask');
+        let opened;
+        if(conditional!==undefined) {
+            if(!Array.isArray(conditional)||conditional.length!==2||!conditional[0]||!validGate(conditional[0])||
+                typeof conditional[1]!=='string'||conditional[1].length>2732)throw Error('Invalid conditional landing');
+            const extra=Buffer.from(conditional[1],'base64');
+            if(extra.length!==points.length)throw Error('Invalid conditional landing mask');
+            opened={gate:conditional[0],points:extra};
+        }
         byTile.set(key, index);
         for (let i = 0; i < exits.length; i += 2) {
             const [next, gate] = [exits[i], exits[i + 1]];
@@ -37,7 +45,7 @@ function readCatalog(data, maps) {
                 throw Error('Invalid walking connection');
             incoming[next].push({ previous: index, gate });
         }
-        return { map, key, points };
+        return { map, key, points, opened };
     });
     return { landings, byTile, incoming };
 }
@@ -50,9 +58,10 @@ function remainingTransfers(catalog, map, point, state, visited, maps, cancelled
     const queue = [];
     for (const [index, landing] of landings.entries()) {
         if (cancelled()) return ranks;
+        const points=landing.opened&&gateAllows(landing.opened.gate,state)?landing.opened.points:landing.points;
         if (landing.map !== map || visited.has(landing.key) ||
-            (targets && !targets.some(cell => cell >= 0 && (landing.points[cell >> 3] & (1 << (cell & 7))))) ||
-            (point && (target < 0 || !(landing.points[target >> 3] & (1 << (target & 7)))))) continue;
+            (targets && !targets.some(cell => cell >= 0 && (points[cell >> 3] & (1 << (cell & 7))))) ||
+            (point && (target < 0 || !(points[target >> 3] & (1 << (target & 7)))))) continue;
         queue.push(index);
         ranks[index] = 1;
     }

@@ -10,7 +10,7 @@ const { onFootAirshipRoute, onFootAirshipReachable } = require('./airship-route.
 const { MAX_CATALOG_BYTES, MAX_LINKS, readCatalog, rankEntrances } = require('./walking-catalog.cjs');
 const { previewCrossing } = require('./puzzles/crossing.cjs');
 const { lineDestination } = require('./puzzles/patrol-line-state.cjs');
-const { routeThroughTerrain } = require('./terrain-controls.cjs');
+const { prerequisiteLanding, routeThroughTerrain } = require('./terrain-controls.cjs');
 const { solveSaltRoute } = require('./puzzles/salt-route.cjs');
 
 const BUILD = '26578620';
@@ -42,7 +42,7 @@ function readBounded(name, limit, cancelled) {
 function geometry(id, tileset, cancelled) {
     if (id === cachedId && tileset === cachedTileset) return cachedGeometry;
     if (!manifest) {
-        const bytes = readBounded('manifest.json', 136 * 1024, cancelled);
+        const bytes = readBounded('manifest.json', 168 * 1024, cancelled);
         if (!bytes || cancelled()) return null;
         const source = JSON.parse(bytes);
         if (source.build !== BUILD || !source.maps) throw new Error('Unsupported map geometry build');
@@ -121,14 +121,14 @@ function currentWorldCatalog(catalog, transfer, cancelled) {
         if (landings[previous].map !== worldMap) continue;
         if (++worldLandings > 128) return null;
         const [, x, y] = landings[previous].key.split('/').map(Number);
-        const available = walkingLanding(base, live, x, y, cancelled);
+        const available = prerequisiteLanding(base, live, x, y, manifest.maps[worldMap].controls, cancelled);
         if (!available) return null;
         const points = Buffer.alloc(Math.ceil(available.reached.length / 8));
         for (let cell = 0; cell < available.reached.length; cell++) {
             if ((cell & 63) === 0 && cancelled()) return null;
             if (available.reached[cell]) points[cell >> 3] |= 1 << (cell & 7);
         }
-        landings[previous] = { ...landings[previous], points };
+        landings[previous] = { ...landings[previous], points, opened:undefined };
         for (const edge of candidates) {
             if (edge.approach ? !(available.approaches[edge.event] & (1 << DIRECTIONS.indexOf(edge.approach))) :
                 !available.events[edge.event]) continue;
@@ -160,11 +160,43 @@ function transferRoute(base, map, live, request, transfer, cancelled) {
         return regionalHandoff(base, live, request, transfer, entrances.filter(edge => edge.rank < rank), cancelled) || result;
     }
     if (!['unreachable', 'unavailable'].includes(result.status)) return result;
+    const prerequisite = entrancePrerequisite(base,map,live,request,entrances,cancelled);
+    if (prerequisite) return prerequisite;
     if (map !== 87 || !entrances.some(edge => edge.event === 73 && edge.approach === 2)) return result;
     const setup = solveRoute(base, live, { ...request, event: 73, bumpDirections: 1, handoffs: [102] }, cancelled);
     if (setup.status === 'interrupted' && setup.boundaryEvent === 102)
         return { ...setup, entrance: 73, approach: 2 };
     return setup.status === 'cancelled' ? setup : result;
+}
+
+// The graph chooses a verified onward landing; the ordinary local planner
+// still owns all earlier events, ice and controls. Never arm that entrance
+// while returning only a prerequisite prefix. Native completion replans it.
+function entrancePrerequisite(base,map,live,request,entrances,cancelled) {
+    if (live.mode!=='walk') return null;
+    let best,rank=Infinity;
+    for (const edge of entrances) {
+        if (cancelled()) return {status:'cancelled'};
+        if (edge.rank>rank) continue;
+        const target=live.events.find(event=>event.id===edge.event&&event.action&&!event.erased);
+        if (!target) continue;
+        const bump=target.normal&&target.trigger===1;
+        const local={x:request.x,y:request.y,field:true,event:edge.event,
+            entryDirection:bump?undefined:edge.approach,
+            bumpDirections:bump?(edge.approach?1<<DIRECTIONS.indexOf(edge.approach):15):undefined,
+            stopBeforeEvent:!target.normal&&target.trigger===1};
+        let route=solveRoute(base,live,local,cancelled);
+        if (['unavailable','unreachable','approachBlocked'].includes(route.status))
+            route=routeThroughTerrain(base,live,local,manifest.maps[map].controls,cancelled);
+        if (route?.status==='cancelled') return route;
+        if (!route || !['iceRoute','controlRoute','interrupted','enemyBlocked','npcBlocked'].includes(route.status) ||
+            route.status==='interrupted'&&(route.boundaryEvent===edge.event||
+                live.events.some(event=>event.id===route.boundaryEvent&&event.mapTransfer))) continue;
+        if (!best||edge.rank<rank||route.distance<best.distance) {
+            best={...route,viaEntrance:edge.event,viaApproach:edge.approach};rank=edge.rank;
+        }
+    }
+    return best;
 }
 
 function regionalHandoff(base, live, request, transfer, entrances, cancelled) {
@@ -236,8 +268,17 @@ parentPort.on('message', message => {
                 const points = routeApproachPoints(base, live, request, cancelled);
                 const via = points.length && transferRoute(base, map, live, request,
                     { ...request.detour, points }, cancelled);
-                result = via && ['ready', 'enemyBlocked'].includes(via.status)
+                result = via && (['ready', 'enemyBlocked'].includes(via.status) || via.viaEntrance &&
+                    ['iceRoute','controlRoute','interrupted','npcBlocked'].includes(via.status))
                     ? { ...via, detourPoints: points } : { status: 'unreachable' };
+            }
+            if (request.autowalk === true && !request.motion && ![196,199,200,201].includes(map) &&
+                result.status === 'interrupted' && result.boundaryEvent !== request.event && result.boundary) {
+                const floor=live.events.find(event=>event.id===result.boundaryEvent&&!event.erased&&event.action&&
+                    !event.normal&&[1,2].includes(event.trigger)&&!event.mapTransfer);
+                if (floor) result.floorPrerequisite={event:floor.id,
+                    x:(result.arrival.x+(result.boundary===6?1:result.boundary===4?-1:0)+base.width)%base.width,
+                    y:(result.arrival.y+(result.boundary===2?1:result.boundary===8?-1:0)+base.height)%base.height};
             }
             const follows = (result.status === 'ready' || result.status === 'enemyBlocked' || result.status === 'iceRoute' ||
                 result.status === 'npcBlocked') && !result.reenter && (request.beacon === true || request.autowalk === true);

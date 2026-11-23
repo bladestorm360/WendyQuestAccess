@@ -48,7 +48,11 @@ function bookName(entry) {
     return /book|\bdiary\b|guide to combat|combat\s*volume|^woa\s+easter egg\b|^the lost island$/i.test(name) ? 'Book' : '';
 }
 
-function excludedDestination(entry, page) {
+function excludedDestination(entry, page, map) {
+    // This retired Saltcaster-return scene is parked beyond Fry Fields'
+    // walkable terrain. Its active story flag does not create a real exit.
+    if (map===14 && entry.id===25 && entry.name==='(OLD VERSION) BackToRussetwood' &&
+        page.list.some(row=>row.code===201&&row.parameters[0]===0&&row.parameters[1]===117)) return true;
     if (typeof entry.name === 'string' && /^(?:play[ _-]?test|test|debug|developer)/i.test(entry.name.trim()))
         return true;
     // A blank event may still be a real interaction with an independently
