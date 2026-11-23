@@ -9,6 +9,7 @@ const { travelMode, createVehicleNotice } = require('../src/world/vehicle-naviga
 const { worldBoundaryName } = require('../src/world/world-destinations');
 const { createBeacon } = require('../src/world/beacon');
 const { createField } = require('../src/world/field');
+const { transferOptions } = require('../src/world/transfer-events.cjs');
 const { createTransferBookmarks } = require('../src/world/transfer-bookmarks');
 const { CUE } = require('../src/runtime/audio');
 const { createRenderer } = require('../src/runtime/renderer');
@@ -83,7 +84,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         player._realY = player._y;
         player.updateVehicle();
     }
-    function follow(fixture, result, expectedEvent, eraseOnly = false) {
+    function follow(fixture, result, expectedEvent, eraseOnly = false, afterCleanup) {
         const { source, player } = fixture;
         // Spoken directions are capped at eight turns. The beacon course
         // carries every step when the fixture follows a longer route.
@@ -102,6 +103,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
                 assert(consumed._erased);
                 source._list = null;
                 source._eventId = undefined;
+                afterCleanup?.();
             }
         }
         assert.deepEqual([player._x, player._y], [result.arrival.x, result.arrival.y]);
@@ -363,7 +365,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         c.addEventListener = () => {};
         c.$gameScreen = { _brightness: 255 };
         c.$gameParty.members = () => [4];
-        const owner = { _wqaFieldReady: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0 };
+        let owner = { _wqaFieldReady: true, _active: true, _fadeDuration: 0, _fadeOpacity: 0 };
         c.SceneManager._scene = owner;
         c.Graphics.app = { stage: owner, renderer: frames };
         const packets = [];
@@ -374,7 +376,13 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             makeWord: () => new Int32Array(new SharedArrayBuffer(4)), createRouteWorker: () => worker },
         { open(record) { records.push(record); return records.length; }, close() {} });
 
+        c.WendyQuestAccessBookmarkEntranceAccepted = field.bookmarkEntranceAccepted;
+        c.WendyQuestAccessBookmarkTransferReserved = field.bookmarkTransferReserved;
+        const oldLeaving = c.WendyQuestAccessSceneLeaving;
+        c.WendyQuestAccessSceneLeaving = field.leave;
+        let previous;
         function site(id, x, y) {
+            owner._wqaFieldReady=false;
             const current = begin(id, [33, 38, 250]);
             current.gameMap.inactiveTime = 0;
             current.player.setPosition(x, y);
@@ -383,6 +391,17 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
                 gate.setupPage = () => { gate._trigger = undefined; };
                 gate.erase();
             }
+            if (previous) {
+                Object.assign(previous.gameMap, current.gameMap);
+                c.$gameMap = current.gameMap = previous.gameMap;
+                c.$gamePlayer = current.player = previous.player;
+                current.player._transferring = false;
+                current.player.setPosition(x,y);
+            }
+            previous = current;
+            owner = { _wqaFieldReady:true,_active:true,_fadeDuration:0,_fadeOpacity:0 };
+            c.SceneManager._scene=owner;c.Graphics.app.stage=owner;
+            field.observeReady(owner);
             return current;
         }
         function ask(action) {
@@ -392,20 +411,30 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         async function answer(fixture, event) {
             const packet = packets.shift();
             assert(packet);
-            assert.equal(packet.request.event, event);
+            if (event !== undefined) assert.equal(packet.request.event, event);
             let output;
             await verifyWorker(fixture, { ...packet.request, beacon: true }, packet.live, result => output = result);
             worker.emit('message', { ...packet, result: output });
             return output;
         }
         function enter(fixture, result) {
-            follow(fixture, result, undefined, fixture.id === 25);
-            fixture.player.moveStraight(result.boundary);
-            assert(fixture.player.isMovementSucceeded());
-            settle(fixture.player);
-            fixture.player.updateNonmoving(true, false);
-            assert.equal(fixture.source._eventId, result.boundaryEvent);
-            return fixture.source._list;
+            follow(fixture, result, result.status==='ready'?result.entrance:undefined, fixture.id === 25,()=>field.observeReady(owner));
+            if (result.status !== 'ready') {
+                fixture.player.moveStraight(result.boundary);
+                assert(fixture.player.isMovementSucceeded());
+                settle(fixture.player);
+                fixture.player.updateNonmoving(true, false);
+            }
+            assert.equal(fixture.source._eventId, result.entrance??result.boundaryEvent);
+            const rows=fixture.source._list;
+            const id=fixture.source._eventId,e=fixture.gameMap._events[id];
+            const edge=transferOptions(fixture.id,fixture.map.events[id],e.page(),c.$dataCommonEvents)
+                .find(edge=>edge.approach===result.approach);assert(edge);
+            const expected=[edge.map,edge.x,edge.y];
+            const transfer=rows.find(row=>row.code===201&&row.parameters.slice(1,4).join(',')===expected.join(','));
+            assert(transfer);
+            assert(fixture.source.command201(transfer.parameters),'native reservation');
+            return rows;
         }
         const east = site(113, 14, 17);
         const world = captureWorld(c, true, undefined, owner);
@@ -419,25 +448,28 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         assert.equal(records.at(-1)?.name, 'Float Fort');
         ask('directions');
         const first = await answer(east, 21);
-        assert.equal(first.boundaryEvent, 19);
-        assert.equal(first.boundary, 4);
-        assert.match(formatSpeech(records.at(-1)), /take exit to Chillcrest.*west exit to the world map/i);
-        assert(enter(east, first).some(row => row.code === 201 && row.parameters.slice(1, 4).join(',') === '25,47,27'));
+        assert.equal(first.entrance, 19);
+        assert([4,8].includes(first.approach));
+        assert(first.detourPoints.length);
+        assert.match(formatSpeech(records.at(-1)), /take exit to Chillcrest/i);
+        assert(enter(east, first).some(row => row.code === 201 && row.parameters[1] === 25));
 
-        const town = site(25, 47, 27);
+        const townLanding=[east.player._newX,east.player._newY];
+        const town = site(25, ...townLanding);
         // Native transfers keep the same player. Model that identity across
         // both scene handbacks while loading each map's stock event pages.
         const player = east.player;
         c.$gamePlayer = town.player = player;
-        player.setPosition(47, 27);
+        player.setPosition(...townLanding);
         const townList = captureWorld(c, true, undefined, owner).objects;
         assert(!townList.some(item => item.name.startsWith('Float Fort')));
         assert(townList.some(item => item.category === 'exits' && item.name === 'West exit to world map'));
         ask('directions');
         const townPacket = packets[0];
-        assert([14, 18, 19].includes(townPacket?.request.event));
-        const leaving = await answer(town, townPacket.request.event);
-        assert([14, 18, 19].includes(leaving.boundaryEvent));
+        assert.equal(townPacket?.request.transfer?.map,113);
+        assert.equal(townPacket.request.transfer.verifiedOnly,true);
+        const leaving = await answer(town);
+        assert([14, 18, 19].includes(leaving.entrance));
         assert(enter(town, leaving).some(row => row.code === 201 && row.parameters.slice(1, 4).join(',') === '113,12,17'));
 
         const west = site(113, 12, 17);
@@ -460,6 +492,9 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         c.$gameScreen = screen;
         c.addEventListener = listen;
         c.$gameParty.members = members;
+        c.WendyQuestAccessSceneLeaving=oldLeaving;
+        delete c.WendyQuestAccessBookmarkEntranceAccepted;
+        delete c.WendyQuestAccessBookmarkTransferReserved;
         console.log('Verified Float Fort from both sides of Chillcrest, including the westward handback and quay.');
     }
 

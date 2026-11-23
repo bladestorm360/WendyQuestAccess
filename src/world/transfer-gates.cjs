@@ -7,6 +7,7 @@ const NUGGEDOR_THRESHOLD = 4;
 const NUGGEDOR_BEFORE = 128;
 const NUGGEDOR_AFTER = 129;
 const WORLD_CAULDRON_GATE = 256;
+const CHILLCREST_RETURNS = Object.freeze({14:512,18:513,19:514});
 const WORLD_CAULDRON = Object.freeze({ early: 1, rescued: 2, informed: 4, changed: 8 });
 const STAGE = Object.freeze({ zero: 1, one: 2, two: 4, three: 8, before: 16, after: 32 });
 const CAULDRON_GATE = 64;
@@ -16,7 +17,7 @@ function cauldronGate(mask) { return CAULDRON_GATE | mask; }
 function worldCauldronGate(mask) { return WORLD_CAULDRON_GATE | mask; }
 
 function validGate(gate) {
-    return Number.isInteger(gate) && (Math.abs(gate) <= HOUSE_SWITCHES.length ||
+    return Number.isInteger(gate) && (Object.values(CHILLCREST_RETURNS).includes(gate) || Math.abs(gate) <= HOUSE_SWITCHES.length ||
         (gate > CAULDRON_GATE && gate <= (CAULDRON_GATE | ALL_STAGES)) ||
         gate === NUGGEDOR_BEFORE || gate === NUGGEDOR_AFTER ||
         (gate > WORLD_CAULDRON_GATE && gate < WORLD_CAULDRON_GATE + 16));
@@ -31,6 +32,8 @@ function stageFor(value) {
 
 function gateAllows(gate, state) {
     if (gate === 0) return true;
+    const west = Object.values(CHILLCREST_RETURNS).indexOf(gate);
+    if (west >= 0) return state?.[HOUSE_SWITCHES.length + 3 + west] === true;
     if (gate === NUGGEDOR_BEFORE || gate === NUGGEDOR_AFTER) {
         const value = state?.[HOUSE_SWITCHES.length + 1];
         return Number.isSafeInteger(value) && (value >= NUGGEDOR_THRESHOLD) === (gate === NUGGEDOR_AFTER);
@@ -61,8 +64,15 @@ function transferState(root) {
         state.push(Number.isSafeInteger(progress) ? progress : null);
     }
     state.push(worldCauldronStage(root));
+    // Native west-exit page precedence: party actor, event self-switch D,
+    // completed variable10 sequence, then the initial rescued-Elder branch.
+    const progress = root.$gameVariables?.value?.(10);
+    const recruited = root.$gameParty?._actors?.includes(4) === true;
+    for (const event of Object.keys(CHILLCREST_RETURNS)) state.push(recruited ||
+        root.$gameSelfSwitches?.value?.([25, Number(event), 'D']) === true ||
+        Number.isSafeInteger(progress) && (progress >= 4 || progress < 1 && root.$gameSwitches?.value?.(33) === true));
     return state;
 }
 
-module.exports = { HOUSE_SWITCHES, CAULDRON_VARIABLE, NUGGEDOR_VARIABLE, NUGGEDOR_THRESHOLD, NUGGEDOR_BEFORE, NUGGEDOR_AFTER,
+module.exports = { CHILLCREST_RETURNS, HOUSE_SWITCHES, CAULDRON_VARIABLE, NUGGEDOR_VARIABLE, NUGGEDOR_THRESHOLD, NUGGEDOR_BEFORE, NUGGEDOR_AFTER,
     STAGE, ALL_STAGES, cauldronGate, WORLD_CAULDRON, worldCauldronGate, validGate, gateAllows, transferState };

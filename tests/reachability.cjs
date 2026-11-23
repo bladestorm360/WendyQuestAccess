@@ -23,8 +23,11 @@ async function verifyReachability(c, load, verifyWorker) {
     const guardView = captureWorld(c);
     const destination = { x: 20, y: 23, event: 16, field: true };
     const blocked = solveRoute(guard.geometry, guardView.live, destination);
-    assert.equal(blocked.status, 'interrupted');
-    const blockedTargets = { ...destination, candidates: [{ event: 16 }, { event: blocked.boundaryEvent }] };
+    assert.equal(blocked.status, 'unreachable');
+    const former=solveRoute(guard.geometry,{...guardView.live,
+        events:guardView.live.events.map(event=>({...event,mapTransfer:false}))},destination);
+    assert.equal(former.status,'interrupted');
+    const blockedTargets = { ...destination, candidates: [{ event: 16 }, { event: former.boundaryEvent }] };
     assert.deepEqual([...findReachable(guard.geometry, guardView.live, blockedTargets).available], [0, 1]);
     assert(!view.objects.some(item => item.id === 17 || item.id === 93),
         'the broad cave list excludes weather setup and the playtest conversation');

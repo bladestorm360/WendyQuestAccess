@@ -786,20 +786,11 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const { exit, boundaryName } = routeBoundary(root, result.boundaryEvent, preferences().spoilers === true,
                     undefined, job.mode);
                 if (!job.request.motion) startBeaconApproach(job, result, result.boundaryEvent);
-                // The east and south world-map approaches are in a separate
-                // walking component. Carry the selection through the town
-                // only when both the west exit and the fort are open.
-                const throughChillcrest = job.map === 113 && job.mode === 'walk' && job.target === FLOAT_FORT_ENTRANCE &&
-                    result.boundaryEvent === 19 && (result.boundary === 4 || result.boundary === 8) &&
-                    root.$gameSwitches?.value?.(33) === true && root.$gameSwitches.value(38) === true && !!exit;
-                if (throughChillcrest)
-                    terrainJourney.begin('floatFort', 113, job.destination, 25);
-                const useExit = !!exit && (throughChillcrest || job.target === result.boundaryEvent ||
+                const useExit = !!exit && (job.target === result.boundaryEvent ||
                     job.request.handoffs?.includes(result.boundaryEvent));
                 const activate = job.eventAction === 'step' && job.target === result.boundaryEvent ? result.boundary : undefined;
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
                     guide: job.guide, activate, exit, useExit,
-                    onward: throughChillcrest ? 'Then take the west exit to the world map.' : undefined,
                     boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent, preferences().spoilers === true)),
                     manualHandoff: !!handoff || !!boundaryName && (job.action === 'puzzleGuide' || job.mode === 'ship' || timedCave(job.map)),
                     more: result.more === true });
@@ -1444,7 +1435,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const shipLanding = island && { event: island.event, x: island.x, y: island.y, facing: island.facing };
         submit(job, snapshot, { limit: 8, field: true, landing, shipLanding, autowalk: job.autowalk,
             beacon: host.beacon?.enabled() === true, transfer: { map: bookmark.map, point, points: bookmark.points, state, trail,
-                world: bookmark.world, worldEntries: bookmark.worldEntries,
+                world: bookmark.world, worldMap: bookmark.worldMap, verifiedOnly: bookmark.verifiedOnly, worldEntries: bookmark.worldEntries,
                 candidates: current.map(copy), ground: island ? ground.map(copy) : undefined,
                 discoveries: transfers.discoveries(island ? ground : current) } });
     }
@@ -2003,7 +1994,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             retireArrival(scene, true);
             if (!(iceRoute?.scene === scene && iceRoute.started && iceRoute.block._eventId === mapEventId) &&
                 !controlRouteCurrent(scene, mapEventId)) clearIceRoute(scene);
-            transfers.leave(scene);
+            transfers.leave(scene, mapEventId);
             autowalk.stop(scene);
             if (scene) scene._wqaFieldReady = false;
             retire(scene);

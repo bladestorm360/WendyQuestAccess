@@ -2,7 +2,7 @@
 
 const { DIRECTIONS, MAX_CELLS } = require('./geometry.cjs');
 const { HOUSE_SWITCHES, CAULDRON_VARIABLE, NUGGEDOR_VARIABLE, NUGGEDOR_THRESHOLD, NUGGEDOR_BEFORE, NUGGEDOR_AFTER,
-    STAGE, ALL_STAGES, cauldronGate, WORLD_CAULDRON, worldCauldronGate } = require('./transfer-gates.cjs');
+    STAGE, ALL_STAGES, CHILLCREST_RETURNS, cauldronGate, WORLD_CAULDRON, worldCauldronGate } = require('./transfer-gates.cjs');
 
 const STAIRS = {
     127: { switchId: HOUSE_SWITCHES[0], gate: 1, condition: 0, open: 2, closed: 6, secretMap: 195, floorMap: 128, floor: 'Third floor' },
@@ -517,6 +517,7 @@ function transferOptions(map, entry, page, common) {
     const stair = houseStair(map, entry.id);
     if (stair) return audioOnly(common) ? houseBranches(stair, page.list, map) || [] : [];
     const index = entry.pages.indexOf(page);
+    if (map === 25 && index === 0 && CHILLCREST_RETURNS[entry.id]) return chillcrestReturn(entry);
     const regional = regionalExit(map, entry, page, index, common);
     if (regional) return regional;
     if (map === 87 && entry.id === 73) return caffeineEscape(entry, page, common);
@@ -557,8 +558,30 @@ function transferOptions(map, entry, page, common) {
     return destination ? [destination] : [];
 }
 
+// Qualify all native west-return page variants before exposing this graph
+// edge. Its gate follows actual page precedence, not a story assumption.
+function chillcrestReturn(entry) {
+    const gate = CHILLCREST_RETURNS[entry?.id], pages = entry?.pages;
+    if (!gate || pages?.length !== 7) return [];
+    for (const [i,page] of pages.entries()) if (page.trigger !== (entry.id === 14 && i === 5 ? 0 : 1) ||
+        page.priorityType !== 0 || page.through || page.moveType !== 0) return [];
+    for (let i = 1; i <= 4; i++) if (!flagsAre(pages[i], 'variableValid') ||
+        pages[i].conditions.variableId !== 10 || pages[i].conditions.variableValue !== i) return [];
+    if (!flagsAre(pages[0]) || !flagsAre(pages[5], 'selfSwitchValid') || pages[5].conditions.selfSwitchCh !== 'D' ||
+        !flagsAre(pages[6], 'actorValid') || pages[6].conditions.actorId !== 4) return [];
+    const edges = [4,5,6].map(i => pages[i].list.length === 2 && rowIs(pages[i].list[0],201) &&
+        rowIs(pages[i].list[1],0) && transferTo(pages[i].list[0],25));
+    if (!edges.every(edge => landingIs(edge,113,12,17) && edge.direction === 0)) return [];
+    const at = entry.id === 14 ? 5 : 0, list = pages[0].list;
+    if (!rowIs(list[at],111) || !parametersAre(list[at],[0,33,1]) ||
+        list.length !== at + 23 || !rowIs(list[at+18],411) || !rowIs(list[at+19],201,1) ||
+        !landingIs(transferTo(list[at+19],25),113,12,17)) return [];
+    return [{...edges[0],gate}];
+}
+
 function catalogTransferOptions(map, entry, common, regional = false) {
     const { pages } = entry;
+    if (map === 25 && CHILLCREST_RETURNS[entry.id]) return chillcrestReturn(entry);
     if (!regional && (map === 87 && (entry.id === 77 || entry.id === 78) ||
         map === 191 && (entry.id === 1 || entry.id === 2))) return [];
     if (map === 61 && entry.id === 1 && pages.length === 2) {
@@ -601,5 +624,38 @@ function cauldronIntroductionFinished(root) {
         rowIs(list[20], 123) && parametersAre(list[20], ['A', 0]);
 }
 
-module.exports = { houseStair, houseBranches, transferOptions, catalogTransferOptions, cauldronIntroductionFinished,
+// A transfer can be recognizable as a boundary even when its exact
+// destination is not statically qualified for graph routing. Common-event
+// data is immutable within a loaded game; cache by that owner and page.
+const TRANSFER_BOUNDARIES = new WeakMap();
+function pageMayTransfer(page, common) {
+    if (!page || !Array.isArray(page.list)) return false;
+    const owner = common && typeof common === 'object' ? common : page;
+    let cache = TRANSFER_BOUNDARIES.get(owner);
+    if (!cache) TRANSFER_BOUNDARIES.set(owner, cache = new WeakMap());
+    if (cache.has(page)) return cache.get(page);
+    const pending = [page.list], seen = new Set();
+    let rows = 0, found = false;
+    while (pending.length && !found) {
+        const list = pending.pop();
+        for (const row of list) {
+            // Unknown/over-budget scripts cannot prove walk-through transit.
+            if (++rows > 2048 || row.code === 201 ||
+                ([355,655].includes(row.code) && /\b(?:reserveTransfer|performTransfer)\s*\(/.test(row.parameters?.[0] || ''))) {
+                found = true; break;
+            }
+            if (row.code !== 117) continue;
+            const id = row.parameters?.[0];
+            if (seen.has(id)) continue;
+            if (seen.size >= 32) { found = true; break; }
+            seen.add(id);
+            const nested = common?.[id]?.list;
+            if (Array.isArray(nested)) pending.push(nested);
+        }
+    }
+    cache.set(page, found);
+    return found;
+}
+
+module.exports = { pageMayTransfer, houseStair, houseBranches, transferOptions, catalogTransferOptions, cauldronIntroductionFinished,
     SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount, worldDiscovery, worldFacingEntrances };

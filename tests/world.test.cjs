@@ -1323,6 +1323,14 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if (process.argv.includes('--vehicles-only')) {
+        await verifyVehicleNavigation(c, load, read, verifyWorker);
+        return;
+    }
+    if (process.argv.includes('--transit-only')) {
+        await require('./transit-boundaries.cjs')(c,load,read,verifyWorker);
+        return;
+    }
     if (process.argv.includes('--encounters-only')) {
         await require('./encounter-triggers.cjs')(c,load,verifyWorker,read);
         return;

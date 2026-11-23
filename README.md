@@ -64,6 +64,8 @@ I follows the current context. It reads:
 
 ## Navigation and puzzles
 
+Routes use another area only when a verified connection leads onward to your destination. Entrances are never treated as shortcuts across their tiles. This applies to all destination categories and saved points.
+
 Choose a category, then a destination. Categories include NPCs, merchants, objects, treasure, exits, events, checkpoints, vehicles, quests and bookmarks. Each category starts with its nearest destination. Its order stays fixed while you browse or follow a route; switching categories sorts again. Quest markers belong to Quests.
 
 The filter switches between all current-map destinations and reachable destinations. Directions explain known blockers and guide you to required conversations, crystals or exits. Spoiler mode is initially off. Save locations or selected destinations under F8, Navigation, Bookmarks. Bookmarks persist between sessions and can route across supported maps and unlocked vehicles.

@@ -8,7 +8,7 @@ const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit
     worldEntranceRevealed } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel, questPageHasAction } = require('./quest-destinations');
 const { travelMode, aircraftAt, boardingTargets, parkedVehicle } = require('./vehicle-navigation');
-const { transferOptions } = require('./transfer-events.cjs');
+const { transferOptions, pageMayTransfer } = require('./transfer-events.cjs');
 const { checkpointTarget, usedCheckpoint, caveDestination, patrolDestination, timedCave } = require('./puzzles/cave');
 const { GATE_SWITCHES, BREAKFAST_MAPS } = require('./terrain-control-labels.cjs');
 const { REMINDERS, saltState } = require('./puzzles/salt-state.cjs');
@@ -136,11 +136,12 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 meltable: !!meltable,
                 ...(meltChanges?.relocate || meltChanges?.clears ? { meltChanges } : {}),
                 movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
-                // Discovery walks cannot use a transfer tile as local transit.
-                // Keep this copied identity even before aircraft ownership.
+                // Keep discovery identity before aircraft ownership; every native
+                // entrance is terminal for local transit, on every map.
                 discoveryFor: id === 113 ? discoveryEntrance(id, event) : undefined,
-                mapTransfer: id === 113 && action && [1, 2].includes(trigger) && event._priorityType !== 1 &&
-                    transferOptions(id, entry, page, root.$dataCommonEvents).length > 0 });
+                mapTransfer: action && [0, 1, 2].includes(trigger) && event._priorityType !== 1 &&
+                    (pageMayTransfer(page, root.$dataCommonEvents) ||
+                        transferOptions(id, entry, page, root.$dataCommonEvents).length > 0) });
         }
         if (routesOnly || event._erased || !spoilers && concealedDestination(id, event)) continue;
         const quest = quests?.get(eventId);

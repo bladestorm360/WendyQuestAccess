@@ -6,7 +6,7 @@ const { discoveryEntrance, worldEntranceRevealed } = require('./world-destinatio
 const { travelMode, vehicleOnMap } = require('./vehicle-navigation');
 const { transferState, gateAllows } = require('./transfer-gates.cjs');
 const { tileKey } = require('./geometry.cjs');
-const { concealedDestination } = require('./local-destinations');
+const { concealedDestination, passiveFloorPage } = require('./local-destinations');
 
 function liveEntrances(root, event, state, mode, spoilers) {
     const map = root.$gameMap;
@@ -82,6 +82,14 @@ function createTransferBookmarks(root, host) {
     function accepted(scene, event) {
         if (approach?.scene !== scene || !approach.edge) return;
         const { edge, bookmark, map, player } = approach;
+        // A native bookkeeping touch can occur on the verified approach.
+        // Keep only this exact ticket across that bounded passive event;
+        // unexpected interactions still cancel through the original path.
+        if (event && map === root.$gameMap && player === root.$gamePlayer && event !== map._events[edge.event] &&
+            map._events[event?._eventId] === event && current(edge) && passiveFloorPage(event.page())) {
+            approach.cleanup = { event, list:event.list() };
+            return;
+        }
         clear();
         // Native interpreter setup retires the old same-scene browser
         // even when a different event won acceptance.
@@ -132,6 +140,13 @@ function createTransferBookmarks(root, host) {
     }
 
     function settle(scene) {
+        if (approach?.cleanup) {
+            if (approach.scene === scene && approach.map === root.$gameMap &&
+                approach.player === root.$gamePlayer && current(approach.edge)) {
+                delete approach.cleanup;
+                scene._wqaBookmarkEntrance = true;
+            } else clear();
+        }
         if (!pending) return null;
         const landing = pending;
         clear();
@@ -197,12 +212,17 @@ function createTransferBookmarks(root, host) {
             approach = { scene, bookmark, map, player: root.$gamePlayer, airship, x, y };
             scene._wqaBookmarkLanding = true;
         },
-        leave(scene) {
+        leave(scene, eventId) {
+            const cleanup = approach?.scene === scene && approach.cleanup;
+            const interpreter = root.$gameMap?._interpreter;
+            const retain = cleanup && approach.map === root.$gameMap && approach.player === root.$gamePlayer &&
+                (eventId === cleanup.event._eventId || eventId === undefined &&
+                    (cleanup.event.isStarting() || interpreter?._eventId === cleanup.event._eventId && interpreter._list === cleanup.list));
             if (scene) {
                 scene._wqaBookmarkEntrance = false;
                 scene._wqaBookmarkLanding = false;
             }
-            if (approach?.scene === scene || (pending && pending.scene !== scene)) clear();
+            if (!retain && (approach?.scene === scene || (pending && pending.scene !== scene))) clear();
         }
     };
 }

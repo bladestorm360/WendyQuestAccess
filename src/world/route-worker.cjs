@@ -109,15 +109,16 @@ function currentWorldCatalog(catalog, transfer, cancelled) {
     const candidates = transfer.worldEntries;
     if (!catalog || !live || live.mode !== 'walk' || !Array.isArray(live.events) || live.events.length > MAX_EVENTS ||
         !Array.isArray(candidates) || candidates.length > MAX_EVENTS) return catalog;
-    const base = geometry(113, live.tileset, cancelled);
+    const worldMap = transfer.worldMap ?? 113;
+    const base = geometry(worldMap, live.tileset, cancelled);
     if (!base || cancelled()) return null;
     const landings = catalog.landings.slice();
-    const incoming = catalog.incoming.map(edges => edges.filter(edge => catalog.landings[edge.previous].map !== 113));
+    const incoming = catalog.incoming.map(edges => edges.filter(edge => catalog.landings[edge.previous].map !== worldMap));
     let links = incoming.reduce((total, edges) => total + edges.length, 0);
     let worldLandings = 0;
     for (let previous = 0; previous < landings.length; previous++) {
         if (cancelled()) return null;
-        if (landings[previous].map !== 113) continue;
+        if (landings[previous].map !== worldMap) continue;
         if (++worldLandings > 128) return null;
         const [, x, y] = landings[previous].key.split('/').map(Number);
         const available = walkingLanding(base, live, x, y, cancelled);
@@ -146,7 +147,7 @@ function transferRoute(base, map, live, request, transfer, cancelled) {
     const catalog = regional ? breakfastCatalog(transfer.breakfast, cancelled) :
         currentWorldCatalog(walkingCatalog(), transfer, cancelled);
     if (transfer.world && !catalog) return { status: 'unreachable' };
-    const entrances = rankEntrances(catalog, map, transfer, manifest.maps, cancelled, live.mode === 'walk');
+    const entrances = rankEntrances(catalog, map, transfer, manifest.maps, cancelled, live.mode === 'walk' && transfer.verifiedOnly !== true);
     const groundEntrances = transfer.ground && rankEntrances(catalog, map,
         { ...transfer, candidates: transfer.ground }, manifest.maps, cancelled, false);
     const discoveries = Array.isArray(transfer.discoveries) && transfer.discoveries.length <= 24
@@ -228,7 +229,7 @@ parentPort.on('message', message => {
                     request.terrainTransfer, cancelled));
                 result = routeThroughTerrain(base, live, request, manifest.maps[map].controls, cancelled, access) || result;
             }
-            if (request.detour && map === 113 && live.mode === 'walk' && !request.motion &&
+            if (request.detour && live.mode === 'walk' && !request.motion && !request.area &&
                 (['unreachable', 'approachBlocked'].includes(result.status) ||
                     result.status === 'interrupted' && result.boundaryEvent !== request.event &&
                     request.detour.candidates.some(edge => edge.event === result.boundaryEvent))) {

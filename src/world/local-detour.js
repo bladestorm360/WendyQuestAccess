@@ -1,5 +1,5 @@
 'use strict';
-const { FLOAT_FORT_ENTRANCE } = require('./world-destinations');
+const { timedCave } = require('./puzzles/cave');
 
 // This ticket is temporary navigation state, not a saved bookmark or a new
 // destination. Only the existing native transfer reservation may carry it.
@@ -10,17 +10,16 @@ function createLocalDetour(root, transfers) {
     return {
         clear,
         prepare(job, snapshot, target) {
-            if (job.action !== 'directions' || snapshot.map !== 113 || snapshot.mode !== 'walk' ||
-                target.category !== 'exits' || target.id === FLOAT_FORT_ENTRANCE || !Number.isInteger(target.x) || !Number.isInteger(target.y)) return;
-            // Preserve the established explicit Float Fort/Chillcrest journey.
+            if (job.action !== 'directions' || snapshot.mode !== 'walk' || timedCave(snapshot.map) || job.area || !Number.isInteger(target.x) || !Number.isInteger(target.y)) return;
+            // All local targets may need a verified leave-and-return route.
             const { entrances, state } = transfers.candidates();
             const trail = journey?.ticket.trail || [];
             // submit transfers the live terrain buffer to the worker. Retain
             // our own bounded copy for later native-map handoffs.
             const world = { ...snapshot.live, terrain: snapshot.live.terrain.slice() };
             job.detourApproach = { entrances, state, target, trail, world };
-            return { map: snapshot.map, state, trail, candidates: entrances.map(copy),
-                world, worldEntries: entrances.map(copy) };
+            return { map: snapshot.map, state, trail, candidates: entrances.map(copy), verifiedOnly: true,
+                world, worldMap: snapshot.map, worldEntries: entrances.map(copy) };
         },
         accept(job, result) {
             const points = result.detourPoints;
@@ -29,7 +28,7 @@ function createLocalDetour(root, transfers) {
                 points.some(p => !Number.isInteger(p?.x) || !Number.isInteger(p?.y) || p.x < 0 || p.y < 0 ||
                     p.x >= root.$dataMap.width || p.y >= root.$dataMap.height)) return false;
             const { entrances, state, target, trail, world } = approach;
-            const bookmark = { map: job.map, mode: 'walk', name: target.name, points, world, worldEntries: entrances.map(copy) };
+            const bookmark = { worldMap: job.map, verifiedOnly: true, map: job.map, mode: 'walk', name: target.name, points, world, worldEntries: entrances.map(copy) };
             const selection = { detour: { ...bookmark, target }, trail };
             job.remote = { bookmark, entrances, ground: [], state, selection };
             return true;

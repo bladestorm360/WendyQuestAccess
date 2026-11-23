@@ -518,23 +518,21 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const stoppedView = captureWorld(c);
     const request = { x: 20, y: 23, event: 16, field: true, beacon: true, limit: 8 };
     const beforeGuard = solveRoute(stopped.geometry, stoppedView.live, request);
-    assert.equal(beforeGuard.status, 'interrupted');
-    assert.equal(beforeGuard.arrival.facing, null);
-    const target = stoppedView.objects.find(item => item.id === 16);
-    assert.match(formatSpeech({ kind: 'routeDirections', name: target.name, legs: beforeGuard.legs,
-        boundary: beforeGuard.boundary }), /Floor event one tile/);
-    await verifyWorker(stopped, request, stoppedView.live, ({ course, ...result }) => {
-        assert.deepEqual(result, beforeGuard);
-        assert.equal(course.length, beforeGuard.distance, 'encode the verified prefix before the floor event');
-    });
-    const { x, y } = beforeGuard.arrival;
-    verifyRoute(stopped, { x: request.x, y: request.y, targetX: x, targetY: y }, { ...beforeGuard, status: 'ready' });
-    const nextX = stopped.gameMap.roundXWithDirection(x, beforeGuard.boundary);
-    const nextY = stopped.gameMap.roundYWithDirection(y, beforeGuard.boundary);
-    stopped.player.setPosition(nextX, nextY);
-    stopped.player.checkEventTriggerHere([1, 2]);
-    const guard = stopped.gameMap.events().find(event => event.isStarting());
-    assert.match(guard.event().name, /^Halt/);
+    assert.equal(beforeGuard.status, 'unreachable','Halt transfers out; it is not local transit');
+    await verifyWorker(stopped,request,stoppedView.live,result=>assert.deepEqual(result,beforeGuard));
+    // Reproduce the former permissive prefix, then use native activation to
+    // prove why crossing that apparent floor path cannot reach the target.
+    const former=solveRoute(stopped.geometry,{...stoppedView.live,
+        events:stoppedView.live.events.map(event=>({...event,mapTransfer:false}))},request);
+    assert.equal(former.status,'interrupted');
+    const {x,y}=former.arrival;
+    verifyRoute(stopped,{x:request.x,y:request.y,targetX:x,targetY:y},{...former,status:'ready'});
+    const nextX=stopped.gameMap.roundXWithDirection(x,former.boundary);
+    const nextY=stopped.gameMap.roundYWithDirection(y,former.boundary);
+    stopped.player.setPosition(nextX,nextY);
+    stopped.player.checkEventTriggerHere([1,2]);
+    const guard=stopped.gameMap.events().find(event=>event.isStarting());
+    assert.match(guard.event().name,/^Halt/);
     const guardSource = Object.assign(new c.Game_Interpreter(), { _list: guard.list() });
     guardSource._index = guardSource._list.findIndex(command => command.code === 201);
     assert(guardSource.executeCommand());
@@ -542,7 +540,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
 
     const guarded = load(57);
     guarded.player.setPosition(20, 23);
-    assert.equal(solveRoute(guarded.geometry, captureWorld(c).live, { ...request, event: 14 }).status, 'interrupted');
+    assert.equal(solveRoute(guarded.geometry, captureWorld(c).live, { ...request, event: 14 }).status, 'unreachable');
     const open = load(57, { switches: [81] });
     select(open, 14, [20, 23], 'Side entrance');
     const occupied = load(57, { switches: [81] });

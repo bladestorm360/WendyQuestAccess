@@ -19,6 +19,8 @@ function interactionTiles(world, cancelled, includeBumps = false) {
     const here = new Uint16Array(world.cells.length);
     const bump = includeBumps ? new Uint16Array(world.cells.length) : null;
     const touch = new Uint16Array(world.cells.length);
+    const terminals = new Set();
+    let buttonTransfers;
     const boats = new Uint8Array(world.cells.length);
     for (const vehicle of world.vehicles || []) {
         const cell = indexOf(world, vehicle.x, vehicle.y);
@@ -31,6 +33,7 @@ function interactionTiles(world, cancelled, includeBumps = false) {
         if (cancelled()) break;
         if (event.erased || !event.action || ![0, 1, 2].includes(event.trigger) ||
             !Number.isInteger(event.id) || event.id < 1 || event.id > MAX_EVENTS) continue;
+        if (event.mapTransfer) terminals.add(event.id);
         const layer = event.normal ? normal : event.trigger === 0 ? here : touch;
         const [left, top, right, bottom] = bounds(world, event);
         for (let y = top; y <= bottom; y++) {
@@ -38,11 +41,20 @@ function interactionTiles(world, cancelled, includeBumps = false) {
             for (let x = left; x <= right; x++) {
                 const cell = y * world.width + x;
                 if (!layer[cell]) layer[cell] = event.id;
+                if (event.mapTransfer && !event.normal && event.trigger === 0) {
+                    buttonTransfers ??= new Uint16Array(world.cells.length);
+                    if (!buttonTransfers[cell]) buttonTransfers[cell] = event.id;
+                }
                 if (bump && event.normal && event.trigger !== 0 && !bump[cell]) bump[cell] = event.id;
             }
         }
     }
-    return { normal, here, touch, bump, boats, aircraft };
+    if (buttonTransfers) for (let cell = 0; cell < touch.length; cell++) {
+        if ((cell & 63) === 0 && cancelled()) break;
+        // Actual native touch priority wins an overlapping button entrance.
+        if (!touch[cell]) touch[cell] = buttonTransfers[cell];
+    }
+    return { normal, here, touch, bump, boats, aircraft, terminals };
 }
 
 function buttonEvent(world, tiles, cell, heading) {
@@ -440,7 +452,7 @@ function reachableApproaches(world, start, tiles, cancelled) {
     return { reached, events, bumps };
 }
 
-// A world-map destination can require leaving and re-entering that map.
+// A local destination can require leaving and re-entering its map.
 // Seed the transfer graph with actual native interaction approaches, never
 // the occupied floor trigger itself or an arbitrary neighboring component.
 function routeApproachPoints(geometry, snapshot, request, cancelled) {
@@ -771,6 +783,7 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
     if (request.field !== true || world.mode === 'airship')
         return finishEntry(world, route(world, start, goals, cancelled, area), entry);
     const stops = tiles.touch;
+    const terminalStops = tiles.terminals;
     let blockedApproach = false;
     const handoffs = new Set();
     let coveredGoals;
@@ -778,13 +791,21 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
     for (let cell = 0; cell < stops.length; cell++) {
         if ((cell & 63) === 0 && cancelled()) return { status: 'cancelled' };
         if (cell === start || !goals[cell] || !stops[cell] || stops[cell] === targetStop) continue;
+        if (terminalStops.has(stops[cell]) && stops[cell] !== request.event) {
+            // A covered approach is not permission to enter another map.
+            // Only an explicit graph plan may select that entrance itself.
+            goals[cell] = 0;
+            blockedApproach = true;
+            continue;
+        }
         if (!entry && request.handoffs?.includes(stops[cell])) handoffs.add(stops[cell]);
         coveredGoals ??= new Uint8Array(goals.length);
         coveredGoals[cell] = goals[cell];
         goals[cell] = 0;
         blockedApproach = true;
     }
-    if (!entry && goals[start] && stops[start] === targetStop) {
+    if (!entry && goals[start] && stops[start] === targetStop &&
+        world.events.find(event => event.id === targetStop)?.trigger !== 0) {
         const reenter = canReenter(world, start, stops, area);
         return reenter ? { ...trace(world, start, start, 1, null, cancelled), reenter: true } : { status: 'unreachable' };
     }
@@ -796,11 +817,9 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
         if (stops[goal] !== targetStop) return result;
         return beforeFloorEvent(world, result, targetStop);
     }
-    // A discovery walk stays on this map. Native entrances transfer away;
-    // crossing their painted tile cannot prove an onward local connection.
-    // Preserve all other event prerequisites and existing cross-map plans.
-    const discovery = world.mode === 'walk' && world.events.some(event => event.id === request.event && event.discoveryFor);
-    const terminalStops = discovery ? new Set(world.events.filter(event => event.mapTransfer).map(event => event.id)) : undefined;
+    // Native entrances terminate local transit for every destination.
+    // Verified graph routing selects an entrance as a goal; it never
+    // authorizes walking across its tile to an unrelated local target.
     const possible = route(world, start, goals, cancelled, area, stops, true, undefined, terminalStops);
     if (possible.status !== 'unreachable') return finishEntry(world, possible, entry);
     if (coveredGoals) {
