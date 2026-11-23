@@ -2,6 +2,7 @@
 
 const { GATE_SWITCHES } = require('./terrain-control-labels.cjs');
 const { houseStair, houseBranches } = require('./transfer-events.cjs');
+const { numberedHouseName } = require('./map-banner');
 
 // Each locator describes the active page's native destination. The worker
 // still derives the interaction approach from live collision and priority.
@@ -431,6 +432,15 @@ function localDestination(root, event, page) {
         return { name: 'Computer', category: 'objects' };
     if (map === 106 && id === 19 && event._pageIndex === 0 && trigger === 0)
         return { name: 'Crowned skeleton', category: 'objects' };
+    // Generic town doors use the destination interior's stable house number,
+    // including both native Nuggedor variants. Keep named homes and shops.
+    // Only an unconditional direct transfer supplies this label; no route or
+    // native activation semantics change and future destinations stay gated.
+    if ((trigger===0 || trigger===1) && /^To(?:Generic)?House$/.test(root.$dataMap?.events?.[id]?.name || '')) {
+        const transfer=list.find(row=>row.code===201 && row.indent===0 && row.parameters[0]===0);
+        const name=transfer && numberedHouseName(transfer.parameters[1]);
+        if(name)return {name,category:'exits',...(trigger===1 && event._priorityType===1 ? {eventAction:'bump'} : {})};
+    }
     const townExit = chillcrestExit(root, event, page);
     if (townExit) return townExit;
     if (map === 134 && id === 10 && trigger === 0 && (event._pageIndex === 0 || event._pageIndex === 1))

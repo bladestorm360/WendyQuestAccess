@@ -32,6 +32,12 @@ const LOCAL_NAMES = Object.freeze({
     206: 'Island', 207: 'Island', 208: 'Island', 209: 'Nugget Mine entrance'
 });
 
+// Share the already established interior numbers with each town entrance.
+function numberedHouseName(id) {
+    const name=LOCAL_NAMES[id];
+    return / house [1-9]\d*$/.test(name || '') ? name : '';
+}
+
 function mapPlace(root) {
     const id = root.$gameMap?._mapId;
     const name = root.$dataMap?.displayName;
@@ -134,4 +140,4 @@ function createMapBannerObserver(root, host, notifications, fieldReady) {
     };
 }
 
-module.exports = { createMapBannerObserver, mapPlace };
+module.exports = { createMapBannerObserver, mapPlace, numberedHouseName };

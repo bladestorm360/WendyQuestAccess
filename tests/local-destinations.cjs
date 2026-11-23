@@ -7,7 +7,7 @@ const { questDestinationLabel } = require('../src/world/quest-destinations');
 const { readBookmarks } = require('../src/world/bookmark-records');
 const { solveRoute, findReachable } = require('../src/world/routes.cjs');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
-const { mapPlace } = require('../src/world/map-banner');
+const { mapPlace, numberedHouseName } = require('../src/world/map-banner');
 const { activeMovingEnemy, browse, createDestinationBrowser } = require('../src/world/destinations');
 
 async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read) {
@@ -51,6 +51,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     let enemyPages = 0;
     const maps = read('MapInfos.json').filter(Boolean);
     assert.equal(maps.length, 239);
+    const numberedDoors=new Set();
     let checked = 0;
     let fallbackCount = 0;
     let worldReturns = 0;
@@ -106,6 +107,16 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 const event = { _eventId: entry.id, _pageIndex: index, _trigger: page.trigger,
                     _priorityType: page.priorityType, _characterName: page.image.characterName };
                 const ordinary = eventTarget(root, 'walk', event, entry, page);
+                if(/^To(?:Generic)?House$/.test(entry.name) && [0,1].includes(page.trigger)) {
+                    const transfer=page.list.find(row=>row.code===201 && row.indent===0 && row.parameters[0]===0);
+                    const expected=transfer && numberedHouseName(transfer.parameters[1]);
+                    if(expected){
+                        assert.equal(ordinary?.name,expected,`numbered house ${id}/${entry.id}/${index}`);
+                        assert.equal(ordinary.category,'exits');
+                        numberedDoors.add(id+'/'+entry.id);
+                    }
+                }
+
                 if (page.trigger <= 1 && page.list.length === 2 && page.list[0].code === 214) {
                     assert.equal(ordinary, null, `erase-only page at map ${id} event ${entry.id}`);
                     cleanupPages[page.trigger]++;
@@ -172,6 +183,8 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
             }
         }
     }
+    assert.equal(numberedDoors.size,29,'all generic house entrances across six town areas and both Nuggedor states');
+    console.log('Verified29 numbered house entrances against the established interior labels across every map.');
     assert.equal(enemyPages, 206);
     assert.equal(fieldEnemyNames.size, 16);
     console.log('Verified ' + enemyPages + ' field encounter pages and ' + fieldEnemyNames.size +
