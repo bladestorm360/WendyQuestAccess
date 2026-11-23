@@ -4038,5 +4038,13 @@
   "assistance-chest": {
     "text": "A treasure chest appears in front of Dave's statue.",
     "beats": []
+  },
+  "momentum-collected": {
+    "text": "A momentum crystal appears and bounces, then flies into the Momentum meter.",
+    "beats": []
+  },
+  "momentum-full": {
+    "text": "A momentum crystal appears and bounces, then disappears in a small starburst with a breaking sound.",
+    "beats": []
   }
 }

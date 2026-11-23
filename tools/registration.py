@@ -143,7 +143,7 @@ def narration_leaving(scene=b'SceneManager._scene', event_entry=False, mode='pau
     }[mode]
     args = b',this,list,eventId' if event_entry else b',sceneClass' if mode == 'transition' else b''
     return (b'if(' + scene + b'?._wqaNarrationActive||' + scene + b'?._wqaNarrationLoading||'
-            + scene + b'?._wqaEnvironmentPending||' + scene + b'?._wqaReactionReceipts||Graphics._wqaNarrationContinuation)'
+            + scene + b'?._wqaEnvironmentPending||' + scene + b'?._wqaReactionReceipts||Graphics._wqaNarrationContinuation||Graphics._wqaNarrationSpeech)'
             + b'globalThis.WendyQuestAccessNarration' + handler + b'?.(' + scene + args + b');')
 
 
@@ -1194,6 +1194,12 @@ def window_notification(original):
     # only attached inventory-vitals digits; later setText may dirty the
     # next animation value while these exact glyphs remain visible.
     return insert(original, WINDOW_SHA, {
+        # Crystal.update has finished positioning this native phase-zero
+        # sprite; the optional observer confirms actual postrender visibility.
+        103673: b'if(this.phase===0&&!this._wqaMomentumNarrationSeen&&Graphics._wqaNarrationEnabled&&'
+                b'SceneManager._scene?._wqaBattleStarted&&!SceneManager._nextScene&&!SceneManager._exiting&&'
+                b'!SceneManager._wqaNativeAutosaves&&!Graphics._wqaResize)'
+                b'this._wqaMomentumNarrationSeen=globalThis.WendyQuestAccessMomentumCrystal?.(SceneManager._scene,this)===true;',
         119201: b';{const wqaScene=globalThis.SceneManager?._scene;'
                 b'const wqaHud=wqaScene?._wqaMenuStatus;'
                 b'if(wqaHud&&wqaHud===wqaScene._statusWindow&&'

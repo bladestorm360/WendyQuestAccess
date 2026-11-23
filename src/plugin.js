@@ -148,12 +148,19 @@ function boot(root, nodeRequire, nodeProcess) {
                 return new Worker(script, { workerData: admission });
             }
         };
+        host.descriptionFlowChanged=enabled=>root.Graphics._wqaNarrationSpeech=enabled;
         const speech = createRenderer(host, !!root.indexedDB);
+        host.describeNarration=speech.notifications.describe;
+        host.pauseNarrationSpeech=speech.pauseDescriptions;
+        host.resumeNarrationSpeech=speech.resumeDescriptions;
+        host.cancelNarrationSpeech=speech.cancelDescriptions;
         const { notifications } = speech;
         let audioPreferences = {};
         let battlePreferences = {};
         let navigationPreferences = {};
         let speechPreferences = {};
+        const refreshNarration=()=>root.Graphics._wqaNarrationEnabled=!!(audioPreferences.narration?.enabled&&
+            (speechPreferences.descriptionVoice==='nvda'?speechPreferences.enabled:audioPreferences.enabled&&audioPreferences.narration.volume>0));
         host.navigationPreferences = () => navigationPreferences;
         host.bookmarks = () => settings?.bookmarkEntries() || [];
         audio = createAudio(host);
@@ -316,7 +323,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 navigationPreferences = value;
             },
             speechChanged(value, owner) {
-                speechPreferences = value;
+                speechPreferences = value;refreshNarration();
                 speech.setSpeechEnabled(value.enabled, () => owner && controlContext() === owner &&
                     owner.scene._wqaSettingsActive && !host.screenFading());
             },
@@ -341,9 +348,9 @@ function boot(root, nodeRequire, nodeProcess) {
                 if (master || value.battleTiming !== audioPreferences.battleTiming ||
                     value.battleTimingVolume !== audioPreferences.battleTimingVolume) battleCues.retire();
                 if (value.enabled !== audioPreferences.enabled || value.narration !== audioPreferences.narration)
-                    narration.leave();
+                    narration.cancel();
                 audioPreferences = value;
-                root.Graphics._wqaNarrationEnabled = value.enabled && value.narration.enabled && value.narration.volume > 0;
+                refreshNarration();
                 root.Graphics._wqaWallEnabled = value.enabled &&
                     (value.wall && value.wallVolume > 0 || value.wallBump && value.wallBumpVolume > 0);
                 root.Graphics._wqaFootstepsEnabled = value.enabled && value.footsteps && value.footstepVolume > 0;
@@ -362,7 +369,7 @@ function boot(root, nodeRequire, nodeProcess) {
             },
             suspend(scene) {
                 battleSpeech.leave(scene);
-                narration.leave(scene);
+                narration.cancel(scene);
                 interaction.leave(scene);
                 wall.leave(scene);
                 footsteps.leave(scene);
@@ -391,10 +398,12 @@ function boot(root, nodeRequire, nodeProcess) {
             capturePads: () => root.Input?._pollGamepads?.(),
             resume(scene) { if (host.manager._scene === scene) root.WendyQuestAccessResizeReady(); },
             repeat() {
+                speech.cancelDescriptions();
                 try { return dialogue.repeatPage() || credits.command(host.manager._scene, 'details') || battleLogAction(); }
                 catch { return false; }
             },
             menuCommand(action, nativeDirection) {
+                speech.cancelDescriptions();
                 const scene = host.manager._scene;
                 try {
                     if (action === 'battleAppearance') return !battleTargets.controlOwner(scene) &&
@@ -412,8 +421,8 @@ function boot(root, nodeRequire, nodeProcess) {
                 }
                 catch { return false; }
             },
-            readWendyStatus() { try { return wendyStatus(); } catch { return false; } },
-            fieldCommand(key) { try { return fieldAction(key); } catch { return false; } }
+            readWendyStatus() { speech.cancelDescriptions();try { return wendyStatus(); } catch { return false; } },
+            fieldCommand(key) { speech.cancelDescriptions();try { return fieldAction(key); } catch { return false; } }
         });
         controller = createController({
             schedule: host.schedule, context: controlContext, bindings: settings.controllerBindings, nativeButton,
@@ -451,7 +460,7 @@ function boot(root, nodeRequire, nodeProcess) {
         });
         for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
             battleSpeech.leave();
-            narration.leave();
+            narration.cancel();
             splash.leave(host.manager._scene);
             interaction.leave(host.manager._scene);
             treasure.leave(host.manager._scene);
@@ -719,6 +728,10 @@ function boot(root, nodeRequire, nodeProcess) {
             root.document.hasFocus() ? scene : null;
     }
 
+    root.WendyQuestAccessMomentumCrystal=function(scene,sprite) {
+        try{return narration?.momentumAccepted(scene,sprite);}catch{return false;}
+    };
+
     root.WendyQuestAccessMomentumChanged = function (scene, hud) {
         try {
             const manager = root.SceneManager;
@@ -831,58 +844,58 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessNarrationAccepted = function (scene, interpreter, actor, switched, visual) {
-        try { narration?.accepted(scene, interpreter, actor, switched, visual); } catch { narration?.leave(scene); }
+        try { narration?.accepted(scene, interpreter, actor, switched, visual); } catch { narration?.cancel(scene); }
     };
 
     root.WendyQuestAccessScreenJolt = function (scene, interpreter, duration) {
-        try { narration?.jolt(scene, interpreter); narration?.environmentStart(scene, interpreter); } catch { narration?.leave(scene); }
+        try { narration?.jolt(scene, interpreter); narration?.environmentStart(scene, interpreter); } catch { narration?.cancel(scene); }
     };
 
     root.WendyQuestAccessNarrationEventEntry = function (scene, interpreter, list, eventId) { narration?.entry(scene, interpreter, list, eventId); };
 
     root.WendyQuestAccessQuestionsPresent = function (scene) {
-        try { narration?.questionsPresent(scene); } catch { narration?.leave(scene); }
+        try { narration?.questionsPresent(scene); } catch { narration?.cancel(scene); }
     };
 
     root.WendyQuestAccessTylerEntryPresent = function (scene) {
-        try { narration?.tylerEntry(scene); } catch { narration?.leave(scene); }
+        try { narration?.tylerEntry(scene); } catch { narration?.cancel(scene); }
     };
 
     root.WendyQuestAccessMechEntryPresent = function (scene) {
-        try { narration?.mechEntry(scene); } catch { narration?.leave(scene); }
+        try { narration?.mechEntry(scene); } catch { narration?.cancel(scene); }
     };
 
     root.WendyQuestAccessProloguePresent = function (scene) {
-        try { narration?.prologue(scene); } catch { narration?.leave(scene); }
+        try { narration?.prologue(scene); } catch { narration?.cancel(scene); }
     };
 
     root.WendyQuestAccessFinaleBattle = function (scene, interpreter) {
-        try { narration?.battleAccepted(scene, interpreter); } catch { narration?.leave(scene); }
+        try { narration?.battleAccepted(scene, interpreter); } catch { narration?.cancel(scene); }
     };
     root.WendyQuestAccessFinaleStones = function (scene, actor, sprite, stones) {
-        try { narration?.battleAccepted(scene, null, actor, sprite, stones); } catch { narration?.leave(scene); }
+        try { narration?.battleAccepted(scene, null, actor, sprite, stones); } catch { narration?.cancel(scene); }
     };
 
     root.WendyQuestAccessIdleNarration = function (scene) {
-        try { narration?.idle(scene); } catch { narration?.leave(scene); }
+        try { narration?.idle(scene); } catch { narration?.cancel(scene); }
     };
 
     root.WendyQuestAccessNarrationPresent = function (scene) {
-        try { narration?.present(scene); } catch { narration?.leave(scene); }
+        try { narration?.present(scene); } catch { narration?.cancel(scene); }
     };
 
     root.WendyQuestAccessNarrationWarm = function (scene) {
         if (!narration?.needsPack) return;
-        try { narration.warm(scene); } catch { narration.leave(scene); }
+        try { narration.warm(scene); } catch { narration.cancel(scene); }
     };
 
     root.WendyQuestAccessNarrationPausing = function (scene) { narration?.pause(scene); };
     root.WendyQuestAccessNarrationFading = function (scene) { narration?.pause(scene, true); };
     root.WendyQuestAccessNarrationTransition = function (scene, next) {
         if (next && (next === root.Scene_Map || next === root.Scene_Battle)) narration?.pause(scene);
-        else narration?.leave();
+        else narration?.cancel();
     };
-    root.WendyQuestAccessNarrationLeaving = function (scene) { narration?.leave(scene); };
+    root.WendyQuestAccessNarrationLeaving = function (scene) { narration?.cancel(scene); };
 
     root.WendyQuestAccessStepNavigationReady = function (scene) { field?.stepReady(scene); };
     root.WendyQuestAccessIdleInput = function (scene) { return field?.idleInput(scene); };
@@ -1027,7 +1040,7 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessResizeStarting = function () {
         battleSpeech?.leave();
-        narration?.leave();
+        narration?.cancel();
         titleWaiting = null;
         filesWaiting = null;
         fieldWaiting = null;

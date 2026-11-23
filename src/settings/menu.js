@@ -68,7 +68,7 @@ const ENGLISH_LOCALE = 'en-US';
 
 function normalizeSpeech(value) {
     return { enabled: value?.enabled !== false, autodetail: value?.autodetail === true,
-        indexing: value?.indexing === true, language: value?.language === 'en' ? 'en' : 'auto' };
+        indexing: value?.indexing === true, descriptionVoice:value?.descriptionVoice==='nvda'?'nvda':'recorded', language: value?.language === 'en' ? 'en' : 'auto' };
 }
 
 function createSettingsMenu(root, host) {
@@ -253,7 +253,7 @@ function createSettingsMenu(root, host) {
                 'Use Read details on the field for the full quest tracker. Movement keys stay available on the field. In dialogue, Read details describes the speaker or the item icon on an acquisition message.',
                 'Use Read details for the displayed World Atlas, cavern and ruins maps, and ending and credit cards.',
                 'Use Read details for inventory, Battle Bag and shop items, equipment comparisons, purchase quantities, the last manual save result, and coupon responses.',
-                'Under Audio, enable Cutscene descriptions for an independent voice during selected story animations. Adjust its speed and volume there.'
+                'Under Audio, enable Cutscene descriptions. Choose recorded voice or NVDA under Speech. Recording speed and volume are under Audio; NVDA uses its own voice settings.'
             ],
             Pathfinder: [
                 'Entering a category selects its nearest destination. Its distance order and your selection stay fixed as you move, until you switch categories again.',
@@ -318,6 +318,8 @@ function createSettingsMenu(root, host) {
             item.setAttribute('aria-pressed', String(speech[key]));
             if (selection === key || !focused) focused = item;
         }
+        const descriptionVoice=button(owner,'Visual description voice, '+(speech.descriptionVoice==='nvda'?'NVDA':'recorded'),()=>
+            change(owner,{...speech,descriptionVoice:speech.descriptionVoice==='nvda'?'recorded':'nvda'},'descriptionVoice','speech'));
         // This Steam build presents English only. Auto checks the game's locale, with English as the fallback.
         const locale = root.$dataSystem?.locale;
         const knownEnglish = typeof locale === 'string' && /^en(?:[-_]us)?$/i.test(locale);
@@ -326,7 +328,7 @@ function createSettingsMenu(root, host) {
         const languageButton = button(owner, 'Language, ' + language, () =>
             change(owner, { ...speech, language: automatic ? 'en' : 'auto' }, 'language', 'speech'));
         button(owner, 'Back', () => showRoot(owner, 'speech'));
-        (selection === 'language' ? languageButton : focused).focus();
+        (selection==='descriptionVoice'?descriptionVoice:selection === 'language' ? languageButton : focused).focus();
     }
 
     function previewAudio(owner, bearing, cue, gain, pitch) {

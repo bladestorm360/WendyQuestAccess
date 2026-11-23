@@ -17,6 +17,7 @@ let active = null;
 let silence = 0;
 let failed = false;
 let line = '';
+const receipt=(status,message,retry=false)=>parentPort.postMessage(message?.preserveDescription?{status,sequence:message.sequence,retry}:status);
 
 function fail() {
     if (failed) return;
@@ -42,15 +43,15 @@ function pump() {
     while (queue.length) {
         const message = queue.shift();
         if (Atomics.load(word, 0) !== message.epoch || (message.brailleOnly === true && !brailleAvailable)) {
-            parentPort.postMessage('discarded');
+            receipt('discarded',message,Atomics.load(word,0)!==message.epoch);
             continue;
         }
         const payload = formatSpeech(message);
         if (!payload || Atomics.load(word, 0) !== message.epoch) {
-            parentPort.postMessage('discarded');
+            receipt('discarded',message,Atomics.load(word,0)!==message.epoch);
             continue;
         }
-        active = { epoch: message.epoch, expected: 'P', braille: message.brailleOnly === true };
+        active = { epoch: message.epoch, expected: 'P', braille: message.brailleOnly === true, message };
         const command = active.braille ? 'L' : message.append === true ? 'A' : 'S';
         child.stdin.write(`${command}${payload}\n`);
         return;
@@ -100,10 +101,11 @@ function begin() {
                 grant();
             } else {
                 const control = active.silence;
+                const message=active.message;
                 active = null;
                 if (control) {
                     if (status !== 'D') parentPort.postMessage(status === 'Q' ? 'silenced' : 'silenceUnavailable');
-                } else parentPort.postMessage(status === 'S' ? 'ack' : 'discarded');
+                } else receipt(status === 'S' ? 'ack' : 'discarded',message,Atomics.load(word,0)!==message.epoch);
             }
         }
         pump();
@@ -115,8 +117,7 @@ parentPort.on('message', message => {
     if (message.kind === 'cancel') {
         silence = 0;
         while (queue.length) {
-            queue.shift();
-            parentPort.postMessage('discarded');
+            receipt('discarded',queue.shift(),true);
         }
     } else if (message.kind === 'silence') {
         if (child && Number.isInteger(message.epoch) && message.epoch > 0 && Atomics.load(word, 0) === message.epoch)
@@ -126,7 +127,7 @@ parentPort.on('message', message => {
         queue.push(message);
         if (!child) begin();
     } else {
-        parentPort.postMessage('discarded');
+        receipt('discarded',message);
     }
     pump();
 });

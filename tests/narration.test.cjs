@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 145);
+assert.equal(Object.keys(clips).length, 147);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -515,7 +515,7 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 145 clips, 294 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 147 clips, 294 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
 
 require('./finale-narration.cjs')(fixture, commandContext, stock);
 require('./screen-jolt.cjs')(fixture, commandContext, stock);
@@ -527,3 +527,42 @@ require('./question-narration.cjs')(fixture, commandContext, stock, emoteMethods
 require('./narration-continuity.cjs')(fixture, commandContext, emoteMethods);
 
 require('./tyler-entry.cjs')(fixture, commandContext, stock, emoteMethods);
+
+// Momentum descriptions use the native branch, actual rendered crystal and
+// the established FIFO; a later crystal cannot interrupt the first recording.
+{
+ const f=fixture(12,8,0);f.scene._wqaBattleStarted=true;
+ f.scene._wqaMapRestored=false;const field=f.spriteset._battleField={};
+ const sprite=full=>({parent:field,phase:0,_full:full,_frame:{x:0,y:32,width:32,height:32},
+  bitmap:{isReady:()=>true},worldVisible:true,worldAlpha:1,texture:{valid:true},worldTransform:{tx:120,ty:110}});
+ const normal=sprite(false),capped=sprite(true);
+ assert(f.narration.momentumAccepted(f.scene,normal));assert(f.narration.momentumAccepted(f.scene,capped));
+ assert.equal(f.played.length,0);f.frame();assert.equal(f.played[0].id,'momentum-collected');
+ normal.phase=capped.phase=2;f.frame();assert.equal(f.played.length,1);
+ f.played[0].emit('ended');f.frame();assert.equal(f.played[1].id,'momentum-full');
+ assert.match(cues['momentum-collected'].text,/flies into the Momentum meter/);
+ assert.match(cues['momentum-full'].text,/momentum crystal.*starburst.*breaking sound/);
+ f.narration.leave(f.scene);assert(f.played[1].paused);
+ console.log('Verified both rendered Momentum branches and uninterrupted recorded-caption order.');
+}
+
+// NVDA uses original captions without reading the pack or creating audio.
+{
+ const f=fixture(13,5,6,false),captions=[];
+ f.host.speechPreferences=()=>({descriptionVoice:'nvda',enabled:true});
+ f.host.describeNarration=(text,ready)=>{assert(ready());captions.push(text);return true;};
+ f.root.XMLHttpRequest=class{constructor(){throw Error('NVDA must not read recordings');}};
+ f.root.Audio=class{constructor(){throw Error('NVDA must not create audio');}};
+ f.playback.enabled=false;f.playback.narration.volume=0;
+ const sleeper=f.actor(17);f.interpreter._index=16;
+ assert(f.narration.accepted(f.scene,f.interpreter,sleeper.candidate,undefined,10));
+ f.balloon(10,sleeper.candidate,sleeper.sprite);f.frame();
+ assert.equal(captions[0],cues['sleeping-wendy'].text);assert.equal(f.played.length,0);
+ assert.equal(f.narration.needsPack,false);
+ f.narration.cancel(f.scene);
+ f.scene._wqaBattleStarted=true;f.scene._wqaMapRestored=false;
+ const field=f.spriteset._battleField={},crystal={parent:field,phase:0,_full:true,_frame:{y:32},
+  bitmap:{isReady:()=>true},worldVisible:true,worldAlpha:1,texture:{valid:true},worldTransform:{tx:10,ty:10}};
+ assert(f.narration.momentumAccepted(f.scene,crystal));f.frame();assert.equal(captions[1],cues['momentum-full'].text);
+ console.log('Verified NVDA story/Momentum captions with sounds muted, no pack reads or Audio objects.');
+}

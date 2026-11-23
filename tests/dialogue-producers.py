@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
 from registration import (BATTLE_REL, CORE_REL, MANAGERS_REL, MAP_REL, MESSAGE_OWNER_REL, OBJECTS_REL, STATS_REL, WINDOW_REL,
                           WINDOWS_REL, battle_notification, managers_notification, map_notification,
-                          objects_notification, windows_notification)
+                          objects_notification, windows_notification, window_notification)
 
 decode = runpy.run_path(str(ROOT / 'tools' / 'inspect-plugin.py'))['decode']
 between = runpy.run_path(str(ROOT / 'tests' / 'file-producers.py'))['between']
@@ -109,8 +109,8 @@ for klass, name, following in [
     ('Game_Picture', 'initText', 'Game_Picture'),
 ]:
     methods.append(between(custom, f"{klass}['prototype']['{name}']=function(", f'}},{following}[') + '};')
-platform, _ = decode((installed / 'package.nw/js/plugins/MonkeyWrenchMZ.js').read_text(encoding='utf8'))
-for name, tail in [('setOnComplete', 'update'), ('update', 'updateBouncePhase')]:
+platform, _ = decode(window_notification((installed / WINDOW_REL).read_bytes()).decode('utf8'))
+for name, tail in [('initialize','setOnComplete'),('setOnComplete', 'update'), ('update', 'updateBouncePhase'),('updateBouncePhase','updateUIPhase')]:
     methods.append(between(platform, f"Sprite_MomentumCrystal['prototype']['{name}']=function(",
                            f"}},Sprite_MomentumCrystal['prototype']['{tail}']") + '};')
 methods.append(between(platform, "Sprite_Text['prototype']['setText']=function(",

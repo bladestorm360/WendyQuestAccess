@@ -608,6 +608,7 @@ const interval = setInterval(() => {
             if (mute.textContent !== 'Speech enabled, off' || mute.getAttribute('aria-pressed') !== 'false')
                 throw Error('The persisted speech switch was not accessible while muted');
             const speechChoices = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
+            if(!speechChoices.includes('Visual description voice, NVDA'))throw Error('NVDA description preference did not persist');
             if (!speechChoices.includes('Autodetail, on') || !speechChoices.includes('Menu indexing, on'))
                 throw Error('The independent menu speech preferences were not restored');
             if (!speechChoices.includes('Language, English') || document.querySelector('dialog').lang !== 'en-US')
@@ -1280,6 +1281,7 @@ const interval = setInterval(() => {
         } else if (endingStep === 5 && fs.existsSync(receipt + '.menu-review-first')) {
             tap('v', 'KeyV');
             choose('Speech');
+            if(![...document.querySelectorAll('dialog button')].some(b=>b.textContent==='Visual description voice, recorded'))throw Error('Recorded descriptions are not the update-safe default');
             choose('Autodetail, off');
             endingStep++;
         } else if (endingStep === 6 && menuStatus() === 'Speech settings saved') {
@@ -2440,8 +2442,33 @@ const interval = setInterval(() => {
             narrationFrame();
             if (!narrationAudio.paused || narrationAudio.getAttribute('src')) throw Error('Leaving idle kept the description active');
             fs.writeFileSync(receipt + '.idle-narration-ms', String(performance.now() - narrationStarted));
-            clearInterval(interval);
-            nw.App.quit();
+            WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const title=SceneManager._scene=Graphics.app.stage=new Scene_Title();
+            WendyQuestAccessTitleReady(title);Graphics.app.renderer.emit('postrender');
+            tap('v','KeyV');choose('Speech');choose('Visual description voice, recorded');endingStep=198;
+        } else if(endingStep===198&&menuStatus()==='Speech settings saved') {
+            if(document.activeElement.textContent!=='Visual description voice, NVDA')throw Error('NVDA voice focus was lost');
+            choose('Speech enabled, off');endingStep=199;
+        } else if(endingStep===199&&menuStatus()==='Speech settings saved') {
+            tap('Escape');tap('Escape');WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const scene=SceneManager._scene=Graphics.app.stage={_wqaBattleStarted:true,_started:true,_active:true,
+                _fadeDuration:0,_fadeOpacity:0,_spriteset:{_battleField:{}}};
+            $gameScreen._brightness=255;$gameScreen._fadeOutDuration=0;$gamePlayer._transferring=false;
+            $gameMap._needsTilemapRefresh=false;
+            const crystal={parent:scene._spriteset._battleField,phase:0,_full:true,_frame:{y:32},
+                bitmap:{isReady:()=>true},worldVisible:true,worldAlpha:1,texture:{valid:true},worldTransform:{tx:10,ty:10}};
+            const priorAudio=narrationAudio;
+            if(!Graphics._wqaNarrationEnabled||!WendyQuestAccessMomentumCrystal(scene,crystal))throw Error('Packaged NVDA caption was not admitted');
+            WendyQuestAccessNarrationPresent(scene);Graphics.app.renderer.emit('postrender');
+            if(narrationAudio!==priorAudio)throw Error('NVDA created a recorded voice');endingStep=200;
+        } else if(endingStep===200&&fs.existsSync(receipt+'.nvda-caption')) {
+            if(!Graphics._wqaNarrationSpeech)throw Error('NVDA continuation gate was not armed');
+            WendyQuestAccessNarrationLeaving(SceneManager._scene);WendyQuestAccessSceneLeaving(SceneManager._scene);
+            const title=SceneManager._scene=Graphics.app.stage=new Scene_Title();
+            WendyQuestAccessTitleReady(title);Graphics.app.renderer.emit('postrender');
+            tap('v','KeyV');choose('Speech');choose('Speech enabled, on');endingStep=201;
+        } else if(endingStep===201&&menuStatus()==='Speech settings saved') {
+            clearInterval(interval);nw.App.quit();
         }
     }
 }, 40);
@@ -2465,13 +2492,18 @@ const { parentPort, workerData } = require('worker_threads');
 const fs = require('fs');
 const { formatSpeech } = require('./speech-text.cjs');
 const records = [];
+const ack=message=>parentPort.postMessage(message.preserveDescription?{status:'ack',sequence:message.sequence,retry:false}:'ack');
 parentPort.on('message', message => {
     const receipt = require('path').join(__dirname, '..', 'receipt.json');
     if (message.kind === 'cancel') return;
+    if(message.kind==='narrationCaption'){
+        if(!message.append||!message.preserveDescription)throw Error('NVDA caption did not use protected append');
+        fs.writeFileSync(receipt+'.nvda-caption',formatSpeech(message));ack(message);return;
+    }
     if (message.kind === 'battleLog' && message.lines?.[0] === 'Wendy prepares to counterattack.') {
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
             fs.writeFileSync(receipt + '.battle-clapback', formatSpeech(message));
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (message.kind === 'battleLog' && ["Here's.", 'The.', 'Beef!!!'].includes(message.lines?.[0])) {
@@ -2482,7 +2514,7 @@ parentPort.on('message', message => {
             throw Error('Word did not use its overlay speech context');
         fs.writeFileSync(file + '-epoch', String(message.epoch));
         fs.appendFileSync(file, (previous ? ' ' : '') + formatSpeech(message));
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (message.kind === 'fieldStatus') {
@@ -2490,7 +2522,7 @@ parentPort.on('message', message => {
         if (state) {
             if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
                 fs.writeFileSync(receipt + '.filter-' + state, message.name);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
     }
@@ -2510,24 +2542,24 @@ parentPort.on('message', message => {
         } else if (message.kind === 'title') {
             fs.writeFileSync(receipt + '.restored-title', '');
         }
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (fs.existsSync(receipt + '.credits-stage')) {
         const label = { dialoguePage: 'page', controllerStatus: 'mode', menuReview: 'review' }[message.kind];
         if (label) fs.writeFileSync(receipt + '.credits-' + label, formatSpeech(message));
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (fs.existsSync(receipt + '.map-diagram-stage')) {
         const label = { mapBanner: 'title', menuDetails: 'details', controllerStatus: 'mode', menuReview: 'review' }[message.kind];
         if (label) fs.writeFileSync(receipt + '.map-diagram-' + label, formatSpeech(message));
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (fs.existsSync(receipt + '.autosave-notice-stage')) {
         if (message.kind === 'mapBanner') fs.appendFileSync(receipt + '.autosave-notice', formatSpeech(message) + '\\n');
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (fs.existsSync(receipt + '.field-vitals-stage')) {
@@ -2536,7 +2568,7 @@ parentPort.on('message', message => {
             fs.writeFileSync(receipt + (fs.existsSync(receipt + '.field-vitals-keyboard') ? '.field-vitals-h' : '.field-vitals-full'), speech);
         if (message.kind === 'fieldStatus' && speech === 'Mod mode.')
             fs.writeFileSync(receipt + '.field-vitals-mode', speech);
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (fs.existsSync(receipt + '.closing-pass')) {
@@ -2547,13 +2579,13 @@ parentPort.on('message', message => {
             if (message.kind === 'menuDetails')
                 fs.writeFileSync(receipt + (message.append ? '.coupon-response-auto' : '.coupon-response-details'), speech);
             if (message.kind === 'menuReview') fs.writeFileSync(receipt + '.coupon-response-copy', speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (fs.existsSync(receipt + '.coupon-list-stage')) {
             if (message.kind === 'menuFocus')
                 fs.writeFileSync(receipt + (message.enabled ? '.coupon-list-stone' : '.coupon-list-locked'), speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (fs.existsSync(receipt + '.menu-vitals-stage')) {
@@ -2562,7 +2594,7 @@ parentPort.on('message', message => {
                 fs.writeFileSync(receipt + (fs.existsSync(receipt + '.menu-vitals-keyboard') ? '.menu-vitals-h' : '.menu-vitals-full'), speech);
             if (message.kind === 'controllerStatus' && speech === 'Mod mode.')
                 fs.writeFileSync(receipt + '.menu-vitals-mode', speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (fs.existsSync(receipt + '.shop-stage')) {
@@ -2570,7 +2602,7 @@ parentPort.on('message', message => {
             if (message.kind === 'menuFocus') fs.writeFileSync(receipt + (quantity ? '.shop-quantity' : '.shop-focus'), speech);
             if (message.kind === 'menuDetails' && !message.append)
                 fs.writeFileSync(receipt + (quantity ? '.shop-quantity-details' : '.shop-details'), speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (fs.existsSync(receipt + '.manual-save-stage')) {
@@ -2579,7 +2611,7 @@ parentPort.on('message', message => {
                 fs.writeFileSync(receipt + suffix, speech);
             }
             if (message.kind === 'menuDetails') fs.writeFileSync(receipt + '.manual-save-details', speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (fs.existsSync(receipt + '.battle-stage')) {
@@ -2589,7 +2621,7 @@ parentPort.on('message', message => {
                 if (fs.existsSync(receipt + '.battle-formation')) throw Error('Formation was spoken again');
                 fs.writeFileSync(receipt + '.battle-formation', speech);
                 fs.writeFileSync(receipt + '.battle-opening-epoch', String(message.epoch));
-                parentPort.postMessage('ack');
+                ack(message);
                 return;
             }
             if (message.kind === 'dialoguePage' && speech === 'Synthetic victory reward.')
@@ -2598,7 +2630,7 @@ parentPort.on('message', message => {
                 if (!message.append || String(message.epoch) !== fs.readFileSync(receipt + '.battle-victory-epoch', 'utf8'))
                     throw Error('Victory Momentum did not append to the rewards');
                 fs.writeFileSync(receipt + '.victory-momentum', speech);
-                parentPort.postMessage('ack');
+                ack(message);
                 return;
             }
             if (message.kind === 'menuFocus' && !target && !fs.existsSync(receipt + '.battle-focus') &&
@@ -2617,7 +2649,7 @@ parentPort.on('message', message => {
                 message.kind === 'dialoguePage' ? 'outcome' :
                 message.kind === 'controllerStatus' ? 'mode' : '';
             if (suffix) fs.writeFileSync(receipt + prefix + suffix, speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (fs.existsSync(receipt + '.cross-map-stage')) {
@@ -2636,7 +2668,7 @@ parentPort.on('message', message => {
                 fs.writeFileSync(receipt + '.cross-map-entrance', speech);
             if (speech === 'You are here.' && fs.existsSync(receipt + '.cross-map-entrance'))
                 fs.writeFileSync(receipt + '.cross-map-arrived', speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (fs.existsSync(receipt + '.bookmark-stage')) {
@@ -2648,20 +2680,20 @@ parentPort.on('message', message => {
                 fs.writeFileSync(receipt + '.bookmark-arrival', speech);
             if (message.kind === 'fieldTarget' && message.name.includes('Synthetic quest anchor'))
                 fs.writeFileSync(receipt + '.bookmark-entity', speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (fs.existsSync(receipt + '.quest-navigation-stage')) {
             if (message.kind === 'fieldTarget') fs.writeFileSync(receipt + '.quest-nav-target', speech);
             if (message.kind === 'routeDirections') fs.writeFileSync(receipt + '.quest-nav-route', speech);
             if (message.kind === 'fieldStatus') fs.writeFileSync(receipt + '.quest-nav-unavailable', speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (fs.existsSync(receipt + '.quest-stage')) {
             if (fs.existsSync(receipt + '.quest-restore-stage')) {
                 if (message.kind === 'questFocus') fs.writeFileSync(receipt + '.quest-restore-focus', speech);
-                parentPort.postMessage('ack');
+                ack(message);
                 return;
             }
             if (message.kind === 'questFocus')
@@ -2670,7 +2702,7 @@ parentPort.on('message', message => {
                 fs.writeFileSync(receipt + (message.append ? '.quest-detail-auto' : '.quest-detail'), speech);
             if (message.kind === 'fieldStatus' && speech === 'Mod mode.')
                 fs.writeFileSync(receipt + '.quest-mode', speech);
-            parentPort.postMessage('ack');
+            ack(message);
             return;
         }
         if (message.kind === 'menuFocus' || message.kind === 'menuDetails') {
@@ -2680,13 +2712,13 @@ parentPort.on('message', message => {
             (message.position === 1 ? '.menu-review-first' : '.menu-review-second'), speech);
         if (message.kind === 'controllerStatus' && speech === 'Mod mode.')
             fs.writeFileSync(receipt + '.menu-mode', speech);
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (message.kind === 'fieldStatus' && message.name === 'Autowalk on.') {
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
             fs.writeFileSync(receipt + '.autowalk-on', formatSpeech(message));
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (message.kind === 'fieldStatus' && ['Walking.', 'Arrived.'].includes(message.name)) {
@@ -2697,7 +2729,7 @@ parentPort.on('message', message => {
                 speech: formatSpeech(message), epoch: message.epoch, sequence: message.sequence, append: !!message.append
             }));
         }
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (fs.existsSync(receipt + '.autowalk') && !fs.existsSync(receipt + '.autowalk-save') &&
@@ -2708,7 +2740,7 @@ parentPort.on('message', message => {
                 speech: formatSpeech(message), epoch: message.epoch, sequence: message.sequence, append: !!message.append
             }));
         }
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if ((message.kind === 'routeDirections' && message.name === 'Synthetic wall' && fs.existsSync(receipt + '.autowalk')) ||
@@ -2716,26 +2748,26 @@ parentPort.on('message', message => {
         const suffix = message.kind === 'routeDirections' ? '.autowalk-path' : '.autowalk-stop';
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
             fs.writeFileSync(receipt + suffix, formatSpeech(message));
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (message.kind === 'interactionPrompt') {
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch)
             fs.writeFileSync(receipt + '.interaction-prompt', formatSpeech(message));
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     if (message.kind === 'mapDescription') {
         const description = formatSpeech(message);
         if (Atomics.load(new Int32Array(workerData), 0) === message.epoch && description.includes('French Fry Forest'))
             fs.writeFileSync(receipt + '.field-description', description);
-        parentPort.postMessage('ack');
+        ack(message);
         return;
     }
     records.push({ sameEpoch: Atomics.load(new Int32Array(workerData), 0) === message.epoch,
         epoch: message.epoch, name: message.name, kind: message.kind, slot: message.slot, empty: message.empty,
         text: message.text, append: message.append, speech: formatSpeech(message) });
-    parentPort.postMessage('ack');
+    ack(message);
     if (message.kind === 'title') {
         const titleCount = records.filter(record => record.kind === 'title').length;
         fs.writeFileSync(receipt + ['.title', '.returned-title', '.controller-returned-title'][titleCount - 1], '');
@@ -2984,6 +3016,7 @@ def main():
             'cross-map-browse': 'Bookmarks, Return marker. Saved on another map, on foot.',
             'cross-map-next': '1 east, take exit to Connecting shore.',
             'cross-map-arrived': 'You are here.',
+            'nvda-caption': 'A momentum crystal appears and bounces, then disappears in a small starburst with a breaking sound.',
             'battle-formation': 'Enemy formation. 1 Synthetic archer.',
             'battle-focus': 'Synthetic hero, Battle commands, Synthetic guard, 1 of 1',
             'battle-companion-focus': 'Synthetic companion, Battle commands, Synthetic guard, 1 of 1',

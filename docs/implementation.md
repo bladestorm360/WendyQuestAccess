@@ -165,3 +165,8 @@ Open **F8 → Help** and choose Menus and reading, Pathfinder, Battle or Control
 
 
 November 22 save confirmation follow-up. The deletePrompt transport kind now uses the same bounded literal-label formatting as fileLabel. Its former invented question mark and Choose Delete or Cancel sentence are removed. No native cursor, input, deletion or storage behavior changes. The file fixture verifies each initially selected native option, changed focus, exact text for the native out-of-range fallback, unchanged deletion-progress retirement and no save deletion merely from observation.
+
+
+### Confirmed NVDA descriptions across output contexts
+
+The optional [NVDA description path](cutscene-description.md#nvda-caption-output-and-ordering) uses the existing bounded renderer and speech worker. Protected copied records carry their own sequence, and only epoch-retirement rejection permits replay; provider acceptance is the irreversible admission boundary. All old-epoch receipts settle before a new-epoch drain. Native narration pause/resume gates own loading suspension even after the visual cue has retired. Current scene readiness and explicit user cancellation remain renderer-owned, while all formatting/provider calls stay on the existing worker/helper. The PRISM binary, pipe commands, normal speech behavior and eight-record cap are preserved. No timed speech-completion approximation or new frame polling is used.

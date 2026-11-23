@@ -21,8 +21,8 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//145 clips, including the clarified sleep caption;6KiB growth is measured.
-const PACK_LIMIT = 1681 * 1024;
+//147 original recordings; measured pack 1,768,755 bytes.
+const PACK_LIMIT = 1728 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -68,14 +68,18 @@ function createNarration(root, host, preferences) {
             !!root.$gameMap && !root.$gameMap._needsTilemapRefresh && host.hasFocus());
     }
 
+    function nvda(){return host.speechPreferences?.().descriptionVoice==='nvda';}
+    function voiceReady(){return nvda()||!!pack;}
+
     function enabled() {
         const audio = preferences();
-        return audio.enabled && audio.narration?.enabled && audio.narration.volume > 0;
+        return audio.narration?.enabled && (nvda()?host.speechPreferences().enabled:audio.enabled&&audio.narration.volume>0);
     }
 
     function warm(scene) {
         const prologue = [188, 115].includes(root.$gameMap?._mapId);
-        if (!enabled() || pack || loading || failed || !ready(scene) || !prologue &&
+        const battle=scene?._wqaBattleStarted&&ready(scene,false,true);
+        if (nvda() || !enabled() || pack || loading || failed || !ready(scene,false,battle) || !prologue && !battle &&
             (root.$gameMap._interpreter?._list || !scene._wqaFieldReady && !idleReady(scene))) return;
         // Chromium reads the fixed package path asynchronously in a settled
         // field frame. Native boundaries retire the request before loading.
@@ -157,6 +161,7 @@ function createNarration(root, host, preferences) {
     // unconfirmed effects never travel to another map. A paused Audio retains
     // its actual playhead, so readiness resumes the word rather than restarting.
     function pause(scene, playing = false, keepReactions = false) {
+        const speechPending=host.pauseNarrationSpeech?.();
         if (owner && (!scene || owner.scene === scene)) {
             for (const state of owner.queue) {
                 if (state.confirmed && carried.length < QUEUE_LIMIT) carried.push(state.id);
@@ -164,7 +169,7 @@ function createNarration(root, host, preferences) {
         }
         leave(scene, false, keepReactions, true);
         if (clip && !playing) { clip.audio.pause();clip.suspended = true; }
-        host.graphics._wqaNarrationContinuation = !!clip || carried.length > 0;
+        host.graphics._wqaNarrationContinuation = !!clip || carried.length > 0 || speechPending;
     }
 
     function resume(scene) {
@@ -179,6 +184,7 @@ function createNarration(root, host, preferences) {
             return false;
         }
         if (clip?.finishedPending) stopClip();
+        host.resumeNarrationSpeech?.(()=>ready(scene,false,true));
         const context = owner ?? begin(scene);
         context.carried = context.hasReactions = true;
         context.queue.unshift(...carried.map(id => ({ id, confirmed: true })));
@@ -192,7 +198,7 @@ function createNarration(root, host, preferences) {
     }
 
     function accepted(scene, interpreter, actor, switched, visual, commandIndex = interpreter._index) {
-        if (!pack || !enabled() || !ready(scene)) return;
+        if (!voiceReady() || !enabled() || !ready(scene)) return;
         const map = root.$gameMap;
         // At the exact first-shop music command, recover the preceding arrival
         // before queuing music if readiness opened during this native update.
@@ -272,7 +278,7 @@ function createNarration(root, host, preferences) {
     }
 
     function jolt(scene, interpreter) {
-        if (!pack || !enabled() || !ready(scene)) return;
+        if (!voiceReady() || !enabled() || !ready(scene)) return;
         // Only the currently executing map/common-event chain can own a jolt.
         // Parallel events qualify through their own native event interpreter.
         const map = root.$gameMap;
@@ -313,7 +319,7 @@ function createNarration(root, host, preferences) {
     }
 
     function environmentStart(scene, interpreter) {
-        if (!pack || !enabled() || !ready(scene)) return;
+        if (!voiceReady() || !enabled() || !ready(scene)) return;
         const state = environmentVisuals.capture(root, scene, interpreter, host.graphics.frameCount);
         if (!state) return;
         if (environment?.list === state.list && environment.index === state.index) return;
@@ -342,7 +348,7 @@ function createNarration(root, host, preferences) {
     }
 
     function questionsPresent(scene) {
-        if (!pack || !enabled() || !ready(scene)) return;
+        if (!voiceReady() || !enabled() || !ready(scene)) return;
         // Preserve native request order when its receipt survived. A bounded
         // rendered-state pass then covers questions requested during loading
         // or tile work; no observation/playback runs inside those phases.
@@ -372,7 +378,7 @@ function createNarration(root, host, preferences) {
 
     function mechEntry(scene) {
         const map = root.$gameMap, interpreter = map?._interpreter;
-        if (!pack || !enabled() || !ready(scene) || map?._mapId !== 16 ||
+        if (!voiceReady() || !enabled() || !ready(scene) || map?._mapId !== 16 ||
             interpreter?._eventId !== 39 || interpreter._index < 7 || interpreter._index > 22 ||
             interpreter._list !== root.$dataMap?.events?.[39]?.pages?.[0]?.list) return;
         // Native setup preloads the first Mech Double portrait before running
@@ -392,7 +398,7 @@ function createNarration(root, host, preferences) {
         // Shop entry may execute the first route while portrait/HUD resources
         // are still gated. Recover only its current native route/landing wait
         // after readiness; no observation or work is started during loading.
-        if (!pack || !enabled() || !ready(scene) || map?._mapId !== 181 || scene._wqaTylerEntryObserved ||
+        if (!voiceReady() || !enabled() || !ready(scene) || map?._mapId !== 181 || scene._wqaTylerEntryObserved ||
             interpreter?._eventId !== 15 || interpreter._list !== list ||
             interpreter._index < 1 || interpreter._index > 14) return;
         const actor = map._events[7], spawn = root.$dataMap.events[7];
@@ -471,7 +477,7 @@ function createNarration(root, host, preferences) {
         if (owner && (owner.scene !== scene || owner.interpreter) || !idleReady(scene)) return;
         // Standing idle closes walking controls. A first settled idle
         // sample can still load the pack when normal field warmup missed it.
-        if (!pack) return warm(scene);
+        if (!voiceReady()) return warm(scene);
         const map = root.$gameMap;
         let context = owner;
         for (const [index, beat] of idleBeats.entries()) {
@@ -489,6 +495,7 @@ function createNarration(root, host, preferences) {
         if (clip || !context.queue[0]?.confirmed) return;
         const { id } = context.queue.shift();
         try {
+            if(nvda()){host.describeNarration?.(cues[id].text,()=>ready(context.scene,false,true));return;}
             const setting = preferences().narration;
             const audio = new root.Audio();
             if (!audio.canPlayType(MIME)) return leave(context.scene);
@@ -515,8 +522,26 @@ function createNarration(root, host, preferences) {
         } catch { leave(context.scene); }
     }
 
+    // The native crystal's own phase-zero update supplies its branch. Only
+    // its rendered sprite is eligible; a full meter alone is not an event.
+    function momentumAccepted(scene,sprite) {
+        if(!enabled()||!ready(scene,false,true)||!scene._wqaBattleStarted||sprite.phase!==0||
+            typeof sprite._full!=='boolean'||pendingCount()>=QUEUE_LIMIT)return false;
+        if(!voiceReady()){warm(scene);return false;}
+        const field=scene._spriteset?._battleField;
+        if(sprite.parent!==field||sprite._frame?.y!==32||!sprite.bitmap?.isReady?.())return false;
+        if(owner?.scene!==scene)leave();
+        const context=owner??begin(scene);
+        context.momentum=context.hasReactions=true;
+        context.queue.push({id:sprite._full?'momentum-full':'momentum-collected',visual:-6,frame:host.graphics.frameCount,
+            battleVisible:()=>sprite.phase===0&&renderedSprite(sprite,field)&&
+                sprite.worldTransform?.tx>=0&&sprite.worldTransform.tx<host.graphics.width&&
+                sprite.worldTransform?.ty>=0&&sprite.worldTransform.ty<host.graphics.height});
+        return true;
+    }
+
     function battleAccepted(scene, interpreter, actor, sprite, stones) {
-        if (!pack || !enabled() || !finaleBattleReady(root, host, scene)) return;
+        if (!voiceReady() || !enabled() || !finaleBattleReady(root, host, scene)) return;
         const beat = actor ? combinedStones(root, scene, actor, sprite, stones) : bossFlash(root, scene, interpreter);
         if (!beat) return;
         interpreter = root.$gameTroop._interpreter;
@@ -535,6 +560,7 @@ function createNarration(root, host, preferences) {
 
     function mayPresent(context) {
         const { scene, interpreter, list } = context;
+        if(context.momentum)return enabled()&&ready(scene,false,true);
         if (context.carried) return ready(scene, false, true) && enabled();
         if (context.hasReactions) return ready(scene) && enabled() && context.mapId === root.$gameMap?._mapId;
         if (context.battle) return enabled() && finaleBattleReady(root, host, scene) &&
@@ -653,7 +679,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { accepted, entry, pause, jolt, environmentStart, questionsPresent, mechEntry, tylerEntry, battleAccepted, prologue, idle, present, warm, leave, get needsPack() { return !pack && !loading && !failed; } };
+    return { cancel(scene){host.cancelNarrationSpeech?.();leave(scene);}, accepted, entry, pause, jolt, environmentStart, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

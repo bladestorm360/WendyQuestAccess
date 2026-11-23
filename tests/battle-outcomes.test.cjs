@@ -74,6 +74,34 @@ async function verifyBattleOutcomes() {
     const won = await enter(mapData(19), 19, true);
     arrange(won);
     const momentum = prepareMomentum(won);
+    // Exercise the original crystal initialization, update/bounce and full
+    // branch independently of the HUD observer or the narration mock.
+    {
+        const c=won.c,scene=won.scene,proto=c.Sprite_MomentumCrystal.prototype;
+        c.Sprite=function(){};c.Sprite.prototype.initialize=function(bitmap){this.bitmap=bitmap;this.anchor={};};
+        c.Sprite.prototype.update=()=>{};
+        c.ImageManager.loadBitmap=()=>({isReady:()=>true});
+        c.Sprite_MomentumCrystal=function(...args){this.initialize(...args);};c.Sprite_MomentumCrystal.prototype=proto;
+        proto.setFrame=function(x,y,width,height){this._frame={x,y,width,height};};
+        proto.getGlobalPosition=function(){return{x:this.x,y:this.y};};
+        momentum.field.addChild=function(sprite){sprite.parent=this;this.crystal=sprite;};
+        momentum.field.removeChild=()=>{};scene.toLocal=p=>p;scene.addChild=sprite=>sprite.parent=scene;
+        let stars=0,seconds=1/60;const observations=[];
+        c.Time={GetDeltaTime:()=>seconds};c.Sprite_StarEffect={CreateStars(...args){assert.equal(args[3],3);stars++;}};
+        c.Graphics._wqaNarrationEnabled=true;c.WendyQuestAccessMomentumCrystal=(owner,sprite)=>{
+            assert.equal(owner,scene);observations.push(sprite._full);return true;};
+        for(const full of [false,true]){
+            let collected=0;c.BattleHelper.SpawnMomentumCrystal(12,24,full);const sprite=momentum.field.crystal;
+            sprite.setOnComplete(()=>collected++);seconds=1/60;sprite.update();sprite.update();
+            seconds=1.3;sprite.update();assert.equal(sprite.phase,full?2:1);
+            assert.equal(collected,0,'bounce does not award Momentum');
+            if(full){sprite.update();assert.equal(collected,0,'the native full branch removes collection');}
+            else{sprite.phase=2;sprite.update();assert.equal(collected,1);}
+        }
+        assert.deepEqual(observations,[false,true]);assert.equal(stars,2);
+        delete c.WendyQuestAccessMomentumCrystal;c.Graphics._wqaNarrationEnabled=false;
+        console.log('Verified original crystal producer once per object, normal collection versus full break/stars with no award.');
+    }
     won.c.BattleManager.processVictory();
     assert.equal(won.c.BattleManager._phase, 'battleEnd');
     assert.equal(won.scene._wqaBattleWon, true);

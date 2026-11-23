@@ -36,6 +36,7 @@ function formatSpeech(message) {
     let text;
     let limit = MAX_TEXT;
     switch (message.kind) {
+        case 'narrationCaption':text=typeof message.text==='string'?message.text:'';break;
         case 'title': {
             const name = label(message);
             text = name && (message.enabled ? name : `${name}, unavailable`);

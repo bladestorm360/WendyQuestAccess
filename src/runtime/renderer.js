@@ -22,24 +22,34 @@ function createRenderer(host, waitForSpeechPreference = false) {
     let outputStarted = false;
     let arrival = null;
     const pending = [];
+    // Confirmed NVDA captions and their automatic followups contain only
+    // copied display records. Keep at most the existing eight outstanding
+    // records, and retry only a provider-rejected packet after native readiness.
+    let descriptions = false;
+    const descriptionFlights = new Map();
     const counters = { dropped: 0, discarded: 0, submitted: 0, silenced: 0, silenceUnavailable: 0, workerFailures: 0 };
 
     function workerFailed() {
         if (failed) return;
         failed = true;
         counters.workerFailures++;
-        pending.length = 0;
+        pending.length = 0;descriptionFlights.clear();
+        descriptions=false;host.descriptionFlowChanged?.(false);
         if (gate) gate.close();
         // Feature observers keep their context and review even if output fails.
     }
 
     function drain() {
+        // Resolve every old-epoch receipt before replaying: a caption that
+        // lost admission must precede text from the newly presented scene.
+        if([...descriptionFlights.values()].some(entry=>entry.epoch!==gate?.epoch))return;
         while (worker && gate?.domain === 'frontend' && inFlight < MAX_PENDING && pending.length) {
             const { continueOutput, ...record } = pending.shift();
             try {
                 // A retained logical context can begin a fresh transport
                 // sequence after mute. Its first record has no prior output.
                 if (!outputStarted && record.append && !continueOutput) record.append = false;
+                if(record.preserveDescription)descriptionFlights.set(record.sequence,{record:{...record,continueOutput:true},epoch:gate.epoch,keep:descriptions});
                 worker.postMessage({ ...record, epoch: gate.epoch, ...(speechEnabled ? {} : { brailleOnly: true }) });
                 outputStarted = true;
                 inFlight++;
@@ -56,9 +66,17 @@ function createRenderer(host, waitForSpeechPreference = false) {
         try {
             worker = host.createWorker(word.buffer);
             worker.on('message', message => {
-                if (message === 'ack' || message === 'discarded') {
+                const receipt=typeof message==='object'&&message?message.status:message;
+                if (receipt === 'ack' || receipt === 'discarded') {
+                    const retained=typeof message==='object'?descriptionFlights.get(message.sequence):null;
+                    if(retained){
+                        descriptionFlights.delete(message.sequence);
+                        if(receipt==='discarded'&&message.retry===true&&retained.keep&&descriptions){
+                            pending.push(retained.record);pending.sort((a,b)=>a.sequence-b.sequence);
+                        }
+                    }
                     if (inFlight > 0) inFlight--;
-                    if (message === 'ack') counters.submitted++;
+                    if (receipt === 'ack') counters.submitted++;
                     else counters.discarded++;
                     drain();
                 } else if (message === 'noBraille') {
@@ -113,13 +131,19 @@ function createRenderer(host, waitForSpeechPreference = false) {
             counters.dropped++;
             return false;
         }
-        pending.push({ kind: 'title', ...focused, continueOutput, sequence: ++nextSequence });
+        pending.push({ kind: 'title', ...focused, continueOutput, sequence: ++nextSequence,
+            ...(descriptions&&{append:true,continueOutput:true,preserveDescription:true}) });
         readyOutput();
         return true;
     }
 
-    function retireOutput() {
-        pending.length = 0;
+    function retireOutput(preserve=descriptions) {
+        if(preserve) {
+            for(let i=pending.length-1;i>=0;i--)if(!pending[i].preserveDescription)pending.splice(i,1);
+        }else{
+            pending.length=0;
+            for(const entry of descriptionFlights.values())entry.keep=false;
+        }
         outputStarted = false;
         // Publish the invalid epoch before sending a bounded cancellation.
         if (!gate?.close() || !worker || failed) return;
@@ -127,9 +151,15 @@ function createRenderer(host, waitForSpeechPreference = false) {
         catch { workerFailed(); }
     }
 
+    function cancelDescriptions() {
+        if(!descriptions)return;
+        descriptions=false;host.descriptionFlowChanged?.(false);retireOutput(false);
+    }
+
     function setSpeechEnabled(enabled, maySilence) {
         if (enabled === speechEnabled) return;
         const previous = speechEnabled;
+        cancelDescriptions();
         if (!enabled) arrival = null;
         speechEnabled = enabled;
         if (previous === null) {
@@ -149,12 +179,12 @@ function createRenderer(host, waitForSpeechPreference = false) {
 
     function open(focused, ready = host.titleStillReady, fieldFollowup = false) {
         if (nextContext >= 0x7ffffffe) return 0;
-        const append = arrival && host.now() < arrival.expires &&
+        const append = descriptions || arrival && host.now() < arrival.expires &&
             (fieldFollowup || FIELD_FOLLOWUP.has(focused.kind));
         // A presented field notice can keep the arrival in the same FIFO.
         // After a native boundary, open a fresh gate and append at the
         // provider to any arrival already admitted before the boundary.
-        if (!append || !arrival.ready?.()) retireOutput();
+        if (!descriptions&&(!append || !arrival.ready?.())) retireOutput();
         if (!append) arrival = null;
         const token = context = ++nextContext;
         isPresented = ready;
@@ -172,6 +202,13 @@ function createRenderer(host, waitForSpeechPreference = false) {
     const notifications = {
         open,
         close,
+        describe(text,ready) {
+            if(speechEnabled!==true||typeof ready!=='function'||!ready())return false;
+            descriptions=true;host.descriptionFlowChanged?.(true);
+            for(const record of pending)Object.assign(record,{append:true,continueOutput:true,preserveDescription:true});
+            if(context&&isPresented?.())return submit(context,{kind:'narrationCaption',text,append:true},true);
+            return !!open({kind:'narrationCaption',text,append:true},ready);
+        },
         focus: submit,
         current: token => !!context && token === context,
         arrive(focused, ready, walking, detail) {
@@ -193,7 +230,16 @@ function createRenderer(host, waitForSpeechPreference = false) {
         }
     };
     return {
-        notifications, counters, setSpeechEnabled,
+        notifications, counters, setSpeechEnabled, cancelDescriptions,
+        pauseDescriptions() {
+            if(!descriptions)return false;
+            retireOutput(true);context=0;isPresented=null;return true;
+        },
+        resumeDescriptions(ready) {
+            if(!descriptions||!ready?.())return false;
+            if(!context){if(nextContext>=0x7ffffffe)return false;context=++nextContext;isPresented=ready;}
+            readyOutput();return true;
+        },
         retireSilence() { if (gate?.domain === 'silence') retireOutput(); }
     };
 }
