@@ -83,7 +83,7 @@ module.exports=async function verifyIceRoutes(c,load,snapshot,read,verifyWorker)
             assert.equal(routeThroughIce(f.geometry,live,{...goal,mode:'walk'},()=>true)?.status,'cancelled');
         }
     }
-    assert.equal(actions,46);assert.equal(projections,46);assert.equal(routes,46);assert.equal(replacements,4);assert.equal(encounters,1);
+    assert.equal(actions,46);assert.equal(projections,46);assert.equal(routes,46);assert.equal(replacements,5);assert.equal(encounters,1);
     // A floor event before the ice is the first manual handoff. Recheck only
     // after native progression, then the ordinary ice/encounter route resumes.
     const state={switches:[1,2,3,4,5,6,7,8,9,10,11,15,20,21,22,24,25,30,31,111,112,120,141,142,160,321,479],
@@ -107,5 +107,5 @@ module.exports=async function verifyIceRoutes(c,load,snapshot,read,verifyWorker)
     assert.equal(afterEvent.status,'iceRoute');assert.equal(afterEvent.event,51);
     assert.equal(routeThroughIce(f.geometry,{...live,mode:'ship'},{x:25,y:16,event:22,field:true},()=>false),null);
     assert.throws(()=>meltedEvents(f.geometry,[{id:1}],[{id:1,meltChanges:{relocate:[2,-1,0]}}],1),/placement/);
-    console.log(`All-map ice audit:46 playable melts on${groups.size} maps,46 native action approaches/after-melt collision models,${routes} newly open local targets,4 chest replacements,1 native encounter,${comparisons} directed native comparisons;${(performance.now()-start).toFixed(1)} ms throttled.`);
+    console.log(`All-map ice audit:46 playable melts on${groups.size} maps,46 native action approaches/after-melt collision models,${routes} newly open local targets,${replacements} chest replacements,1 native encounter,${comparisons} directed native comparisons;${(performance.now()-start).toFixed(1)} ms throttled.`);
 };

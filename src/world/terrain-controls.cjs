@@ -26,8 +26,18 @@ function routeThroughControl(geometry, live, request, controls, cancelled, remot
             field: true, stopBeforeEvent: stepOn }, cancelled);
         if (approach?.status === 'cancelled') return approach;
         const detour = pull && live.pullStage === 2 && id === 4 && approach?.status !== 'ready';
+        // An ordinary button can itself lie behind ice, and its bridge can
+        // lead to another ice reveal. Prove the whole chain in the same
+        // bounded detached search; return only its first native prerequisite.
+        const combine = !remote && !pull && !gate && !stepOn && control.trigger === 0
+            ? () => routeThroughIce(geometry, live, request, cancelled, [], { id, changes }) : null;
         if (approach && !detour && (stepOn ? approach.status !== 'interrupted' || approach.boundaryEvent !== id
-            : approach.status !== 'ready')) continue;
+            : approach.status !== 'ready')) {
+            const sequence = combine?.();
+            if (sequence?.status === 'cancelled') return sequence;
+            if (sequence && (!best || sequence.distance < best.distance)) best = sequence;
+            continue;
+        }
         let origin = stepOn && !remote ? control : approach?.arrival || request;
         if (pull && !detour) {
             let cell = indexOf(current, origin.x, origin.y);
@@ -72,7 +82,12 @@ function routeThroughControl(geometry, live, request, controls, cancelled, remot
         if (onward.status === 'cancelled') return onward;
         let afterIce;
         if (onward.status !== 'ready' && onward.status !== 'interrupted') {
-            if (gate !== 97) continue;
+            if (gate !== 97) {
+                const sequence = combine?.();
+                if (sequence?.status === 'cancelled') return sequence;
+                if (sequence && (!best || sequence.distance < best.distance)) best = sequence;
+                continue;
+            }
             // The bridge work can reveal an approach that is still blocked
             // by a separate, ordinary ice interaction. Verify both effects
             // on worker-owned copies before naming the first prerequisite.
@@ -132,27 +147,45 @@ function meltedEvents(geometry, events, ice, removed) {
         moved.has(event.id) ? {...event,...moved.get(event.id)} : event);
 }
 
-function routeThroughIce(geometry, live, request, cancelled, terrain = []) {
+function routeThroughIce(geometry, live, request, cancelled, terrain = [], control) {
     if (live.mode !== 'walk' || request.entrances || request.vehicle || request.area || request.motion) return null;
     const ice = live.events.filter(event => event.meltable && !event.erased && event.id !== request.event);
     if (!ice.length || ice.length > 8) return null;
-    const queue = [{ x: request.x, y: request.y, removed: 0, first: null }];
+    const queue = [{ x: request.x, y: request.y, removed: 0, opened: false, first: null }];
     const visited = new Set();
     // A node clears only verified one-use blockers. Replay normal collision
     // and event ordering for each candidate approach. Copying and search
     // happen on the existing routing worker under its cancellation epoch.
     for (let index = 0; index < queue.length && index < 64; index++) {
         if (cancelled()) return { status: 'cancelled' };
-        const { x, y, removed, first } = queue[index];
+        const { x, y, removed, opened, first } = queue[index];
         const events = meltedEvents(geometry, live.events, ice, removed);
         const world = composeWorld(geometry, { ...live, events }, cancelled);
         if (!world) return { status: 'cancelled' };
         for (const [cell, flags] of terrain) world.cells[cell] = (world.cells[cell] & 240) | flags;
+        if (opened) for (const [cell, flags] of control.changes) world.cells[cell] = (world.cells[cell] & 240) | flags;
         if (first) {
             const goal = solveWorldRoute(world, { ...request, x, y }, cancelled);
             if (goal.status === 'cancelled') return goal;
             if (goal.status === 'ready' || goal.status === 'interrupted')
-                return first.status === 'interrupted' ? first : { ...first, status: 'iceRoute' };
+                return ['interrupted','controlRoute'].includes(first.status) ? first : { ...first, status: 'iceRoute' };
+        }
+        if (control && !opened) {
+            const approach = solveWorldRoute(world, { x, y, event: control.id, field: true }, cancelled);
+            if (approach.status === 'cancelled') return approach;
+            const planned = approach.status === 'interrupted'
+                ? solveWorldRoute(world, { x, y, event: control.id, field: false }, cancelled) : approach;
+            if (planned.status === 'cancelled') return planned;
+            if (planned.status === 'ready') {
+                const { x: nextX, y: nextY } = planned.arrival;
+                const key = removed + ':true:' + nextX + ':' + nextY;
+                if (!visited.has(key) && queue.length < 64) {
+                    visited.add(key);
+                    queue.push({ x: nextX, y: nextY, removed, opened: true,
+                        first: first || { ...approach, event: control.id,
+                            status: approach.status === 'interrupted' ? 'interrupted' : 'controlRoute' } });
+                }
+            }
         }
         for (const [slot, block] of ice.entries()) {
             if (removed & (1 << slot)) continue;
@@ -168,10 +201,10 @@ function routeThroughIce(geometry, live, request, cancelled, terrain = []) {
             if (planned.status !== 'ready') continue;
             const next = removed | (1 << slot);
             const { x: arrivalX, y: arrivalY } = planned.arrival;
-            const key = next + ':' + arrivalX + ':' + arrivalY;
+            const key = next + ':' + opened + ':' + arrivalX + ':' + arrivalY;
             if (visited.has(key) || queue.length >= 64) continue;
             visited.add(key);
-            queue.push({ x: arrivalX, y: arrivalY, removed: next, first: first || { ...approach, event: block.id } });
+            queue.push({ x: arrivalX, y: arrivalY, removed: next, opened, first: first || { ...approach, event: block.id } });
         }
     }
     return null;

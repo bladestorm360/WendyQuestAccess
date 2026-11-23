@@ -29,8 +29,13 @@ module.exports = async function verifyControls(c, load, verifyWorker, read, snap
         });
     }
     let peak = 0, nativeMs = 0, steps = 0;
-    async function run(x,y,target,mode='finish') {
-        const f = load(12), {player,map,gameMap} = f;
+    async function run(x,y,target,mode='finish',frozen=false) {
+        const iceIds=[44,47,48,57];
+        const states=new Set(frozen?iceIds.map(id=>`12,${id},A`):[]);
+        const f = load(12,{self:[...states]}), {player,map,gameMap} = f;
+        c.$gameSelfSwitches.value=key=>states.has(key.join(','));
+        c.$gameSelfSwitches.setValue=(key,value)=>{if(value)states.add(key.join(','));else states.delete(key.join(','));};
+        if(frozen)for(const id of iceIds)gameMap.event(id).SetBlocker(-1,-1,1,0);
         delete player.direction;
         player.setPosition(x,y);
         player._followers = {areGathering:()=>false,updateMove(){}};
@@ -69,6 +74,27 @@ module.exports = async function verifyControls(c, load, verifyWorker, read, snap
         assert(field.command('directions'));frame();
         assert.equal(packets.at(-1).request.event,target);
         await reply();assert(field.autowalk.active(scene),'control detours must start automatic movement');
+        if(frozen) {
+            assert.equal(lastResult.status,'iceRoute');assert.equal(lastResult.event,47);
+            const approach=lastResult.arrival;
+            for(let limit=0;field.autowalk.active(scene)&&limit<200;limit++)tick();
+            assert.deepEqual([player._x,player._y],[approach.x,approach.y]);
+            const ice=gameMap.event(47);assert(scene._wqaIceRoute);
+            player.checkEventTriggerThere([0]);assert(ice.isStarting());gameMap.setupStartingEvent();
+            assert.equal(gameMap._interpreter._eventId,47);
+            const done=map.events[47].pages[1].list.find(row=>row.code===123);
+            gameMap._interpreter.command123(done.parameters);
+            assert.equal(ice.findProperPageIndex(),2);
+            // Native animation/render work stays inert. Mirror its pinned
+            // completed erase fields, as the all-map ice parity fixture does.
+            Object.assign(ice,{_erased:true,_through:true,_priorityType:0,_starting:false});
+            gameMap._interpreter.clear();scene._wqaFieldReady=true;
+            gameMap._needsRefresh=gameMap._needsTilemapRefresh=false;
+            field.iceRouteReady(scene);frame();
+            assert.equal(packets.at(-1).request.event,target,'ice completion retains the selected chest');
+            await reply();assert.equal(lastResult.status,'controlRoute');assert.equal(lastResult.event,56);
+            assert(field.autowalk.active(scene));
+        }
         const verifiedApproach=lastResult.arrival;
         if(mode==='cancel') {
             field.cancelAutowalk(scene);assert(!scene._wqaIceRoute);tick();
@@ -83,12 +109,12 @@ module.exports = async function verifyControls(c, load, verifyWorker, read, snap
         assert.equal(player._direction,verifiedApproach.facing);
         assert.deepEqual([player._x,player._y],[verifiedApproach.x,verifiedApproach.y]);
         assert(scene._wqaIceRoute,'selected destination survives native interpreter acceptance');
-        assert.equal(records.filter(record=>record.name==='Arrived.').length,0,'the button is not the selected arrival');
+        assert.equal(records.filter(record=>record.name==='Arrived.').length,frozen?1:0,'the button adds no arrival beyond the existing ice-interaction approach');
         const before=packets.length;
         field.iceRouteReady(scene);assert.equal(packets.length,before,'no routing during the native script');
         // Invoke the original native tile setter and self-switch command from
         // the authored rows. Presentation-only sounds/plugin dispatch are inert.
-        const states=new Set();c.$gameSelfSwitches.value=key=>states.has(key.join(','));
+        c.$gameSelfSwitches.value=key=>states.has(key.join(','));
         c.$gameSelfSwitches.setValue=(key,value)=>{if(value)states.add(key.join(','));else states.delete(key.join(','));};
         for(const row of map.events[56].pages[0].list) {
             if(row.code===357) {
@@ -105,11 +131,12 @@ module.exports = async function verifyControls(c, load, verifyWorker, read, snap
         assert.equal(solveRoute(f.geometry,packets.at(-1).live,packets.at(-1).request).status,'ready');
         await reply();assert(field.autowalk.active(scene));
         for(let limit=0;field.autowalk.active(scene)&&limit<200;limit++)tick();
-        assert.equal(records.filter(record=>record.name==='Walking.').length,1,'resume is silent');
-        assert.equal(records.filter(record=>record.name==='Arrived.').length,1);
+        assert.equal(records.filter(record=>record.name==='Walking.').length,frozen?2:1,'button resume is silent; native ice interaction begins the next course');
+        assert.equal(records.filter(record=>record.name==='Arrived.').length,frozen?2:1);
         assert.equal(records.at(-1).name,'Arrived.');
     }
     await run(15,36,26);await run(39,22,26);await run(43,15,7);
+    await run(15,36,7,'finish',true);await run(30,16,26,'finish',true);
     await run(15,36,26,'cancel');await run(15,36,26,'manual');
-    console.log(`Verified8 choice-free buttons,7 full worker control courses without beacon,3 native Russetwood detours/button activations/final arrivals, cancellation and manual takeover. ${steps} throttled native input updates ${nativeMs.toFixed(2)}ms total/${peak.toFixed(2)}ms peak; no actual game measurement.`);
+    console.log(`Verified8 choice-free buttons,7 full worker control courses without beacon,3 original Russetwood detours and2 ice-to-button journeys/button activations/final arrivals, cancellation and manual takeover. ${steps} throttled native input updates ${nativeMs.toFixed(2)}ms total/${peak.toFixed(2)}ms peak; no actual game measurement.`);
 };

@@ -278,6 +278,19 @@ function iceOpensPassage(entry, page) {
                 plan = { relocate: [splashMove.parameters[0],splashMove.parameters[2],splashMove.parameters[3]] };
             }
         }
+        // Russetwood's northern block uses the ordinary ice graphic, but
+        // its splash callback brings the hidden chest to the melted tile.
+        // Verify that exact native relocation instead of leaving the chest
+        // at its off-path holding position in the worker projection.
+        const splash = entry.pages[3];
+        if (plan && entry.id === 57 && entry.x === 44 && entry.y === 9 && page === entry.pages[1] &&
+            entry.pages[0]?.list[0]?.parameters?.[3]?.animationPath === 'ICE WITHOUT PERSON' &&
+            splash?.trigger === 4 && splash.conditions.selfSwitchValid && splash.conditions.selfSwitchCh === 'B' &&
+            splash.list[0]?.code === 203 && splash.list[0].parameters.join(',') === '58,0,44,9,0' &&
+            splash.list[1]?.code === 205 && splash.list[1].parameters[0] === 58 &&
+            splash.list[1].parameters[1]?.list.map(move => move.code).join(',') === '14,0' &&
+            splash.list[1].parameters[1].list[0].parameters?.join(',') === '0,0')
+            plan = { relocate: [58,44,9] };
         // This audited melt runs a non-escapable native encounter and then
         // retires actor11 via switch446. Name only the visible ice prerequisite;
         // the original script/battle owns all progression and player control.

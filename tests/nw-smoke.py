@@ -2842,7 +2842,9 @@ def run_fixture(launch, runtime, environment):
     with error_log.open('wb') as errors:
         process = subprocess.Popen(launch, cwd=runtime, stdout=subprocess.DEVNULL, stderr=errors, env=environment)
         try:
-            code = process.wait(timeout=25)
+            # Leave startup margin beyond the in-app24-second watchdog so
+            # its decisive receipt survives a cold Chromium launch.
+            code = process.wait(timeout=40)
         except subprocess.TimeoutExpired as failure:
             if process.poll() is None:
                 taskkill = Path(os.environ['SystemRoot']) / 'System32' / 'taskkill.exe'
