@@ -1716,6 +1716,7 @@ async function main() {
     await verifyQuestDestinations(c, game, read, load, verifyRoute, verifyWorker);
     await verifyBookmarks(c, load, verifyRoute, verifyWorker);
     await verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, read('CommonEvents.json'));
+    await require('./frosty-peak.cjs')(c,load,read,verifyWorker);
     await verifyWorldDetours(c, load, verifyWorker, read('CommonEvents.json'), read('MapInfos.json'));
     await require('./world-detour-field.cjs').verifyWorldDetourField(c, load, verifyWorker, read('CommonEvents.json'), read('MapInfos.json'));
     await require('./breakfast-quest-field.cjs').verifyBreakfastQuestField(c, load, verifyWorker, read('CommonEvents.json'), read('MapInfos.json'));
@@ -1736,4 +1737,5 @@ function changedCrossing(before, after) {
     assert.fail('Authored bridge edits did not open a crossing');
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+if(require.main===module)main().catch(error => { console.error(error); process.exitCode = 1; });
+module.exports={c,load,read,verifyWorker};

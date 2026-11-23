@@ -227,29 +227,41 @@ function inactiveFloorScene(root, event, page) {
 
 const floorCompletions=new WeakMap();
 const FLOOR_COMPLETION_ROWS=new Set([0,108,408,101,401,205,505,213,250,230,121,123,214,241,242,223,224,225]);
-// Only linear, same-map presentation/dialogue followed by one native flag
-// qualifies. Choices, scripts, battles and unknown plugin calls stay opaque.
+// Only linear same-map presentation and a verified native completion flag
+// qualify; extra bounded flag writes do not make an erase page permanent.
+// Choices, transfers, battles and unknown scripts/common events stay opaque.
 function floorClearsOnUse(entry,page) {
     if (!page || page.list.length>256 || page.priorityType!==0 || ![1,2].includes(page.trigger) || page.image?.tileId ||
         page.image?.characterName) return false;
     if (!floorCompletions.has(page)) {
         const rows=page.list.filter(row=>!([0,108,408].includes(row.code)));
+        // Atlas position updates are a verified one-use navigation marker,
+        // not a permanent story wall. Common159 only computes atlas UI coords;
+        // the native self-switch/erase page still owns actual completion.
+        const atlas=rows.length===5 && [122,122,121,117,123].every((code,i)=>rows[i].code===code) &&
+            rows[0].parameters.slice(0,4).join(',')==='119,119,0,0' &&
+            rows[1].parameters.slice(0,4).join(',')==='120,120,0,0' &&
+            rows.slice(0,2).every(row=>Number.isInteger(row.parameters[4])&&row.parameters[4]>=0&&row.parameters[4]<100) &&
+            rows[2].parameters.join(',')==='624,624,0' && rows[3].parameters.join(',')==='159';
         const flags=rows.filter(row=>[121,123].includes(row.code));
-        let clears=rows.length>0 && rows.every(row=>row.indent===0&&FLOOR_COMPLETION_ROWS.has(row.code)&&
+        let clears=rows.length>0 && rows.every(row=>row.indent===0&&(FLOOR_COMPLETION_ROWS.has(row.code)||atlas&&[122,117].includes(row.code))&&
             (row.code!==205 || row.parameters[1]?.repeat===false && row.parameters[1].list?.length<=64 &&
                 row.parameters[1].list.every(move=>move.code===0||move.code>=15&&move.code<=44)));
         if (clears && rows.some(row=>row.code===214)) clears=true;
         else {
-            clears=clears&&flags.length===1;
-            const flag=flags[0], index=entry.pages.indexOf(page);
-            clears=clears&&entry.pages.slice(index+1).some(next=>{
+            clears=clears&&flags.length>=1&&flags.length<=4;
+            const index=entry.pages.indexOf(page);
+            // Several ambush/atlas triggers set a global flag as well as their
+            // own completion flag. Any matching unconditional erase page
+            // proves the selected event itself clears; never erase its peers.
+            clears=clears&&flags.some(flag=>entry.pages.slice(index+1).some(next=>{
                 const q=next.conditions;
                 const active=Object.keys(q).filter(key=>key.endsWith('Valid')&&q[key]);
                 const matches=flag.code===123 ? flag.parameters[1]===0&&active.length===1&&q.selfSwitchValid&&
                     q.selfSwitchCh===flag.parameters[0] : flag.parameters[0]===flag.parameters[1]&&flag.parameters[2]===0&&
                     active.length===1&&q.switch1Valid&&q.switch1Id===flag.parameters[0];
                 return matches&&next.priorityType===0&&next.list.length===2&&next.list[0].code===214&&next.list[1].code===0;
-            });
+            }));
         }
         floorCompletions.set(page,!!clears);
     }

@@ -84,7 +84,7 @@ Battle timing cues and cave timing cues start **on for new profiles**. Updates r
 
 F8, Audio groups adjustable navigation sounds and volumes. **Sound previews** has its own submenu. Speech and sounds have independent master switches. HRTF provides spatial playback; stereo playback uses left/right placement and a lower rear cue. Wall tones, bumps, footsteps, beacons and the entity soundscape can be adjusted independently.
 
-Optional **Cutscene descriptions** in Audio describe supported visible animations, including reactions, idle actions and Momentum crystals. They start off. Under **Speech → Visual description voice**, choose **recorded** (the default) or **NVDA**. Recorded speed and volume are under Audio; NVDA uses your screen reader’s voice settings. Following automatic text queues behind NVDA descriptions. Recorded descriptions continue across fades and pause at their current position during loading. Updates preserve your choices.
+Optional **Cutscene descriptions** in Audio describe supported visible animations, including reactions, idle actions, Momentum crystals, screen glitches and the supported special skills. They start off. Under **Speech → Visual description voice**, choose **recorded** (the default) or **NVDA**. Recorded speed and volume are under Audio; NVDA uses your screen reader’s voice settings. Following automatic text queues behind NVDA descriptions. Recorded descriptions continue across fades and pause at their current position during loading. Updates preserve your choices.
 
 ## Controller
 
