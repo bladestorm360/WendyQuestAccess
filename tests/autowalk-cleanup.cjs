@@ -9,12 +9,12 @@ async function verifyCleanupField(c, load, verifyWorker) {
     const saved = Object.fromEntries(keys.map(key => [key, c[key]]));
     const previousScene = c.SceneManager._scene, app = c.Graphics.app;
     const switchState = { value: c.$gameSwitches.value, setValue: c.$gameSwitches.setValue };
-    for (const [id, cancel] of [[94, false], [94, true], [16, false]]) {
+    for (const [id, cancel] of [[113,false], [94, false], [94, true], [16, false]]) {
         const run = load(id, { switches: id === 94 ? [405] : [] });
         let start = id === 94 ? [24, 13] : [25, 17];
         let finish = id === 94 ? [18, 6] : [25, 15];
-        if (id === 16) {
-            const event = run.gameMap._events[50];
+        if (id === 16 || id === 113) {
+            const event = run.gameMap._events[id===113?179:50];
             finish = [event._x, event._y];
             const direction = [2, 4, 6, 8].find(heading => {
                 start = [run.gameMap.roundXWithDirection(event._x, 10 - heading),
@@ -61,6 +61,16 @@ async function verifyCleanupField(c, load, verifyWorker) {
         }
         scene._wqaSettingsActive = true; assert(field.selectBookmark(scene, bookmark)); scene._wqaSettingsActive = false;
         assert(field.command('directions')); frame(); await reply();
+        if(id===113){
+            assert.equal(packets.at(-1).live.events.find(e=>e.id===179).action,true,
+                'unselected named encounters cannot become passive cleanup');
+            for(let idle=0;idle<120;idle++){
+                run.player.moveByInput();run.player._realX=run.player._x;run.player._realY=run.player._y;frame();
+            }
+            assert.deepEqual([run.player._x,run.player._y],start);
+            assert(!run.gameMap.event(179).isStarting(),'point routing also stops before an encounter flag');
+            assert(!field.autowalk.active(scene));field.leave(scene);continue;
+        }
         for (let count = 0; count < 100; count++) {
             run.player.moveByInput(); run.player._realX = run.player._x; run.player._realY = run.player._y;
             field.observeReady(scene); // Native readiness can publish once before floor acceptance.
@@ -96,6 +106,6 @@ async function verifyCleanupField(c, load, verifyWorker) {
     }
     Object.assign(c.$gameSwitches, switchState);
     Object.assign(c, saved); c.SceneManager._scene = previousScene; c.Graphics.app = app;
-    console.log('Verified native Burgenburg cleanup erasure and Crispy Ruins flag-only trigger, silent resumed worker routes, retained destination, single arrival and cancellation.');
+    console.log('Verified real world encounter manual handoff and native Burgenburg cleanup erasure and Crispy Ruins flag-only trigger, silent resumed worker routes, retained destination, single arrival and cancellation.');
 }
 module.exports = { verifyCleanupField };

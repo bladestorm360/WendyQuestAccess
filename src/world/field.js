@@ -948,8 +948,13 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         // The explicitly selected touch remains an action: even a flag-only
         // page can activate an encounter through a separate native autorun.
         if (snapshot.mode !== 'walk' || timedCave(snapshot.map)) return;
+        const manualSteps=new Set();
+        for(const item of snapshot.objects||[])if(['step','bump'].includes(item.eventAction))manualSteps.add(item.id);
         for (const row of snapshot.live?.events || []) {
             if (row.id === selectedEvent || !row.action || row.normal || ![1, 2].includes(row.trigger)) continue;
+            // A named scene/encounter is a real interaction even when its
+            // first page only sets a flag for a separate native autorun.
+            if(manualSteps.has(row.id))continue;
             const event = root.$gameMap._events[row.id];
             const page = root.$dataMap?.events[row.id]?.pages[event?._pageIndex];
             if (event?._x === row.x && event._y === row.y && passiveFloorPage(page)) row.action = false;
