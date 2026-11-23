@@ -853,6 +853,10 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessNarrationEventEntry = function (scene, interpreter, list, eventId) { narration?.entry(scene, interpreter, list, eventId); };
 
+    root.WendyQuestAccessScreenGlitchPresent = function (scene) {
+        try { narration?.glitchPresent(scene); } catch { narration?.cancel(scene); }
+    };
+
     root.WendyQuestAccessQuestionsPresent = function (scene) {
         try { narration?.questionsPresent(scene); } catch { narration?.cancel(scene); }
     };

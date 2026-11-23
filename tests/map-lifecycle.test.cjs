@@ -272,6 +272,15 @@ async function main() {
         frame();
         assert.deepEqual(speech(), ['Entering ' + data.displayName + '.']);
 
+        // Execute the transformed native ready-map frame: attachment is
+        // observed at the real update call site, before postrender narration.
+        const originalGlitch=c.WendyQuestAccessScreenGlitchPresent;
+        let glitchFrames=0;
+        c.WendyQuestAccessScreenGlitchPresent=observed=>{assert.equal(observed,scene);glitchFrames++;};
+        c.Graphics._wqaNarrationEnabled=true;scene.filters=[{}];scene._TKMFilters=[{}];
+        c.SceneManager.updateScene();assert.equal(glitchFrames,1);
+        scene.filters=[];c.SceneManager.updateScene();assert.equal(glitchFrames,1);
+        c.WendyQuestAccessScreenGlitchPresent=originalGlitch;scene._TKMFilters=[];
         const pendingEvent = c.$gameMap.fixtureEvents[0];
         const load = c.Bitmap.load;
         c.Bitmap.load = url => {

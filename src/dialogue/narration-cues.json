@@ -2503,18 +2503,8 @@
     ]
   },
   "epilogue-glitch": {
-    "text": "The epilogue image briefly glitches.",
-    "beats": [
-      [
-        224,
-        1,
-        0,
-        66,
-        1,
-        null,
-        -6
-      ]
-    ]
+    "text": "The screen briefly breaks into sideways-shifting horizontal strips.",
+    "beats": []
   },
   "double-mech-explosion": {
     "text": "An explosion rocks the Double Big Mech.",

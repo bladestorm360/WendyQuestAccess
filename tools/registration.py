@@ -417,9 +417,7 @@ def objects_notification(original):
         companions_entry: b'\n        if(Graphics._wqaNarrationEnabled&&params[0]===65&&'
                           b'this._mapId===98&&this._eventId===19&&this._index===34&&'
                           b'this._childInterpreter?._list===commonEvent.list)'
-                          b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-5);'
-                          b'if(Graphics._wqaNarrationEnabled&&params[0]===40&&this._mapId===224&&this._eventId===1&&this._index===66)'
-                          b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,this.character(0),undefined,-6);',
+                          b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-5);',
 
         2915: b'        if(SceneManager._scene?._wqaBattleStarted){BattleManager._wqaBattleSpritesBusy=undefined;'
               + BATTLE_LOG_LEAVING + b';}\n',
@@ -762,6 +760,8 @@ def map_notification(original):
     if (Graphics._wqaNarrationEnabled && (this._spriteset?._balloonSprites?.length ||
         $gameMap._mapId === 16 && !this._wqaAssistanceReveal))
         globalThis.WendyQuestAccessQuestionsPresent?.(this);
+    if (Graphics._wqaNarrationEnabled && this.filters?.length && this._TKMFilters?.length)
+        globalThis.WendyQuestAccessScreenGlitchPresent?.(this);
     if (this._wqaNarrationActive || this._wqaEnvironmentPending || this._wqaReactionReceipts || Graphics._wqaNarrationContinuation) globalThis.WendyQuestAccessNarrationPresent?.(this);
     // The opening has no controllable field before its first visual beat.
     // Warm asynchronously only after the normal map/resource readiness gates.
@@ -1100,6 +1100,7 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
         241897: b'this._wqaBattleStarted=true;',
         241953: b'BattleManager._wqaDialogueBusy=BattleManager._wqaBattleSpritesBusy=undefined;',
         242214: target_update + bag_update + timing_update + radial_update + log_update +
+                b'if(Graphics._wqaNarrationEnabled&&this.filters?.length&&this._TKMFilters?.length)globalThis.WendyQuestAccessScreenGlitchPresent?.(this);'
                 b'if(this._wqaNarrationActive||Graphics._wqaNarrationContinuation)globalThis.WendyQuestAccessNarrationPresent?.(this);' + dialogue_update(ready, victory=True),
         # Optional speaker metadata stays on its native row through queuing and paint.
         239515: b',wqaSource',  # Scene_Battle.logAction

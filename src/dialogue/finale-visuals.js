@@ -109,8 +109,6 @@ function finaleVisible(root, host, scene, state) {
         const image = picture(root, host, scene, 23, 'objects/Wendy');
         return !!(image && image.data._duration > 0 && image.data._y < -16);
     }
-    if (id === 'epilogue-glitch') return !!(root.$gameMap.getFilterController?.('rgb') &&
-        picture(root, host, scene, 3, 'Credits/017 HOT SLUDGE SUNDAE f18484'));
     return false;
 }
 

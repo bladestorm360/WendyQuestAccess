@@ -34,8 +34,8 @@ def stage_narration():
     if not clips or len(clips) > 147 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
         raise ValueError('Malformed narration clips')
     pack = struct.pack('<' + 'I' * len(clips), *(len(clip) for clip in clips)) + b''.join(clips)
-    #147 recordings; measured packed size 1,768,755 bytes.
-    if len(pack) > 1728 * 1024:
+    #147 recordings; measured packed size 1,777,065 bytes.
+    if len(pack) > 1736 * 1024:
         raise ValueError('Narration clips exceed their playback budget')
     target = OUT / 'wendyquest-access/narration.webmpack'
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -55,6 +55,7 @@ def bundle():
         './question-visuals': 'dialogue/question-visuals.js',
         './finale-visuals': 'dialogue/finale-visuals.js',
         './tyler-visuals': 'dialogue/tyler-visuals.js',
+        './screen-glitch': 'dialogue/screen-glitch.js',
         './finale-battle': 'dialogue/finale-battle.js',
         './narration-cues.json': 'dialogue/narration-cues.json',
         './character-art': 'dialogue/character-art.js',

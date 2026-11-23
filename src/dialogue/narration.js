@@ -2,6 +2,7 @@
 
 const cues = require('./narration-cues.json');
 const { currentTylerEntry } = require('./tyler-visuals');
+const { createGlitchTracker } = require('./screen-glitch');
 const { renderedSprite } = require('../runtime/rendered-sprite');
 const { finaleVisible, captureFinale } = require('./finale-visuals');
 const { finaleBattleReady, bossFlash, combinedStones } = require('./finale-battle');
@@ -22,8 +23,8 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//147 original recordings; measured pack 1,768,755 bytes.
-const PACK_LIMIT = 1728 * 1024;
+//147 original recordings; measured pack 1,777,065 bytes.
+const PACK_LIMIT = 1736 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -46,6 +47,7 @@ function unpackClips(root, bytes) {
 }
 
 function createNarration(root, host, preferences) {
+    const glitches=createGlitchTracker(root);
     let pack = null;
     let loading = null;
     let failed = false;
@@ -348,6 +350,17 @@ function createNarration(root, host, preferences) {
         context.queue.push(state);environment = null;scene._wqaEnvironmentPending = false;
     }
 
+    function glitchPresent(scene) {
+        if(!voiceReady() || !enabled() || !ready(scene,false,true) || pendingCount()>=QUEUE_LIMIT)return;
+        const state=glitches.capture(scene);
+        if(!state)return;
+        if(owner && owner.scene!==scene)leave(owner.scene);
+        const context=owner??begin(scene);
+        context.screenEffect=true;
+        glitches.admit(state);
+        context.queue.push({...state,frame:host.graphics.frameCount,order:++sequence});
+    }
+
     function questionsPresent(scene) {
         if (!voiceReady() || !enabled() || !ready(scene)) return;
         // Preserve native request order when its receipt survived. A bounded
@@ -555,6 +568,7 @@ function createNarration(root, host, preferences) {
 
     function mayPresent(context) {
         const { scene, interpreter, list } = context;
+        if(context.screenEffect)return enabled()&&ready(scene,false,true)&&context.mapId===root.$gameMap?._mapId;
         if(context.momentum)return enabled()&&ready(scene,false,true);
         if (context.carried) return ready(scene, false, true) && enabled();
         if (context.hasReactions) return ready(scene) && enabled() && context.mapId === root.$gameMap?._mapId;
@@ -589,6 +603,7 @@ function createNarration(root, host, preferences) {
     }
 
     function visibleActorCue(scene, state) {
+        if(state.visual===-9)return glitches.visible(scene,state.filter);
         if (state.visual === -8) return environmentVisuals.visible(root, scene, state);
         if (state.visual === -7) return scene._spriteset._tilemap?.worldVisible === true &&
             (scene._spriteset.x !== state.screenX || scene._spriteset.y !== state.screenY);
@@ -662,6 +677,7 @@ function createNarration(root, host, preferences) {
                 const map = root.$gameMap;
                 state.confirmed = state.battleVisible ? state.battleVisible() : state.idle ? map.inactiveTime < state.idle.end &&
                     state.idle.visible(scene, map, root.$gamePlayer) : visibleActorCue(scene, state);
+                if(state.confirmed && state.visual===-9)glitches.confirm(state);
                 if (state.confirmed && state.bit) scene._wqaIdleNarrationMask |= state.bit;
                 if(state.confirmed && state.id==='tyler-arrives') {
                     scene._wqaTylerEntrySeen=state.sourceKey;scene._wqaTylerEntryMap=map._mapId;
@@ -677,7 +693,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { cancel(scene){host.cancelNarrationSpeech?.();leave(scene);}, accepted, entry, pause, jolt, environmentStart, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
+    return { cancel(scene){host.cancelNarrationSpeech?.();leave(scene);}, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };
