@@ -76,8 +76,8 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             if (!current) return changed(state, 'Autowalk stopped. The interaction approach changed. Request directions again.');
             player.setDirection(facing);
         }
-        if ((job.caveCrystal || job.caveLoot || job.prerequisiteAction) && target && atApproach(map, player, target, arrival) &&
-            ((job.caveCrystal || job.caveLoot) && job.caveAction?.(target) || job.prerequisiteAction?.(target))) {
+        if ((job.caveCrystal || job.caveLoot) && target && atApproach(map, player, target, arrival) &&
+            job.caveAction?.(target)) {
             stop(state.scene);
             if (job.caveLoot) report(state.scene, null, false, true, job);
             if (facing === null) player.checkEventTriggerHere([0]);

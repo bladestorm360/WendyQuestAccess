@@ -5,18 +5,8 @@ const { performance } = require('node:perf_hooks');
 const { createField } = require('../src/world/field');
 const { captureWorld } = require('../src/world/snapshot');
 const { solveRoute } = require('../src/world/routes.cjs');
-const { simpleTerrainControl } = require('../src/world/terrain-control-labels.cjs');
 
 module.exports = async function verifyControls(c, load, verifyWorker, read, snapshot) {
-    const simple = [[12,56], [27,43], [36,37], [62,17], [62,18], [93,58], [103,5], [104,6]];
-    for (const [id,event] of simple) {
-        const f = load(id), actor = f.gameMap.event(event), entry = f.map.events[event];
-        assert(simpleTerrainControl(id,actor,entry));
-        const changed = structuredClone(entry);
-        changed.pages[0].list.splice(1,0,{code:102,parameters:[]});
-        const choice = {...actor, page: () => changed.pages[0]};
-        assert(!simpleTerrainControl(id,choice,changed), 'a new choice cannot be auto-accepted');
-    }
     for (const [id,event,x,y,target] of [[12,56,43,15,7],[27,43,7,41,4],[36,37,29,19,6],
         [62,18,13,29,10],[93,58,3,40,2],[103,5,7,2,3],[104,6,21,5,68]]) {
         const f = load(id); f.player.setPosition(x,y);
@@ -105,7 +95,18 @@ module.exports = async function verifyControls(c, load, verifyWorker, read, snap
         }
         for(let limit=0;field.autowalk.active(scene)&&limit<200;limit++)tick();
         const button=gameMap.event(56);
-        assert.equal(gameMap._interpreter._eventId,56,'the actual native Action Button path selects the bridge button');
+        assert.notEqual(gameMap._interpreter._eventId,56,'arrival must not press the button');
+        assert(!button.isStarting());
+        const waitingPackets=packets.length;
+        for(let idle=0;idle<10;idle++)tick();
+        assert(!button.isStarting());assert.notEqual(gameMap._interpreter._eventId,56);
+        assert.equal(packets.length,waitingPackets,'waiting for confirm must not resume early');
+        c.Tyruswoo.TileControl.param={};
+        const previousTrigger=c.Input.isTriggered;
+        c.Input.isTriggered=key=>key==='ok';
+        assert(player.triggerButtonAction(),'the player confirm starts the actual native button');
+        c.Input.isTriggered=previousTrigger;
+        assert.equal(gameMap._interpreter._eventId,56,'only the player starts the button event');
         assert.equal(player._direction,verifiedApproach.facing);
         assert.deepEqual([player._x,player._y],[verifiedApproach.x,verifiedApproach.y]);
         assert(scene._wqaIceRoute,'selected destination survives native interpreter acceptance');
@@ -138,5 +139,5 @@ module.exports = async function verifyControls(c, load, verifyWorker, read, snap
     await run(15,36,26);await run(39,22,26);await run(43,15,7);
     await run(15,36,7,'finish',true);await run(30,16,26,'finish',true);
     await run(15,36,26,'cancel');await run(15,36,26,'manual');
-    console.log(`Verified8 choice-free buttons,7 full worker control courses without beacon,3 original Russetwood detours and2 ice-to-button journeys/button activations/final arrivals, cancellation and manual takeover. ${steps} throttled native input updates ${nativeMs.toFixed(2)}ms total/${peak.toFixed(2)}ms peak; no actual game measurement.`);
+    console.log(`Verified7 full worker control courses without beacon,3 original Russetwood detours and2 ice-to-button journeys/manual button confirmations/final arrivals, cancellation and manual takeover. ${steps} throttled native input updates ${nativeMs.toFixed(2)}ms total/${peak.toFixed(2)}ms peak; no actual game measurement.`);
 };

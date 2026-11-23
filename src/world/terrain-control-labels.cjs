@@ -39,24 +39,6 @@ const GATE_SWITCHES = Object.freeze({
 
 const BREAKFAST_MAPS = [66, 77, 78, 79, 80, 81, 84, 85, 86, 87, 113, 191];
 
-// Only the eight audited, choice-free tile buttons may be activated by
-// ordinary Autowalk. Cache qualification by the native page, never by text.
-// Dialogue, scripts, combat, crystals with choices and pull sequences retain
-// their existing player interaction; automatic movement still reaches them.
-const simplePages = new WeakMap();
-function simpleTerrainControl(map, event, entry) {
-    if (!CONTROLS[map]?.[event?._eventId] || event._pageIndex !== 0 || event._trigger !== 0) return false;
-    const page = entry?.pages?.[0], next = entry?.pages?.[1];
-    if (!page || page !== event.page?.() || page.list.length > 192) return false;
-    if (!simplePages.has(page)) {
-        const rows = page.list.filter(row => ![0,108,408,657].includes(row.code));
-        const done = rows[rows.length - 1];
-        simplePages.set(page, !!(next?.conditions.selfSwitchValid && next.conditions.selfSwitchCh === 'A' &&
-            done?.code === 123 && done.parameters.join(',') === 'A,0' &&
-            rows.some(row => row.code === 357) && rows.every(row => row.code === 250 || row === done ||
-                row.code === 357 && row.parameters[0] === 'Tyruswoo_TileControl' && row.parameters[1] === 'set_tile')));
-    }
-    return simplePages.get(page);
-}
-
-module.exports = { CONTROLS, TERRAIN_PAGES, GATE_SWITCHES, BREAKFAST_MAPS, simpleTerrainControl };
+// Ordinary terrain controls retain native player interaction. Navigation
+// keeps the selected destination through the actual event and page change.
+module.exports = { CONTROLS, TERRAIN_PAGES, GATE_SWITCHES, BREAKFAST_MAPS };

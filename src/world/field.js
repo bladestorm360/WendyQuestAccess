@@ -16,7 +16,7 @@ const { tileKey, DIRECTIONS } = require('./geometry.cjs');
 const { browse, createDestinationBrowser, activeMovingEnemy } = require('./destinations');
 const { collectQuestDestinations, questDestinationCurrent } = require('./quest-destinations');
 const { createSaltGuide } = require('./puzzles/salt-caverns');
-const { CONTROLS, TERRAIN_PAGES, simpleTerrainControl } = require('./terrain-control-labels.cjs');
+const { CONTROLS, TERRAIN_PAGES } = require('./terrain-control-labels.cjs');
 const { createTerrainJourney, BRIDGE_REASON, CRYSTAL_REASON, PULL_REASON, STONE_ISLAND } = require('./terrain-journey');
 const { saltControlName } = require('./puzzles/salt-state.cjs');
 const { mapPlace } = require('./map-banner');
@@ -143,8 +143,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (job?.controlPrerequisite && !arrived) clearIceRoute(scene);
         if (arrived && job?.controlPrerequisite) {
             // This is an intermediate interaction, not the selected arrival.
-            // Choice-free buttons start natively in Autowalk.arrive; other
-            // controls keep their concise manual activation instruction.
+            // Keep the original selection while the player activates the
+            // control. Native completion and readiness own continuation.
             retire(scene);
             if (record) command('navigationReport', record);
             return;
@@ -714,8 +714,6 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 }[result.gate];
                 startBeaconApproach(job, result, result.event);
                 const retained = retainControlRoute(job, result);
-                const entry = root.$dataMap.events[result.event];
-                const automatic = retained && simpleTerrainControl(job.map, retained.block, entry);
                 // Numeric terrain gate IDs are not timed-patrol callbacks.
                 // Keep that completion condition only on the inert handoff.
                 follow(job, { ...result, gate: undefined }, { kind: 'routeDirections', name: job.label,
@@ -723,9 +721,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     more: result.more === true, prerequisite,
                     prerequisiteMove: result.step ? result.boundary : undefined },
                 { ...job, target: result.event, quest: null, point: false, vehicle: undefined,
-                    nearestLanding: false, controlPrerequisite: !!retained,
-                    prerequisiteAction: automatic ? event => iceRoute === retained && event === retained.block &&
-                        event._pageIndex === retained.page && event.list() === retained.list : undefined });
+                    nearestLanding: false, controlPrerequisite: !!retained });
             }
             else if (result?.status === 'saltRoute') {
                 const event = result.actions?.[0];

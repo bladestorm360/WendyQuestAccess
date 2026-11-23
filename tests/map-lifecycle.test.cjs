@@ -110,7 +110,9 @@ function fixture(data, failSave = false, navigation) {
         addEventListener: (event, callback) => events.on(event, callback),
         console: { log() {}, warn() {} }
     });
-    const run = text => vm.runInContext(text, c, { timeout: 100 });
+    // Definition evaluation needs scheduler margin under the shared CPU cap;
+    // this fixture watchdog is not a native frame-latency allowance.
+    const run = text => vm.runInContext(text, c, { timeout: 500 });
     for (const [file, groups] of Object.entries(stock)) {
         const source = read(`js/rmmz_${file}.js`);
         for (const [target, methods] of Object.entries(groups)) {
