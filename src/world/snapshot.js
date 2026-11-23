@@ -136,7 +136,11 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 meltable: !!meltable,
                 ...(meltChanges?.relocate || meltChanges?.clears ? { meltChanges } : {}),
                 movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
-                discoveryFor: mode === 'airship' || airshipAvailable ? discoveryEntrance(id, event) : undefined });
+                // Discovery walks cannot use a transfer tile as local transit.
+                // Keep this copied identity even before aircraft ownership.
+                discoveryFor: id === 113 ? discoveryEntrance(id, event) : undefined,
+                mapTransfer: id === 113 && action && [1, 2].includes(trigger) && event._priorityType !== 1 &&
+                    transferOptions(id, entry, page, root.$dataCommonEvents).length > 0 });
         }
         if (routesOnly || event._erased || !spoilers && concealedDestination(id, event)) continue;
         const quest = quests?.get(eventId);

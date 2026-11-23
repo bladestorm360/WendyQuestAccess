@@ -72,7 +72,9 @@ async function verifyAirshipFoot(c, load, read, verifyWorker) {
             }
             assert.equal(onFootAirshipRoute(f.geometry,{...walk.live,airshipAvailable:false},request,direct,()=>false),null);
         }
-        assert.equal(markers.length,23);assert.equal(alternate,21);assert.equal(disconnected,6);
+        // Native transfers are terminal for discovery walks. Fourteen old
+        // interrupted results were false transit through unrelated entrances.
+        assert.equal(markers.length,23);assert.equal(alternate,21);assert.equal(disconnected,20);
         const direct=findReachable(f.geometry,walk.live,{x:walk.x,y:walk.y,candidates});
         const expanded=onFootAirshipReachable(f.geometry,walk.live,{x:walk.x,y:walk.y,candidates},direct,()=>false);
         assert.equal(expanded.status,'reachable');

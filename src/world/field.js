@@ -388,7 +388,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             host.beacon.refreshResult(state, state.revision, state.player._x, state.player._y, null);
             return true;
         }
-        if (autowalk.active(state.scene)) automaticSnapshot(snapshot);
+        if (autowalk.active(state.scene)) automaticSnapshot(snapshot, state.request?.event);
         const job = { scene: state.scene, sequence: ++sequence, beaconState: state, revision: state.revision };
         state.waiting = true;
         submit(job, snapshot, state.request);
@@ -919,13 +919,15 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return destination;
     }
 
-    function automaticSnapshot(snapshot) {
+    function automaticSnapshot(snapshot, selectedEvent) {
         // Only numeric copied rows are altered. Bookkeeping floor triggers do
         // not block the worker's automatic course; the native input owner
         // still stops at each touch and resumes after its exact event ends.
+        // The explicitly selected touch remains an action: even a flag-only
+        // page can activate an encounter through a separate native autorun.
         if (snapshot.mode !== 'walk' || timedCave(snapshot.map)) return;
         for (const row of snapshot.live?.events || []) {
-            if (!row.action || row.normal || ![1, 2].includes(row.trigger)) continue;
+            if (row.id === selectedEvent || !row.action || row.normal || ![1, 2].includes(row.trigger)) continue;
             const event = root.$gameMap._events[row.id];
             const page = root.$dataMap?.events[row.id]?.pages[event?._pageIndex];
             if (event?._x === row.x && event._y === row.y && passiveFloorPage(page)) row.action = false;
@@ -936,7 +938,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const destination = setRouteTarget(job, target);
         job.area = area;
         job.autowalk = job.action !== 'puzzleGuide' && !job.journey && preferences().autowalk;
-        if (job.autowalk) automaticSnapshot(snapshot);
+        if (job.autowalk) automaticSnapshot(snapshot, destination.event);
         if (job.autowalk && timedCave(snapshot.map)) {
             job.caveWalk ||= { destination: target, attempt: 0, acted: new Set(), announced: false };
             if (job.caveWalk.x !== snapshot.x || job.caveWalk.y !== snapshot.y)

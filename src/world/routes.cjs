@@ -276,7 +276,7 @@ function trace(world, start, goal, facing, parents, cancelled, stops) {
     return result;
 }
 
-function route(world, start, goals, cancelled, area, stops, crossStops = false, preference) {
+function route(world, start, goals, cancelled, area, stops, crossStops = false, preference, terminalStops) {
     const parents = new Uint8Array(world.cells.length);
     const frontier = new Uint16Array(world.cells.length);
     parents[start] = 255;
@@ -296,7 +296,7 @@ function route(world, start, goals, cancelled, area, stops, crossStops = false, 
                 bestRank = rank;
             }
         }
-        if (!crossStops && cell !== start && stops?.[cell]) continue;
+        if (cell !== start && stops?.[cell] && (!crossStops || terminalStops?.has(stops[cell]))) continue;
         for (let heading = 0; heading < DIRECTIONS.length; heading++) {
             const next = step(world, cell, heading);
             if (next < 0 || parents[next] || (area && !inside(world, next, area))) continue;
@@ -796,7 +796,12 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
         if (stops[goal] !== targetStop) return result;
         return beforeFloorEvent(world, result, targetStop);
     }
-    const possible = route(world, start, goals, cancelled, area, stops, true);
+    // A discovery walk stays on this map. Native entrances transfer away;
+    // crossing their painted tile cannot prove an onward local connection.
+    // Preserve all other event prerequisites and existing cross-map plans.
+    const discovery = world.mode === 'walk' && world.events.some(event => event.id === request.event && event.discoveryFor);
+    const terminalStops = discovery ? new Set(world.events.filter(event => event.mapTransfer).map(event => event.id)) : undefined;
+    const possible = route(world, start, goals, cancelled, area, stops, true, undefined, terminalStops);
     if (possible.status !== 'unreachable') return finishEntry(world, possible, entry);
     if (coveredGoals) {
         // A floor event may occupy the only button/bump/counter approach,
@@ -808,7 +813,7 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
             if ((cell & 63) === 0 && cancelled()) return { status: 'cancelled' };
             if (coveredGoals[cell]) goals[cell] = coveredGoals[cell];
         }
-        const covered = route(world, start, goals, cancelled, area, stops, true);
+        const covered = route(world, start, goals, cancelled, area, stops, true, undefined, terminalStops);
         if (covered.status !== 'unreachable')
             return covered.status === 'ready' ? beforeFloorEvent(world, covered,
                 stops[indexOf(world, covered.arrival.x, covered.arrival.y)]) : covered;

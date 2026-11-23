@@ -1323,6 +1323,10 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if (process.argv.includes('--encounters-only')) {
+        await require('./encounter-triggers.cjs')(c,load,verifyWorker,read);
+        return;
+    }
     if (process.argv.includes('--russetwood-bridge-only')) {
         await require('./russetwood-bridge.cjs')(c,load,snapshot,read,verifyWorker);
         return;
