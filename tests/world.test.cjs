@@ -1323,6 +1323,14 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if (process.argv.includes('--event-regressions-only')) {
+        await require('./event-approaches.cjs').verify(c,load,snapshot,read,verifyWorker);
+        return;
+    }
+    if (process.argv.includes('--event-audit-only')) {
+        await require('./event-approaches.cjs').audit(c,load,snapshot,read);
+        return;
+    }
     if (process.argv.includes('--elder-door-only')) {
         await require('./elder-door.cjs').verifyNative(c,load,snapshot,verifyWorker);
         return;
@@ -1339,7 +1347,11 @@ async function main() {
         await verifyAutowalk(c, load, verifyWorker);
         return;
     }
-    const catalog = bake(game, derived);
+    // Focused fixes may reuse the installed, input-verified geometry. Native
+    // loads below and the all-map audit still compare the exact authored data.
+    const reused = process.argv.includes('--reuse-geometry') && JSON.parse(fs.readFileSync(path.join(derived,'manifest.json'),'utf8'));
+    const catalog = reused ? {maps:Object.keys(reused.maps).length,
+        cells:Object.values(reused.maps).reduce((sum,map)=>sum+map.width*map.height,0)} : bake(game, derived);
     if (process.argv.includes('--airship-foot')) {
         await require('./airship-foot.cjs').verifyAirshipFoot(c, load, read, verifyWorker);
         return;

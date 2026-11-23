@@ -387,6 +387,18 @@ function finishEntry(world, result, entry) {
     return result;
 }
 
+function beforeFloorEvent(world, result, event) {
+    // Leave the final activation step to the existing manual/Autowalk
+    // handoff. The actor has not run yet; its outcome is never projected.
+    const last = result.legs[result.legs.length - 1];
+    const goal = indexOf(world, result.arrival.x, result.arrival.y);
+    if (--last.tiles === 0) result.legs.pop();
+    const before = offset(world, goal, 3 - DIRECTIONS.indexOf(last.direction));
+    return { ...result, status: 'interrupted', distance: result.distance - 1,
+        boundary: last.direction, boundaryEvent: event,
+        arrival: { x: before % world.width, y: Math.floor(before / world.width), facing: null } };
+}
+
 function canReenter(world, start, stops, area) {
     return DIRECTIONS.some((_, heading) => {
         const adjacent = step(world, start, heading);
@@ -761,11 +773,14 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
     const stops = tiles.touch;
     let blockedApproach = false;
     const handoffs = new Set();
+    let coveredGoals;
     const targetStop = request.waypoint === true ? undefined : request.event;
     for (let cell = 0; cell < stops.length; cell++) {
         if ((cell & 63) === 0 && cancelled()) return { status: 'cancelled' };
         if (cell === start || !goals[cell] || !stops[cell] || stops[cell] === targetStop) continue;
         if (!entry && request.handoffs?.includes(stops[cell])) handoffs.add(stops[cell]);
+        coveredGoals ??= new Uint8Array(goals.length);
+        coveredGoals[cell] = goals[cell];
         goals[cell] = 0;
         blockedApproach = true;
     }
@@ -779,17 +794,25 @@ function solveWorldRoute(world, request, cancelled = () => false, readyTiles) {
         if (result.status !== 'ready' || request.stopBeforeEvent !== true || !result.distance) return result;
         const goal = indexOf(world, result.arrival.x, result.arrival.y);
         if (stops[goal] !== targetStop) return result;
-        // Reuse the verified final edge, but leave the activation step to
-        // the player. Offset preserves looping-map geometry.
-        const last = result.legs[result.legs.length - 1];
-        if (--last.tiles === 0) result.legs.pop();
-        const before = offset(world, goal, 3 - DIRECTIONS.indexOf(last.direction));
-        return { ...result, status: 'interrupted', distance: result.distance - 1,
-            boundary: last.direction, boundaryEvent: targetStop,
-            arrival: { x: before % world.width, y: Math.floor(before / world.width), facing: null } };
+        return beforeFloorEvent(world, result, targetStop);
     }
     const possible = route(world, start, goals, cancelled, area, stops, true);
     if (possible.status !== 'unreachable') return finishEntry(world, possible, entry);
+    if (coveredGoals) {
+        // A floor event may occupy the only button/bump/counter approach,
+        // waypoint or oriented entrance predecessor. Prove the full path
+        // with the unchanged native colliders, then return only its prefix
+        // before the first floor event. One bounded fallback search replaces
+        // missing per-map metadata; real walls and closed gates stay blocked.
+        for (let cell = 0; cell < goals.length; cell++) {
+            if ((cell & 63) === 0 && cancelled()) return { status: 'cancelled' };
+            if (coveredGoals[cell]) goals[cell] = coveredGoals[cell];
+        }
+        const covered = route(world, start, goals, cancelled, area, stops, true);
+        if (covered.status !== 'unreachable')
+            return covered.status === 'ready' ? beforeFloorEvent(world, covered,
+                stops[indexOf(world, covered.arrival.x, covered.arrival.y)]) : covered;
+    }
     // A verified approach can itself be a floor event. Stop before stepping
     // onto it, then let the native interpreter run before continuing.
     let handoff;

@@ -34,7 +34,8 @@ def stage_narration():
     if not clips or len(clips) > 145 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
         raise ValueError('Malformed narration clips')
     pack = struct.pack('<' + 'I' * len(clips), *(len(clip) for clip in clips)) + b''.join(clips)
-    if len(pack) > 1675 * 1024:
+    #145 recordings; the clarified sleep caption adds6,076 measured bytes.
+    if len(pack) > 1681 * 1024:
         raise ValueError('Narration clips exceed their playback budget')
     target = OUT / 'wendyquest-access/narration.webmpack'
     target.parent.mkdir(parents=True, exist_ok=True)

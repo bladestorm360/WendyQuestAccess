@@ -21,7 +21,8 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-const PACK_LIMIT = 1675 * 1024;
+//145 clips, including the clarified sleep caption;6KiB growth is measured.
+const PACK_LIMIT = 1681 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;

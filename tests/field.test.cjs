@@ -220,6 +220,7 @@ async function main() {
     profileSnapshot(flags);
     await verifyOpeningField(flags);
     await require('./elder-door.cjs').verifyField(fixture,mapData,flags);
+    await require('./elder-door.cjs').verifyField(fixture,mapData,flags,117);
     await verifyIceHandback(flags);
     await verifyVisibleChestBarriers(flags);
     await verifyClosedRuinsDoor(flags);
