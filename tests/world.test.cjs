@@ -1380,6 +1380,7 @@ async function main() {
         await require('./ice-routes.cjs')(c,load,snapshot,read,verifyWorker);
         return;
     }
+    if(process.argv.includes('--salt-guide-only')) {await require('./salt-guide.cjs')(c,load,read,verifyWorker);return;}
     if (process.argv.includes('--autowalk-only')) {
         await verifyAutowalk(c, load, verifyWorker);
         return;

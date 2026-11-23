@@ -92,7 +92,7 @@ function solveSaltRoute(base, live, request, model, cancelled) {
             if (route.status === 'interrupted' && (id === 18 || REMINDERS.includes(id))) floor.set(id, route);
         }
         rememberFloor(goal);
-        for (const event of CONTROLS) {
+        for (const event of request.saltTerrainOnly ? TERRAIN : CONTROLS) {
             if (event === request.event) continue;
             const next = advance(state, event);
             if (!next) continue;

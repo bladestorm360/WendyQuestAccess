@@ -269,8 +269,8 @@ async function verifyNavigationAuditFixes(c, load, verifyRoute, verifyWorker, re
     const opening = at(19, 24, 68);
     const saltScene = { _wqaMapRestored: true };
     const guide = createSaltGuide(c).review(saltScene, opening.view.objects);
-    assert.equal(guide.target.id, 19);
-    assert.match(guide.text, /0 of 4 colors complete/);
+    assert.equal(guide.target.id, 6);
+    assert.match(guide.text, /0 of 4 chests collected/);assert(!guide.text.includes('yellow'));
     await verifyWorker(opening.fixture, { x: 24, y: 68, event: guide.target.id, field: true }, opening.view.live, result => {
         assert.equal(result.status, 'saltRoute');
         assert(result.actions.length > 0 && result.actions[0] !== guide.target.id);

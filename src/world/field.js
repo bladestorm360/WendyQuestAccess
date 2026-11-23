@@ -758,10 +758,11 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     event === 105 ? 'the torch reminder' : event === 18 ? 'the cave conversation' : '');
                 if (!prerequisite) return status(job, 'Crystal directions unavailable');
                 startBeaconApproach(job, result, event);
-                presentRoute(job, { kind: 'routeDirections', name: job.label, guide: job.guide,
+                follow(job, result, { kind: 'routeDirections', name: job.label, guide: job.guide,
                     legs: result.legs, facing: result.arrival.facing, more: result.more === true,
                     prerequisite, prerequisiteMove: kind !== 'action' ? result.boundary : undefined,
-                    remainingActions: result.actions.length - 1 });
+                    remainingActions: result.actions.length - 1 },
+                    {...job,target:event,point:false,vehicle:undefined});
             }
             else if (result?.status === 'npcBlocked') {
                 const gate = npcPassage(root.$gameMap);
@@ -958,7 +959,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     function route(job, snapshot, target, area, motion) {
         const destination = setRouteTarget(job, target);
         job.area = area;
-        job.autowalk = job.action !== 'puzzleGuide' && !job.journey && preferences().autowalk;
+        job.autowalk = (job.action !== 'puzzleGuide' || snapshot.map===19) && !job.journey && preferences().autowalk;
         if (job.autowalk) automaticSnapshot(snapshot, destination.event);
         if (job.autowalk && timedCave(snapshot.map)) {
             job.caveWalk ||= { destination: target, attempt: 0, acted: new Set(), announced: false };
@@ -992,6 +993,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const followedDirection = !motion && !area ? routeProgress(job, snapshot, target, destination.event) : undefined;
         const detour = localDetour.prepare(job, snapshot, target);
         submit(job, snapshot, { ...destination, detour, terrainTransfer, guideOptions, followedDirection,
+            saltTerrainOnly: snapshot.map===19 && (job.saltTerrainOnly || salt.active(job.scene) && [3,4,5,6].includes(job.target)),
             stopBeforeEvent: job.eventAction === 'step',
             limit: 8, area, motion, field: true, landing: snapshot.mode === 'airship' && !job.point,
             surface: snapshot.mode !== 'walk', patrolGuidance: !!motion,
@@ -1539,6 +1541,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             }
             selectGuideTarget(result.target);
             job.guide = result.text;
+            job.saltTerrainOnly = result.terrainOnly===true;
             job.readyGuide = result.readyText;
             job.guideOptions = result.options;
             return timed ? timedRoute(job, snapshot, result.target) : route(job, snapshot, result.target);
@@ -1649,10 +1652,11 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (action === 'puzzleStop') {
             if (!host.hasFocus()) return false;
             const pending = active?.scene === scene && active.action === 'puzzleGuide';
+            const guidedMap = timedCave(root.$gameMap._mapId) || salt.active(scene);
             const stopped = salt.stop(scene) || cave.stop(scene);
             const timing = host.caveTiming?.stop(scene);
-            const walking = timedCave(root.$gameMap._mapId) && autowalk.stop(scene);
-            const waiting = active?.scene === scene && active.action === 'directions' && timedCave(root.$gameMap._mapId);
+            const walking = guidedMap && autowalk.stop(scene);
+            const waiting = active?.scene === scene && active.action === 'directions' && guidedMap;
             if (!pending && !stopped && !timing && !waiting && !walking) return false;
             if (pending || waiting) retire(scene);
             if (stopped && timedCave(root.$gameMap._mapId)) host.beacon?.stop(scene);
@@ -1901,6 +1905,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 browserOwner(scene);
                 return rerouteAutowalk({scene});
             }
+            // Only native-ready progress changes requeue the active Salt guide.
+            // Ordinary roaming steps do not repeat speech or assume presses.
+            if (salt.observe(scene) && !active && !autowalk.active(scene)) return command('puzzleGuide');
             if (cave.recover(scene) && (!active || active.scene !== scene))
                 command('puzzleGuide');
             const outcome = cave.settleProgress(scene);

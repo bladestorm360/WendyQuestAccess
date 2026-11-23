@@ -295,7 +295,7 @@ parentPort.on('message', message => {
             const follows = (result.status === 'ready' || result.status === 'enemyBlocked' || result.status === 'iceRoute' ||
                 result.status === 'npcBlocked') && !result.reenter && (request.beacon === true || request.autowalk === true);
             const prefix = ['interrupted', 'saltRoute', 'controlRoute', 'terrainExit'].includes(result.status);
-            if (follows || prefix && (request.beacon === true || ['interrupted', 'controlRoute'].includes(result.status) && request.autowalk === true)) {
+            if (follows || prefix && (request.beacon === true || ['interrupted', 'controlRoute', 'saltRoute'].includes(result.status) && request.autowalk === true)) {
                 // Two direction bits and the bounded distance to the next turn.
                 // The renderer advances one byte per accepted native step.
                 const course = new Uint8Array(result.distance);
