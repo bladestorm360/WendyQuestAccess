@@ -4,13 +4,14 @@ const {createField}=require('../src/world/field');
 const {createSaltGuide}=require('../src/world/puzzles/salt-caverns');
 const {captureWorld}=require('../src/world/snapshot');
 const {saltState}=require('../src/world/puzzles/salt-state.cjs');
+const {formatSpeech}=require('../src/services/speech-text.cjs');
 module.exports=async(c,load,read,verifyWorker)=>{
  const keys=['Input','$gameScreen','$gameMessage','$gameTemp','addEventListener','ConfigManager','WendyQuestAccessAutowalkInput',
   'WendyQuestAccessFieldMove','WendyQuestAccessFieldChanged','WendyQuestAccessSceneLeaving','CoroutineManager'];
  const saved=Object.fromEntries(keys.map(k=>[k,c[k]])),sceneBefore=c.SceneManager._scene,app=c.Graphics.app;
  const sv=c.$gameSwitches.value,ss=c.$gameSwitches.setValue,vv=c.$gameVariables.value,vs=c.$gameVariables.setValue;
  const lv=c.$gameSelfSwitches.value,ls=c.$gameSelfSwitches.setValue;
- try{for(const automatic of [false,true]){
+ try{for(const [automatic,verbose] of [[false,true],[false,false],[true,false]]){
   const f=load(19),map=f.gameMap,p=f.player;p.setPosition(24,68);delete p.direction;
   p._followers={areGathering:()=>false,updateMove(){}};map.inactiveTime=0;
   const switches=new Set([200]),self=new Set(),vars=new Map([[3,0]]);
@@ -36,7 +37,7 @@ module.exports=async(c,load,read,verifyWorker)=>{
   refresh();
   let wire;
   const field=createField(c,{manager:c.SceneManager,graphics:c.Graphics,hasFocus:()=>true,screenFading:()=>false,
-   navigationPreferences:()=>({autowalk:automatic}),makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),
+   navigationPreferences:()=>({autowalk:automatic,verbosePuzzleGuidance:verbose}),makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),
    createRouteWorker:()=>wire=Object.assign(new EventEmitter(),{unref(){},postMessage:q=>packets.push(q)})},
    {open(r){records.push(r);return records.length;},close(){},arrive(r,current,old,detail){records.push(r);if(detail)records.push(detail);return records.length;},endArrival(){}});
   c.WendyQuestAccessAutowalkInput=field.autowalk.input;c.WendyQuestAccessFieldMove=field.autowalk.moved;
@@ -90,6 +91,10 @@ module.exports=async(c,load,read,verifyWorker)=>{
     p.moveStraight(leg.direction);p._realX=p._x;p._realY=p._y;
    }
    if(p.x!==result.arrival.x||p.y!==result.arrival.y)continue;
+   const spoken=records.findLast(r=>r.kind==='routeDirections');
+   assert(spoken?.puzzleGuidance);assert.equal(spoken.verbosePuzzleGuidance,verbose);
+   if(verbose && spoken.legs.length)assert(formatSpeech(spoken).indexOf('Salt Caverns')>0);
+   if(!verbose)assert(!/chests collected|Color order|More steps follow/.test(formatSpeech(spoken)));
    const actor=map.event(target),waiting=packets.length;
    for(let idle=0;idle<60;idle++){tick();field.observeReady(scene);}
    assert(!actor.isStarting(),'guide never activates a crystal/chest');assert.equal(packets.length,waiting);

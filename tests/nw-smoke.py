@@ -401,6 +401,11 @@ function verifySettings() {
             beaconSpeechConfigured++;
             return;
         }
+        if (beaconSpeechConfigured === 2) {
+            choose('Verbose puzzle guidance, on');
+            beaconSpeechConfigured++;
+            return;
+        }
         tap('Escape');
         if (document.activeElement.textContent !== 'Navigation') throw Error('Navigation parent focus was lost');
         choose('Audio');
@@ -585,7 +590,7 @@ const interval = setInterval(() => {
             const navigationBindings = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
             tap('Escape');tap('Escape');
             choose('Navigation');
-            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 9).map(item => item.textContent);
+            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 10).map(item => item.textContent);
             choose('Bookmarks');
             const bookmarks = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
             if (bookmarks.join('|') !== 'Return marker, Map 1, saved on foot|Back')
@@ -3079,7 +3084,7 @@ def main():
         if restarted or not reloaded.get('speechRestored') or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T',
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, RT', 'Next category, Unassigned'] or \
-                reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on',
+                reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on', 'Verbose puzzle guidance, off',
                                                'Navigation keymap, Brackets and backslash', 'Reachable destinations only, off', 'Spoiler mode, on',
                                                'Speak beacon destination on controller directions, on', 'Speak full path with beacon, on',
                                                'Bookmarks', 'Back'] or reloaded.get('battle') != ['Automatic perfect timing, on', 'Back'] or \

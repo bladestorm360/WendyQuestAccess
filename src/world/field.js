@@ -290,6 +290,16 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         speech = 0;
     }
 
+    function puzzleSpeech(job, record) {
+        if(!record || !['routeDirections','timedDirections','patrolApproach','patrolWait','timedCue','patrolLineManual'].includes(record.kind))return record;
+        if(job.action!=='puzzleGuide' && !job.caveWalk && !timedCave(root.$gameMap?._mapId) &&
+            !(salt.available(job.scene)&&salt.active(job.scene)))return record;
+        // Mark copied speech only: routes, native inputs and patrol safety
+        // never depend on verbosity. Pickup retreats are current-step actions.
+        return {...record,puzzleGuidance:true,verbosePuzzleGuidance:preferences().verbosePuzzleGuidance!==false,
+            guideRequired:record.guideRequired===true || job.essentialGuide===true};
+    }
+
     function present(job, record, moving = false) {
         if (active !== job) return;
         job.scene._wqaInteractionDeferred = false;
@@ -301,6 +311,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 preferences().speakBeaconDestination;
             record = { ...record, name: speakDestination ? job.label : record.name, directionsOnly: !speakDestination };
         }
+        record = puzzleSpeech(job,record);
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
             (!job.questExit || chillcrestQuestExit(root)) &&
@@ -320,6 +331,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     }
 
     function follow(job, result, record, walkingJob = job) {
+        record = puzzleSpeech(job,record);
         if (job.progress && (result.status === 'ready' || result.status === 'enemyBlocked')) {
             const first = result.legs[0];
             if (first) owner.routeProgress = { ...job.progress, x: job.x, y: job.y, ...first };
@@ -558,7 +570,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const { activate } = result;
                 const record = { kind: 'routeDirections', name: job.label, legs: [], facing: result.arrival.facing,
                     activate, takeExit: !!activate, exit: activate ? job.label : undefined, guideAction: !activate };
-                if (!autowalk.start(job, result, record))
+                if (!autowalk.start(job, result, puzzleSpeech(job,record)))
                     return job.caveWalk ? waitCaveWalk(job) : status(job, 'Guard timing changed. Request directions again.');
                 job.scene._wqaRouteActive = false;
                 // A real touch boundary always remains a player-owned step.
@@ -668,7 +680,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 return present(job, { kind: 'patrolApproach', direction: result.direction, tiles: result.tiles,
                     terminal: result.terminal, guide: job.guide });
             else if (result?.status === 'ready') {
-                if (result.pickup) job.guide = 'Open the barrel, then move 1 ' + PATROL_HEADINGS[result.pickup.retreat] + '.';
+                if (result.pickup) {job.guide = 'Open the barrel, then move 1 ' + PATROL_HEADINGS[result.pickup.retreat] + '.';job.essentialGuide=true;}
                 if (job.readyGuide) job.guide = job.readyGuide;
                 if (result.land && !canLand(root.$gameMap, result.arrival.x, result.arrival.y))
                     return status(job, 'Landing site changed. Request directions again.');
@@ -1176,7 +1188,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         job.caveContinue = !terminal && !job.caveWalk.pickupEscape;
         if (!autowalk.start(job, { status: ordinary ? 'ready' : undefined,
             distance: course.length, course, gate, arrival: { x, y, facing: null } },
-            { kind: 'routeDirections', name: job.label, legs, guide: terminal ? job.guide : undefined }))
+            puzzleSpeech(job,{ kind: 'routeDirections', name: job.label, legs, guide: terminal ? job.guide : undefined })))
             return status(job, 'Autowalk stopped. The crossing changed. Request directions again.');
         announceCaveWalk(job);
     }

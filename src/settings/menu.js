@@ -270,6 +270,7 @@ function createSettingsMenu(root, host) {
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
                 'Use normal walking speed for cave crossings. Follow the directional pings and release movement at the thud.',
                 'Guarded routes announce each current leg automatically. Directions repeats its remaining steps. Activate crystals when prompted.',
+                'Navigation, Verbose puzzle guidance: off reads only the next directions and required action; on adds progress and explanations after directions.',
                 'Salt Caverns guidance covers terrain crystals and unopened chests before the final color sequence. Native progress updates the next step after free roaming.',
                 'In the distraction room, Puzzle guide also follows the Autowalk setting.',
                 'In the distraction room, activate the crystal with the action button. Directions resume when movement returns. Follow the pings to a stop, then request directions again.',
@@ -495,6 +496,8 @@ function createSettingsMenu(root, host) {
             { ...navigation, autowalk: !navigation.autowalk }, 'autowalk', 'navigation'));
         const narration = button(owner, `Speak autowalk path, ${navigation.speakAutowalkPath ? 'on' : 'off'}`, () => change(owner,
             { ...navigation, speakAutowalkPath: !navigation.speakAutowalkPath }, 'speakAutowalkPath', 'navigation'));
+        const puzzleVerbosity = button(owner, `Verbose puzzle guidance, ${navigation.verbosePuzzleGuidance ? 'on' : 'off'}`, () => change(owner,
+            { ...navigation, verbosePuzzleGuidance: !navigation.verbosePuzzleGuidance }, 'verbosePuzzleGuidance', 'navigation'));
         const keymap = button(owner, `Navigation keymap, ${LAYOUT_NAMES[layout]}`, () => change(owner,
             { ...navigation, layout: layout === 'letters' ? 'brackets' : 'letters' }, 'layout', 'navigation'));
         const reachable = button(owner, 'Reachable destinations only, ' + (navigation.reachableOnly ? 'on' : 'off'), () =>
@@ -507,7 +510,7 @@ function createSettingsMenu(root, host) {
             beaconSpeech[key] = button(owner, label + ', ' + (navigation[key] ? 'on' : 'off'), () =>
                 change(owner, { ...navigation, [key]: !navigation[key] }, key, 'navigation'));
         }
-        let focused = { autowalk, speakAutowalkPath: narration, reachableOnly: reachable, spoilers,
+        let focused = { autowalk, verbosePuzzleGuidance: puzzleVerbosity, speakAutowalkPath: narration, reachableOnly: reachable, spoilers,
             ...beaconSpeech }[selection] || keymap;
         const savedPlaces = button(owner, 'Bookmarks', () => bookmarks.show(owner));
         if (selection === 'bookmarks') focused = savedPlaces;

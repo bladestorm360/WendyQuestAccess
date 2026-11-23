@@ -141,7 +141,7 @@ function formatSpeech(message) {
             const steps = message.tiles;
             if (!heading || !Number.isInteger(steps) || steps < 1 || steps > 3) return '';
             text = `${message.alternate ? 'Alternate preview' : 'Preview'}. ${steps} ${steps === 1 ? 'step' : 'steps'} ${heading}${message.terminal ? ' to an event' : ''}. Recheck if you wait.`;
-            if (message.guide) text += ' ' + label({ name: message.guide });
+            if (message.guide && (!message.puzzleGuidance || message.verbosePuzzleGuidance !== false || message.guideRequired)) text += ' ' + label({ name: message.guide });
             break;
         }
         case 'patrolApproach':
@@ -152,7 +152,7 @@ function formatSpeech(message) {
             text = message.kind === 'patrolWait' ? `Wait for the guard to move. Crossing is ${heading}. Timing audio is unavailable.` :
                 Number.isInteger(steps) && steps > 0 && steps <= 12 ?
                     `${steps} ${heading}.` : '';
-            if (text && message.guide) text += ' ' + label({ name: message.guide });
+            if (text && message.guide && (!message.puzzleGuidance || message.verbosePuzzleGuidance !== false || message.guideRequired)) text += ' ' + label({ name: message.guide });
             break;
         }
         case 'timedCue': {
@@ -185,7 +185,7 @@ function formatSpeech(message) {
                     ' Switch directions when the ping moves. Keep moving through the turns.' : '') +
                     ' Release movement at the thud.' :
                 ' Stop there and request directions again.';
-            if (message.guide) text += ' ' + label({ name: message.guide });
+            if (message.guide && (!message.puzzleGuidance || message.verbosePuzzleGuidance !== false || message.guideRequired)) text += ' ' + label({ name: message.guide });
             break;
         }
         case 'patrolLineManual': {
@@ -236,8 +236,8 @@ function formatSpeech(message) {
                     const move = HEADINGS[message.prerequisiteMove];
                     parts.push(move ? 'Move ' + move + ' to continue' :
                         (facing ? 'Face ' + facing + ' and press' : 'Press') + ' the action button');
-                    if (message.remainingActions > 0) parts.push('More steps follow');
-                    parts.push(message.resumeIce ? 'Directions resume after the ice melts' :
+                    if (message.remainingActions > 0 && (!message.puzzleGuidance || message.verbosePuzzleGuidance !== false)) parts.push('More steps follow');
+                    if(!message.puzzleGuidance || message.verbosePuzzleGuidance !== false)parts.push(message.resumeIce ? 'Directions resume after the ice melts' :
                         'Request directions again after the passage changes');
                 }
             }
@@ -299,13 +299,14 @@ function formatSpeech(message) {
             const afterEnemy = message.enemyBlocked === true && label({ name: message.afterEnemy });
             if (afterEnemy)
                 parts.push('Once clear, approach ' + afterEnemy + ' and press the action button');
-            const guide = label({ name: message.guide });
+            const guide = message.puzzleGuidance && message.verbosePuzzleGuidance===false && !message.guideRequired ? '' : label({ name: message.guide });
             if (beaconOnly && !parts.length && !guide) {
                 text = message.directionsOnly === true ? '' : name;
                 break;
             }
             if (!parts.length && !beaconOnly) parts.push('you are here');
-            const instructions = [guide, parts.length ? parts.join('. ') + '.' : ''].filter(Boolean).join(' ');
+            const movement = parts.length ? parts.join('. ') + '.' : '';
+            const instructions = (message.puzzleGuidance ? [movement,guide] : [guide,movement]).filter(Boolean).join(' ');
             text = message.directionsOnly === true ? instructions[0].toUpperCase() + instructions.slice(1) :
                 name + '. ' + instructions;
             limit = 512;
