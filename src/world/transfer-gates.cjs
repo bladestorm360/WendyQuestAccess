@@ -8,6 +8,10 @@ const NUGGEDOR_BEFORE = 128;
 const NUGGEDOR_AFTER = 129;
 const WORLD_CAULDRON_GATE = 256;
 const CHILLCREST_RETURNS = Object.freeze({14:512,18:513,19:514});
+// Audited native page conditions, captured once with each field request.
+const CONNECTION_GATES = Object.freeze({ beach:768, forest:769, salt:770, nuggedorDoors:771,
+    burgenburg:772, office:773, cafe:774, cauldronReturn:775 });
+const CONNECTION_OFFSET = HOUSE_SWITCHES.length + 6;
 const WORLD_CAULDRON = Object.freeze({ early: 1, rescued: 2, informed: 4, changed: 8 });
 const STAGE = Object.freeze({ zero: 1, one: 2, two: 4, three: 8, before: 16, after: 32 });
 const CAULDRON_GATE = 64;
@@ -17,7 +21,7 @@ function cauldronGate(mask) { return CAULDRON_GATE | mask; }
 function worldCauldronGate(mask) { return WORLD_CAULDRON_GATE | mask; }
 
 function validGate(gate) {
-    return Number.isInteger(gate) && (Object.values(CHILLCREST_RETURNS).includes(gate) || Math.abs(gate) <= HOUSE_SWITCHES.length ||
+    return Number.isInteger(gate) && (Object.values(CONNECTION_GATES).includes(gate) || Object.values(CHILLCREST_RETURNS).includes(gate) || Math.abs(gate) <= HOUSE_SWITCHES.length ||
         (gate > CAULDRON_GATE && gate <= (CAULDRON_GATE | ALL_STAGES)) ||
         gate === NUGGEDOR_BEFORE || gate === NUGGEDOR_AFTER ||
         (gate > WORLD_CAULDRON_GATE && gate < WORLD_CAULDRON_GATE + 16));
@@ -32,6 +36,8 @@ function stageFor(value) {
 
 function gateAllows(gate, state) {
     if (gate === 0) return true;
+    const connection = Object.values(CONNECTION_GATES).indexOf(gate);
+    if (connection >= 0) return state?.[CONNECTION_OFFSET + connection] === true;
     const west = Object.values(CHILLCREST_RETURNS).indexOf(gate);
     if (west >= 0) return state?.[HOUSE_SWITCHES.length + 3 + west] === true;
     if (gate === NUGGEDOR_BEFORE || gate === NUGGEDOR_AFTER) {
@@ -71,8 +77,14 @@ function transferState(root) {
     for (const event of Object.keys(CHILLCREST_RETURNS)) state.push(recruited ||
         root.$gameSelfSwitches?.value?.([25, Number(event), 'D']) === true ||
         Number.isSafeInteger(progress) && (progress >= 4 || progress < 1 && root.$gameSwitches?.value?.(33) === true));
+    const switches = root.$gameSwitches;
+    state.push(switches?.value?.(11) === true, switches?.value?.(23) === true,
+        switches?.value?.(39) === true, switches?.value?.(424) === false,
+        switches?.value?.(404) === true || switches?.value?.(405) === true || root.$gameVariables?.value?.(16) >= 5,
+        switches?.value?.(103) === true, root.$gameSelfSwitches?.value?.([134,10,'A']) === true,
+        switches?.value?.(477) === false);
     return state;
 }
 
-module.exports = { CHILLCREST_RETURNS, HOUSE_SWITCHES, CAULDRON_VARIABLE, NUGGEDOR_VARIABLE, NUGGEDOR_THRESHOLD, NUGGEDOR_BEFORE, NUGGEDOR_AFTER,
+module.exports = { CONNECTION_GATES, CHILLCREST_RETURNS, HOUSE_SWITCHES, CAULDRON_VARIABLE, NUGGEDOR_VARIABLE, NUGGEDOR_THRESHOLD, NUGGEDOR_BEFORE, NUGGEDOR_AFTER,
     STAGE, ALL_STAGES, cauldronGate, WORLD_CAULDRON, worldCauldronGate, validGate, gateAllows, transferState };

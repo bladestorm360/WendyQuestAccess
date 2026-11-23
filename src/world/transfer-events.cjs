@@ -2,7 +2,7 @@
 
 const { DIRECTIONS, MAX_CELLS } = require('./geometry.cjs');
 const { HOUSE_SWITCHES, CAULDRON_VARIABLE, NUGGEDOR_VARIABLE, NUGGEDOR_THRESHOLD, NUGGEDOR_BEFORE, NUGGEDOR_AFTER,
-    STAGE, ALL_STAGES, CHILLCREST_RETURNS, cauldronGate, WORLD_CAULDRON, worldCauldronGate } = require('./transfer-gates.cjs');
+    STAGE, ALL_STAGES, CONNECTION_GATES, CHILLCREST_RETURNS, cauldronGate, WORLD_CAULDRON, worldCauldronGate } = require('./transfer-gates.cjs');
 
 const STAIRS = {
     127: { switchId: HOUSE_SWITCHES[0], gate: 1, condition: 0, open: 2, closed: 6, secretMap: 195, floorMap: 128, floor: 'Third floor' },
@@ -27,8 +27,8 @@ function transferTo(command, map) {
     return { map: target, x, y, direction: parameters[4], gate: 0 };
 }
 
-function audioOnly(common) {
-    const rows = common?.[38]?.list;
+function audioOnly(common, id = 38) {
+    const rows = common?.[id]?.list;
     return rows?.length === 2 && rows[0]?.code === 250 && rows[0].indent === 0 && rows[1]?.code === 0;
 }
 
@@ -510,14 +510,101 @@ function regionalExit(map, entry, page, index, common) {
     return null;
 }
 
+// These verified wrapper families have one unconditional literal reservation.
+// Branches only update a journal/ambient flag; no branch skips or replaces it.
+// Keep the allowlist local: dialogue rejection, choice and patrol reset pages
+// elsewhere must never become an invented walking connection.
+const WRAPPED_SHAPES = Object.freeze({
+        '14:2:0':'357,111,122,121,0,412,201,0', '14:3:0':'357,111,122,121,0,412,201,0',
+        '49:12:0':'122,121,201,357,0', '63:14:0':'117,117,201,0',
+        '97:18:0':'117,111,242,221,230,0,412,357,657,657,657,657,111,357,657,357,657,657,123,0,412,201,0',
+        '106:12:0':'117,235,201,0', '106:13:0':'117,221,235,357,201,0',
+        '116:8:0':'117,201,242,0',
+        '134:10:2':'111,123,357,657,357,657,657,117,0,412,117,201,0',
+        '181:3:0':'111,121,0,412,117,201,0',
+        '105:11:0':'250,117,242,221,134,230,121,201,0',
+        '128:11:0':'101,401,111,101,401,101,401,0,412,230,250,230,250,121,201,0',
+        '196:22:0':'121,117,242,221,201,122,222,0',
+        '202:4:0':'111,281,121,0,411,121,122,0,412,117,121,117,201,0'
+});
+function wrappedExit(map, entry, page, index, common) {
+    const list = page.list;
+    if (map===94 && [12,27].includes(entry.id) && index===5 && flagsAre(page,'variableValid') &&
+        page.conditions.variableId===16 && page.conditions.variableValue===5 &&
+        list.map(row=>row.code).join(',') === '243,242,230,101,401,401,101,401,230,101,401,122,121,121,121,122,122,117,357,657,357,657,657,250,134,117,230,201,230,117,134,357,0') {
+        const edge=transferTo(list[27],map);
+        return landingIs(edge,93,13,64) && list[27].indent===0 ? edge : null;
+    }
+    const shape = WRAPPED_SHAPES[map+':'+entry.id+':'+index];
+    if (!shape || list.map(row=>row.code).join(',') !== shape) return null;
+    if (map === 97 ? !flagsAre(page,'switch1Valid') || page.conditions.switch1Id !== 103 :
+        map === 134 ? !flagsAre(page,'selfSwitchValid') || page.conditions.selfSwitchCh !== 'A' : !flagsAre(page)) return null;
+    for (const row of list) if (row.code === 117) {
+        const id = row.parameters[0];
+        if ([37,38].includes(id) && audioOnly(common,id)) continue;
+        if ((map === 134 || map === 202) && id === 48 && common?.[48]?.list?.length === 2 &&
+            rowIs(common[48].list[0],122) && parametersAre(common[48].list[0],[12,12,0,0,0])) continue;
+        if (map === 105 && id === 47 && common?.[47]?.list?.length === 2 &&
+            rowIs(common[47].list[0],122) && parametersAre(common[47].list[0],[12,12,0,0,1])) continue;
+        const haze = common?.[7]?.list;
+        if (map === 63 && id === 7 && haze?.length === 3 && haze[0].code === 357 &&
+            haze[0].parameters[0] === 'FilterControllerMZ' && haze[0].parameters[1] === 'eraseFilter' && haze[1].code === 657 && haze[2].code === 0) continue;
+        return null;
+    }
+    const reservation = list.find(row=>row.code===201);
+    return reservation.indent === 0 ? transferTo(reservation,map) : null;
+}
+
+function conditionalCatalog(map, entry, common) {
+    const {pages,id}=entry;
+    // The same house returns to the town layout selected by native variable5.
+    if ([139,141,143,145,154,155,156,183].includes(map) && pages.length === 2 &&
+        flagsAre(pages[0]) && flagsAre(pages[1],'variableValid') &&
+        pages[1].conditions.variableId === 5 && pages[1].conditions.variableValue === 4) {
+        const edges=pages.map(page=>transferOptions(map,entry,page,common)[0]);
+        if (edges[0]?.map===59 && edges[1]?.map===45 && edges[0].x===edges[1].x && edges[0].y===edges[1].y)
+            return edges.map((edge,i)=>({...edge,gate:i?NUGGEDOR_AFTER:NUGGEDOR_BEFORE}));
+    }
+    // Following Chomps temporarily closes the older town's doors/mines.
+    if (map === 59 && pages.length === 2 && flagsAre(pages[0]) &&
+        flagsAre(pages[1],'switch1Valid') && pages[1].conditions.switch1Id === 424 &&
+        !pageMayTransfer(pages[1],common))
+        return transferOptions(map,entry,pages[0],common).map(edge=>({...edge,gate:CONNECTION_GATES.nuggedorDoors}));
+    const spec=map===13&&id===16?[3,2,11,'beach']:map===16&&[20,21].includes(id)?[2,1,23,'forest']:
+        map===17&&id===7?[3,2,39,'salt']:null;
+    if (spec && pages.length===spec[0] && flagsAre(pages[spec[1]],'switch1Valid') &&
+        pages[spec[1]].conditions.switch1Id===spec[2])
+        return transferOptions(map,entry,pages[spec[1]],common).map(edge=>({...edge,gate:CONNECTION_GATES[spec[3]]}));
+    if (map===94 && [12,27].includes(id) && pages.length===8 &&
+        [6,7].every((i)=>flagsAre(pages[i],'switch1Valid')&&pages[i].conditions.switch1Id===i+398)) {
+        const edges=[6,7].map(i=>transferOptions(map,entry,pages[i],common)[0]);
+        if (edges.every(edge=>landingIs(edge,93,13,64)))
+            return [{...edges[0],gate:CONNECTION_GATES.burgenburg}];
+    }
+    if (map===97&&id===18&&pages.length===1) return transferOptions(map,entry,pages[0],common)
+        .map(edge=>({...edge,gate:CONNECTION_GATES.office}));
+    if (map===134&&id===10&&pages.length===3) return transferOptions(map,entry,pages[2],common)
+        .map(edge=>({...edge,gate:CONNECTION_GATES.cafe}));
+    return null;
+}
+
 function transferOptions(map, entry, page, common) {
     if (!page || ![0, 1].includes(page.trigger) || page.moveType !== 0 || page.through ||
         ![0, 1].includes(page.priorityType) || /^(?:test|debug|developer)/i.test(entry.name || '') ||
-        !Array.isArray(page.list) || page.list.length < 2 || page.list.length > 32) return [];
+        !Array.isArray(page.list) || page.list.length < 2 || page.list.length > 40) return [];
     const stair = houseStair(map, entry.id);
     if (stair) return audioOnly(common) ? houseBranches(stair, page.list, map) || [] : [];
     const index = entry.pages.indexOf(page);
     if (map === 25 && index === 0 && CHILLCREST_RETURNS[entry.id]) return chillcrestReturn(entry);
+    const wrapped = wrappedExit(map,entry,page,index,common);
+    if (wrapped) return [wrapped];
+    if (map===58 && [3,4,27,28].includes(entry.id) && entry.pages.length===1 && flagsAre(page) &&
+        page.list.map(row=>row.code).join(',')==='111,101,401,205,505,0,411,201,0,412,0' &&
+        parametersAre(page.list[0],[0,477,0]) && page.list[6].indent===0 && page.list[7].indent===1) {
+        const edge=transferTo(page.list[7],map);
+        if(landingIs(edge,113,entry.id<5?44:45,entry.id<5?13:14))
+            return [{...edge,gate:CONNECTION_GATES.cauldronReturn}];
+    }
     const regional = regionalExit(map, entry, page, index, common);
     if (regional) return regional;
     if (map === 87 && entry.id === 73) return caffeineEscape(entry, page, common);
@@ -553,7 +640,10 @@ function transferOptions(map, entry, page, common) {
     const commands = page.list.filter(row => ![0, 108, 408].includes(row.code) &&
         !(row.indent === 0 && (questCommand(row, 'disableAutoMarker') ||
             resetSaltcaster && row.code === 117 && parametersAre(row, [48]))));
-    if (commands.length === 2 && callsStairSound(commands[0]) && commands[0].indent === 0 && audioOnly(common)) commands.shift();
+    // Door37 and stair38 are both independently verified one-SE events.
+    // Their harmless prefix must not erase a literal house/shop connection.
+    if (commands.length === 2 && commands[0].code === 117 && [37,38].includes(commands[0].parameters?.[0]) &&
+        commands[0].indent === 0 && audioOnly(common, commands[0].parameters[0])) commands.shift();
     const destination = commands.length === 1 && commands[0].indent === 0 && transferTo(commands[0], map);
     return destination ? [destination] : [];
 }
@@ -606,6 +696,8 @@ function catalogTransferOptions(map, entry, common, regional = false) {
         const variants = pages.map(page => transferOptions(map, entry, page, common));
         return variants.every(options => options.length === 1) ? variants.flat() : [];
     }
+    const conditional=conditionalCatalog(map,entry,common);
+    if (conditional) return conditional;
     return pages.length === 1 && flagsAre(pages[0]) ? transferOptions(map, entry, pages[0], common) : [];
 }
 

@@ -1323,6 +1323,14 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if (process.argv.includes('--connections-only')) {
+        await require('./connection-gates.cjs')(c,load,read,verifyWorker);
+        return;
+    }
+    if (process.argv.includes('--doors-only')) {
+        await require('./door-connections.cjs')(c,load,read,verifyWorker);
+        return;
+    }
     if (process.argv.includes('--vehicles-only')) {
         await verifyVehicleNavigation(c, load, read, verifyWorker);
         return;

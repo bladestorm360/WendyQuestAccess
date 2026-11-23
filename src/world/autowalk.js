@@ -151,7 +151,7 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             stop(scene);
             // Manual input ends automatic movement. The beacon can still
             // follow the player's accepted step toward the same destination.
-            report(scene, null, false, false, state.job);
+            report(scene, { kind: 'fieldStatus', name: 'Autowalk stopped.' }, false, false, state.job);
             return direction;
         }
         if (!ready(scene) && holdRefresh(scene)) return 0;

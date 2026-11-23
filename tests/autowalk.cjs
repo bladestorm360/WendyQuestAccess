@@ -127,8 +127,12 @@ async function verifyAutowalk(c, load, verifyWorker) {
     const overridden = [gameMap.roundXWithDirection(x, manual), gameMap.roundYWithDirection(y, manual)];
     assert.deepEqual(position(player), overridden);
     assert(!walk.active(scene));
+    assert.equal(reports.at(-1).record.name, 'Autowalk stopped.', 'manual takeover announces the stop');
+    assert.equal(reports.at(-1).arrived, false, 'manual takeover never announces arrival');
+    const stoppedReports = reports.length;
     c.Input.dir4 = 0;
     tick(player);
+    assert.equal(reports.length, stoppedReports, 'the stopped announcement fires only once');
     assert.deepEqual(position(player), overridden);
 
     player.setPosition(x, y);
