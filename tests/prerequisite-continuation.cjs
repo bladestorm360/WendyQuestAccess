@@ -40,8 +40,12 @@ module.exports=async(c,load,read,verifyWorker)=>{
   scene._wqaSettingsActive=true;assert(field.selectBookmark(scene,bookmark));scene._wqaSettingsActive=false;
   assert(field.command('directions'));frame();await reply();assert(field.autowalk.active(scene));
   for(let n=0;n<5&&!f.gameMap.event(13).isStarting();n++)tick();
-  assert.deepEqual([p._x,p._y],[5,7]);assert(f.gameMap.event(13).isStarting(),'automatic final step enters the native note');
-  assert(!records.some(r=>r.name==='Arrived.'),'no intermediate arrival');
+  assert.deepEqual([p._x,p._y],[6,7]);assert(!f.gameMap.event(13).isStarting(),'stop before the native note');
+  const stoppedCount=packets.length;
+  for(let n=0;n<120;n++){tick();field.observeReady(scene);}
+  assert.equal(packets.length,stoppedCount);assert(!f.gameMap.event(13).isStarting(),'idle cannot accept a warning');
+  c.Input.dir4=4;tick();c.Input.dir4=0;
+  assert(f.gameMap.event(13).isStarting(),'the player owns the final event step');
   assert(map.setupStartingMapEvent());assert.equal(interpreter._eventId,13);assert.equal(scene._wqaFieldReady,false);
   const count=packets.length;field.observeReady(scene);assert.equal(packets.length,count,'no work during native event');
   // Execute original completion command; native dialogue/rendering remains a
@@ -50,16 +54,13 @@ module.exports=async(c,load,read,verifyWorker)=>{
   assert.equal(switches.has(142),true);const note=map.event(13);assert.equal(note.findProperPageIndex(),1);
   Object.assign(note,{_pageIndex:1,_erased:true,_through:true,_priorityType:0,_starting:false});
   interpreter.clear();map._needsRefresh=map._needsTilemapRefresh=false;scene._wqaFieldReady=true;
-  if(cancel){
-   c.Input.dir4=6;tick();c.Input.dir4=0;field.observeReady(scene);frame();
-   assert.equal(packets.length,count,'manual takeover cancels pending continuation');
-   assert.equal(records.filter(r=>r.name==='Autowalk stopped.').length,1);
-  }else{
-   field.observeReady(scene);frame();assert.equal(packets.length,count+1);
-   assert.equal(packets.at(-1).request.event,8,'the original exit, not the floor event, is retained');
-   await reply();tick();assert.equal(records.filter(r=>r.name==='Arrived.').length,1);
-   assert.equal(records.filter(r=>r.name==='Walking.').length,1,'continuation is silent');
-   assert.deepEqual([p._x,p._y],[5,7]);
+  field.observeReady(scene);frame();assert.equal(packets.length,count,'story completion does not resume movement');
+  if(cancel){c.Input.dir4=6;tick();c.Input.dir4=0;}
+  else {
+   assert(field.command('directions'));frame();
+   assert.equal(packets.at(-1).request.event,8,'original exit remains selected');
+   await reply();tick();assert(!field.autowalk.active(scene));
+   assert.deepEqual([p._x,p._y],[5,7],'the next touch entrance also remains player-owned');
   }
  }
  // The known officer conversation moves a real collider without erasing it.
@@ -99,12 +100,13 @@ module.exports=async(c,load,read,verifyWorker)=>{
   const jump=f.map.events[3].pages[0].list.find(row=>row.code===205&&row.indent===1).parameters[1].list.find(row=>row.code===14);
   officer.setPosition(officer.x+jump.parameters[0],officer.y+jump.parameters[1]);officer._pageIndex=1;
   interpreter.clear();map._needsRefresh=map._needsTilemapRefresh=false;scene._wqaFieldReady=true;
-  field.iceRouteReady(scene);frame();assert.equal(packets.length,count+1);
-  assert.equal(packets.at(-1).request.event,36);assert(!records.some(r=>r.name==='Arrived.'));
+  field.iceRouteReady(scene);field.observeReady(scene);frame();assert.equal(packets.length,count,'NPC completion stays stopped');
+  assert(field.command('directions'));frame();assert.equal(packets.length,count+1);
+  assert.equal(packets.at(-1).request.event,36);assert(!officer.isStarting());
   assert.equal(records.filter(r=>r.name==='Walking.').length,1);
-  console.log('Verified player-confirmed officer passage, actual native jump displacement, event phase suspension and quiet original-target continuation.');
+  console.log('Verified player-confirmed officer passage, actual native jump displacement, event phase suspension and explicit original-target resumption.');
  }
  }finally{Object.assign(c,saved);c.SceneManager._scene=prior.scene;c.Graphics.app=prior.app;
   c.$gameSwitches.value=prior.value;c.$gameSwitches.setValue=prior.set;}
- console.log(`Verified original house-note activation/completion, retained exit, native readiness, silent continuation, manual cancellation/one stop report; peak throttled input ${peak.toFixed(3)} ms.`);
+ console.log(`Verified player-owned house-note activation/completion, retained exit, native readiness and explicit resumption; peak throttled input ${peak.toFixed(3)} ms.`);
 };

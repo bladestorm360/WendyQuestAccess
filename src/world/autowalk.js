@@ -66,19 +66,11 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
     function arrive(state, record) {
         const { facing, ...rest } = record;
         const { player, target, map, job, arrival } = state;
-        // A verified remote journey may enter a native touch door through
-        // the normal movement input site. Action-button doors still wait
-        // for the player's Confirm; no interaction input is synthesized.
-        if(job.remote&&job.mode==='walk'&&job.entrance?.event===job.target&&target?._trigger===1&&
-            job.entrance.action&&DIRECTIONS.includes(facing)) {
-            if(!atApproach(map,player,target,arrival))return changed(state);
-            player.setDirection(facing);stop(state.scene);return facing;
-        }
         // Use the native turn only for the interaction the route verified.
         // An event on the current tile, a nearer event, or a parked vehicle
         // can take priority before the final input.
         if (DIRECTIONS.includes(facing) && player._direction !== facing && job.mode === 'walk' &&
-            target && !rest.bump && !rest.activate && !rest.boundary) {
+            target && !rest.activate && !rest.boundary) {
             const current = job.vehicle ? atBoardingApproach(map, job.vehicle.type, target, arrival) :
                 atApproach(map, player, target, arrival);
             if (!current) return changed(state, 'Autowalk stopped. The interaction approach changed. Request directions again.');
@@ -86,15 +78,9 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
         }
         if ((job.caveCrystal || job.caveLoot) && target && atApproach(map, player, target, arrival) &&
             job.caveAction?.(target)) {
-            stop(state.scene);
-            if (job.caveLoot) report(state.scene, null, false, true, job);
-            if (facing === null) player.checkEventTriggerHere([0]);
-            else player.checkEventTriggerThere([0]);
-            // Complete the native Action Button path instead of leaving its
-            // event queued behind the visible interaction icon for another
-            // update. Reserved/common event priority stays with the engine.
-            if (target.isStarting()) map.setupStartingEvent();
-            return 0;
+            // Retain only an inert continuation. Native player Confirm owns
+            // acceptance; waiting here must never start the event or time out.
+            job.caveContinue = false;
         }
         if (rest.npcBlocker)
             return end(state, { kind: 'fieldStatus', name: 'Blocked by ' + rest.npcBlocker + '.' },false,!!job.controlPrerequisite);
@@ -153,7 +139,7 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
     }
 
     function input(scene, player, direction, manual) {
-        const continuation=manual&&cancelContinuation(scene);
+        const continuation=manual&&cancelContinuation(scene,player,direction);
         const state = active;
         if (!state || state.scene !== scene || state.player !== player) {
             if (continuation) report(scene,{kind:'fieldStatus',name:'Autowalk stopped.',manualAutowalkStop:true},false,false,continuation);
@@ -224,15 +210,16 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             const floor = player.findEventsAt(x, y).find(event =>
                 player.canTriggerEvent(event, TOUCH_TRIGGERS, false) && event.list()?.length > 1);
             if (floor) {
-                if (index === length - 1 && floor._eventId === job.caveFloor && job.caveAction?.(floor)) {
-                    if (job.caveArrives) end(state, null, false, true);
-                    else stop(scene);
-                    return step;
+                if (index === length - 1 && floor._eventId === job.caveFloor) {
+                    job.caveAction?.(floor); // inert until the player takes the final step
+                    job.caveContinue = false;
+                    return end(state, { ...record, legs: [], activate: step, more: false,
+                        directionsOnly: true }, false, true);
                 }
                 const page = root.$dataMap?.events?.[floor._eventId]?.pages?.[floor._pageIndex];
                 // Even an invisible cleanup page starts the native interpreter.
                 // Hand the step back to the player before the native event gate.
-                if (page && (!pageHasInteraction(page) || inactiveFloorScene(root, floor, page) ||
+                if (floor !== state.target && page && (!pageHasInteraction(page) || inactiveFloorScene(root, floor, page) ||
                     !job.caveWalk && passiveFloorPage(page))) {
                     if (cleanup(job, floor, page, x, y)) {
                         stop(scene);
@@ -240,16 +227,6 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
                     }
                     return end(state, { kind: 'routeDirections', name: 'Autowalk paused', legs: [],
                         boundary: step, boundaryName: 'Map cleanup', manualHandoff: true }, true);
-                }
-                if (floor._eventId===job.prerequisiteFloor && index===length-1 &&
-                    cleanup(job,floor,page,x,y)) {
-                    stop(scene);
-                    return step;
-                }
-                if(floor===state.target&&index===length-1&&job.remote&&job.mode==='walk'&&
-                    job.entrance?.event===floor._eventId&&!job.entrance.action) {
-                    stop(scene);
-                    return step;
                 }
                 if (floor === state.target && index === length - 1) {
                     return arrive(state, { ...record, activate: step });

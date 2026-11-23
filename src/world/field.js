@@ -166,15 +166,22 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (scene._wqaArrivalSpeech) arrivalScene = scene;
         } else if (record && scene === host.manager._scene) command('navigationReport', record);
         else retire(scene);
-    }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true), rerouteAutowalk, cleanupAutowalk, scene => {
+    }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true), rerouteAutowalk, cleanupAutowalk, (scene,player,direction) => {
         const pending=cleanupWalk;
         const transfer=transfers.automatic(scene);
         const ice=iceRoute?.scene===scene&&iceRoute.remote&&iceRoute.autowalk?iceRoute:null;
-        if ((!pending||pending.scene!==scene)&&!transfer&&!ice) return null;
+        const cave=caveEvent?.scene===scene&&!caveEvent.accepted?caveEvent:null;
+        // An explicit player step onto this exact cave trigger accepts the
+        // handoff. Keep its inert continuation for the native acceptance hook;
+        // any other movement cancels it normally.
+        if(cave && [1,2].includes(cave.event._trigger) &&
+            cave.event.pos(root.$gameMap.roundXWithDirection(player._x,direction),
+                root.$gameMap.roundYWithDirection(player._y,direction))) return null;
+        if ((!pending||pending.scene!==scene)&&!transfer&&!ice&&!cave) return null;
         if(pending?.scene===scene)owner=pending.owner;
         else if(ice)owner=ice.owner;
-        const job=pending?.scene===scene?pending.job:ice?.job||{scene};
-        clearCleanupWalk();clearIceRoute(scene);if(transfer)transfers.clear();
+        const job=pending?.scene===scene?pending.job:ice?.job||cave||{scene};
+        clearCleanupWalk();clearIceRoute(scene);if(transfer)transfers.cancelAutomatic(scene);if(cave)clearCaveEvent();
         retire(scene);
         return job;
     });
@@ -554,10 +561,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 if (!autowalk.start(job, result, record))
                     return job.caveWalk ? waitCaveWalk(job) : status(job, 'Guard timing changed. Request directions again.');
                 job.scene._wqaRouteActive = false;
-                if (job.caveWalk && activate) {
-                    job.caveContinue = true;
-                    job.caveExit = { next: job.target, legs: [{ direction: activate, tiles: 1 }], pace: 'walk' };
-                }
+                // A real touch boundary always remains a player-owned step.
+                // Reaching its approach must not chain an activation segment.
+                if (job.caveWalk && activate) job.caveContinue = false;
                 announceCaveWalk(job);
                 return;
             }
@@ -762,12 +768,11 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 if (gate?.event !== result.npc)
                     return status(job, 'The passage changed. Request directions again.');
                 job.npcCurrent = () => npcPassage(root.$gameMap) === gate;
-                const retained=retainControlRoute(job,{event:gate.event});
-                if(retained)retained.npcGate=gate;
+                // A warning conversation is a player-owned stopping point.
                 startBeaconApproach(job, result, gate.event);
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs,
                     npcBlocker: gate.name, facing: result.arrival.facing, more: result.more === true },
-                { ...job, target: gate.event, point: false, controlPrerequisite:!!retained });
+                { ...job, target: gate.event, point: false, controlPrerequisite:false });
             }
             else if (result?.status === 'enemyBlocked') {
                 if (!currentEnemy(root, result)) {
@@ -818,14 +823,6 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent, preferences().spoilers === true)),
                     manualHandoff: !!handoff || !!boundaryName && (job.action === 'puzzleGuide' || job.mode === 'ship' || timedCave(job.map)),
                     more: result.more === true };
-                const prefix=result.floorPrerequisite;
-                if (job.autowalk && prefix && result.course?.length===result.distance) {
-                    const course=new Uint8Array(result.distance+1);course.set(result.course);
-                    course[result.distance]=4|DIRECTIONS.indexOf(result.boundary);
-                    return follow(job,{...result,course,distance:course.length,
-                        arrival:{x:prefix.x,y:prefix.y,facing:null}},record,
-                        {...job,target:prefix.event,prerequisiteFloor:prefix.event,point:false,vehicle:undefined});
-                }
                 follow(job,result,record);
             }
             else if (job.remote && ['unreachable', 'approachBlocked', 'unavailable'].includes(result?.status))
@@ -1120,7 +1117,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             job.caveWalk.acted.add(event._eventId);
             if (action.origin === 200 && action.crystal && event._eventId === 10) job.caveWalk.distractionCrossing = true;
             caveEvent = { ...action, map: root.$gameMap, player: root.$gamePlayer, caveWalk: job.caveWalk,
-                expires: host.graphics.frameCount + 40, requestedAt: host.graphics.frameCount };
+                requestedAt: host.graphics.frameCount };
             host.graphics._wqaCaveAutoPending = true;
         }
         return true;
@@ -1133,7 +1130,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
 
     function clearCaveResume() {
         caveResume = null;
-        host.graphics._wqaCaveAutoPending = !!caveEvent;
+        host.graphics._wqaCaveAutoPending = !!caveEvent?.accepted;
     }
 
     function waitCaveWalk(job, urgent = false) {
@@ -1785,6 +1782,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             cave.accepted(scene, event);
             if (caveEvent?.scene === scene && caveEvent.event === event) {
                 caveEvent.accepted = true; caveEvent.acceptance = 'event';
+                host.graphics._wqaCaveAutoPending = true;
             }
         },
         bookmarkEntranceAccepted: transfers.accepted,
@@ -1857,7 +1855,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             }
             const leg = chaseGuide.settle(scene);
             if (leg && !preferences().autowalk) reportChaseLeg(leg);
-            if (caveEvent && (caveEvent.accepted || host.graphics.frameCount >= caveEvent.expires)) {
+            if (caveEvent?.accepted) {
                 const action = caveEvent;
                 clearCaveEvent();
                 if (action.accepted && action.scene === scene && action.map === root.$gameMap &&
@@ -2024,6 +2022,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 sameCaveAction(caveEvent, scene, mapEventId) && caveEvent.event.list() === caveEvent.list) {
                 caveEvent.accepted = true;
                 caveEvent.acceptance = 'interpreter';
+                host.graphics._wqaCaveAutoPending = true;
             }
             if (manualAction && !manualAction.action && manualAction.scene === scene &&
                 manualAction.map === root.$gameMap && manualAction.player === root.$gamePlayer &&

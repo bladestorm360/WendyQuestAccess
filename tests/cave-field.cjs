@@ -34,7 +34,7 @@ function verifyCaveField(c, load, configureMotion) {
     const preferences = { autowalk: true };
     const packets = [], records = [], accepted = [], diagnostics = [];
     const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
-    let field, fixture, guards, source, repeatChecked = false, pendingArrival = false;
+    let field, fixture, guards, source, repeatChecked = false, pendingArrival = false, playerHandoff = false;
     const computeCosts = [];
     const automaticCost = { calls: 0, total: 0, peak: 0, framePeak: 0 };
     let measureDepth = 0;
@@ -59,6 +59,7 @@ function verifyCaveField(c, load, configureMotion) {
             }
         }
     }
+    let playerConfirmWait = null;
     let nativeLoot = false, nativePickup = 0, messageLeft = 0, lootMessages = 0, messagePose = null;
     const commonEvents = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/CommonEvents.json'), 'utf8'));
     const previousMessage = c.Game_Interpreter.prototype.command101;
@@ -174,12 +175,14 @@ function verifyCaveField(c, load, configureMotion) {
     c.WendyQuestAccessFieldEvent = (owner) => { field.autowalk.stop(owner); field.changed(owner); };
     c.WendyQuestAccessCaveEventAccepted = (owner, event) => {
         accepted.push(event._eventId);
+        playerHandoff = false;
         measure(() => field.caveEventAccepted(owner, event));
     };
     c.WendyQuestAccessSceneLeaving = (owner, eventId) => measure(() => field.leave(owner, eventId), 'native-entry');
 
     function start(map, x, y, viewX, viewY) {
         field.leave(scene);
+        playerHandoff = false;playerConfirmWait = null;
         ({ run: fixture, guards } = setup(map, x, y, viewX, viewY));
         const { player, gameMap } = fixture;
         const checkThere = player.checkEventTriggerThere;
@@ -361,6 +364,30 @@ function verifyCaveField(c, load, configureMotion) {
             if (manualNext && (manualNext === true || c.Graphics.frameCount >= manualNext)) {
                 manualNext = false;
                 field.command('directions');
+            }
+        }
+        // Simulated PLAYER input only after production Autowalk has stopped.
+        // The fixture supplies Confirm/the final touch step, never the mod.
+        if (preferences.autowalk && !source._list && !player.isMoving() &&
+            !field.autowalk.active(scene) && !packets.length && field.ready(scene)) {
+            if (playerHandoff) { playerHandoff = false; ask('directions'); }
+            else {
+                const detail = records.at(-1);
+                const boundary = detail?.activate || detail?.boundary;
+                if (boundary) {
+                    player.setDirection(boundary);player.moveStraight(boundary);
+                    player.checkEventTriggerHere([1,2]);
+                    playerHandoff = true;
+                } else if (detail?.facing || detail?.guideAction || pendingArrival) {
+                    if (detail?.facing) player.setDirection(detail.facing);
+                    if (fixture.id===200 && player.x===16 && player.y===29 && !accepted.includes(5)) {
+                        playerConfirmWait ??= c.Graphics.frameCount;
+                        assert(!gameMap.event(5).isStarting(),'waiting never synthesizes crystal acceptance');
+                        if(c.Graphics.frameCount-playerConfirmWait<120) return render();
+                    }
+                    player.checkEventTriggerHere([0]);player.checkEventTriggerThere([0]);
+                    pendingArrival = false;
+                }
             }
         }
         const oldX = player.x, oldY = player.y;
@@ -616,12 +643,9 @@ function verifyCaveField(c, load, configureMotion) {
                     assert.equal(diagnostics.at(-1).target, 5);
                     assert.match(formatSpeech(records.at(-1)), /Face west and press the action button to activate the distraction crystal/);
                 }
-                if (test.automatic && pendingArrival && !fixture.player.isMoving()) {
-                    pendingArrival = false;
-                    fixture.player.checkEventTriggerThere([0]);
-                }
+
             }
-            assert(accepted.includes(5), 'The barrel route activates crystal 5');
+            assert(accepted.includes(5), 'The barrel route activates crystal 5 '+JSON.stringify({test,accepted,at:[fixture.player.x,fixture.player.y],records:records.slice(-6),diagnostics:diagnostics.slice(-4),pendingArrival}));
             if (!test.automatic && test.target === 3) {
                 assert.equal(rechecks, 3);
                 assert(crystalRechecked, 'Directions at the crystal still gives its activation action');
@@ -644,7 +668,7 @@ function verifyCaveField(c, load, configureMotion) {
                 assert.deepEqual([fixture.player.x, fixture.player.y], [23, 24]);
             }
         }
-        // No fixture interaction input is supplied for these pickups. Their
+        // Explicit fixture player Confirm accepts these pickups. Their
         // actual common events consume self A and hold a native message; then
         // the production coordinator must escape using a fresh guard snapshot.
         nativeLoot = true;
@@ -675,13 +699,13 @@ function verifyCaveField(c, load, configureMotion) {
                     break;
                 }
             }
-            assert(collected && completed,'Automatic pickup and protected stop '+JSON.stringify({test,collected,accepted,at:[fixture.player.x,fixture.player.y],reports:records.slice(-5).map(formatSpeech),diagnostics:diagnostics.slice(-6)}));
+            assert(collected && completed,'Player-confirmed pickup and protected stop '+JSON.stringify({test,collected,accepted,at:[fixture.player.x,fixture.player.y],reports:records.slice(-5).map(formatSpeech),diagnostics:diagnostics.slice(-6)}));
             assert.equal(lootMessages, 1,'The native pickup holds its acquired message');
             assert(!records.some(row => /unavailable|Autowalk stopped/.test(row.name || '')),'No consumed destination failure');
             if (test.map===200 && test.target===3) assert.deepEqual([fixture.player.x,fixture.player.y],[23,24],'First barrel retreats north after its message');
         }
         nativeLoot = false;
-        console.log('Verified all eight cave pickups through native common-event self-switch and message waits, automatic interaction without fixture Confirm, and protected departure.');
+        console.log('Verified all eight cave pickups through native common-event self-switch and message waits, player-confirmed interaction, and protected departure.');
         records.length = accepted.length = diagnostics.length = 0;
         preferences.autowalk = true;
         start(200, entry[2], entry[3], 0, 26);
