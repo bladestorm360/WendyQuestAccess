@@ -4054,5 +4054,49 @@
   "momentum-full": {
     "text": "A momentum crystal appears and bounces, then disappears in a small starburst with a breaking sound.",
     "beats": []
+  },
+  "skill-crispy-shield": {
+    "text": "Frygor plants a shield of giant fries around Wendy.",
+    "beats": []
+  },
+  "skill-spicy-surge": {
+    "text": "Golden flames flare around Wendy.",
+    "beats": []
+  },
+  "skill-rise-shine": {
+    "text": "A golden beam shines down around Wendy.",
+    "beats": []
+  },
+  "skill-frosty-time": {
+    "text": "Frostyna summons an ice cream clock with spinning hands.",
+    "beats": []
+  },
+  "skill-frosty-blast": {
+    "text": "A giant swirl of ice cream engulfs the target.",
+    "beats": []
+  },
+  "skill-crispy-barrage": {
+    "text": "Frygor rains giant fries onto the enemies, bursting on impact.",
+    "beats": []
+  },
+  "skill-pigtail-whip": {
+    "text": "Wendy spins, lashing her target with her long pigtails.",
+    "beats": []
+  },
+  "skill-beef-charge": {
+    "text": "Wendy charges.",
+    "beats": []
+  },
+  "skill-beef-attack": {
+    "text": "Wendy darts through the enemies, slashing rapidly with her spatulas.",
+    "beats": []
+  },
+  "skill-nugget-strike": {
+    "text": "Chicken nuggets erupt across the ground toward Sir Chicken's target.",
+    "beats": []
+  },
+  "skill-bacon-blast": {
+    "text": "Bacon-shaped lightning strikes the target.",
+    "beats": []
   }
 }

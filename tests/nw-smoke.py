@@ -2343,7 +2343,34 @@ const interval = setInterval(() => {
             narrationStarted = performance.now();endingStep = 497;
         } else if (endingStep === 497 && narrationAudio?.currentTime > 0.005) {
             fs.writeFileSync(receipt + '.discovery-question-ms', String(performance.now() - narrationStarted));
-            WendyQuestAccessNarrationLeaving(SceneManager._scene);$gameMap._mapId = 16;endingStep = 596;
+            WendyQuestAccessNarrationLeaving(SceneManager._scene);$gameMap._mapId = 16;endingStep = 498;
+        } else if (endingStep === 498) {
+            const scene=SceneManager._scene;
+            if(!scene._testSkillVoices){
+                scene._testSkillVoices=[['crispy-shield',22,3,'FrygorCrispyShieldFX'],['spicy-surge',28,5,'SpiceBuff_Over'],
+                    ['rise-shine',31,2,'BaconatorBuff'],['frosty-time',25,4,'FrostyTimeClock'],['frosty-blast',10,4,'FrostyBlast'],
+                    ['crispy-barrage',7,3,'FrygorCrispyBarrageFX'],['pigtail-whip',37,1,'WendyPigtailWhipFX'],
+                    ['beef-charge',38,1,'WendyWhereIsBeef_PowerUp'],['beef-attack',38,1,'WendyWhereIsBeef_Attack'],
+                    ['nugget-strike',15,5,'NuggetStrike'],['bacon-blast',18,2,'BaconatorBlast']];
+                scene._testSkillIndex=0;scene._testSavedTroop=window.$gameTroop;scene._testSavedAction=BattleManager._action;
+            }
+            const [key,id,actorId,file]=scene._testSkillVoices[scene._testSkillIndex];
+            scene._wqaBattleStarted=true;window.$gameTroop={_interpreter:{}};
+            const field=scene._spriteset._battleField={parent:scene};
+            const actor={parent:field,_actor:actorId===1?{_actorId:1}:{id:actorId}};
+            if(actorId===1)scene._spriteset._actorSprites=[actor];else scene._spriteset._subActorSprite=actor;
+            BattleManager._action={isSkill:()=>true,item:()=>({id})};
+            const sprite={parent:field,bitmap:{isReady:()=>true},worldVisible:true,worldAlpha:1,texture:{valid:true},
+                worldTransform:{tx:100,ty:100},animator:{_animationData:{fileName:'ParticleEffects/'+file}}};
+            narrationAudio=null;WendyQuestAccessSkillVisual(actor,sprite,key);narrationFrame();
+            if(!narrationAudio)throw Error('Packaged skill voice not admitted: '+key);
+            narrationStarted=performance.now();endingStep=499;
+        } else if(endingStep===499 && narrationAudio?.currentTime>0.005) {
+            const scene=SceneManager._scene;
+            fs.appendFileSync(receipt+'.skill-voices',scene._testSkillVoices[scene._testSkillIndex][0]+' '+(performance.now()-narrationStarted).toFixed(1)+'ms\\n');
+            WendyQuestAccessNarrationLeaving(scene);scene._testSkillIndex++;
+            if(scene._testSkillIndex<scene._testSkillVoices.length)endingStep=498;
+            else{scene._wqaBattleStarted=false;window.$gameTroop=scene._testSavedTroop;BattleManager._action=scene._testSavedAction;endingStep=596;}
         } else if (endingStep === 596) {
             const scene = SceneManager._scene;
             // Original authored pages and original patched setup/balloon/wait/fade
@@ -2691,7 +2718,7 @@ parentPort.on('message', message => {
         if (fs.existsSync(receipt + '.quest-navigation-stage')) {
             if (message.kind === 'fieldTarget') fs.writeFileSync(receipt + '.quest-nav-target', speech);
             if (message.kind === 'routeDirections') fs.writeFileSync(receipt + '.quest-nav-route', speech);
-            if (message.kind === 'fieldStatus') fs.writeFileSync(receipt + '.quest-nav-unavailable', speech);
+            if (message.kind === 'fieldStatus' && speech === 'Selected destination is unavailable') fs.writeFileSync(receipt + '.quest-nav-unavailable', speech);
             ack(message);
             return;
         }
@@ -3106,6 +3133,10 @@ def main():
         if not sleep.get('naturalEnd') or not sleep.get('pausedDuringLoading'):
             raise RuntimeError('Incomplete slow sleep continuation')
         print('Verified the full original sleep recording at80 percent across the actual30-frame fade, native transfer, paused loading and the next ready scene, retaining its playhead through natural completion.')
+        skill_voices = receipt.with_suffix('.json.skill-voices').read_text(encoding='utf8').splitlines()
+        if len(skill_voices) != 11 or len({line.split()[0] for line in skill_voices}) != 11:
+            raise RuntimeError('Not every requested skill recording decoded')
+        print('Verified all11 packaged skill recordings decode; existing timed beef-word path remains unchanged.')
         narration_ms = float(receipt.with_suffix('.json.cutscene-narration-ms').read_text(encoding='utf8'))
         idle_ms = float(receipt.with_suffix('.json.idle-narration-ms').read_text(encoding='utf8'))
         question_ms = float(receipt.with_suffix('.json.question-narration-ms').read_text(encoding='utf8'))

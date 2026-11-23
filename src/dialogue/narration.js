@@ -3,6 +3,7 @@
 const cues = require('./narration-cues.json');
 const { currentTylerEntry } = require('./tyler-visuals');
 const { createGlitchTracker } = require('./screen-glitch');
+const { skillVisual } = require('./skill-visuals');
 const { renderedSprite } = require('../runtime/rendered-sprite');
 const { finaleVisible, captureFinale } = require('./finale-visuals');
 const { finaleBattleReady, bossFlash, combinedStones } = require('./finale-battle');
@@ -23,8 +24,8 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//147 original recordings; measured pack 1,777,065 bytes.
-const PACK_LIMIT = 1736 * 1024;
+//158 original recordings; measured pack 1,935,577 bytes.
+const PACK_LIMIT = 1904 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -48,6 +49,7 @@ function unpackClips(root, bytes) {
 
 function createNarration(root, host, preferences) {
     const glitches=createGlitchTracker(root);
+    const skillActions=new WeakMap();
     let pack = null;
     let loading = null;
     let failed = false;
@@ -350,6 +352,23 @@ function createNarration(root, host, preferences) {
         context.queue.push(state);environment = null;scene._wqaEnvironmentPending = false;
     }
 
+    function skillAccepted(scene,actor,sprite,key) {
+        if(!voiceReady() || !enabled() || !ready(scene,false,true) || pendingCount()>=QUEUE_LIMIT)return;
+        // Never add a late charging caption ahead of the timed word overlay.
+        // Its brisk recording fits the native1.2s gap at the slowest setting.
+        if(key==='beef-charge' && (clip || pendingCount()))return;
+        const state=skillVisual(root,host,scene,actor,sprite,key);
+        if(!state)return;
+        let seen=skillActions.get(state.action);
+        if(seen?.has(key))return;
+        if(owner && owner.scene!==scene)leave(owner.scene);
+        const context=owner??begin(scene);
+        context.skillEffect=context.hasReactions=true;
+        if(!seen){seen=new Set();skillActions.set(state.action,seen);}
+        seen.add(key);
+        context.queue.push({...state,frame:host.graphics.frameCount,order:++sequence});
+    }
+
     function glitchPresent(scene) {
         if(!voiceReady() || !enabled() || !ready(scene,false,true) || pendingCount()>=QUEUE_LIMIT)return;
         const state=glitches.capture(scene);
@@ -568,6 +587,7 @@ function createNarration(root, host, preferences) {
 
     function mayPresent(context) {
         const { scene, interpreter, list } = context;
+        if(context.skillEffect)return enabled()&&ready(scene,false,true);
         if(context.screenEffect)return enabled()&&ready(scene,false,true)&&context.mapId===root.$gameMap?._mapId;
         if(context.momentum)return enabled()&&ready(scene,false,true);
         if (context.carried) return ready(scene, false, true) && enabled();
@@ -693,7 +713,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { cancel(scene){host.cancelNarrationSpeech?.();leave(scene);}, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
+    return { cancel(scene){host.cancelNarrationSpeech?.();leave(scene);}, skillAccepted, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

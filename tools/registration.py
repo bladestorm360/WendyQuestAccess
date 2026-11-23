@@ -1046,7 +1046,40 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
     freezer_token = b'function(_0x545edf,_0x4eadf5,_0x1f43a8,_0x3accfc={}){'
     freezer_entry = original.index(freezer_token) + len(freezer_token)
     stones_entry = original.index(b"],$gameScreen['startTint']", original.index(b'_0x348760=[')) + 2
+    # Observe only the requested native effect attachments. These calls do
+    # not alter coroutines/input; narration confirms their real postrender art.
+    skill_hooks = {}
+    def skill_hook(token, actor, sprite, key, comma=False):
+        if original.count(token) != 1:
+            raise ValueError('Ambiguous native skill effect locator: ' + key)
+        pos = original.index(token) + len(token)
+        call = b'globalThis.WendyQuestAccessSkillVisual?.(' + actor + b',' + sprite + b',"' + key.encode() + b'")'
+        skill_hooks[pos] = call + (b',' if comma else b';')
+    skill_hook(b'(_0x23db23),', b'_0x5a043c', b'_0x23db23', 'crispy-shield', True)
+    skill_hook(b'(_0x24b65e),', b'_0x44c6b0', b'_0x24b65e', 'crispy-barrage', True)
+    skill_hook(b'(_0x255f7e);', b'SceneManager._scene._spriteset._subActorSprite', b'_0x255f7e', 'spicy-surge')
+    # The buff factory did not previously retain its returned particle.
+    buff_start = original.index(b'function(_0x3a83ef,_0x465650){')
+    buff_call = original.index(b'SpriteEffectHelper[', buff_start)
+    skill_hooks[buff_start + len(b'function(_0x3a83ef,_0x465650){')] = b'let wqaShine;'
+    skill_hooks[buff_call] = b'wqaShine='
+    skill_hook(b'_0x465650);', b'_0x3a83ef', b'wqaShine', 'rise-shine')
+    skill_hook(b'(_0x14f08),', b'_0x17676a', b'_0x21479d', 'frosty-time', True)
+    skill_hook(b'(_0x27dd86),', b'_0x47928e', b'_0x27dd86', 'frosty-blast', True)
+    skill_hook(b'(_0x2a0d6a));', b'_0x167395', b'_0x2a0d6a', 'nugget-strike')
+    skill_hook(b'(_0x4008f5,0x0);', b'_0x33452b', b'_0x4008f5', 'bacon-blast')
+    whip_end = original.index(b';var _0x13db21=') + 1
+    skill_hooks[whip_end] = b'globalThis.WendyQuestAccessSkillVisual?.(_0x26e9e2,_0x1edbd9,"pigtail-whip");'
+    beef_start = original.index(b'function(_0x3e461b,_0x18340b){')
+    charge_delay = original.index(b'](1.2)', beef_start)
+    charge_end = original.rindex(b';', beef_start, charge_delay) + 1
+    skill_hooks[charge_end] = b'globalThis.WendyQuestAccessSkillVisual?.(_0x3e461b,_0x26c109,"beef-charge");'
+    attack_call = original.index(b"SpriteEffectHelper['CreateParticleEffectSprite'](_0x2bc72d", beef_start)
+    skill_hooks[attack_call] = b'const wqaBeefAttack='
+    attack_end = original.index(b';', attack_call) + 1
+    skill_hooks[attack_end] = b'globalThis.WendyQuestAccessSkillVisual?.(_0x3e461b,wqaBeefAttack,"beef-attack");'
     return insert(original, BATTLE_SHA, {
+        **skill_hooks,
         stones_entry: b'globalThis.WendyQuestAccessFinaleStones?.(SceneManager._scene,_0x37cee4,_0xffdf2,_0x348760),',
         freezer_entry: b'if(_0x4eadf5==="MechDoubleLaser"||_0x4eadf5==="FreezerBurn"||_0x4eadf5==="BigMechPunch"||_0x4eadf5==="BigMechGun"||_0x4eadf5==="BigMechBoosterBash")'
                        b'globalThis.WendyQuestAccessAbilityAnimation?.(_0x545edf,this);',

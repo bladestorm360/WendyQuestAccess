@@ -52,6 +52,20 @@ def animated_text_methods():
     return methods
 
 
+if sys.argv[2:] == ['skill-visuals']:
+    names = ['CreateCrispyShieldAnimation','SpiceBuffAnimation','CreateBaconatorBuffAnimation',
+             'createFrostyTimeAnimation','createFrostyBlastAnimation','CreateCrispyBarrageAnimation',
+             'CreatePigtailWhipAnimation','CreateWhereIsBeefAnimation','CreateNuggetStrikeAnimation',
+             'CreateBaconatorBlastAnimation']
+    methods = {}
+    for name in names:
+        start = battle.index("BattleAnimations['" + name + "']=function(")
+        end = battle.index('},BattleAnimations[', start)
+        methods[name] = battle[start:end + 1] + ';'
+    print(json.dumps(methods))
+    sys.exit(0)
+
+
 if sys.argv[2:] == ['finale']:
     start = battle.index("BattleAnimations['CornerStone']=function(")
     end = battle.index("},BattleAnimations['IceCreamSelfDestruct']", start)
