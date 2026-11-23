@@ -2532,6 +2532,15 @@
     "text": "Tyler leaps into view.",
     "beats": [
       [
+        15,
+        60,
+        1,
+        0,
+        60,
+        null,
+        -6
+      ],
+      [
         26,
         12,
         1,
@@ -2581,6 +2590,15 @@
   "tyler-departs": {
     "text": "Tyler leaps away.",
     "beats": [
+      [
+        15,
+        60,
+        1,
+        35,
+        60,
+        null,
+        -6
+      ],
       [
         26,
         12,

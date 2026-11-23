@@ -535,10 +535,10 @@ def objects_notification(original):
                 b'(this._mapId===16||this._mapId===20||this._mapId===63||this._mapId===77||'
                 b'this._mapId===103||this._mapId===106||this._mapId===107||this._mapId===108||'
                 b'this._mapId===110||this._mapId===134||this._mapId===197||this._mapId===97||'
-                b'this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
+                b'this._mapId===15&&this._eventId===60||this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
                 b'this._mapId===188||this._mapId===115||this._mapId===39||this._mapId===13))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,'
-                b'(this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
+                b'(this._mapId===15&&this._eventId===60||this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
                 b'this._mapId===63&&this._eventId===19||this._mapId===188||this._mapId===115||'
                 b'this._mapId===39||this._mapId===13&&this._eventId===5&&[70,77].includes(this._index))?-6:undefined);',
         # Native emotes, Frostyna's flash, and the two identical door approaches.
@@ -751,8 +751,13 @@ def map_notification(original):
         globalThis.WendyQuestAccessProloguePresent?.(this);
     if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 16 && this._wqaMechDoubleNarrationMask !== 3)
         globalThis.WendyQuestAccessMechEntryPresent?.(this);
-    if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 181 &&
-        $gameMap._events?.[15]?._pageIndex === 2 && !this._wqaTylerEntryObserved)
+    if (Graphics._wqaNarrationEnabled && this._wqaTylerEntryMap !== $gameMap._mapId &&
+        ($gameMap._mapId === 15 && $gameMap._events?.[60]?._pageIndex === 1 ||
+         $gameMap._mapId === 26 && $gameMap._events?.[12]?._pageIndex === 1 ||
+         $gameMap._mapId === 63 && $gameMap._events?.[19]?._pageIndex === 1 ||
+         $gameMap._mapId === 86 && $gameMap._events?.[35]?._pageIndex === 1 ||
+         $gameMap._mapId === 181 && $gameMap._events?.[15]?._pageIndex === 2 ||
+         $gameMap._mapId === 239))
         globalThis.WendyQuestAccessTylerEntryPresent?.(this);
     if (Graphics._wqaNarrationEnabled && (this._spriteset?._balloonSprites?.length ||
         $gameMap._mapId === 16 && !this._wqaAssistanceReveal))

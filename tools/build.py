@@ -54,6 +54,7 @@ def bundle():
         './environment-visuals': 'dialogue/environment-visuals.js',
         './question-visuals': 'dialogue/question-visuals.js',
         './finale-visuals': 'dialogue/finale-visuals.js',
+        './tyler-visuals': 'dialogue/tyler-visuals.js',
         './finale-battle': 'dialogue/finale-battle.js',
         './narration-cues.json': 'dialogue/narration-cues.json',
         './character-art': 'dialogue/character-art.js',

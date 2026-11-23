@@ -36,7 +36,7 @@ for (const [id, { beats }] of Object.entries(cues)) {
         }
     }
 }
-assert.equal(locators.size, 294);
+assert.equal(locators.size, 296);
 assert.match(cues['party-vanishes'].text, /gather into her.*party fits on the elevator/);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
@@ -515,7 +515,7 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 147 clips, 294 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 147 clips, 296 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
 
 require('./finale-narration.cjs')(fixture, commandContext, stock);
 require('./screen-jolt.cjs')(fixture, commandContext, stock);
@@ -527,6 +527,7 @@ require('./question-narration.cjs')(fixture, commandContext, stock, emoteMethods
 require('./narration-continuity.cjs')(fixture, commandContext, emoteMethods);
 
 require('./tyler-entry.cjs')(fixture, commandContext, stock, emoteMethods);
+require('./tyler-audit.cjs')(fixture,stock);
 
 // Momentum descriptions use the native branch, actual rendered crystal and
 // the established FIFO; a later crystal cannot interrupt the first recording.

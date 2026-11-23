@@ -1,6 +1,7 @@
 'use strict';
 
 const cues = require('./narration-cues.json');
+const { currentTylerEntry } = require('./tyler-visuals');
 const { renderedSprite } = require('../runtime/rendered-sprite');
 const { finaleVisible, captureFinale } = require('./finale-visuals');
 const { finaleBattleReady, bossFlash, combinedStones } = require('./finale-battle');
@@ -197,13 +198,12 @@ function createNarration(root, host, preferences) {
         return true;
     }
 
-    function accepted(scene, interpreter, actor, switched, visual, commandIndex = interpreter._index) {
+    function accepted(scene, interpreter, actor, switched, visual, commandIndex = interpreter._index, recovery = false) {
         if (!voiceReady() || !enabled() || !ready(scene)) return;
         const map = root.$gameMap;
-        // At the exact first-shop music command, recover the preceding arrival
-        // before queuing music if readiness opened during this native update.
-        if (map._mapId === 181 && interpreter._eventId === 15 && commandIndex === 8 && visual === 3 &&
-            interpreter._list === root.$dataMap?.events?.[15]?.pages?.[2]?.list) tylerEntry(scene);
+        // Recover a preceding Tyler entrance before its first greeting
+        // reaction; the native route may have run behind a resource gate.
+        if (visual > 0) tylerEntry(scene);
         const common = commonReactions.resolve(root, interpreter, visual);
         if (common) { interpreter = common.parent; commandIndex = common.index; }
         const candidates = beats[interpreter._mapId]?.[interpreter._eventId]?.[commandIndex];
@@ -218,6 +218,7 @@ function createNarration(root, host, preferences) {
         actor = source;
         visual = candidate.visual;
         const sourceKey = [map._mapId,interpreter._eventId,candidate.page,commandIndex].join('/');
+        if(candidate.id==='tyler-arrives' && !recovery) {scene._wqaTylerEntrySeen=null;scene._wqaTylerEntryMap=null;}
         const prior = scene._wqaNarrationSeen;
         if (visual > 0) {
             if (prior?.list === interpreter._list && prior.index === commandIndex &&
@@ -393,19 +394,13 @@ function createNarration(root, host, preferences) {
     }
 
     function tylerEntry(scene) {
-        const map = root.$gameMap, interpreter = map?._interpreter;
-        const list = root.$dataMap?.events?.[15]?.pages?.[2]?.list;
-        // Shop entry may execute the first route while portrait/HUD resources
-        // are still gated. Recover only its current native route/landing wait
-        // after readiness; no observation or work is started during loading.
-        if (!voiceReady() || !enabled() || !ready(scene) || map?._mapId !== 181 || scene._wqaTylerEntryObserved ||
-            interpreter?._eventId !== 15 || interpreter._list !== list ||
-            interpreter._index < 1 || interpreter._index > 14) return;
-        const actor = map._events[7], spawn = root.$dataMap.events[7];
-        if (!actor || !(actor._jumpCount > 0) && !(actor._x === spawn.x - 4 && actor._y === spawn.y)) return;
-        const key = '181/15/2/0';
-        if (owner?.scene === scene && owner.queue.some(state => state.sourceKey === key)) return;
-        accepted(scene, interpreter, actor, undefined, -6, 0);
+        if (!voiceReady() || !enabled() || !ready(scene)) return;
+        const entry=currentTylerEntry(root);
+        if(!entry || scene._wqaTylerEntrySeen===entry.key)return;
+        const actor=root.$gameMap._events[entry.actor], spawn=root.$dataMap.events[entry.actor];
+        if(!actor || !(actor._jumpCount>0) && !(actor._x===spawn.x+entry.dx && actor._y===spawn.y+entry.dy))return;
+        if(owner?.scene===scene && owner.queue.some(state=>state.sourceKey===entry.key))return;
+        accepted(scene,entry.script,actor,undefined,-6,entry.index,true);
     }
 
     function prologue(scene) {
@@ -668,7 +663,10 @@ function createNarration(root, host, preferences) {
                 state.confirmed = state.battleVisible ? state.battleVisible() : state.idle ? map.inactiveTime < state.idle.end &&
                     state.idle.visible(scene, map, root.$gamePlayer) : visibleActorCue(scene, state);
                 if (state.confirmed && state.bit) scene._wqaIdleNarrationMask |= state.bit;
-                if (state.confirmed && state.sourceKey === '181/15/2/0') scene._wqaTylerEntryObserved = true;
+                if(state.confirmed && state.id==='tyler-arrives') {
+                    scene._wqaTylerEntrySeen=state.sourceKey;scene._wqaTylerEntryMap=map._mapId;
+                    if(state.sourceKey==='181/15/2/0')scene._wqaTylerEntryObserved=true;
+                }
                 if (state.confirmed && state.id === 'assistance-chest') scene._wqaAssistanceReveal = true;
                 if (state.confirmed && map?._mapId === 16) {
                     if (state.sourceKey === '16/39/0/0') scene._wqaMechDoubleNarrationMask = (scene._wqaMechDoubleNarrationMask || 0) | 1;
