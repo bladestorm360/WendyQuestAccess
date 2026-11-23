@@ -1323,6 +1323,10 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if (process.argv.includes('--elder-door-only')) {
+        await require('./elder-door.cjs').verifyNative(c,load,snapshot,verifyWorker);
+        return;
+    }
     if (process.argv.includes('--controls-only')) {
         await require('./control-autowalk.cjs')(c,load,verifyWorker,read,snapshot);
         return;

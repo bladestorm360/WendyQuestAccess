@@ -426,3 +426,12 @@ Ownership: [control predicate](../src/world/terrain-control-labels.cjs), [field 
 
 
 The existing large field module remains a cohesive owner exception for this scoped integration: destination selection, native acceptance, readiness, cancellation and final arrival share one lifecycle. The fix adds no independent router or parallel ownership path. Further reorganization is outside this owner-requested regression fix.
+
+
+## Elder Tater house note before the beach exit
+
+November23 owner report. Current own log shows116 exit8 returning approachBlocked from7,7 and6,7. The exit is a solid normal-priority touch event at5,8. Its only legal bump approach is the active note floor13 at5,7. The solver deliberately removes final interaction goals occupied by another floor event; this exit lacked its existing explicit handoff link. The focused fix adds note13 to that exit's checked handoffs, preserving the normal collider, native event order and generic spoiler-free scene label.
+
+Directions now return the safe first prefix to6,7 and the westward activation step into note13. Native note completion sets142 and its next page erases the floor event. Afterward the unchanged solver reaches the door's south-facing bump from5,7. Neither the note text nor future story state is exposed in directions. The native/local fixture reproduces the old approachBlocked result without the link, checks both reported positions with manual and automatic worker prefixes, validates actual floor activation, original switch/page selection, pinned post-erase state and actual solid-door touch. The field test proves the exit category/request carries the link and speaks event directions before ordinary door directions. Existing field/ice/vehicle/phase regressions remain applicable.
+
+The owner explicitly requested this focused fix be deployed before finishing the broader all-map event audit. The all-map audit and implementation remain a separate ordered portion of the same active task. No solver redesign, baked-map update, native hook or progression/input change belongs to this first fix. [Locator](../src/world/local-destinations.js) · [Native/field replay](../tests/elder-door.cjs) · [Scope/order](feature-checkpoint.md#required-floor-events-at-destination-approaches)

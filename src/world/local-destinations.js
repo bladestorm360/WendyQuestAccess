@@ -419,7 +419,11 @@ function localDestination(root, event, page) {
         const transfer = TOUCH_TRANSFERS[map]?.[id];
         if (transfer && list.some(command => command.code === 201 && command.parameters[0] === 0 &&
             transfer.includes(command.parameters[1], 1)))
-            return { name: transfer[0], category: 'exits', eventAction: 'bump' };
+            // The note scene occupies the only north-side action approach
+            // to Elder Tater's door. Retain that native floor handoff before
+            // the exit's failed-step interaction; nothing bypasses the note.
+            return { name: transfer[0], category: 'exits', eventAction: 'bump',
+                ...(map === 116 && id === 8 ? { handoffs: [13] } : {}) };
     }
     const floorAction = trigger === 1 && event._priorityType !== 1;
     if (map === 27 && floorAction && [27, 32].includes(id) &&

@@ -219,6 +219,7 @@ async function main() {
         { category: 'enemies', name: 'Enemy' });
     profileSnapshot(flags);
     await verifyOpeningField(flags);
+    await require('./elder-door.cjs').verifyField(fixture,mapData,flags);
     await verifyIceHandback(flags);
     await verifyVisibleChestBarriers(flags);
     await verifyClosedRuinsDoor(flags);
