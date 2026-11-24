@@ -292,7 +292,7 @@ function createNarration(root, host, preferences) {
             balloonAnchor: candidate.balloonAnchor, waitFrames: candidate.waitFrames,
             screenX: scene._spriteset.x, screenY: scene._spriteset.y,
             x: actor._realX, y: actor._realY, mapY: map._displayY, mapX: map._displayX, direction: actor._direction, id: candidate.id,
-            finale: visual === -6 ? captureFinale(root, scene, candidate.id) : null });
+            finale: visual === -6 ? captureFinale(root, scene, candidate.id, recovery) : null });
         return true;
     }
 
@@ -477,6 +477,13 @@ function createNarration(root, host, preferences) {
     }
 
     function entry(scene, interpreter, list, eventId) {
+        if(scene && root.$gameMap?._mapId===197 && eventId===18 &&
+            root.$dataMap?.events?.[18]?.pages?.some(page=>page.list===list)) {
+            // Another real shrine activation may replay the reunion. Bitmap
+            // preloads within the same interpreter do not reset this guard.
+            scene._wqaJailNarrationSeen?.delete('shrine-lights');
+            scene._wqaJailNarrationSeen?.delete('shrine-reunion');
+        }
         // This exact beach page is a repeating wait-only continuation, not a
         // fresh cutscene/resource phase. Its native loadImages sees no image
         // commands. Retire on first entry; later ready iterations must not
@@ -739,7 +746,7 @@ function createNarration(root, host, preferences) {
                     scene._wqaTylerEntrySeen=state.sourceKey;scene._wqaTylerEntryMap=map._mapId;
                     if(state.sourceKey==='181/15/2/0')scene._wqaTylerEntryObserved=true;
                 }
-                if(state.confirmed && ['grunt-ambush','party-jailed','jail-breach'].includes(state.id))
+                if(state.confirmed && ['grunt-ambush','party-jailed','jail-breach','shrine-lights','shrine-reunion'].includes(state.id))
                     (scene._wqaJailNarrationSeen ||= new Set()).add(state.id);
                 if (state.confirmed && state.id === 'assistance-chest') scene._wqaAssistanceReveal = true;
                 if (state.confirmed && map?._mapId === 16) {

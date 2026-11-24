@@ -37,15 +37,18 @@ const STONES = {
     'stone-sir-chicken': [20, 'Nugget'], 'stone-baconator': [23, 'Bacon']
 };
 
-function captureFinale(root, scene, id) {
+function captureFinale(root, scene, id, recovery = false) {
     if(id==='shrine-lights') {
         const mask=scene._spriteset?._lightmask;
         return mask?.parent===scene._spriteset && mask.worldVisible===true &&
-            Array.isArray(mask._sprites) && mask._sprites.length>0 && mask._sprites.length<=16 ? {mask} : null;
+            Array.isArray(mask._sprites) && (mask._sprites.length>0 || recovery && root.$gameSwitches.value(576)) && mask._sprites.length<=16 ? {mask} : null;
     }
     if(id==='shrine-reunion') {
         const tone=root.$gameScreen?._tone;
-        return Array.isArray(tone) && tone.length===4 && tone.slice(0,3).every(value=>value>=200) ? {white:true} : null;
+        // Exact recovery is after the native white-tint/wait/switch/clear-tint
+        // sequence. The newly rendered companion sprites must still confirm it.
+        return Array.isArray(tone) && tone.length===4 &&
+            (tone.slice(0,3).every(value=>value>=200) || recovery && root.$gameSwitches.value(573)) ? {white:true} : null;
     }
 
     if (!['companions-take-stones', 'prologue-march'].includes(id)) return null;

@@ -112,6 +112,20 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
             f.narration.leave(f.scene);assert(f.played[0].paused);count++;
         }
     }
+    for(const [page,index,id,switched] of [[0,20,'shrine-lights',576],[0,72,'shrine-reunion',573],[1,15,'shrine-reunion',573]]) {
+        const f=fixture(197,18,page);f.actor(-1);f.interpreter._index=index;
+        f.spriteset._tilemap.worldVisible=true;f.switches.add(switched);
+        f.spriteset._lightmask={parent:f.spriteset,worldVisible:true,_sprites:[]};
+        f.status._tone=[0,0,0,0];
+        for(const n of [1,22]) {const a=f.actor(n);a.candidate._pageIndex=0;
+            a.candidate._characterName=a.sprite._characterName=f.root.$dataMap.events[n].pages[0].image.characterName;}
+        f.scene._wqaPreloads=new Set([{}]);f.frame();assert.equal(f.played.length,0);
+        f.scene._wqaPreloads.clear();f.frame(false);assert.equal(f.played.length,0);
+        f.renderer.emit('postrender');assert.equal(f.played[0]?.id,id,'cold shrine native-ready recovery');
+        f.played[0].emit('ended');f.frame();assert.equal(f.played.length,1,'no repeat inside one activation');
+        f.narration.entry(f.scene,f.interpreter,f.interpreter._list,18);f.frame();
+        assert.equal(f.played.length,2,'another real activation can replay the same shrine cue');f.narration.leave(f.scene);
+    }
     for(const [event,page,index,id,actorId] of [[6,0,14,'party-jailed',-1],[10,1,72,'jail-breach',11]]) {
         const f=fixture(134,event,page),a=f.actor(actorId);
         f.interpreter._index=index;f.status._brightness=0;

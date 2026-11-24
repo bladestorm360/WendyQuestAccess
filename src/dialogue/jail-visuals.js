@@ -3,7 +3,9 @@ const {renderedSprite}=require('../runtime/rendered-sprite');
 function site(root) {
     const map=root.$gameMap, script=map?._interpreter;
     const table=map?._mapId===49 ? [[14,1,56,89,55,-1,51,'grunt-ambush']] :
-        map?._mapId===134 ? [[6,0,10,24,6,-1,undefined,'party-jailed'],[10,1,71,99,70,11,77,'jail-breach']] : [];
+        map?._mapId===134 ? [[6,0,10,24,6,-1,undefined,'party-jailed'],[10,1,71,99,70,11,77,'jail-breach']] :
+        map?._mapId===197 ? [[18,0,18,22,17,-1,576,'shrine-lights'],
+            [18,0,69,77,68,-1,573,'shrine-reunion'],[18,1,14,18,13,-1,573,'shrine-reunion']] : [];
     for(const [event,page,first,last,index,actor,switched,id] of table) {
         if(script?._eventId===event && script._index>=first && script._index<=last &&
             script._list===root.$dataMap?.events?.[event]?.pages?.[page]?.list)
