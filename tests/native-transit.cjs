@@ -13,11 +13,11 @@ module.exports=async(c,load,read,verifyWorker,transferFactory=createTransferBook
  function handoff(tr,source,scene,edge,selection,boards=false){
   const player=source.player,ownerMap=source.gameMap;
   tr.arm(scene,selection,edge);ownerMap._interpreter={_eventId:edge.event,_list:edge.list};
-  tr.accepted(scene,ownerMap.event(edge.event));tr.reserved(scene,player,edge.map,edge.x,edge.y,edge.direction);
+  tr.accepted(scene,ownerMap.event(edge.event));if(edge.craft){player._vehicleGettingOff=true;edge.craft._driving=false;}tr.reserved(scene,player,edge.map,edge.x,edge.y,edge.direction);
   const next={};Object.assign(player,{_transferring:true,_newMapId:edge.map,_newX:edge.x,_newY:edge.y});
   tr.leave(next); // Destination construction/preload used to discard the ticket.
   const f=load(edge.map,state);Object.assign(ownerMap,f.gameMap);c.$gameMap=ownerMap;c.$gamePlayer=player;
-  Object.assign(player,{_transferring:false,_vehicleType:boards?'ship':'walk'});player.setPosition(boards?18:edge.x,edge.y);
+  Object.assign(player,{_transferring:false,_vehicleGettingOff:false,_vehicleType:boards?'ship':'walk'});player.setPosition(boards?18:edge.x,edge.y);
   if(boards)Object.assign(ownerMap.ship(),{_mapId:113,_x:18,_y:6,_driving:true});
   f.gameMap=ownerMap;f.player=player;tr.leave(next);
   const arrived=tr.settle(next);assert(arrived,'exact reserved ticket survives destination preload');
@@ -41,7 +41,7 @@ module.exports=async(c,load,read,verifyWorker,transferFactory=createTransferBook
   // An unrelated reservation/position cannot retain a ticket.
   tr.clear();det.clear();
  }
- for(const autowalk of [false,true])for(const id of [28,94,514]){
+ for(const autowalk of [false,true])for(const id of [28,94,514,43]){
   const tr=transferFactory(c,host),boat=createBoatJourney(c,tr),f=load(113,state);
   f.player.setPosition(12,17);Object.assign(f.gameMap.ship(),{_mapId:113,_x:18,_y:6,_driving:false});
   const snap=captureWorld(c),target=snap.objects.find(t=>t.id===id),job={action:'directions',map:113,scene:{},autowalk};
@@ -64,11 +64,23 @@ module.exports=async(c,load,read,verifyWorker,transferFactory=createTransferBook
   assert(boat.resume(job,captureWorld(c),()=>assert.fail('already aboard'),route,(_job,text)=>status=text,()=>{}));
   if(id===514)assert.equal(status,'Arrived.');
   else {
-   assert.equal(routed.t.id,id===28?31:51);
+   assert.equal(routed.t.id,id===28||id===43?31:51);
    await verifyWorker(moved.f,{x:18,y:6,event:routed.t.id,field:true,entryDirection:routed.t.entryDirection,surface:true,autowalk},routed.snapshot.live,r=>{
     assert(['ready','interrupted'].includes(r.status),'the sea leg is genuinely navigable');
     if(r.status==='interrupted')assert.equal(r.boundaryEvent,routed.t.id);
    });
+   if(id===43) {
+    const port=tr.candidates().entrances.find(e=>e.event===31);
+    const landed=handoff(tr,moved.f,moved.scene,port,{...moved.arrived,boat:{...moved.arrived.boat,phase:'land'},autowalk});
+    assert(boat.settle(landed.arrived));let onward;
+    assert(boat.resume(job,captureWorld(c),(_j,_s,b,t)=>onward={b,t},()=>assert.fail(),()=>assert.fail(),()=>{}));
+    assert(onward?.b.points?.length);const now=captureWorld(c),cs=tr.candidates();
+    await verifyWorker(landed.f,{x:now.x,y:now.y,field:true,autowalk,transfer:{...onward.b,state:cs.state,
+      trail:onward.t.trail,candidates:cs.entrances.map(copy)}},now.live,r=>{
+      assert(['ready','iceRoute','controlRoute','enemyBlocked','interrupted'].includes(r.status));
+      assert.notEqual(r.entrance,undefined,'native port has an onward walking exit');
+    });
+   }
    if(id===94) {
     const island=tr.islandLanding();assert(island?.sameScene);
     moved.f.player.setPosition(island.sourceX,island.sourceY);moved.f.player.setDirection(6);
@@ -98,5 +110,5 @@ module.exports=async(c,load,read,verifyWorker,transferFactory=createTransferBook
   assert(snap.live.events.find(e=>e.id===189).clearsOnUse);
   await verifyWorker(f,{x:44,y:21,event:43,field:true},snap.live,r=>{assert.equal(r.status,'interrupted');assert.equal(r.boundaryEvent,189);});
  }
- console.log('Verified three multi-exit native mine/town tickets through destination loading, six manual/Autowalk boat prerequisites/boarding/sea continuations and three no-Chomps cauldron approaches.');
+ console.log('Verified three multi-exit native mine/town tickets through destination loading, eight manual/Autowalk boat prerequisites/boarding/sea continuations and three no-Chomps cauldron approaches.');
 };

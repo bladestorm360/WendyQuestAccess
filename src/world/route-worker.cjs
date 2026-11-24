@@ -273,12 +273,6 @@ parentPort.on('message', message => {
                     request.terrainTransfer, cancelled));
                 result = routeThroughTerrain(base, live, request, manifest.maps[map].controls, cancelled, access) || result;
             }
-            if(request.boatFallback && map===113 && live.mode==='walk' &&
-                ['unreachable','approachBlocked'].includes(result.status)) {
-                const boat=transferRoute(base,map,live,request,request.boatFallback,cancelled);
-                if(boat && ['ready','enemyBlocked','iceRoute','controlRoute','interrupted','npcBlocked'].includes(boat.status))
-                    result={...boat,boatFallback:true};
-            }
             if (request.detour && live.mode === 'walk' && !request.motion && !request.area &&
                 (['unreachable', 'approachBlocked'].includes(result.status) ||
                     result.status === 'interrupted' && result.boundaryEvent !== request.event &&
@@ -289,6 +283,24 @@ parentPort.on('message', message => {
                 result = via && (['ready', 'enemyBlocked'].includes(via.status) || via.viaEntrance &&
                     ['iceRoute','controlRoute','interrupted','npcBlocked'].includes(via.status))
                     ? { ...via, detourPoints: points } : { status: 'unreachable' };
+            }
+            if(request.boatFallback && map===113 && live.mode==='walk' &&
+                ['unreachable','approachBlocked'].includes(result.status)) {
+                const fallback=request.boatFallback;
+                let onward,allowed=true;
+                if(fallback.onward) {
+                    onward=routeApproachPoints(base,live,request,cancelled);
+                    const catalog=currentWorldCatalog(walkingCatalog(),fallback,cancelled);
+                    const port=onward.length && rankEntrances(catalog,26,{map:113,points:onward,state:fallback.state,
+                        candidates:[{event:31,map:49,x:2,y:13}]},manifest.maps,cancelled,false);
+                    const ship=live.vehicles?.find(v=>v.type==='ship');
+                    const sea=port?.length && ship && solveRoute(base,{...live,mode:'ship',airshipAvailable:false},
+                        {x:ship.x,y:ship.y,event:31,field:true,surface:true},cancelled);
+                    allowed=!!sea && (sea.status==='ready'||sea.status==='interrupted'&&sea.boundaryEvent===31);
+                }
+                const boat=allowed && transferRoute(base,map,live,request,fallback,cancelled);
+                if(boat && ['ready','enemyBlocked','iceRoute','controlRoute','interrupted','npcBlocked'].includes(boat.status))
+                    result={...boat,boatFallback:true,...(onward?{boatOnwardPoints:onward}:{})};
             }
             if (request.autowalk === true && !request.motion && ![196,199,200,201].includes(map) &&
                 result.status === 'interrupted' && result.boundaryEvent !== request.event && result.boundary) {
