@@ -169,7 +169,7 @@
     ]
   },
   "chicken-falls": {
-    "text": "Sir Chicken falls to the floor after charging the mechs.",
+    "text": "Sir Chicken charges the mechs and is knocked to the ground.",
     "beats": [
       [
         63,
