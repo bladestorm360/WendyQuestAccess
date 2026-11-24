@@ -321,7 +321,7 @@ function boot(root, nodeRequire, nodeProcess) {
             nativeButton,
             controllerChanged: () => controller?.reset(),
             navigationChanged(value) {
-                if (navigationPreferences.autowalk && !value.autowalk) field.cancelAutowalk(host.manager._scene);
+                if (navigationPreferences.autowalk && !value.autowalk || navigationPreferences.caveAutomaticInteractions && !value.caveAutomaticInteractions) field.cancelAutowalk(host.manager._scene);
                 navigationPreferences = value;
             },
             speechChanged(value, owner) {
@@ -390,6 +390,7 @@ function boot(root, nodeRequire, nodeProcess) {
                 skillEffects.leave(scene);
                 radialResult.retire(scene);
                 quests.suspend(scene);
+                field.stopCaveSolver();
                 field.autowalk.stop(scene);
                 field.clearIceRoute(scene);
                 field.changed(scene);
@@ -464,6 +465,7 @@ function boot(root, nodeRequire, nodeProcess) {
             if (root.Input?._wqaSettingsPads) delete root.Input._wqaSettingsPads[event.gamepad.index];
         });
         for (const type of ['blur', 'pagehide']) root.addEventListener(type, () => {
+            field.stopCaveSolver();
             battleSpeech.leave();
             narration.cancel();
             splash.leave(host.manager._scene);
@@ -793,7 +795,7 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessFieldReady = function (scene) {
         if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaCaveProgressPending &&
-            !root.Graphics._wqaCaveAutoPending && !root.Graphics._wqaCaveChasePending && !root.Graphics._wqaCaveManualPending &&
+            !root.Graphics._wqaCaveAutoPending && !root.Graphics._wqaCaveSolverPending && !root.Graphics._wqaCaveChasePending && !root.Graphics._wqaCaveManualPending &&
             !root.Graphics._wqaBookmarkTransferPending && !root.Graphics._wqaWallEnabled &&
             !root.Graphics._wqaFootstepsEnabled && !root.Graphics._wqaCaveTimingEnabled &&
             !root.Graphics._wqaEventKnowledgePending) ||

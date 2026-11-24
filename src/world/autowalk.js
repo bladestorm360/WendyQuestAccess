@@ -13,6 +13,10 @@ const { admitPatrolLine, patrolStepReady } = require('./puzzles/patrol-line-play
 const { automaticCaveMap } = require('./puzzles/cave-progression');
 
 const TOUCH_TRIGGERS = [1, 2];
+function caveInputContext(map,job,target) {
+    return automaticCaveMap(map._mapId) || job.caveAll &&
+        (map._mapId===206 && target?._eventId===11);
+}
 
 function createAutowalk(root, ready, preferences, report, refreshReady = () => false, reroute = () => false, cleanup = () => false, cancelContinuation = () => null) {
     let active = null;
@@ -81,7 +85,7 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
         // This final step is part of the verified cave route. Return it through
         // native moveByInput; never set a coordinate, switch or interpreter.
         if (rest.activate && automaticTouch(state, rest.activate)) return rest.activate;
-        if (automaticCaveMap(map._mapId) && job.caveWalk && (job.caveCrystal || job.caveLoot) &&
+        if (caveInputContext(map,job,target) && job.caveWalk && (job.caveCrystal || job.caveLoot) &&
             target && atApproach(map, player, target, arrival) &&
             job.caveAction?.(target, true)) {
             // The owner's cave exception uses the ordinary native Confirm
@@ -100,7 +104,7 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
         // Pickups and checkpoints retain only an inert handoff. Their native
         // activation is the player's choice; accepted completion can resume
         // the existing protected route, just as before the cave exception.
-        if (automaticCaveMap(map._mapId) && job.caveWalk && (job.caveCrystal || job.caveLoot) &&
+        if (caveInputContext(map,job,target) && job.caveWalk && (job.caveCrystal || job.caveLoot) &&
             target && atApproach(map, player, target, arrival) && job.caveAction?.(target)) job.caveContinue = false;
         if (rest.npcBlocker)
             return end(state, { kind: 'fieldStatus', name: 'Blocked by ' + rest.npcBlocker + '.' },false,!!job.controlPrerequisite);
@@ -115,12 +119,12 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
 
     function automaticTouch(state, step) {
         const { map, player, job } = state;
-        if (!job.caveWalk || !automaticCaveMap(map._mapId) || !DIRECTIONS.includes(step) ||
+        if (!job.caveWalk || !caveInputContext(map,job,state.target) || !DIRECTIONS.includes(step) ||
             !player.canStartLocalEvents() || !player.canPass(player._x, player._y, step)) return false;
         const x = map.roundXWithDirection(player._x, step), y = map.roundYWithDirection(player._y, step);
         const floor = player.findEventsAt(x, y).find(event =>
             player.canTriggerEvent(event, TOUCH_TRIGGERS, false) && event.list()?.length > 1);
-        if (!floor || floor !== state.target && floor._eventId !== job.caveFloor || !job.caveAction?.(floor, true)) return false;
+        if (!floor || floor !== state.target && floor._eventId !== job.caveFloor && !job.caveAll || !job.caveAction?.(floor, true)) return false;
         job.caveContinue = false;
         stop(state.scene);
         return true;
@@ -243,9 +247,10 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             const floor = player.findEventsAt(x, y).find(event =>
                 player.canTriggerEvent(event, TOUCH_TRIGGERS, false) && event.list()?.length > 1);
             if (floor) {
+                if(job.caveAll && automaticTouch(state,step))return step;
                 if (index === length - 1 && floor._eventId === job.caveFloor) {
                     if (automaticTouch(state, step)) return step;
-                    if (automaticCaveMap(map._mapId)) job.caveAction?.(floor);
+                    if (caveInputContext(map,job,state.target)) job.caveAction?.(floor);
                     job.caveContinue = false;
                     return end(state, { ...record, legs: [], activate: step, more: false,
                         directionsOnly: true }, false, true);

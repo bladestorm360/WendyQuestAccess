@@ -412,8 +412,8 @@ function verifySettings() {
         if (document.activeElement.textContent !== 'Mod sounds, on') throw Error('Sound defaults were not applied');
         const labels = Array.from(document.querySelectorAll('dialog button'), item => item.textContent);
         if (labels.some(label => label.startsWith('Preview '))) throw Error('Preview buttons leaked into Audio settings');
-        if (!labels.includes('Battle timing assist, on') || !labels.includes('Cave timing cues, on'))
-            throw Error('Both timing assists must start enabled in a fresh profile');
+        if (!labels.includes('Battle timing assist, on') || labels.some(label=>/cave/i.test(label)))
+            throw Error('Battle timing defaults or scoped cave controls are incorrect');
         const bumps = labels.indexOf('Wall bump, off');
         if (bumps < 1 || !labels[bumps - 1].startsWith('Increase wall volume') ||
             !labels[bumps + 2].startsWith('Increase wall bump volume') ||
@@ -464,12 +464,8 @@ function verifySettings() {
         settingsStep++;
     } else if (settingsStep === 15 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         leavePreviews();
-        preview('Preview cave crossing ping');
-        settingsStep++;
-    } else if (settingsStep === 16 && menuStatus() === 'Preview uses stereo and rear pitch.') {
-        leavePreviews();
         preview('Preview battle accuracy tone');
-        settingsStep++;
+        settingsStep = 17;
     } else if (settingsStep === 17 && menuStatus() === 'Preview uses stereo and rear pitch.') {
         leavePreviews();
         choose('Mod sounds');
@@ -2207,12 +2203,8 @@ const interval = setInterval(() => {
             choose('Increase cutscene description speed, 200 percent');
             endingStep++;
         } else if (endingStep === 91 && menuStatus() === 'Audio settings saved') {
-            choose('Cave timing cues, on');
-            endingStep++;
-        } else if (endingStep === 92 && menuStatus() === 'Audio settings saved') {
-            if (document.activeElement.textContent !== 'Cave timing cues, off') throw Error('Cave cue toggle did not turn off');
             choose('Battle timing assist, on');
-            endingStep++;
+            endingStep = 93;
         } else if (endingStep === 93 && menuStatus() === 'Audio settings saved') {
             if (document.activeElement.textContent !== 'Battle timing assist, off') throw Error('Battle assist toggle did not turn off');
             choose('Decrease cutscene description volume');
@@ -3136,8 +3128,7 @@ def main():
                     'Increase wall volume, 55 percent', 'Wall bump, on', 'Decrease wall bump volume, 50 percent',
                     'Increase wall bump volume, 50 percent', 'Footstep sounds, on', 'Decrease footstep volume, 50 percent',
                     'Increase footstep volume, 50 percent', 'Navigation beacon, on', 'Decrease beacon volume, 65 percent',
-                    'Increase beacon volume, 65 percent', 'Cave timing cues, off', 'Decrease cave timing volume, 65 percent',
-                    'Increase cave timing volume, 65 percent', 'Battle timing assist, off',
+                    'Increase beacon volume, 65 percent', 'Battle timing assist, off',
                     'Decrease battle timing volume, 65 percent', 'Increase battle timing volume, 65 percent'] or reloaded.get('soundscape') != [
                     'Soundscape, on', 'Decrease volume, 35 percent', 'Exits, off']:
             raise RuntimeError(f'NW settings did not survive restart in the isolated profile: {reloaded}')

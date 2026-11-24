@@ -32,7 +32,7 @@ function createSecretIslandMenu(root, host) {
                 host.change(owner, {...host.audio(),caveVolume:Math.min(100,host.audio().caveVolume+10)}, 'caveRaise', 'audio')),
             preview: host.button(owner, 'Preview cave crossing ping', () => host.preview(owner, audio.caveVolume / 100)),
             help: host.button(owner, 'How to use the cave solver', () => host.status(owner,
-                `Turn on Autowalk and Automatic interactions, then press ${host.guideKey()} to collect the cave pickups and complete the route. Press ${host.stopKey()} to stop. With Automatic interactions off, current cave assistance is unchanged.`))
+                `Turn on Autowalk and Automatic interactions, then press ${host.guideKey()} to collect available cave pickups and stop safely after the chase. Close dialogue and reward messages with Confirm. Press ${host.stopKey()} to stop. Progress is read from your save. Earlier one-way pickups may need another visit. With Automatic interactions off, current cave assistance is unchanged.`))
         };
         items.automatic.setAttribute('aria-pressed',String(navigation.caveAutomaticInteractions));
         items.caveTiming.setAttribute('aria-pressed',String(audio.caveTiming));

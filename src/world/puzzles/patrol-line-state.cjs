@@ -9,7 +9,7 @@ const REACTION_FRAMES = 30;
 const MANUAL_PAUSE_FRAMES = 16;
 
 function lineDestination(map, event) {
-    return map === ROOM && (event === 25 || event === 34 || event === 26);
+    return map === ROOM && (event === 10 || event === 25 || event === 34 || event === 26);
 }
 
 function lineActors(patrols) {

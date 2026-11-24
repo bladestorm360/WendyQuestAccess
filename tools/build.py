@@ -144,6 +144,7 @@ def bundle():
         './cave-progression': 'world/puzzles/cave-progression.js',
         './puzzles/cave-progression': 'world/puzzles/cave-progression.js',
         './puzzles/cave-chase': 'world/puzzles/cave-chase.js',
+        './puzzles/cave-solver': 'world/puzzles/cave-solver.js',
         './puzzles/cave-loot': 'world/puzzles/cave-loot.js',
         './patrol-motion.cjs': 'world/puzzles/patrol-motion.cjs',
         './geometry.cjs': 'world/geometry.cjs',

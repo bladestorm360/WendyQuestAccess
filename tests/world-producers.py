@@ -27,7 +27,7 @@ def methods(installed):
                      'tileset', 'tilesetFlags', 'tileId', 'layeredTiles', 'tileEventsXy', 'allTiles', 'isPassable',
                      'terrainTag', 'regionId', 'checkLayeredTilesFlags', 'isCounter', 'events', 'eventsXyNt',
                      'refreshTileEvents', 'changeTileset', 'vehicle', 'boat', 'ship', 'airship', 'isAnyEventStarting', 'updateEvents',
-                     'tileWidth', 'tileHeight', 'screenTileX', 'screenTileY', 'adjustX', 'adjustY',
+                     'setDisplayPos', 'tileWidth', 'tileHeight', 'screenTileX', 'screenTileY', 'adjustX', 'adjustY',
                      'scrollUp', 'scrollDown', 'scrollLeft', 'scrollRight', 'deltaX', 'deltaY', 'isLadder',
                      'setupStartingMapEvent', 'setupStartingEvent', 'setupTestEvent', 'setupAutorunCommonEvent', 'autorunCommonEvents', 'event', 'eraseEvent', 'vehicles', 'encounterStep', 'eventsXy', 'isDashDisabled'],
         'Game_CharacterBase': ['pos', 'posNt', 'isNormalPriority', 'tileId', 'isTile', 'reverseDir', 'isThrough',
@@ -54,7 +54,7 @@ def methods(installed):
         'Game_Vehicle': ['pos', 'isBoat', 'isShip', 'isAirship', 'isMapPassable', 'isLandOk', 'getOn', 'getOff',
                          'setLocation', 'refresh', 'syncWithPlayer', 'isLowest', 'resetDirection',
                          'updateAirship', 'updateAirshipAltitude', 'isHighest', 'maxAltitude', 'canMove'],
-        'Game_Interpreter': ['clear', 'setup', 'command101', 'nextEventCode', 'setupChild', 'command111', 'command115', 'command117', 'command121', 'command122', 'command123',
+        'Game_Interpreter': ['clear', 'setup', 'command101', 'command102', 'setupChoices', 'nextEventCode', 'setupChild', 'command111', 'command115', 'command117', 'command121', 'command122', 'command123',
                              'operateVariable', 'gameDataOperand',
                              'command201', 'command202', 'command203', 'command205', 'command206',
                              'command214', 'command230', 'wait', 'command282', 'command402', 'command411', 'executeCommand', 'updateWaitMode', 'currentCommand',
@@ -70,7 +70,7 @@ def methods(installed):
     output.append(between(stock, 'Game_Character.ROUTE_END =', 'Game_Character.prototype.initialize ='))
     core = core_notification((installed / CORE_REL).read_bytes()).decode('utf8')
     output.append(between(core, 'Tilemap.TILE_ID_B =', 'Tilemap.isVisibleTile ='))
-    for name in ('Math.randomInt', 'Number.prototype.mod', 'Array.prototype.contains', 'Tilemap.prototype._readMapData',
+    for name in ('Math.randomInt', 'Number.prototype.clamp', 'Number.prototype.mod', 'Array.prototype.contains', 'Array.prototype.clone', 'Tilemap.prototype._readMapData',
                  'Tilemap.getAutotileKind', 'Tilemap.isTileA3', 'Tilemap.isTileA4',
                  'Tilemap.isWaterfallTile', 'Tilemap.isWallSideTile'):
         output.append(between(core, f'\n{name} = function(', '\n};') + '\n};')

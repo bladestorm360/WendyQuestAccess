@@ -25,6 +25,7 @@ const { createCaveGuide, timedCave, warningApproach, captureMotion, distractionF
     checkpointTarget } = require('./puzzles/cave');
 const { acceptedAction, chaseContinuation, activeDistraction, automaticCaveMap, automaticCaveAction } = require('./puzzles/cave-progression');
 const { createChaseGuide } = require('./puzzles/cave-chase');
+const {createCaveSolver,caveSolverMap,solverActionAllowed} = require('./puzzles/cave-solver');
 const { caveLootAction } = require('./puzzles/cave-loot');
 const { capturePatrolLine } = require('./puzzles/patrol-line-playback');
 const BROWSE = new Set(['previousDestination', 'nextDestination', 'previousCategory', 'nextCategory']);
@@ -131,7 +132,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     let manualWait = null;
     let manualCrossing = null;
     const preferences = host.navigationPreferences;
+    const solver = createCaveSolver(root,host.graphics,preferences);
     const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed, arrived, job) => {
+        if(record?.manualAutowalkStop)solver.stop();
+        else if(arrived && job?.caveWalk?.solverToken)solver.wake();
         if (arrived && job?.caveWalk?.pickupEscape) {
             retire(scene);
             return;
@@ -167,6 +171,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         } else if (record && scene === host.manager._scene) command('navigationReport', record);
         else retire(scene);
     }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true), rerouteAutowalk, cleanupAutowalk, (scene,player,direction) => {
+        const solving=solver.active();
+        if(solving)solver.stop();
         const pending=cleanupWalk;
         const transfer=transfers.automatic(scene);
         const ice=iceRoute?.scene===scene&&iceRoute.remote&&iceRoute.autowalk?iceRoute:null;
@@ -177,7 +183,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if(cave && [1,2].includes(cave.event._trigger) &&
             cave.event.pos(root.$gameMap.roundXWithDirection(player._x,direction),
                 root.$gameMap.roundYWithDirection(player._y,direction))) return null;
-        if ((!pending||pending.scene!==scene)&&!transfer&&!ice&&!cave) return null;
+        if ((!pending||pending.scene!==scene)&&!transfer&&!ice&&!cave) return solving?{scene}:null;
         if(pending?.scene===scene)owner=pending.owner;
         else if(ice)owner=ice.owner;
         const job=pending?.scene===scene?pending.job:ice?.job||cave||{scene};
@@ -323,7 +329,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             (!job.scene._wqaPreviewUntil || host.graphics.frameCount < job.scene._wqaPreviewUntil));
     }
 
-    function status(job, name) { present(job, { kind: 'fieldStatus', name }); }
+    function status(job, name) {
+        if(job.solverToken || job.caveWalk?.solverToken)solver.stop();
+        present(job, { kind: 'fieldStatus', name });
+    }
 
     function navigationRequest(job) {
         return job && (job.action === 'directions' || job.action === 'currentDestination' ||
@@ -978,7 +987,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         job.area = area;
         job.autowalk = (job.action !== 'puzzleGuide' || snapshot.map===19) && !job.journey && preferences().autowalk;
         if (job.autowalk) automaticSnapshot(snapshot, destination.event);
-        if (job.autowalk && automaticCaveMap(snapshot.map)) {
+        job.caveAll=job.autowalk && solver.enabled() && caveSolverMap(snapshot.map);
+        if (job.autowalk && (automaticCaveMap(snapshot.map) || job.caveAll)) {
             job.caveWalk ||= { destination: target, attempt: 0, acted: new Set(), announced: false };
             if (job.caveWalk.x !== snapshot.x || job.caveWalk.y !== snapshot.y)
                 Object.assign(job.caveWalk, { x: snapshot.x, y: snapshot.y, attempt: 0, replans: 0 });
@@ -1088,17 +1098,21 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             }
             return retire(scene);
         }
+        if(caveWalk?.solverToken)browserOwner(scene);
         queue({ scene, action: 'directions', caveWalk, chase, changes: [] });
     }
 
     function caveAction(scene, event) {
-        if (!event || event._erased || !automaticCaveMap(root.$gameMap?._mapId)) return null;
+        if (!event || event._erased) return null;
+        const expanded=solver.enabled() && root.$gameMap?._mapId===206 && event._eventId===11;
+        if(!automaticCaveMap(root.$gameMap?._mapId) && !expanded)return null;
+        if(expanded && !solverActionAllowed(root,scene,event))return null;
         const map = root.$gameMap;
         const list = event.list();
         if (list !== root.$dataMap.events[event._eventId]?.pages[event._pageIndex]?.list) return null;
         return acceptedAction(root, scene, event) || caveLootAction(root, scene, event) ||
             (checkpointTarget(map._mapId, event._eventId, event._pageIndex, event._trigger) ?
-                { scene, origin: map._mapId, event, list } : null);
+                { scene, origin: map._mapId, event, list, checkpoint:true } : null);
     }
 
     function setManualAction(value) {
@@ -1132,7 +1146,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
 
     function expectCaveAction(job, event, automatic = false) {
         const action = caveAction(job.scene, event);
-        if (!action || automatic && !automaticCaveAction(action)) return false;
+        if (!action || automatic && !(job.caveAll && solver.enabled()) && !automaticCaveAction(action)) return false;
+        if(job.caveWalk?.solverToken && !solver.current(job.caveWalk.solverToken))return false;
+        if(solver.active())solver.prepare(action);
         if (!job.caveArrives) {
             if (job.caveWalk.acted.has(event._eventId)) return false;
             job.caveWalk.acted.add(event._eventId);
@@ -1515,6 +1531,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         }
         const routing = job.action === 'directions';
         if (job.caveWalk) {
+            if(job.caveWalk.solverToken && !solver.current(job.caveWalk.solverToken))return retire(job.scene);
             const snapshot = captureWorld(root, true);
             if (!snapshot) return status(job, 'Map information unavailable.');
             job.performed = true;
@@ -1545,6 +1562,28 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return submit(job, snapshot, { candidates: snapshot.objects.map(destinationRequest) }, true);
         }
         job.performed = true;
+        if (puzzleGuide && solver.enabled() && solver.available()) {
+            if(!solver.active() && !solver.start())return retire(job.scene);
+            cave.arm(job.scene);
+            if(solver.waitingNative())return retire(job.scene);
+            const next=solver.next(snapshot.objects);
+            if(next?.complete || next?.declined) {
+                job.solverToken=undefined;
+                return status(job,next.complete ? 'Chase complete.'+(next.remaining ? ` ${next.remaining} earlier cave pickup${next.remaining===1?' remains':'s remain'}.` : '') : 'Cave solving stopped.');
+            }
+            if(!next?.target) {solver.stop();return status(job,'The next cave step is not currently reachable.');}
+            selectGuideTarget(next.target);
+            job.action='directions';job.solverToken=next.token;
+            job.caveWalk={destination:next.target,attempt:0,acted:new Set(),announced:next.announced,solverToken:next.token};
+            solver.announced();
+            if(next.chase) {
+                Object.assign(job,{map:snapshot.map,mode:snapshot.mode,x:snapshot.x,y:snapshot.y,
+                    label:next.target.name,target:next.target.id,caveAll:true,
+                    caveAction:(event,automatic)=>expectCaveAction(job,event,automatic)});
+                return startCaveSegment(job,next.chase.legs,null,true,next.chase.next);
+            }
+            return timed ? timedRoute(job,snapshot,next.target) : route(job,snapshot,next.target);
+        }
         if (puzzleGuide) {
             const result = guideFor(job.scene)?.review(job.scene, snapshot.objects, snapshot.x, snapshot.y);
             if (!result) return retire(job.scene);
@@ -1629,6 +1668,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     function command(action, text, controller = false, keepCaveTiming = false) {
         if (BROWSE.has(action) || ['directions', 'puzzleGuide', 'puzzleStop'].includes(action)) clearCleanupWalk();
         const scene = host.manager._scene;
+        const stoppedSolver=(action==='beaconStop'||action==='puzzleStop'||BROWSE.has(action)) && solver.stop();
         if ((action === 'beaconStop' || action === 'puzzleStop') && caveResume) {
             clearCaveResume();
             return true;
@@ -1662,7 +1702,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             shoreJourney = null;
             clearIceRoute(scene);
             const walking = autowalk.stop(scene) || pendingAutowalk(scene) || cleaning || transfers.automatic(scene) ||
-                !!automaticIce;
+                !!automaticIce || stoppedSolver;
             const beaming = host.beacon?.stop(scene);
             if (!walking && !beaming && !waitingForIce) return false;
             transfers.clear();
@@ -1677,7 +1717,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             const timing = host.caveTiming?.stop(scene);
             const walking = guidedMap && autowalk.stop(scene);
             const waiting = active?.scene === scene && active.action === 'directions' && guidedMap;
-            if (!pending && !stopped && !timing && !waiting && !walking) return false;
+            if (!stoppedSolver && !pending && !stopped && !timing && !waiting && !walking) return false;
             if (pending || waiting) retire(scene);
             if (stopped && timedCave(root.$gameMap._mapId)) host.beacon?.stop(scene);
             if (!active && ready(scene)) command('status', 'Puzzle guidance stopped');
@@ -1685,7 +1725,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         }
         const reporting = action === 'navigationReport';
         const navigation = navigationRequest({ action, scene });
-        const canWaitForStep = action === 'mapName' || action === 'mapDescription' || navigation && !timedCave(root.$gameMap?._mapId);
+        const canWaitForStep = action === 'mapName' || action === 'mapDescription' || navigation && (!timedCave(root.$gameMap?._mapId) || action==='puzzleGuide' && solver.enabled());
         const idle = canWaitForStep && root.$gameMap?.inactiveTime >= 30;
         if (!ready(scene, reporting || canWaitForStep, idle) || sequence >= 0x7ffffffe) return false;
         const player = root.$gamePlayer;
@@ -1734,6 +1774,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
 
     return {
         ready,
+        stopCaveSolver:solver.stop,
         autowalk,
         refreshBeacon, cancelBeaconRefresh,
         bookmarkContext(scene) {
@@ -1797,6 +1838,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         dialoguePresented(scene, paint) { guideFor(scene)?.presented(scene, paint); },
         puzzleActive(scene) { return salt.active(scene) || cave.active(scene); },
         caveEventAccepted(scene, event) {
+            solver.accepted(root.$gameMap?._mapId,event._eventId);
             chaseGuide.accepted(scene, event);
             if (manualAction?.scene === scene && manualAction.map === root.$gameMap &&
                 manualAction.eventId === event._eventId) {
@@ -1850,7 +1892,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (leg) reportChaseLeg(leg);
         },
         observeReady(scene) {
-            if (!ready(scene)) return;
+            if (!ready(scene) || solver.active() && solver.waitingNative()) return;
             if (cleanupWalk) {
                 const pending = cleanupWalk;
                 if (cleanupCurrent(pending) && !pending.accepted) return;
@@ -1907,7 +1949,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     const chase = chaseContinuation(root, action);
                     if (action.chase !== undefined && !chase)
                         return command('status', 'Autowalk stopped. The chase changed.');
-                    resumeCaveWalk(action, chase);
+                    if(action.checkpoint && action.caveWalk.solverToken && solver.current(action.caveWalk.solverToken))solver.wake();
+                    else resumeCaveWalk(action, chase);
                 }
             }
             const arrived = transfers.settle(scene);
@@ -1931,10 +1974,18 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (cave.recover(scene) && (!active || active.scene !== scene))
                 command('puzzleGuide');
             const outcome = cave.settleProgress(scene);
-            if (outcome && !active) command('status', outcome);
+            if (solver.active()) {
+                if(solver.pending() && !autowalk.active(scene) && !inFlight && !caveEvent && !caveResume && !cleanupWalk &&
+                    (!active || active.action==='status' || active.action==='navigationReport')) {
+                    if(active)retire(scene);
+                    browserOwner(scene);
+                    queue({scene,action:'puzzleGuide',changes:[],controller:false,retries:0});
+                }
+            } else if (outcome && !active) command('status', outcome);
         },
         command,
         cancelAutowalk(scene) {
+            solver.stop();
             clearCleanupWalk();
             if (iceRoute?.kind === 'control'||iceRoute?.remote&&iceRoute.autowalk) clearIceRoute(scene);
             transfers.cancelAutomatic(scene);
@@ -1958,7 +2009,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             scene._wqaNavigationWake = false;
             // Automatic movement and scheduled waits are player activity.
             // Let updateInactive own its timer reset at the native input site.
-            return autowalk.active(scene) && ready(scene, true, true) ||
+            return (autowalk.active(scene) || solver.active()) && ready(scene, true, true) ||
                 waking && active?.scene === scene && ready(scene, true, active.idle);
         },
         interactionReady(scene) {
@@ -2025,6 +2076,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return !!(root.$gameMap?._needsRefresh && ready(scene, true, false, true));
         },
         controlLost(scene) {
+            if(scene?._wqaSettingsActive)solver.stop();
             retireArrival(scene, true);
             const refresh = root.$gameMap?._needsRefresh && ready(scene, true, false, true);
             if (!autowalk.holdRefresh(scene)) autowalk.stop(scene);
@@ -2032,6 +2084,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (control?.scene === scene) control = null;
         },
         leave(scene, mapEventId) {
+            if(mapEventId!==undefined)solver.accepted(root.$gameMap?._mapId,mapEventId);
+            solver.leave(scene,!!(caveEvent || caveResume || cleanupWalk || mapEventId>0));
             if (cleanupWalk) {
                 const pending = cleanupWalk;
                 const child = mapEventId === 0 && pending.accepted && pending.map._interpreter?._list === pending.list;

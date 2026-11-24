@@ -278,6 +278,7 @@ function createSettingsMenu(root, host) {
                 'Follow directions and take the last step onto a trigger yourself. Save or load a bookmark under Navigation, Bookmarks.',
                 'Turn on Spoiler mode under Navigation to find marked optional secrets before discovering them in the game.',
                 'Puzzle guidance ' + gestureName(keys.puzzleGuide) + '. Stop puzzle guidance ' + gestureName(keys.puzzleStop) + '.',
+                'On Secret Island, open Secret Island settings for cave timing and volume. Automatic interactions starts off. With it and Autowalk on, Puzzle guidance collects available cave pickups, handles checkpoints and room exits, then stops after the chase. Confirm messages yourself. Earlier one-way pickups stay uncollected and are reported at the end.',
                 'Use normal walking speed for cave crossings. Follow the directional pings and release movement at the thud.',
                 'Guarded routes announce each current leg automatically. Directions repeats its remaining steps. Activate crystals when prompted.',
                 'Navigation, Verbose puzzle guidance: off reads only the next directions and required action; on adds progress and explanations after directions.',

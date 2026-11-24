@@ -161,7 +161,7 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'SceneManager._scene?._wqaArrivalSpeech||'
                  b'SceneManager._scene?._wqaSoundscapeActive||SceneManager._scene?._wqaCaveChaseActive||'
                  b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance||'
-                 b'SceneManager._scene?._wqaBookmarkLanding||SceneManager._scene?._wqaVehicleNotice)')
+                 b'SceneManager._scene?._wqaBookmarkLanding||Graphics._wqaCaveSolverActive||SceneManager._scene?._wqaVehicleNotice)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
                b'SceneManager._scene?._wqaWallAudio||SceneManager._scene?._wqaBeaconActive||'
                b'SceneManager._scene?._wqaCaveTimingActive||SceneManager._scene?._wqaAutowalkActive||'
@@ -503,7 +503,7 @@ def objects_notification(original):
         232058: b'if(this===$gamePlayer&&SceneManager._scene?._wqaBookmarkLanding)'
                 b'globalThis.WendyQuestAccessBookmarkLandingAccepted?.(SceneManager._scene,this);'
                 + MAP_LEAVING + b'\n        ',  # Native landing after isLandOk
-        222789: b'if(this===$gamePlayer&&(SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaAutowalkCleanup||SceneManager._scene?._wqaBookmarkEntrance))'
+        222789: b'if(this===$gamePlayer&&(SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaAutowalkCleanup||SceneManager._scene?._wqaBookmarkEntrance||Graphics._wqaCaveSolverActive))'
                 b'direction=globalThis.WendyQuestAccessAutowalkInput?.(SceneManager._scene,this,direction,'
                 b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
@@ -810,7 +810,7 @@ def map_notification(original):
             (!this._wqaInteractionActive && !this._wqaInteractionDeferred && !this._wqaAutowalkActive && wqaIcon && wqaIcon !== this._wqaInteractionSeen &&
             wqaIcon.scale.x > 0 && wqaIcon.children[0]?.texture?.valid))
             globalThis.WendyQuestAccessInteractionUpdate?.(this, wqaIcon);
-        if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaCaveAutoPending || Graphics._wqaCaveChasePending || Graphics._wqaCaveManualPending ||
+        if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaCaveAutoPending || Graphics._wqaCaveSolverPending || Graphics._wqaCaveChasePending || Graphics._wqaCaveManualPending ||
             Graphics._wqaBookmarkTransferPending || Graphics._wqaEventKnowledgePending) &&
             !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||
@@ -875,7 +875,7 @@ def map_notification(original):
                                                b'$gameMap.inactiveTime < 30 && !$gamePlayer._transferring'),
         # Feed owned automatic movement into the native activity branch.
         # This includes interpolation and guard waits before idle can cancel the route.
-        67386: b'||((this._wqaNavigationWake||this._wqaAutowalkActive)&&'
+        67386: b'||((this._wqaNavigationWake||this._wqaAutowalkActive||Graphics._wqaCaveSolverActive)&&'
                b'globalThis.WendyQuestAccessIdleInput?.(this))',
         69005: b'if(_0x1bb9dc>=30){' + MAP_LEAVING + b'}',  # Before the first native idle cue
         86279: b'if(SceneManager._scene?._mapNameWindow===this&&SceneManager._scene._wqaMapAnnouncement)'

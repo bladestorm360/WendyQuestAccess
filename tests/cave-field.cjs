@@ -17,26 +17,36 @@ const { checkpointTarget } = require('../src/world/puzzles/cave');
 const { caveLootAction } = require('../src/world/puzzles/cave-loot');
 const { atApproach } = require('../src/world/interaction-approach');
 
-function verifyCaveField(c, load, configureMotion, diagnosis = null) {
+function verifyCaveField(c, load, configureMotion, options = null) {
+    const diagnosis=options && Object.hasOwn(options,'footsteps')?options:null;
+    const solving=options?.solver===true;
+    const hostClone=Object.getOwnPropertyDescriptor(Array.prototype,'clone');
+    if(solving)Object.defineProperty(Array.prototype,'clone',{value:vm.runInContext('Array.prototype.clone',c),configurable:true});
+    const solverHarness=solving?require('./cave-solver-harness.cjs').createSolverHarness(c):null;
     const previousView = { width: c.Graphics.width, height: c.Graphics.height,
         _wqaFootstepsEnabled: c.Graphics._wqaFootstepsEnabled, _wqaCaveTimingEnabled: c.Graphics._wqaCaveTimingEnabled };
     Object.assign(c.Graphics, { width: c.$dataSystem.advanced.screenWidth, height: c.$dataSystem.advanced.screenHeight });
     function setup(id, x, y, viewX, viewY) {
-        const run = load(id), guards = configureMotion(run, x, y, viewX, viewY);
-        for (const event of run.gameMap.events()) if (event._trigger === 3 || event._trigger === 4)
+        const run = load(id,solverHarness?.states());
+        solverHarness?.adopt(run);
+        const guards = configureMotion(run, x, y, viewX, viewY);
+        for (const event of run.gameMap.events()) if ((event._trigger === 3 || event._trigger === 4) &&
+            !(solving && (id===196 && [3,23].includes(event._eventId) || id===200 && [13,19].includes(event._eventId) || id===201 && event._eventId===6 || id===202 && event._eventId===12)))
             Object.assign(event, { _erased: true, _pageIndex: -1, _through: true, _trigger: null });
         return { run, guards };
     }
     const keys = ['Input', '$gameTemp', '$gameMessage', '$gameScreen', '$dataCommonEvents', 'addEventListener',
         'WendyQuestAccessFieldMove', 'WendyQuestAccessAutowalkInput', 'WendyQuestAccessFieldEvent',
         'WendyQuestAccessCaveEventAccepted', 'WendyQuestAccessSceneLeaving', 'WendyQuestAccessFieldChanged', 'WendyQuestAccessCaveTimingMoved',
-        'WendyQuestAccessFootstep', 'WendyQuestAccessGuardFootstep'];
+        'WendyQuestAccessFootstep', 'WendyQuestAccessGuardFootstep','$gameSystem'];
     const saved = Object.fromEntries(keys.map(key => [key, c[key]]));
     const originalScene = c.SceneManager._scene, app = c.Graphics.app;
     const members = c.$gameParty.members, inBattle = c.$gameParty.inBattle;
     const renderer = new EventEmitter();
-    const scene = { _wqaMapRestored: true, _wqaFieldReady: true, _mapLoaded: true, _started: true,
-        _prevCanMove: true, srcWendy: {}, srcStones: {}, _active: true, _fadeDuration: 0, _fadeOpacity: 0 };
+    const makeScene=()=>({ _wqaMapRestored: true, _wqaFieldReady: true, _mapLoaded: true, _started: true,
+        _prevCanMove: true, srcWendy: {}, srcStones: {}, _active: true, _fadeDuration: 0, _fadeOpacity: 0 });
+    let scene=makeScene();
+    if(solving)c.$gameSystem={};
     const preferences = { autowalk: true };
     const packets = [], records = [], accepted = [], diagnostics = [];
     const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
@@ -84,7 +94,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             }
         }
     }
-    let nativeLoot = false, nativePickup = 0, messageLeft = 0, lootMessages = 0, messagePose = null;
+    let nativeLoot = solving, nativePickup = 0, messageLeft = 0, lootMessages = 0, messagePose = null, messageForced = false;
     const commonEvents = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/CommonEvents.json'), 'utf8'));
     const previousMessage = c.Game_Interpreter.prototype.command101;
     c.Game_Interpreter.prototype.command101 = c.caveMessageProducer;
@@ -140,11 +150,15 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
     c.$gameScreen = { _brightness: 255 };
     c.Input = { dir4: 0 };
     c.$gameTemp = { isDestinationValid: () => false, clearDestination() {}, isCommonEventReserved: () => false };
-    c.$gameMessage = { isBusy: () => messageLeft > 0, setFaceImage() {}, setBackground() {},
+    let choiceCallback=null;
+    c.$gameMessage = { isBusy: () => messageLeft > 0,
+        setChoices() {messageLeft=48;messagePose=[c.$gamePlayer.x,c.$gamePlayer.y];messageForced=false;},
+        setChoiceBackground() {},setChoicePositionType() {},setChoiceCallback(callback) {choiceCallback=callback;}, setFaceImage() {}, setBackground() {},
         setPositionType() {}, setSpeakerName() {}, add() {
             if (!messageLeft) {
                 if (this._wqaSpeakerEvent === nativePickup) lootMessages++;
                 messagePose = [c.$gamePlayer.x, c.$gamePlayer.y];
+                messageForced=solving && !!c.$gamePlayer._moveRouteForcing;
             }
             messageLeft = 48;
         } };
@@ -203,10 +217,11 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
     };
     c.WendyQuestAccessSceneLeaving = (owner, eventId) => measure(() => field.leave(owner, eventId), 'native-entry');
 
-    function start(map, x, y, viewX, viewY) {
-        field.leave(scene);
+    function start(map, x, y, viewX, viewY, continuation=false) {
+        if(!continuation)field.leave(scene);
         ({ run: fixture, guards } = setup(map, x, y, viewX, viewY));
         const { player, gameMap } = fixture;
+        if(solving)gameMap.setDisplayPos(x-player.centerX(),y-player.centerY());
         const checkThere = player.checkEventTriggerThere;
         player.checkEventTriggerThere = function(triggers) {
             checkThere.call(this, triggers);
@@ -223,18 +238,22 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             Object.assign(event, { _through: page?.through ?? true, _priorityType: page?.priorityType ?? 0,
                 _trigger: page?.trigger, _characterName: page?.image.characterName || '', _tileId: page?.image.tileId || 0 });
         };
-        const selfSwitches = new Set();
+        const selfSwitches = solverHarness?.self || new Set();
         c.$gameSelfSwitches.value = key => selfSwitches.has(key.join(','));
         c.$gameSelfSwitches.setValue = (key, value) => {
             if (value) selfSwitches.add(key.join(',')); else selfSwitches.delete(key.join(','));
             gameMap._needsRefresh = true;
         };
-        const switches = new Set();
+        const switches = solverHarness?.switches || new Set();
         c.$gameSwitches.value = key => switches.has(key);
         c.$gameSwitches.setValue = (key, value) => {
             if (value) switches.add(key); else switches.delete(key);
             gameMap._needsRefresh = true;
         };
+        if(solving) {
+            c.$gameVariables.value=id=>solverHarness.variables.get(id) ?? 0;
+            c.$gameVariables.setValue=(id,value)=>{solverHarness.variables.set(id,value);gameMap._needsRefresh=true;};
+        }
         gameMap.refreshIfNeeded = () => {
             for (const event of gameMap.events()) {
                 const index = event._erased ? -1 : event.findProperPageIndex();
@@ -256,10 +275,16 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             }
             gameMap._needsRefresh = false;
         };
-        const variables = new Map();
-        c.$gameVariables.value = id => variables.get(id) || 0;
-        c.$gameVariables.setValue = (id, value) => { variables.set(id, value); };
-        source = gameMap._interpreter = Object.assign(new c.Game_Interpreter(), {
+        if(!solving) {
+            const variables = new Map();
+            c.$gameVariables.value = id => variables.get(id) || 0;
+            c.$gameVariables.setValue = (id, value) => { variables.set(id, value); };
+        }
+        if(solving)for(const event of gameMap.events()) {
+            event.checkEventTriggerAuto();
+            if(event._trigger===4) {event._interpreter=new c.Game_Interpreter();event._interpreter.setup(event.list(),event._eventId);}
+        }
+        source = gameMap._interpreter = continuation ? source : Object.assign(new c.Game_Interpreter(), {
             _list: null, setup(list, id) {
                 c.WendyQuestAccessSceneLeaving(scene, id);
                 Object.assign(this, { _list: list, _eventId: id, _mapId: gameMap._mapId,
@@ -269,7 +294,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
         gameMap.isEventRunning = () => !!source._list;
         c.$dataCommonEvents = nativeLoot ? commonEvents : [];
         messageLeft = lootMessages = 0; messagePose = null;
-        c.Graphics.frameCount = 0;
+        if(!continuation)c.Graphics.frameCount = 0;
         scene._wqaFieldReady = true;
         scene._wqaCaveGuideActive = false;
         c.Input.dir4 = 0;
@@ -309,7 +334,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
         if (!interpreter?._list) return;
         // Navigation-only staircase fixture: its presentation is separately verified.
         // Hold native scene entry, then execute the actual completion flag below.
-        if (fixture.id === 202) return;
+        if (fixture.id === 202 && !solving) return;
         if (interpreter._childInterpreter) {
             execute(interpreter._childInterpreter);
             if (interpreter._childInterpreter._list) return;
@@ -338,13 +363,35 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
         }
     }
 
+    function mainUpdate() {
+        if(!solving) {if(!source._list)fixture.gameMap.setupStartingMapEvent();execute(source);return;}
+        // Native Game_Map.updateInterpreter consumes a completed list and the
+        // next starting/autorun event in the same update, before field ready.
+        for(let count=0;count<16;count++) {
+            execute(source);
+            if(source._list || c.$gamePlayer._transferring)return;
+            if(!fixture.gameMap.setupStartingEvent())return;
+        }
+        assert.fail('Native main interpreter did not settle within fixture bound');
+    }
+
     function tick() {
+        if(solving && solverHarness.loading) {
+            const next=solverHarness.load();
+            c.Graphics.frameCount++;
+            if(next.waiting)return;
+            scene=makeScene();scene._transfer=true;
+            c.SceneManager._scene=c.Graphics.app.stage=scene;
+            start(next.map,next.x,next.y,0,0,true);
+            c.$gamePlayer._transferring=false;c.$gamePlayer._direction=next.direction;
+        }
         const { gameMap, player } = fixture;
         frameCost = 0;
         c.Graphics.frameCount++;
         if (messageLeft > 0) {
-            assert.deepEqual([player.x, player.y], messagePose, 'Autowalk must wait while the native loot message is open');
-            messageLeft--;
+            if(messageForced)assert(!field.autowalk.active(scene),'Only the native authored route may move during its message');
+            else assert.deepEqual([player.x, player.y], messagePose, 'Autowalk must wait while the native loot message is open');
+            if(--messageLeft===0 && choiceCallback) {const callback=choiceCallback;choiceCallback=null;callback(c.$gameMessage._fixtureChoice ?? 0);}
         }
         if (delayedMove && c.Graphics.frameCount >= delayedMove.frame) {
             c.Input.dir4 = delayedMove.direction; delayedMove = null;
@@ -353,8 +400,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
         // Retail Game_Map updates its main interpreter before event actors;
         // a crystal's newly forced guard route can jump on this same update.
         if (fixture.id === 200) {
-            if (!source._list) gameMap.setupStartingMapEvent();
-            execute(source);
+            mainUpdate();
         }
         gameMap.updateEvents();
         for (const event of gameMap.events()) if (event._trigger === 4) execute(event._interpreter);
@@ -393,7 +439,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
         }
         // Simulate player input ONLY for the deliberately manual interactions.
         // A crystal or puzzle scene must never rely on this fixture handoff.
-        if (preferences.autowalk && !source._list && !player.isMoving() &&
+        if (preferences.autowalk && !preferences.caveAutomaticInteractions && !source._list && !player.isMoving() &&
             !field.autowalk.active(scene) && !packets.length && field.ready(scene)) {
             const detail = records.at(-1);
             const boundary = detail?.activate || detail?.boundary;
@@ -423,6 +469,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
         const oldX = player.x, oldY = player.y;
         if (diagnosis) poseTrace.push([c.Graphics.frameCount,player.x,player.y,source._eventId,source._index]);
         if (!source._list) player.moveByInput();
+        if(solving && player._moveRouteForcing && !player.isMoving())player.updateRoutineMove();
         if (!preferences.autowalk && [196, 199, 200].includes(fixture.id) && manualDrive === 'static' &&
             (oldX !== player.x || oldY !== player.y)) {
             assert.equal(player._direction, staticLeg.moves[staticLeg.index++]);
@@ -437,8 +484,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             if (fixture.id === 200 && preferences.autowalk) gameMap.setupStartingEvent();
         }
         if (fixture.id !== 200) {
-            if (!source._list) gameMap.setupStartingMapEvent();
-            execute(source);
+            mainUpdate();
         }
         // MapScene's real end-of-update gate closes as soon as a guard's
         // native switch command requests a page refresh, even mid-step.
@@ -456,6 +502,9 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             if (fixture.id !== 200) scene._wqaFieldReady = true;
             if (scene._wqaFieldReady) measure(() => field.observeReady(scene), 'field-ready');
         }
+        if(solving && solverHarness.begin()) {
+            field.leave(scene);scene._wqaFieldReady=false;return;
+        }
         if (field.ready(scene, true) && scene._wqaCaveCueDue && scene._wqaCaveCueDue <= c.Graphics.frameCount)
             measure(() => timing.update(scene));
         render();
@@ -464,6 +513,10 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
     }
 
     try {
+        if(solving) {
+            return require('./cave-solver-journeys.cjs').verifySolverJourneys({c,field,preferences,solverHarness,
+                start,tick,ask,records,accepted,diagnostics,metrics:()=>({automaticCost,replyCost,callbackOutliers}),getFixture:()=>fixture,getScene:()=>scene});
+        }
         if (diagnosis) {
             preferences.autowalk = true;nativeLoot = true;nativePickup = 9;
             start(196,11,49,0,0);
@@ -834,7 +887,9 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
         assert(!records.some(row => /unavailable|Autowalk stopped|Patrol timing/.test(row.name || '')));
         console.log('Verified fifth-room staircase entry and same-destination resumption after the native completion flag; full presentation remains a separate fixture.');
     } finally {
+        if(solving){if(hostClone)Object.defineProperty(Array.prototype,'clone',hostClone);else delete Array.prototype.clone;}
         diagnosticFeet?.leave(scene);
+        field.stopCaveSolver();
         field.leave(scene);
         Object.assign(c, saved);
         c.Game_Interpreter.prototype.setup = childSetup;
