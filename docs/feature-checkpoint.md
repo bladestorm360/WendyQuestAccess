@@ -1142,3 +1142,10 @@ Ordered scopes:1 Shift+G native input/route regression and correction (active);2
 
 
 System1 offline exit complete: new native Shift+G check fails old ordinary guidance, then passes all five rooms with full solving off, native idle/step handback, manual boundaries and all nine chase/final-event acceptances. Existing default cave/full11-solver/field/input suites pass. The necessary route-prefix fix preserves the eight-leg bound and defers the distant event step until reached. Scope1 source frozen pending combined deployment; system2 is now active for both shrine reaction and Dave reunion cues.
+
+Owner additions in order: two shrine/reunion cues plus mech march, party capture and jail transition join narration scope2; both boat/boarding entries and the quest marker via Float Fort/port are scope3; combined deployment is scope4.
+
+
+System2 offline exit complete: all168 clips/304 direct locators and native narration/reaction/Guard/skill/Momentum/NVDA regressions pass. Added exact shrine light/reunion (both pages), moving grunt ambush, captured-party jail entry, jail jolt/wall breach, Sir Chicken advance, Chomps departure and common58 upgrade flash/jolt. The wall reveal's black-screen receipt is now recovered only from the exact native-ready script window and actual changed rendered wall/mech. Shared confirmed-caption continuation is unchanged. Expanded owner requests account for the additional narration work; no game launch/control or live probe. Source fixture initially lacked the artwork argument; corrected canonical stock plus separate read-only retail artwork invocation now passes. Native notification guards are syntax-safe; final exact bundle/runtime/scans remain scope4.
+
+System3 active: quest via boarded float, both boat/boarding entries via Float Fort/port, plus the newly reported recursive mines/Nuggedor return. Trace current own log and actual native transfers/components, then fix the first incorrect route dependency and verify manual/automatic multi-exit journeys. Estimate45–90minutes for this connected routing slice; no change to native gates or automatic boarding. System1/2 frozen except necessary integration.

@@ -1,5 +1,6 @@
 'use strict';
 
+const jailVisuals = require('./jail-visuals');
 const cues = require('./narration-cues.json');
 const { currentTylerEntry } = require('./tyler-visuals');
 const { createGlitchTracker } = require('./screen-glitch');
@@ -24,8 +25,8 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//160 original recordings; measured pack 1,971,103 bytes.
-const PACK_LIMIT = 1928 * 1024;
+//168 original recordings; measured pack 2,087,289 bytes.
+const PACK_LIMIT = 2039 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -203,6 +204,19 @@ function createNarration(root, host, preferences) {
     }
 
     function accepted(scene, interpreter, actor, switched, visual, commandIndex = interpreter._index, recovery = false) {
+        if(visual===-13) {
+            if(!voiceReady() || !enabled() || !ready(scene) || pendingCount()>=QUEUE_LIMIT ||
+                interpreter._list!==root.$dataCommonEvents?.[58]?.list || interpreter._index!==4)return;
+            let child=root.$gameMap._interpreter,depth=0;
+            while(child && child!==interpreter && depth++<8)child=child._childInterpreter;
+            if(child!==interpreter)return;
+            if(owner && owner.scene!==scene)leave(owner.scene);
+            const context=owner??begin(scene);
+            context.hasReactions=true;
+            context.queue.push({id:'ability-upgrade',visual:-13,frame:host.graphics.frameCount,order:++sequence,
+                script:interpreter,scriptList:interpreter._list,screenX:scene._spriteset.x,screenY:scene._spriteset.y});
+            return true;
+        }
         if (!voiceReady() || !enabled() || !ready(scene)) return;
         const map = root.$gameMap;
         // Recover a preceding Tyler entrance before its first greeting
@@ -633,6 +647,9 @@ function createNarration(root, host, preferences) {
     }
 
     function visibleActorCue(scene, state) {
+        if(state.visual===-13)return root.$gameScreen._flashColor?.[3]>0 &&
+            scene._spriteset._tilemap.worldVisible===true &&
+            (scene._spriteset.x!==state.screenX || scene._spriteset.y!==state.screenY);
         if(state.visual===-9)return glitches.visible(scene,state.filter);
         if (state.visual === -8) return environmentVisuals.visible(root, scene, state);
         if (state.visual === -7) return scene._spriteset._tilemap?.worldVisible === true &&
@@ -679,6 +696,14 @@ function createNarration(root, host, preferences) {
     }
 
     function present(scene) {
+        // Exact cutscene entry recovery after native fade/tile/portrait gates.
+        // No work or pointer is carried through the protected loading phase.
+        if(voiceReady() && enabled() && ready(scene)) {
+            const cue=jailVisuals.site(root);
+            if(cue && !scene._wqaJailNarrationSeen?.has(cue.id) &&
+                !owner?.queue.some(state=>state.id===cue.id))
+                accepted(scene,cue.script,cue.actor,cue.switched,-6,cue.index,true);
+        }
         if (!resume(scene)) return;
         harvestReactions(scene);
         environmentPresent(scene);
@@ -714,6 +739,8 @@ function createNarration(root, host, preferences) {
                     scene._wqaTylerEntrySeen=state.sourceKey;scene._wqaTylerEntryMap=map._mapId;
                     if(state.sourceKey==='181/15/2/0')scene._wqaTylerEntryObserved=true;
                 }
+                if(state.confirmed && ['grunt-ambush','party-jailed','jail-breach'].includes(state.id))
+                    (scene._wqaJailNarrationSeen ||= new Set()).add(state.id);
                 if (state.confirmed && state.id === 'assistance-chest') scene._wqaAssistanceReveal = true;
                 if (state.confirmed && map?._mapId === 16) {
                     if (state.sourceKey === '16/39/0/0') scene._wqaMechDoubleNarrationMask = (scene._wqaMechDoubleNarrationMask || 0) | 1;

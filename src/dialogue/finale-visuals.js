@@ -1,5 +1,7 @@
 'use strict';
 
+const jailVisuals = require('./jail-visuals');
+
 const { landedTyler } = require('./tyler-visuals');
 
 const { renderedSprite } = require('../runtime/rendered-sprite');
@@ -36,6 +38,16 @@ const STONES = {
 };
 
 function captureFinale(root, scene, id) {
+    if(id==='shrine-lights') {
+        const mask=scene._spriteset?._lightmask;
+        return mask?.parent===scene._spriteset && mask.worldVisible===true &&
+            Array.isArray(mask._sprites) && mask._sprites.length>0 && mask._sprites.length<=16 ? {mask} : null;
+    }
+    if(id==='shrine-reunion') {
+        const tone=root.$gameScreen?._tone;
+        return Array.isArray(tone) && tone.length===4 && tone.slice(0,3).every(value=>value>=200) ? {white:true} : null;
+    }
+
     if (!['companions-take-stones', 'prologue-march'].includes(id)) return null;
     const sprites = scene._spriteset?._characterSprites;
     if (!Array.isArray(sprites) || sprites.length > 512) return [];
@@ -47,6 +59,30 @@ function captureFinale(root, scene, id) {
 
 function finaleVisible(root, host, scene, state) {
     const { id } = state;
+    if(['grunt-ambush','party-jailed','jail-breach'].includes(id))return jailVisuals.visible(root,host,scene,state);
+    if(id==='jail-impact')return renderedSprite(state.sprite,scene._spriteset._tilemap) &&
+        (scene._spriteset.x!==state.screenX || scene._spriteset.y!==state.screenY);
+    if(['sir-chicken-advances','chomps-walks-away'].includes(id))return renderedSprite(state.sprite,scene._spriteset._tilemap) &&
+        (state.actor._realX!==state.x || state.actor._realY!==state.y);
+    if(id==='shrine-lights') {
+        const mask=state.finale?.mask;
+        return !!mask && scene._spriteset?._lightmask===mask && mask.parent===scene._spriteset &&
+            mask.worldVisible===true && Array.isArray(mask._sprites) && mask._sprites.length===0 &&
+            scene._spriteset._tilemap?.worldVisible===true && root.$gameSwitches.value(576);
+    }
+    if(id==='shrine-reunion') {
+        const tone=root.$gameScreen?._tone,sprites=scene._spriteset?._characterSprites;
+        if(!state.finale?.white || !Array.isArray(tone) || !tone.slice(0,3).every(value=>value<200) ||
+            !Array.isArray(sprites) || sprites.length>512 || !root.$gameSwitches.value(573))return false;
+        return [1,22].every(id=>{
+            const actor=root.$gameMap._events?.[id],sprite=sprites.find(sprite=>sprite._character===actor),pose=sprite?.worldTransform;
+            return actor?._pageIndex===0 && !actor._erased && !actor._transparent &&
+                actor._characterName===root.$dataMap.events[id].pages[0].image.characterName &&
+                sprite?._characterName===actor._characterName && renderedSprite(sprite,scene._spriteset._tilemap) &&
+                pose?.tx>=0 && pose.tx<=host.graphics.width && pose.ty>=0 && pose.ty<=host.graphics.height;
+        });
+    }
+
     if (id === 'ice-machine-arrives') {
         const pos = state.sprite?.worldTransform;
         return state.actor._characterName === '~ICM' && state.actor._characterIndex === 5 &&

@@ -37,7 +37,33 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
                 return data;
             };
             let reveal;
-            if (id === 'elder-tater-shout') { f.spriteset.x = f.spriteset.y = 0;reveal = () => f.spriteset.x = 3; }
+            if(id==='shrine-lights') {
+                const mask=f.spriteset._lightmask={parent:f.spriteset,worldVisible:true,_sprites:[{}]};
+                reveal=()=>mask._sprites=[];
+            } else if(id==='shrine-reunion') {
+                f.status._tone=[255,255,255,0];
+                for(const id of [1,22]) {
+                    const a=f.actor(id);a.candidate._pageIndex=0;
+                    a.candidate._characterName=a.sprite._characterName=f.root.$dataMap.events[id].pages[0].image.characterName;
+                }
+                reveal=()=>f.status._tone=[0,0,0,0];
+            } else if(id==='grunt-ambush') {
+                const actors=[18,19,20,22].map(id=>{
+                    const a=f.actor(id),spawn=f.root.$dataMap.events[id];
+                    Object.assign(a.candidate,{_characterName:'~MechGrunt',_realX:spawn.x,_realY:spawn.y});
+                    a.sprite._characterName='~MechGrunt';return a;
+                });
+                reveal=()=>actors[0].candidate._realX--;
+            } else if(id==='party-jailed') {
+                actor._x=actor._y=2;reveal=()=>{actor._x=6;actor._y=5;};
+            } else if(id==='jail-breach') {
+                actor._characterName=source.sprite._characterName='~Chomps';
+                f.spriteset._tilemap._mapData=[...f.root.$dataMap.data];
+                reveal=()=>f.spriteset._tilemap._mapData[(12+1)*12+5]++;
+            } else if(id==='jail-impact') {
+                f.spriteset.x=f.spriteset.y=0;reveal=()=>f.spriteset.x=3;
+            } else if(['sir-chicken-advances','chomps-walks-away'].includes(id))reveal=()=>actor._realX++;
+            else if (id === 'elder-tater-shout') { f.spriteset.x = f.spriteset.y = 0;reveal = () => f.spriteset.x = 3; }
             else if (id.startsWith('stone-')) {
                 const slots = { 'stone-frygor': [21, 'Fries'], 'stone-frostyna': [22, 'Frosty'],
                     'stone-sir-chicken': [20, 'Nugget'], 'stone-baconator': [23, 'Bacon'] };
@@ -85,6 +111,39 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
             assert.equal(f.played[0]?.id, id);
             f.narration.leave(f.scene);assert(f.played[0].paused);count++;
         }
+    }
+    for(const [event,page,index,id,actorId] of [[6,0,14,'party-jailed',-1],[10,1,72,'jail-breach',11]]) {
+        const f=fixture(134,event,page),a=f.actor(actorId);
+        f.interpreter._index=index;f.status._brightness=0;
+        f.spriteset._tilemap.worldVisible=true;
+        Object.assign(a.candidate,{_x:6,_y:5});
+        if(actorId===11) {
+            a.candidate._characterName=a.sprite._characterName='~Chomps';f.switches.add(77);
+            f.spriteset._tilemap._mapData=[...f.root.$dataMap.data];
+            f.spriteset._tilemap._mapData[(12+1)*12+5]++;
+        }
+        f.frame();assert.equal(f.played.length,0,'no observation during native fade');
+        f.status._brightness=255;a.sprite.worldVisible=false;f.frame();assert.equal(f.played.length,0);
+        a.sprite.worldVisible=true;f.frame(false);assert.equal(f.played.length,0);
+        f.renderer.emit('postrender');assert.equal(f.played[0]?.id,id);
+        f.narration.pause(f.scene,true);f.frame();assert.equal(f.played.length,1,'confirmed voice resumes through fade');
+        f.played[0].emit('ended');f.frame();assert.equal(f.played.length,1,'same native event is not repeated');
+        f.narration.leave(f.scene);
+    }
+    {
+        const f=fixture(197,20,0),script={_list:common[58].list,_index:4};
+        f.root.$dataCommonEvents=common;f.root.$gameTroop=null;
+        f.interpreter._childInterpreter={_childInterpreter:{_childInterpreter:script}};
+        f.root.$gameScreen.startFlash=color=>f.status._flashColor=color;
+        f.spriteset.x=f.spriteset.y=0;f.spriteset._tilemap.worldVisible=true;
+        const c=commandContext(f);c.$dataCommonEvents=common;
+        assert(c.Game_Interpreter.prototype.command224.call(script,common[58].list[4].parameters));
+        f.frame();assert.equal(f.played.length,0,'upgrade flash without its screen motion stays silent');
+        f.spriteset.x=2;f.frame(false);assert.equal(f.played.length,0);
+        f.renderer.emit('postrender');assert.equal(f.played[0]?.id,'ability-upgrade');
+        f.narration.leave(f.scene);
+        script._list=[];f.narration.accepted(f.scene,script,f.root.$gamePlayer,undefined,-13);
+        f.frame();assert.equal(f.played.length,1,'unrelated flash cannot claim upgrade');
     }
     {
         const f = fixture(188, 1, 0, false);

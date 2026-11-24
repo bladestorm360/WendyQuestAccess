@@ -60,6 +60,7 @@ SYSTEM_SHA = '1f5069331af8e8c2fcce3dde3f5e6d71b2d262bc3d604ceaf6f62d0ac8d41b76'
 PIXI_REL = Path('package.nw/js/libs/pixi.js')
 PIXI_SHA = '6eca31989af44e87ac64319da69b9e484a7fdf0cbbdcaf3cd85869362588cee1'
 DEPENDENCIES = {
+    Path('package.nw/js/plugins/Community_Lighting_MZ.js'): '6a14124cc57b0717a639d1ee73a5831acdad285e8b29d24c4fd3a6cc0c4afecf',
     SYSTEM_REL: SYSTEM_SHA,
     PIXI_REL: PIXI_SHA,
     Path('package.nw/img/system/Splash.png'): 'fdb48bb2dc78ea6d501ce325f52398a64bcb75ff517c5848614e44c9d7851fe7',
@@ -539,7 +540,9 @@ def objects_notification(original):
                 b'this._mapId===114&&params[0]===23||this._mapId===134&&params[0]===77||'
                 b'this._mapId===106&&params[0]===115||'
                 b'this._mapId===107&&[127,130,132,143,165,383,384,385,386].includes(params[0])||'
-                b'this._mapId===190&&params[0]===500||this._mapId===109&&params[0]===20))'
+                b'this._mapId===190&&params[0]===500||this._mapId===109&&params[0]===20||'
+                b'this._mapId===197&&this._eventId===18&&[573,576].includes(params[0])||'
+                b'this._mapId===49&&this._eventId===14&&params[0]===51))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,null,params[0]);\n    ',
         # After acceptance of an authored actor's route. The rendered actor,
         # current event list and resource gates are checked in the observer.
@@ -552,12 +555,15 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,'
                 b'(this._mapId===27&&this._eventId===29&&this._index===1||this._mapId===15&&this._eventId===60||this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
                 b'this._mapId===63&&this._eventId===19||this._mapId===188||this._mapId===115||'
+                b'this._mapId===134&&([6,93,145].includes(this._index))||'
                 b'this._mapId===39||this._mapId===13&&this._eventId===5&&[70,77].includes(this._index))?-6:undefined);',
         # Native emotes, Frostyna's flash, and the two identical door approaches.
         287095: b'\n        if(Graphics._wqaNarrationEnabled&&'
                 b'(params[1]>=1&&params[1]<=10))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,params[1]);',
-        288646: b'\n    if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._eventId===2&&this._index===15)'
+        288646: b'\n    if(Graphics._wqaNarrationEnabled&&this._list===globalThis.$dataCommonEvents?.[58]?.list&&this._index===4)'
+                b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-13);'
+                b'if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._eventId===2&&this._index===15)'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,this.character(0),undefined,-1);'
                 b'if(Graphics._wqaNarrationEnabled&&this===$gameTroop?._interpreter&&$gameTroop._troopId===96)'
                 b'globalThis.WendyQuestAccessFinaleBattle?.(SceneManager._scene,this);',
@@ -571,7 +577,8 @@ def objects_notification(original):
                 b'else if(this._mapId===197&&this._eventId===18&&this._index===151&&'
                 b'params[0]?.name==="WQ/Attack/SFX_RiseAndShine")'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-4);'
-                b'else if(this._mapId===107&&this._eventId===3&&this._index===81||'
+                b'else if(this._mapId===134&&this._eventId===10&&this._index===12||'
+                b'this._mapId===107&&this._eventId===3&&this._index===81||'
                 b'this._mapId===190&&this._eventId===24&&this._index===33||'
                 b'this._mapId===83&&this._eventId===38&&this._index===32||'
                 b'this._mapId===13&&this._eventId===5&&this._index===67)'
