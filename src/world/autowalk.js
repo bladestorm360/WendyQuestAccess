@@ -10,6 +10,8 @@ const { inactiveFloorScene, passiveFloorPage } = require('./local-destinations')
 
 const { admitPatrolLine, patrolStepReady } = require('./puzzles/patrol-line-playback');
 
+const { automaticCaveMap } = require('./puzzles/cave-progression');
+
 const TOUCH_TRIGGERS = [1, 2];
 
 function createAutowalk(root, ready, preferences, report, refreshReady = () => false, reroute = () => false, cleanup = () => false, cancelContinuation = () => null) {
@@ -76,12 +78,30 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             if (!current) return changed(state, 'Autowalk stopped. The interaction approach changed. Request directions again.');
             player.setDirection(facing);
         }
-        if ((job.caveCrystal || job.caveLoot) && target && atApproach(map, player, target, arrival) &&
-            job.caveAction?.(target)) {
-            // Retain only an inert continuation. Native player Confirm owns
-            // acceptance; waiting here must never start the event or time out.
+        // This final step is part of the verified cave route. Return it through
+        // native moveByInput; never set a coordinate, switch or interpreter.
+        if (rest.activate && automaticTouch(state, rest.activate)) return rest.activate;
+        if (automaticCaveMap(map._mapId) && job.caveWalk && (job.caveCrystal || job.caveLoot) &&
+            target && atApproach(map, player, target, arrival) &&
+            job.caveAction?.(target, true)) {
+            // The owner's cave exception uses the ordinary native Confirm
+            // producers once. Retain the exact action token across prompts and
+            // cold resources; only native acceptance/readiness may resume it.
             job.caveContinue = false;
+            stop(state.scene);
+            if (facing === null) player.checkEventTriggerHere([0]);
+            else player.checkEventTriggerThere([0]);
+            // Restore the working native handoff from 92669d7/c9e4f06.
+            // Native reserved/common-event priority remains inside this owner;
+            // leaving the start queued behind the prompt broke crystal resume.
+            if (target.isStarting()) map.setupStartingEvent();
+            return 0;
         }
+        // Pickups and checkpoints retain only an inert handoff. Their native
+        // activation is the player's choice; accepted completion can resume
+        // the existing protected route, just as before the cave exception.
+        if (automaticCaveMap(map._mapId) && job.caveWalk && (job.caveCrystal || job.caveLoot) &&
+            target && atApproach(map, player, target, arrival) && job.caveAction?.(target)) job.caveContinue = false;
         if (rest.npcBlocker)
             return end(state, { kind: 'fieldStatus', name: 'Blocked by ' + rest.npcBlocker + '.' },false,!!job.controlPrerequisite);
         const turn = facing && player._direction !== facing;
@@ -91,6 +111,19 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             more: false, directionsOnly: true,
             beaconOnly: !turn } : null;
         return end(state, detail, false, true);
+    }
+
+    function automaticTouch(state, step) {
+        const { map, player, job } = state;
+        if (!job.caveWalk || !automaticCaveMap(map._mapId) || !DIRECTIONS.includes(step) ||
+            !player.canStartLocalEvents() || !player.canPass(player._x, player._y, step)) return false;
+        const x = map.roundXWithDirection(player._x, step), y = map.roundYWithDirection(player._y, step);
+        const floor = player.findEventsAt(x, y).find(event =>
+            player.canTriggerEvent(event, TOUCH_TRIGGERS, false) && event.list()?.length > 1);
+        if (!floor || floor !== state.target && floor._eventId !== job.caveFloor || !job.caveAction?.(floor, true)) return false;
+        job.caveContinue = false;
+        stop(state.scene);
+        return true;
     }
 
     function changed(state, name = 'Autowalk stopped. Route changed. Request directions again.') {
@@ -211,7 +244,8 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
                 player.canTriggerEvent(event, TOUCH_TRIGGERS, false) && event.list()?.length > 1);
             if (floor) {
                 if (index === length - 1 && floor._eventId === job.caveFloor) {
-                    job.caveAction?.(floor); // inert until the player takes the final step
+                    if (automaticTouch(state, step)) return step;
+                    if (automaticCaveMap(map._mapId)) job.caveAction?.(floor);
                     job.caveContinue = false;
                     return end(state, { ...record, legs: [], activate: step, more: false,
                         directionsOnly: true }, false, true);

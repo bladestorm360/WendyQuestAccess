@@ -12,6 +12,10 @@ const { DIRECTIONS } = require('../src/world/geometry.cjs');
 const { createField } = require('../src/world/field');
 const { createCaveTiming } = require('../src/world/cave-timing');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
+const { acceptedAction, automaticCaveAction } = require('../src/world/puzzles/cave-progression');
+const { checkpointTarget } = require('../src/world/puzzles/cave');
+const { caveLootAction } = require('../src/world/puzzles/cave-loot');
+const { atApproach } = require('../src/world/interaction-approach');
 
 function verifyCaveField(c, load, configureMotion, diagnosis = null) {
     const previousView = { width: c.Graphics.width, height: c.Graphics.height,
@@ -36,7 +40,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
     const preferences = { autowalk: true };
     const packets = [], records = [], accepted = [], diagnostics = [];
     const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
-    let field, fixture, guards, source, repeatChecked = false, pendingArrival = false, playerHandoff = false;
+    let field, fixture, guards, source, repeatChecked = false, pendingArrival = false;
     let diagnosticFeet = null;
     const footCounts = { player: 0, guard: 0 };
     const poseTrace = [];
@@ -80,7 +84,6 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             }
         }
     }
-    let playerConfirmWait = null;
     let nativeLoot = false, nativePickup = 0, messageLeft = 0, lootMessages = 0, messagePose = null;
     const commonEvents = JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data/CommonEvents.json'), 'utf8'));
     const previousMessage = c.Game_Interpreter.prototype.command101;
@@ -196,14 +199,12 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
     c.WendyQuestAccessFieldEvent = (owner) => { field.autowalk.stop(owner); field.changed(owner); };
     c.WendyQuestAccessCaveEventAccepted = (owner, event) => {
         accepted.push(event._eventId);
-        playerHandoff = false;
         measure(() => field.caveEventAccepted(owner, event));
     };
     c.WendyQuestAccessSceneLeaving = (owner, eventId) => measure(() => field.leave(owner, eventId), 'native-entry');
 
     function start(map, x, y, viewX, viewY) {
         field.leave(scene);
-        playerHandoff = false;playerConfirmWait = null;
         ({ run: fixture, guards } = setup(map, x, y, viewX, viewY));
         const { player, gameMap } = fixture;
         const checkThere = player.checkEventTriggerThere;
@@ -306,6 +307,9 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
 
     function execute(interpreter) {
         if (!interpreter?._list) return;
+        // Navigation-only staircase fixture: its presentation is separately verified.
+        // Hold native scene entry, then execute the actual completion flag below.
+        if (fixture.id === 202) return;
         if (interpreter._childInterpreter) {
             execute(interpreter._childInterpreter);
             if (interpreter._childInterpreter._list) return;
@@ -387,27 +391,30 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
                 field.command('directions');
             }
         }
-        // Simulated PLAYER input only after production Autowalk has stopped.
-        // The fixture supplies Confirm/the final touch step, never the mod.
+        // Simulate player input ONLY for the deliberately manual interactions.
+        // A crystal or puzzle scene must never rely on this fixture handoff.
         if (preferences.autowalk && !source._list && !player.isMoving() &&
             !field.autowalk.active(scene) && !packets.length && field.ready(scene)) {
-            if (playerHandoff) { playerHandoff = false; ask('directions'); }
-            else {
-                const detail = records.at(-1);
-                const boundary = detail?.activate || detail?.boundary;
-                if (boundary) {
-                    player.setDirection(boundary);player.moveStraight(boundary);
-                    player.checkEventTriggerHere([1,2]);
-                    playerHandoff = true;
-                } else if (detail?.facing || detail?.guideAction || pendingArrival) {
-                    if (detail?.facing) player.setDirection(detail.facing);
-                    if (fixture.id===200 && player.x===16 && player.y===29 && !accepted.includes(5)) {
-                        playerConfirmWait ??= c.Graphics.frameCount;
-                        assert(!gameMap.event(5).isStarting(),'waiting never synthesizes crystal acceptance');
-                        if(c.Graphics.frameCount-playerConfirmWait<120) return render();
-                    }
-                    player.checkEventTriggerHere([0]);player.checkEventTriggerThere([0]);
+            const detail = records.at(-1);
+            const boundary = detail?.activate || detail?.boundary;
+            if (boundary) {
+                const x = gameMap.roundXWithDirection(player.x, boundary), y = gameMap.roundYWithDirection(player.y, boundary);
+                const floor = player.findEventsAt(x,y).find(event => player.canTriggerEvent(event,[1,2],false) && event.list()?.length > 1);
+                if (floor) {
+                    const action = acceptedAction(c,scene,floor);
+                    assert(!automaticCaveAction(action), 'automatic puzzle events cannot use simulated player movement');
+                    assert(action?.exit || checkpointTarget(fixture.id,floor._eventId,floor._pageIndex,floor._trigger),
+                        'only room exits and checkpoints receive a simulated player step');
+                    assert(!floor.isStarting(), 'Autowalk pauses before manual floor activation');
+                    player.setDirection(boundary);player.moveStraight(boundary);player.checkEventTriggerHere([1,2]);
+                }
+            } else if (pendingArrival) {
+                const pickup = gameMap.events().find(event => caveLootAction(c,scene,event) &&
+                    atApproach(gameMap,player,event,{x:player.x,y:player.y,facing:detail?.facing ?? player._direction}));
+                if (pickup) {
+                    assert(!pickup.isStarting(), 'Autowalk leaves the pickup to the player');
                     pendingArrival = false;
+                    player.checkEventTriggerHere([0]);player.checkEventTriggerThere([0]);
                 }
             }
         }
@@ -584,12 +591,8 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             ask(action);
             for (let frame = 0; frame < 1800 && !(accepted.includes(5) && !source._list && field.ready(scene)); frame++) {
                 tick();
-                if (pendingArrival && !fixture.player.isMoving()) {
-                    pendingArrival = false;
-                    fixture.player.checkEventTriggerThere([0]);
-                }
             }
-            assert(accepted.includes(5), 'Autowalk reaches the crystal from ' + action);
+            assert(accepted.includes(5), 'Autowalk reaches the crystal from ' + action + JSON.stringify({firstUse,position:[fixture.player.x,fixture.player.y],reports:records.slice(-4),diagnostics:diagnostics.slice(-4),source:[source._eventId,source._index,source._waitMode]}));
             assert(!source._list, 'Native crystal activation completes');
             assert.equal(crystalMessages > 0, firstUse, 'The intended native activation branch ran');
             assert(field.autowalk.active(scene), 'Autowalk must resume after the crystal ' + JSON.stringify({action,firstUse,reports:records.slice(-3).map(formatSpeech)}));
@@ -609,9 +612,6 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             ask('directions');
             for (let frame=0;frame<1000 && !(source._eventId===10 && !source._list && field.ready(scene));frame++) {
                 tick();
-                if (automatic && pendingArrival && !fixture.player.isMoving()) {
-                    pendingArrival=false;fixture.player.checkEventTriggerThere([0]);
-                }
             }
             assert.equal(source._eventId,10,'The directly selected second crystal starts natively');
             assert(!accepted.includes(10),'The early notifier remains closed');
@@ -635,9 +635,6 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             ask('directions');
             for (let frame=0; frame<14000 && source._eventId!==test.target; frame++) {
                 tick();
-                if (pendingArrival && !fixture.player.isMoving()) {
-                    pendingArrival=false;fixture.player.checkEventTriggerThere([0]);
-                }
             }
             assert(diagnostics.some(row => row.status === 'crystalReady' && row.target === 10), 'The second crystal is confirmed at native handback');
             assert(!accepted.includes(10), 'The early acceptance notifier was gated off in this regression');
@@ -652,7 +649,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
         assert.equal(entry[1], 200);
         // Reproduce the exact report and cover both room barrels through the
         // production field owner. Selected loot is opened by the user's action,
-        // matching ordinary Autowalk arrival; crystals remain prerequisites.
+        // the verified cave-only input owner; ordinary maps still require the player.
         for (const test of [
             { automatic: false, target: 3, point: [22, 25], from: [23, 26, 15.25, 21.25] },
             { automatic: false, target: 3, point: [22, 25] },
@@ -747,7 +744,7 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
                     break;
                 }
             }
-            assert(collected && completed,'Player-confirmed pickup and protected stop '+JSON.stringify({test,collected,accepted,at:[fixture.player.x,fixture.player.y],reports:records.slice(-5).map(formatSpeech),diagnostics:diagnostics.slice(-6)}));
+            assert(collected && completed,'Native cave pickup and protected stop '+JSON.stringify({test,collected,accepted,at:[fixture.player.x,fixture.player.y],reports:records.slice(-5).map(formatSpeech),diagnostics:diagnostics.slice(-6)}));
             assert.equal(lootMessages, 1,'The native pickup holds its acquired message');
             assert(!records.some(row => /unavailable|Autowalk stopped/.test(row.name || '')),'No consumed destination failure');
             if (test.map===200 && test.target===3) assert.deepEqual([fixture.player.x,fixture.player.y],[23,24],'First barrel retreats north after its message');
@@ -810,6 +807,25 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             assert.equal(source._eventId, 2, 'The destination remained the staircase passage');
             if (!automatic) assert(repeatChecked, 'Directions repeated a remaining leg during interpolation');
         }
+        // The fifth cave room is not a timed patrol map. Its verified scene
+        // must still be entered and the same destination restored after native
+        // completion, without adding an automatic interaction in shrine197.
+        preferences.autowalk = true;
+        records.length = accepted.length = diagnostics.length = 0;
+        start(202, 8, 20, 0, 14);
+        select('Chamber entrance', 'Exits');
+        ask('directions');
+        for (let frame = 0; frame < 2000 && !(source._list && source._eventId >= 5 && source._eventId <= 11); frame++) tick();
+        assert(source._list && source._eventId >= 5 && source._eventId <= 11,
+            'Autowalk enters the staircase scene through its verified native floor trigger '+JSON.stringify({at:[fixture.player.x,fixture.player.y],source:source._eventId,reports:records.slice(-3),diagnostics:diagnostics.slice(-4)}));
+        const finish = source._list.find(command => command.code === 121 && command.parameters[0] === 585);
+        assert(finish, 'native staircase completion flag is present');
+        source.command121(finish.parameters);
+        source._list = null;
+        for (let frame = 0; frame < 2000 && source._eventId !== 4; frame++) tick();
+        assert.equal(source._eventId, 4, 'The same chamber destination resumes and waits for the fixture player to take the room exit');
+        assert(!records.some(row => /unavailable|Autowalk stopped|Patrol timing/.test(row.name || '')));
+        console.log('Verified fifth-room staircase entry and same-destination resumption after the native completion flag; full presentation remains a separate fixture.');
     } finally {
         diagnosticFeet?.leave(scene);
         field.leave(scene);

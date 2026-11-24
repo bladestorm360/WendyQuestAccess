@@ -242,6 +242,14 @@ async function verifyAutowalk(c, load, verifyWorker) {
     kitchen.player.checkEventTriggerThere([0, 1, 2]);
     assert(potEvent.isStarting(), 'native confirm targets the cooking pot after the turn');
     potEvent._starting = false;
+    // A stale/forged cave continuation must never auto-confirm ordinary maps.
+    let outsideActions = 0;
+    const outsideCave = { ...pot.job, caveLoot: true, caveWalk: { destination: { id: 9 } },
+        caveAction: () => { outsideActions++; return true; } };
+    assert(walk.start(outsideCave, pot.result, pot.record));
+    tick(kitchen.player);
+    assert.equal(outsideActions, 0);
+    assert(!potEvent.isStarting(), 'outside-cave props retain player Confirm');
 
     kitchen.player.setDirection(2);
     assert(walk.start(pot.job, pot.result, pot.record));
@@ -268,6 +276,14 @@ async function verifyAutowalk(c, load, verifyWorker) {
     assert(!origin.gameMap._events[4].isStarting());
     assert.equal(reports.at(-1).arrived, true);
     assert.match(formatSpeech(reports.at(-1).record), /Move south to activate/);
+    let outsideTouches = 0;
+    const outsideFloor = { ...door.job, caveWalk: { destination: { id: 4 } }, caveFloor: 4,
+        caveAction: () => { outsideTouches++; return true; } };
+    assert(walk.start(outsideFloor, door.result, door.record));
+    tick(origin.player);
+    assert.deepEqual(position(origin.player), [9, 16]);
+    assert.equal(outsideTouches, 0);
+    assert(!origin.gameMap._events[4].isStarting(), 'outdoor island event remains player-owned');
     c.Input.dir4 = 2;
     tick(origin.player);
     c.Input.dir4 = 0;

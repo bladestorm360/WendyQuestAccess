@@ -11,6 +11,17 @@ const EXITS = {
     202: { 4: ['Chamber entrance', [12], 197] },
     197: { 10: ['Exit to island', [9], 206] }
 };
+// Automatic interactions are an owner-approved exception only inside these rooms.
+// 198 has no selectable actions; native capture/reset owns it. Exclude shrine197/outdoor206.
+function automaticCaveMap(id) { return [196, 199, 200, 201, 202].includes(id); }
+
+// Owner scope: crystals and puzzle scene triggers only. Checkpoints, pickups
+// and exits retain the ordinary player interaction, even inside these rooms.
+function automaticCaveAction(action) {
+    return !!action && automaticCaveMap(action.origin) &&
+        !!(action.crystal || action.line || action.chase !== undefined || action.stairs);
+}
+
 const LINE = [9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 const CRYSTALS = { 5: [582, [25]], 10: [583, [6]], 19: [584, [8, 25, 45]] };
 const CHASES = { 3: [4, 4], 8: [9, 3], 10: [11, 3], 12: [13, 3], 14: [24, 3],
@@ -191,4 +202,4 @@ function createCaveProgress(root, graphics) {
 }
 
 module.exports = { CHASE_LEGS, chaseHandoff, CHASES, CRYSTALS, activeDistraction, corridorMap, caveDestination,
-    createCaveProgress, acceptedAction, chaseContinuation };
+    createCaveProgress, acceptedAction, chaseContinuation, automaticCaveMap, automaticCaveAction };

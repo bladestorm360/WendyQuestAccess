@@ -1400,6 +1400,10 @@ async function main() {
         require('./cave-field.cjs').verifyCaveField(c,load,configureMotion,{footsteps:value==='on'});
         return;
     }
+    if (process.argv.includes('--cave-crossings')) {
+        await verifyCaveCrossings(c, load, configureMotion, motionRequest, verifyMotion, verifyWorker);
+        return;
+    }
     if (process.argv.includes('--cave-field')) {
         require('./cave-field.cjs').verifyCaveField(c, load, configureMotion);
         return;

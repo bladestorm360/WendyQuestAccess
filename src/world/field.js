@@ -23,7 +23,7 @@ const { mapPlace } = require('./map-banner');
 const { mapDescription } = require('./map-descriptions');
 const { createCaveGuide, timedCave, warningApproach, captureMotion, distractionForGuard,
     checkpointTarget } = require('./puzzles/cave');
-const { acceptedAction, chaseContinuation, activeDistraction } = require('./puzzles/cave-progression');
+const { acceptedAction, chaseContinuation, activeDistraction, automaticCaveMap, automaticCaveAction } = require('./puzzles/cave-progression');
 const { createChaseGuide } = require('./puzzles/cave-chase');
 const { caveLootAction } = require('./puzzles/cave-loot');
 const { capturePatrolLine } = require('./puzzles/patrol-line-playback');
@@ -573,8 +573,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 if (!autowalk.start(job, result, puzzleSpeech(job,record)))
                     return job.caveWalk ? waitCaveWalk(job) : status(job, 'Guard timing changed. Request directions again.');
                 job.scene._wqaRouteActive = false;
-                // A real touch boundary always remains a player-owned step.
-                // Reaching its approach must not chain an activation segment.
+                // Only verified cave puzzle events take an automatic final step.
+                // Checkpoints and room exits retain their player-owned boundary.
                 if (job.caveWalk && activate) job.caveContinue = false;
                 announceCaveWalk(job);
                 return;
@@ -978,17 +978,19 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         job.area = area;
         job.autowalk = (job.action !== 'puzzleGuide' || snapshot.map===19) && !job.journey && preferences().autowalk;
         if (job.autowalk) automaticSnapshot(snapshot, destination.event);
-        if (job.autowalk && timedCave(snapshot.map)) {
+        if (job.autowalk && automaticCaveMap(snapshot.map)) {
             job.caveWalk ||= { destination: target, attempt: 0, acted: new Set(), announced: false };
             if (job.caveWalk.x !== snapshot.x || job.caveWalk.y !== snapshot.y)
                 Object.assign(job.caveWalk, { x: snapshot.x, y: snapshot.y, attempt: 0, replans: 0 });
-            job.caveAction = event => expectCaveAction(job, event);
-            job.caveLoot = !!caveLootAction(root, job.scene, root.$gameMap._events[job.target]);
+            job.caveAction = (event, automatic) => expectCaveAction(job, event, automatic);
+            const action = caveAction(job.scene, root.$gameMap._events[job.target]);
+            job.caveLoot = !!action?.loot;
+            job.caveCrystal = !!action?.crystal && !action.blocked;
         }
         // Capture recovery can select a crystal itself. It then bypasses the
         // stationary-blocker branch, but still needs a fresh continuation on
         // every accepted activation, including the branch with no dialogue.
-        if ((!job.caveWalk || !job.caveCrystal) && motion && snapshot.map === 200 && manualAction?.eventId !== job.target) {
+        if (!job.caveWalk && motion && snapshot.map === 200 && manualAction?.eventId !== job.target) {
             const action = caveAction(job.scene, root.$gameMap._events[job.target]);
             if (action?.crystal && !action.blocked) {
                 setManualAction({ scene: job.scene, map: root.$gameMap, player: root.$gamePlayer,
@@ -1090,7 +1092,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     }
 
     function caveAction(scene, event) {
-        if (!event || event._erased) return null;
+        if (!event || event._erased || !automaticCaveMap(root.$gameMap?._mapId)) return null;
         const map = root.$gameMap;
         const list = event.list();
         if (list !== root.$dataMap.events[event._eventId]?.pages[event._pageIndex]?.list) return null;
@@ -1125,12 +1127,12 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const event = pending.event || map._events[pending.eventId];
         const action = caveAction(scene, event);
         return !!(event?.isStarting() && (!pending.list || event.list() === pending.list) &&
-            (action?.crystal || action?.loot));
+            action);
     }
 
-    function expectCaveAction(job, event) {
+    function expectCaveAction(job, event, automatic = false) {
         const action = caveAction(job.scene, event);
-        if (!action) return false;
+        if (!action || automatic && !automaticCaveAction(action)) return false;
         if (!job.caveArrives) {
             if (job.caveWalk.acted.has(event._eventId)) return false;
             job.caveWalk.acted.add(event._eventId);
@@ -1520,10 +1522,11 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (job.chase) {
                 Object.assign(job, { map: snapshot.map, mode: snapshot.mode, x: snapshot.x, y: snapshot.y,
                     label: job.caveWalk.destination.name, target: job.caveWalk.destination.event ?? job.caveWalk.destination.id,
-                    caveAction: event => expectCaveAction(job, event) });
+                    caveAction: (event, automatic) => expectCaveAction(job, event, automatic) });
                 return startCaveSegment(job, job.chase.legs, null, true, job.chase.next);
             }
-            return timedRoute(job, snapshot, job.caveWalk.destination);
+            return timedCave(snapshot.map) ? timedRoute(job, snapshot, job.caveWalk.destination) :
+                route(job, snapshot, job.caveWalk.destination);
         }
         const timed = timedCave(root.$gameMap._mapId);
         const filtering = preferences().reachableOnly === true && !timed && navigationRequest(job) &&
@@ -2041,8 +2044,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             }
             // Interpreter.setup is the definitive native acceptance site.
             // A cold resource/prompt gate may suppress the earlier field-ready
-            // notification; preserve only this exact queued crystal or loot action.
-            if ((caveEvent?.crystal || caveEvent?.loot) && !caveEvent.accepted &&
+            // notification; preserve only this exact verified cave action.
+            if (caveEvent && !caveEvent.accepted &&
                 sameCaveAction(caveEvent, scene, mapEventId) && caveEvent.event.list() === caveEvent.list) {
                 caveEvent.accepted = true;
                 caveEvent.acceptance = 'interpreter';
@@ -2057,7 +2060,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             }
             chaseGuide.leave(scene, mapEventId);
             // Native resource entry can occur after Event.start but before
-            // Interpreter.setup. Retain only that exact queued crystal token;
+            // Interpreter.setup. Retain only that exact verified cave token;
             // it is still unaccepted and cannot resume until setup confirms it.
             const queuedManual = mapEventId === undefined && queuedCaveInteraction(manualAction, scene);
             const queuedAutomatic = mapEventId === undefined && queuedCaveInteraction(caveEvent, scene);

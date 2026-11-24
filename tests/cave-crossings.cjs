@@ -266,12 +266,12 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
             assert(!scene._wqaCaveReview, 'the automatic native step does not invalidate its own field job');
             const begin = c.Graphics.frameCount;
             do { tick(); } while ((auto.active(scene) || player.isMoving()) && c.Graphics.frameCount - begin < 640);
-            if(opts.floor && reports.at(-1)?.record?.activate) {
-                const direction=reports.at(-1).record.activate;
-                assert(!gameMap.event(opts.floor).isStarting(),'no automatic floor activation');
-                assert(!auto.active(scene));
-                player.moveStraight(direction); // explicit fixture player step
-                while(player.isMoving())tick();
+            if (opts.manualFloor) {
+                assert(reports.at(-1)?.record?.activate, "manual floor has a current handoff");
+                const direction = reports.at(-1).record.activate;
+                assert(!gameMap.event(opts.floor).isStarting(), 'manual checkpoint or exit stays unactivated');
+                player.moveStraight(direction); // Explicit fixture player input, never the mod.
+                while (player.isMoving()) tick();
             }
             assert.deepEqual([player.x, player.y], [x, y],
                 'Autowalk completed the verified stretch from ' + [job.x, job.y] + ' ' +
@@ -304,8 +304,8 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
                 assert(steps.length, plan.status);
                 const gate = plan.opening && timing.automaticGate(timing.capture(scene, motion, { id: 20 }, true), plan.opening);
                 if (plan.opening) { assert(gate); crossings++; }
-                walk(run, tick, 20, steps, { gate, floor,
-                    job: { caveFloor: floor, caveAction: event => event._eventId === floor } });
+                walk(run, tick, 20, steps, { gate, floor, manualFloor: !!floor,
+                    job: { caveFloor: floor, caveAction: (event,automatic) => !automatic && event._eventId === floor } });
                 if (floor) {
                     const event = run.gameMap._events[floor];
                     assert(event.isStarting());
@@ -332,14 +332,10 @@ async function verifyCaveCrossings(c, load, configureMotion, motionRequest, veri
             walk(distraction.run, crystalTick, 5, [], { facing: 4,
                 job: { caveCrystal: true, caveAction: event => !!(crystalAction = acceptedAction(c, scene, event)) } });
             assert.equal(crystalAction?.event, crystal);
-            assert(!crystal.isStarting(), 'Autowalk leaves native crystal activation to the player');
-            assert.equal(distraction.run.gameMap._interpreter._list,undefined);
+            assert(!crystal.isStarting(), 'The known working native handoff consumes the crystal start');
+            assert.equal(distraction.run.gameMap._interpreter._eventId,5);
             for(let idle=0;idle<120;idle++)crystalTick();
-            assert(!crystal.isStarting(),'idle never presses Confirm');
-            distraction.run.player.checkEventTriggerThere([0]);
-            assert(crystal.isStarting());
-            distraction.run.gameMap.setupStartingEvent();
-            assert(!crystal.isStarting(), 'The native player action consumes its own queued crystal start');
+            assert(!crystal.isStarting(),'idle never repeats native crystal acceptance');
             assert.equal(distraction.run.gameMap._interpreter._eventId,5);
             assert.equal(distraction.run.gameMap._interpreter._list,crystal.list());
             distraction.run.gameMap._interpreter._list=null;
