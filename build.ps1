@@ -4,7 +4,7 @@ param(
     [string]$AudioSdkRoot = (Join-Path $PSScriptRoot '.deps/audio-sdk'),
     [switch]$VerifySpeechPipe,
     [switch]$VerifyAudio,
-    [string]$ResourceReceipt = (Join-Path $PSScriptRoot ' .build/native-build-budget.json'.Trim())
+    [string]$ResourceReceipt = (Join-Path $PSScriptRoot '.build/native-build-budget.json')
 )
 
 $ErrorActionPreference = 'Stop'
