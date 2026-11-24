@@ -61,6 +61,7 @@ function normalizeNavigation(saved, reserved = []) {
     }
     return { layout: saved?.layout === 'brackets' ? 'brackets' : 'letters', bindings, autowalk: saved?.autowalk === true,
         verbosePuzzleGuidance: saved?.verbosePuzzleGuidance !== false,
+        caveAutomaticInteractions: saved?.caveAutomaticInteractions === true,
         speakAutowalkPath: saved?.speakAutowalkPath === true, reachableOnly: saved?.reachableOnly === true,
         spoilers: saved?.spoilers === true, speakBeaconDestination: saved?.speakBeaconDestination === true,
         speakBeaconPath: saved?.speakBeaconPath === true };

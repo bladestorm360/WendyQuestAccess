@@ -152,6 +152,8 @@ def bundle():
         './dialogue/credits': 'dialogue/credits.js',
         './number-entry': 'dialogue/number-entry.js',
         './settings/menu': 'settings/menu.js',
+        './secret-island': 'settings/secret-island.js',
+        '../world/puzzles/cave-progression': 'world/puzzles/cave-progression.js',
         './bookmark-menu': 'settings/bookmark-menu.js',
         '../world/bookmark-records': 'world/bookmark-records.js',
         './keyboard': 'settings/keyboard.js',

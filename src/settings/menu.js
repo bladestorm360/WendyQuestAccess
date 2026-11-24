@@ -9,6 +9,7 @@ const { FIELD_ACTIONS, ACTION_NAMES, buttonBit, buttonName, bindingAllowed,
     normalizeController, canUnassign } = require('./controller-bindings');
 const { SOUNDSCAPE, normalizeSoundscape } = require('./soundscape-preferences');
 const { createBookmarkMenu } = require('./bookmark-menu');
+const { createSecretIslandMenu, secretIslandAvailable } = require('./secret-island');
 const { HIT_NOTE_PITCH } = require('../battle/timing-cues');
 
 const LABELS = Object.freeze({ settings: 'Open mod settings', repeat: 'Repeat dialogue',
@@ -24,7 +25,7 @@ const AUDIO_PREVIEWS = [
     ['behind', [0, 0, -1]], ['above', [0, 1, 0]]
 ];
 const audioGroup = group => group === 'audio' || group === 'audioPreviews' ||
-    group === 'soundscape' || group === 'soundscapeCategory';
+    group === 'soundscape' || group === 'soundscapeCategory' || group === 'secretIsland';
 
 function normalizeAudio(value) {
     const volume = value?.wallVolume;
@@ -99,6 +100,13 @@ function createSettingsMenu(root, host) {
         }
     });
 
+    const secretIsland = createSecretIslandMenu(root, {
+        button, status, change, loading:()=>loading, audio:()=>audio, navigation:()=>navigation,
+        stop:scene=>host.audioStop(scene), back:owner=>showRoot(owner,'secretIsland'),
+        preview:(owner,gain)=>previewAudio(owner,[0,0,1],'caveGo',gain),
+        guideKey:()=>keys.puzzleGuide, stopKey:()=>keys.puzzleStop
+    });
+
     openSettings(root.indexedDB).then(async database => {
         // A failed read for another settings group cannot erase a saved mute.
         const results = await Promise.allSettled([
@@ -144,6 +152,7 @@ function createSettingsMenu(root, host) {
             controller: button(owner, 'Controller bindings', () => showController(owner)),
             speech: button(owner, 'Speech', () => showSpeech(owner)),
             navigation: button(owner, 'Navigation', () => showNavigation(owner)),
+            ...(secretIslandAvailable(root,owner.scene) ? {secretIsland:button(owner,'Secret Island',()=>secretIsland.show(owner))} : {}),
             battle: button(owner, 'Battle', () => showBattle(owner)),
             audio: button(owner, 'Audio', () => showAudio(owner)),
             help: button(owner, 'Help', () => showHelp(owner))
@@ -196,7 +205,7 @@ function createSettingsMenu(root, host) {
             refresh('Changed for this session. Settings storage is unavailable.');
             return true;
         }
-        const subject = { controller: 'Controller settings', navigation: 'Navigation settings',
+        const subject = origin === 'secretIsland' ? 'Secret Island settings' : { controller: 'Controller settings', navigation: 'Navigation settings',
             audio: 'Audio settings', speech: 'Speech settings', battle: 'Battle settings', keyboard: 'Keyboard bindings' }[key];
         saving = true;
         refresh(`Saving ${subject.toLowerCase()}`);
@@ -206,7 +215,7 @@ function createSettingsMenu(root, host) {
         }, () => {
             saving = false;
             apply(previous);
-            if (session && (session.group === key || (isNavigation && session.group === 'navigationBindings') || (isAudio && audioGroup(session.group))))
+            if (session && (session.group === key || (isNavigation && (session.group === 'navigationBindings' || session.group === 'secretIsland')) || (isAudio && audioGroup(session.group))))
                 showGroup(session, session.selected);
             if (owner && owner.group === origin) {
                 status(owner, `Could not save ${subject.toLowerCase()}. Previous settings restored.`);
@@ -224,6 +233,7 @@ function createSettingsMenu(root, host) {
         else if (owner.group === 'navigationBindings') showNavigationBindings(owner, selection);
         else if (owner.group === 'battle') showBattle(owner);
         else if (owner.group === 'bookmarks') bookmarks.show(owner);
+        else if (owner.group === 'secretIsland') secretIsland.show(owner,selection);
         else if (owner.group === 'audio') showAudio(owner, selection);
         else if (owner.group === 'audioPreviews') showAudioPreviews(owner);
         else if (owner.group === 'soundscape') showSoundscape(owner, selection);
@@ -419,12 +429,6 @@ function createSettingsMenu(root, host) {
                 update('beaconLower', { ...audio, beaconVolume: Math.max(0, audio.beaconVolume - 10) })),
             beaconRaise: button(owner, `Increase beacon volume, ${audio.beaconVolume} percent`, () =>
                 update('beaconRaise', { ...audio, beaconVolume: Math.min(100, audio.beaconVolume + 10) })),
-            caveTiming: button(owner, `Cave timing cues, ${audio.caveTiming ? 'on' : 'off'}`, () =>
-                update('caveTiming', { ...audio, caveTiming: !audio.caveTiming })),
-            caveLower: button(owner, `Decrease cave timing volume, ${audio.caveVolume} percent`, () =>
-                update('caveLower', { ...audio, caveVolume: Math.max(0, audio.caveVolume - 10) })),
-            caveRaise: button(owner, `Increase cave timing volume, ${audio.caveVolume} percent`, () =>
-                update('caveRaise', { ...audio, caveVolume: Math.min(100, audio.caveVolume + 10) })),
             battleTiming: button(owner, `Battle timing assist, ${audio.battleTiming ? 'on' : 'off'}`, () =>
                 update('battleTiming', { ...audio, battleTiming: !audio.battleTiming })),
             battleLower: button(owner, `Decrease battle timing volume, ${audio.battleTimingVolume} percent`, () =>
@@ -474,7 +478,6 @@ function createSettingsMenu(root, host) {
         button(owner, 'Preview beacon ahead', () => preview([0, 0, 1], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon turn to the right', () => preview([1, 0, 0], 'beaconPulse', audio.beaconVolume / 100));
         button(owner, 'Preview beacon arrival', () => preview([0, 0, 1], 'beaconArrival', audio.beaconVolume / 100));
-        button(owner, 'Preview cave crossing ping', () => preview([0, 0, 1], 'caveGo', audio.caveVolume / 100));
         button(owner, 'Preview battle power tone', () => preview([0, 0, 1], 'battlePower', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
         button(owner, 'Preview battle accuracy tone', () => preview([0, 0, 1], 'battleAccuracy', audio.battleTimingVolume / 100, HIT_NOTE_PITCH));
         for (const [direction, bearing] of AUDIO_PREVIEWS) {
