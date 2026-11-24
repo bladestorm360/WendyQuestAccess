@@ -1323,6 +1323,7 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if(process.argv.includes('--cauldron-reveal')){await require('./cauldron-reveal.cjs')(c,load,read,verifyWorker);return;}
     if(process.argv.includes('--boat-field')){await require('./boat-field.cjs')(c,load,read,verifyWorker);return;}
     if(process.argv.includes('--native-transit')){await require('./native-transit.cjs')(c,load,read,verifyWorker);await require('./boat-field.cjs')(c,load,read,verifyWorker);return;}
     if(process.argv.includes('--connection-pages-only')){await require('./connection-pages.cjs')(c,load,read);return;}

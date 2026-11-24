@@ -74,7 +74,10 @@ function worldEntranceRevealed(root, id, spoilers, questMarker = false) {
     if (id === 23) return on(38) || atlasPinAt(root, 7, 11);
     if (id === 22 && on(38) || (id === 16 || id === 19) && on(33)) return true;
     if (id === 31 && root.$gamePlayer?._vehicleType === 'ship') return true;
-    if (id === 43 && on(54) || id === 25 && on(267) || id === 71 && on(97)) return true;
+    // The native secret-cauldron glitches reveal this alternate approach
+    // before Chomps starts the ordinary cauldron quests. Use their persisted
+    // completion, not the earlier route-enabling flag or Spoiler mode.
+    if (id === 43 && (on(54) || on(452) || on(453)) || id === 25 && on(267) || id === 71 && on(97)) return true;
     const prerequisites = INTRODUCTIONS[id];
     return !prerequisites || prerequisites.some(quest => learnedQuest(root, quest));
 }
