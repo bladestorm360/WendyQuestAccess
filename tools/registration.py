@@ -1052,6 +1052,8 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
     # Observe only the requested native effect attachments. These calls do
     # not alter coroutines/input; narration confirms their real postrender art.
     skill_hooks = {}
+    guard_frame = original.index(b'(_0x1c59ad));') + len(b'(_0x1c59ad)')
+    skill_hooks[guard_frame] = b',_0x1c59ad===\"guard\"&&globalThis.WendyQuestAccessSkillVisual?.(this,this._mainSprite,\"guard\")'
     def skill_hook(token, actor, sprite, key, comma=False):
         if original.count(token) != 1:
             raise ValueError('Ambiguous native skill effect locator: ' + key)

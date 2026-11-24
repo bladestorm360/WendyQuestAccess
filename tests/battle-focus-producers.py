@@ -52,6 +52,15 @@ def animated_text_methods():
     return methods
 
 
+if sys.argv[2:] == ['guard-visual']:
+    frame, _ = decode((installed / 'package.nw/js/plugins/MonkeyWrenchMZ.js').read_text(encoding='utf8'))
+    start = frame.index('class FrameAnimator{')
+    end = frame.index('$customSaveData=null', start)
+    print(json.dumps({'motion': sprite_method(battle, 'Sprite_Actor', 'startMotion'),
+                      'frame': frame[start:end].rstrip(',;')}))
+    sys.exit(0)
+
+
 if sys.argv[2:] == ['skill-visuals']:
     names = ['CreateCrispyShieldAnimation','SpiceBuffAnimation','CreateBaconatorBuffAnimation',
              'createFrostyTimeAnimation','createFrostyBlastAnimation','CreateCrispyBarrageAnimation',

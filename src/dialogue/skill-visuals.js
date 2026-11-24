@@ -6,6 +6,7 @@ const { battleScenePresented } = require('../battle/presentation');
 // Exact native particle factories supply these identities after attachment.
 // Base/upgraded skills share art; each real action owns one caption per stage.
 const SKILLS = Object.freeze({
+ 'guard': [[2],1,'sv_actors/Wendy_Combat'],
  'crispy-shield': [[22,23],3,'FrygorCrispyShieldFX'],
  'spicy-surge': [[28,29],5,'SpiceBuff_Over'],
  'rise-shine': [[31,32],2,'BaconatorBuff'],
@@ -31,7 +32,11 @@ function skillVisual(root,host,scene,actor,sprite,key) {
      !renderedSprite(sprite,parent) || !sprite.bitmap?.isReady?.() ||
      !sprite.worldTransform || sprite.worldTransform.tx<0 || sprite.worldTransform.tx>=host.graphics.width ||
      sprite.worldTransform.ty<0 || sprite.worldTransform.ty>=host.graphics.height ||
-     sprite.animator?._animationData?.fileName!=='ParticleEffects/'+spec[2])return false;
+     (key==='guard' ? actor._mainSprite!==sprite || actor._battlerName!=='Wendy_Combat' ||
+       actor._frameAnimator?._animationData?.fileName!==spec[2] ||
+       actor._frameAnimator?._currentAnimation?.name!=='guard' || sprite._frame?.y!==192 ||
+       ![0,64,128].includes(sprite._frame?.x) || sprite._frame?.width!==64 || sprite._frame?.height!==64 :
+       sprite.animator?._animationData?.fileName!=='ParticleEffects/'+spec[2]))return false;
   let node=parent;
   for(let depth=0;node&&depth<4;depth++,node=node.parent){
    if(node===scene || node===set._battleField)return true;

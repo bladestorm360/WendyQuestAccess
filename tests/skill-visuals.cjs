@@ -52,7 +52,7 @@ module.exports=(fixture,stock)=>{
   return{f,actor,created,calls,advance};
  }
  let total=0;
- for(const [key,spec]of Object.entries(SKILLS))for(const id of spec[0]){
+ for(const [key,spec]of Object.entries(SKILLS).filter(([key])=>key!=='guard'))for(const id of spec[0]){
   const t=setup(key,id);
   if(key==='beef-attack'){t.advance(0);for(const s of t.created)s.texture.valid=true;t.f.frame();assert.equal(t.f.played[0]?.id,'skill-beef-charge');t.f.played[0].emit('ended');}
   t.advance(key==='beef-attack'?3.7:1.3);

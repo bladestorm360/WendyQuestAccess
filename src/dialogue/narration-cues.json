@@ -1807,11 +1807,11 @@
     "beats": []
   },
   "idle-hud-slides": {
-    "text": "Wendy’s status display slides away.",
+    "text": "Wendy\u2019s status display slides away.",
     "beats": []
   },
   "idle-dozes": {
-    "text": "Zs drift over Wendy’s head as she dozes.",
+    "text": "Zs drift over Wendy\u2019s head as she dozes.",
     "beats": []
   },
   "idle-map-dark": {
@@ -4097,6 +4097,10 @@
   },
   "skill-bacon-blast": {
     "text": "Bacon-shaped lightning strikes the target.",
+    "beats": []
+  },
+  "skill-guard": {
+    "text": "Wendy braces behind her crossed spatulas.",
     "beats": []
   }
 }

@@ -31,10 +31,10 @@ def stage_narration():
     cues = json.loads(source.read_text(encoding='utf8'))
     folder = source.parent / 'clips'
     clips = [(folder / f'{name}.webm').read_bytes() for name in cues]
-    if not clips or len(clips) > 158 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
+    if not clips or len(clips) > 159 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
         raise ValueError('Malformed narration clips')
     pack = struct.pack('<' + 'I' * len(clips), *(len(clip) for clip in clips)) + b''.join(clips)
-    #158 recordings; measured packed size 1,935,577 bytes.
+    #159 recordings, including the brief Guard pose.
     if len(pack) > 1904 * 1024:
         raise ValueError('Narration clips exceed their playback budget')
     target = OUT / 'wendyquest-access/narration.webmpack'
