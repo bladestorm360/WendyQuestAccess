@@ -350,8 +350,14 @@ function createNarration(root, host, preferences) {
     function environmentPresent(scene) {
         const state = environment;
         if (!state || state.scene !== scene) return;
-        if (!enabled() || state.interpreter !== root.$gameMap?._interpreter ||
-            state.interpreter._list !== state.list || host.graphics.frameCount - state.frame > 600) {
+        // The third Cauldron flood outlasts its accepting event's native
+        // clear. Keep that already-owned drain receipt on this same map until
+        // its changed floor is ready/painted. A different event/list, map or
+        // scene boundary still retires it; no loading-time work is admitted.
+        const finishedDrain = state.id === 'sauce-drains' && state.interpreter._list === null;
+        if (!enabled() || state.mapId !== root.$gameMap?._mapId ||
+            state.interpreter !== root.$gameMap?._interpreter ||
+            !finishedDrain && state.interpreter._list !== state.list || host.graphics.frameCount - state.frame > 600) {
             scene._wqaEnvironmentPending = false;environment = null;return;
         }
         // No processing during flood-fill/resource work. Resume at the same

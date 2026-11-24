@@ -520,6 +520,7 @@ console.log('Verified 168 clips, 304 authored locators, shrine reactions/glows a
 require('./finale-narration.cjs')(fixture, commandContext, stock);
 require('./screen-jolt.cjs')(fixture, commandContext, stock);
 require('./environment-narration.cjs')(fixture, commandContext, stock);
+require('./cauldron-drain.cjs')(fixture,commandContext,stock);
 require('./reaction-audit.cjs')(fixture, commandContext, stock, emoteMethods);
 
 require('./question-narration.cjs')(fixture, commandContext, stock, emoteMethods);

@@ -17,7 +17,7 @@ function capture(root, scene, interpreter, frame) {
     if (!sites[map._mapId]?.[interpreter._eventId]?.[page]?.includes(interpreter._index)) return null;
     const row = interpreter._list[interpreter._index], parameters = row?.parameters;
     if (row?.code !== 357) return null;
-    const state = { scene, interpreter, list: interpreter._list, index: interpreter._index, frame,
+    const state = { scene, mapId: map._mapId, interpreter, list: interpreter._list, index: interpreter._index, frame,
         screenX: scene._spriteset.x, screenY: scene._spriteset.y, visual: -8 };
     if ([27, 37].includes(map._mapId)) {
         if (parameters[0] !== 'ShakeScreen' || parameters[1] !== 'CreateImpulse') return null;

@@ -69,6 +69,15 @@ if sys.argv[2:] == ['terrain-paint']:
     print(json.dumps([between(text, "Tilemap['prototype']['SetMapData']=function(", "},Tilemap['prototype']['updateTransform']") + '};']))
     sys.exit()
 
+if sys.argv[2:] == ['cauldron-drain']:
+    text, _ = decode(map_notification((PLUGINS / MAP_REL.name).read_bytes()).decode('utf8'))
+    print(json.dumps([
+        between(text, "TileEditor['FloodFillRegion']=function(", "},Tilemap['prototype']['SetMapData']") + '};',
+        between(text, "Tilemap['prototype']['SetMapData']=function(", "},Tilemap['prototype']['updateTransform']") + '};',
+    ]))
+    sys.exit()
+
+
 if sys.argv[2:] == ['narration-commands']:
     source = objects_notification((Path(sys.argv[1]) / OBJECTS_REL.relative_to('package.nw')).read_bytes()).decode('utf8')
     methods = []
