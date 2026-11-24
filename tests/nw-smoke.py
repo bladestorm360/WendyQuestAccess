@@ -2351,7 +2351,8 @@ const interval = setInterval(() => {
                     ['rise-shine',31,2,'BaconatorBuff'],['frosty-time',25,4,'FrostyTimeClock'],['frosty-blast',10,4,'FrostyBlast'],
                     ['crispy-barrage',7,3,'FrygorCrispyBarrageFX'],['pigtail-whip',37,1,'WendyPigtailWhipFX'],
                     ['beef-charge',38,1,'WendyWhereIsBeef_PowerUp'],['beef-attack',38,1,'WendyWhereIsBeef_Attack'],
-                    ['nugget-strike',15,5,'NuggetStrike'],['bacon-blast',18,2,'BaconatorBlast']];
+                    ['nugget-strike',15,5,'NuggetStrike'],['bacon-blast',18,2,'BaconatorBlast'],
+                    ['guard',2,1,'sv_actors/Wendy_Combat'],['ice-machine-arrives',0,0,'']];
                 scene._testSkillIndex=0;scene._testSavedTroop=window.$gameTroop;scene._testSavedAction=BattleManager._action;
             }
             const [key,id,actorId,file]=scene._testSkillVoices[scene._testSkillIndex];
@@ -2362,7 +2363,22 @@ const interval = setInterval(() => {
             BattleManager._action={isSkill:()=>true,item:()=>({id})};
             const sprite={parent:field,bitmap:{isReady:()=>true},worldVisible:true,worldAlpha:1,texture:{valid:true},
                 worldTransform:{tx:100,ty:100},animator:{_animationData:{fileName:'ParticleEffects/'+file}}};
-            narrationAudio=null;WendyQuestAccessSkillVisual(actor,sprite,key);narrationFrame();
+            narrationAudio=null;
+            if(key==='guard'){
+                sprite.parent=actor;sprite._frame={x:0,y:192,width:64,height:64};actor._mainSprite=sprite;
+                actor._battlerName='Wendy_Combat';actor._frameAnimator={_animationData:{fileName:file},_currentAnimation:{name:'guard'}};
+                WendyQuestAccessSkillVisual(actor,sprite,key);
+            }else if(key==='ice-machine-arrives'){
+                scene._wqaBattleStarted=false;const list=[{code:0},{code:205}];
+                $gameMap._mapId=27;$dataMap.events[29]={pages:[{list}]};
+                const machine={_eventId:29,_characterName:'~ICM',_characterIndex:5,_jumpCount:8};
+                $gameMap._events[29]=machine;$gameMap._interpreter={_mapId:27,_eventId:29,_index:1,_list:list};
+                scene._spriteset._characterSprites.push({_character:machine,_characterName:'~ICM',
+                    parent:scene._spriteset._tilemap,bitmap:{isReady:()=>true},worldVisible:true,worldAlpha:1,
+                    texture:{valid:true},worldTransform:{tx:100,ty:100}});
+                WendyQuestAccessNarrationAccepted(scene,$gameMap._interpreter,machine,undefined,-6);
+            }else WendyQuestAccessSkillVisual(actor,sprite,key);
+            narrationFrame();
             if(!narrationAudio)throw Error('Packaged skill voice not admitted: '+key);
             narrationStarted=performance.now();endingStep=499;
         } else if(endingStep===499 && narrationAudio?.currentTime>0.005) {
@@ -3134,9 +3150,9 @@ def main():
             raise RuntimeError('Incomplete slow sleep continuation')
         print('Verified the full original sleep recording at80 percent across the actual30-frame fade, native transfer, paused loading and the next ready scene, retaining its playhead through natural completion.')
         skill_voices = receipt.with_suffix('.json.skill-voices').read_text(encoding='utf8').splitlines()
-        if len(skill_voices) != 11 or len({line.split()[0] for line in skill_voices}) != 11:
+        if len(skill_voices) != 13 or len({line.split()[0] for line in skill_voices}) != 13:
             raise RuntimeError('Not every requested skill recording decoded')
-        print('Verified all11 packaged skill recordings decode; existing timed beef-word path remains unchanged.')
+        print('Verified all11 skill recordings plus Guard and Ice Cream Machine entrance decode through the packaged renderer; timed beef words stay unchanged.')
         narration_ms = float(receipt.with_suffix('.json.cutscene-narration-ms').read_text(encoding='utf8'))
         idle_ms = float(receipt.with_suffix('.json.idle-narration-ms').read_text(encoding='utf8'))
         question_ms = float(receipt.with_suffix('.json.question-narration-ms').read_text(encoding='utf8'))
