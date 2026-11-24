@@ -25,8 +25,8 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//168 original recordings; measured pack 2,086,727 bytes.
-const PACK_LIMIT = 2039 * 1024;
+//169 original recordings; measured pack 2,096,130 bytes.
+const PACK_LIMIT = 2048 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;

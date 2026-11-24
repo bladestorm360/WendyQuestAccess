@@ -31,11 +31,11 @@ def stage_narration():
     cues = json.loads(source.read_text(encoding='utf8'))
     folder = source.parent / 'clips'
     clips = [(folder / f'{name}.webm').read_bytes() for name in cues]
-    if not clips or len(clips) > 168 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
+    if not clips or len(clips) > 169 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
         raise ValueError('Malformed narration clips')
     pack = struct.pack('<' + 'I' * len(clips), *(len(clip) for clip in clips)) + b''.join(clips)
-    #168 original recordings; measured pack 2,086,727 bytes.
-    if len(pack) > 2039 * 1024:
+    #169 original recordings; measured pack 2,096,130 bytes.
+    if len(pack) > 2048 * 1024:
         raise ValueError('Narration clips exceed their playback budget')
     target = OUT / 'wendyquest-access/narration.webmpack'
     target.parent.mkdir(parents=True, exist_ok=True)

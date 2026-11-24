@@ -585,7 +585,7 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,(this._mapId===190||this._mapId===83||this._mapId===13)?this.character(0):$gamePlayer,undefined,-6);}',
         # ShowRewardTokens synchronously appends exactly one reward sprite.
         # Record it after the native call, before any later event command.
-        305132: b'if(Graphics._wqaNarrationEnabled&&(pluginName==="ShakeScreen"&&params[1]==="CreateImpulse"||pluginName==="MapScene"&&params[1]==="FloodFill"||[51,53,55].includes(this._mapId)&&pluginName==="Tyruswoo_TileControl"&&params[1]==="set_tile"))'
+        305132: b'if(Graphics._wqaNarrationEnabled&&(pluginName==="ShakeScreen"&&params[1]==="CreateImpulse"||pluginName==="MapScene"&&params[1]==="FloodFill"||([51,53,55].includes(this._mapId)||this._mapId===63&&this._eventId===13&&this._index===5)&&pluginName==="Tyruswoo_TileControl"&&params[1]==="set_tile"))'
                 b'globalThis.WendyQuestAccessScreenJolt?.(SceneManager._scene,this,Number(params[3]?.Duration));'
                 b'const wqaRewardScene=pluginName==="WendyQuest"&&params[1]==="ShowRewardTokens"?SceneManager._scene:null;'
                 b'const wqaRewardChildren=wqaRewardScene?._spriteset?.children;'

@@ -6,6 +6,7 @@ module.exports=function(fixture,commandContext,stock){
  const paint=JSON.parse(execFileSync('python',['-B',path.join(__dirname,'map-producers.py'),path.join(stock,'package.nw'),'terrain-paint'],{encoding:'utf8'}));
  let count=0;
  for(const [m,events] of Object.entries(sites))for(const [e,pages]of Object.entries(events))for(const[p,indices]of Object.entries(pages))for(const i of indices){
+  if(+m===63)continue; // Exact wall artwork/flash/paint cases have their own replay.
   const f=fixture(+m,+e,+p);f.interpreter._index=i;
   f.spriteset.x=f.spriteset.y=0;const tiles=f.spriteset._tilemap;
   tiles.worldVisible=true;tiles._mapData=f.root.$dataMap.data.slice();tiles._mapWidth=f.root.$dataMap.width;tiles._mapHeight=f.root.$dataMap.height;

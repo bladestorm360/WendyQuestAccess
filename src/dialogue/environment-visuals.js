@@ -6,7 +6,7 @@ const sites = {
         71: {0: [1]}, 120: {0: [12]}},
     51: {2: {0: [8]}}, 53: {3: {0: [9]}, 4: {0: [9]}}, 55: {4: {0: [7]}},
     27: {24: {1: [18, 28, 37]}, 30: {1: [18, 28, 37]}},
-    37: {4: {0: [5]}}
+    37: {4: {0: [5]}}, 63: {13: {0: [5]}}
 };
 function capture(root, scene, interpreter, frame) {
     const map = root.$gameMap, data = root.$dataMap;
@@ -19,7 +19,16 @@ function capture(root, scene, interpreter, frame) {
     if (row?.code !== 357) return null;
     const state = { scene, mapId: map._mapId, interpreter, list: interpreter._list, index: interpreter._index, frame,
         screenX: scene._spriteset.x, screenY: scene._spriteset.y, visual: -8 };
-    if ([27, 37].includes(map._mapId)) {
+    if (map._mapId === 63) {
+        // The first mutation precedes native tile refresh. The whole thirteen-
+        // tile broken-hole graphic, not the later Chomps flag, proves the reveal.
+        if(parameters[0]!=='Tyruswoo_TileControl' || parameters[1]!=='set_tile' ||
+            parameters[3]?.tileId!=='D2,4' || data.width!==25 || data.height!==32)return null;
+        state.id='cauldron-wall-breaks';state.cell=(3*32+4)*25+15;
+        state.data=scene._spriteset._tilemap?._mapData;
+        if(state.data?.length!==25*32*6)return null;
+        state.before=state.data[state.cell];state.wall=true;
+    } else if ([27, 37].includes(map._mapId)) {
         if (parameters[0] !== 'ShakeScreen' || parameters[1] !== 'CreateImpulse') return null;
         state.id = map._mapId === 27 && interpreter._index !== 18 ? 'tremors-strengthen' : 'ground-trembles';
     } else {
@@ -44,6 +53,17 @@ function capture(root, scene, interpreter, frame) {
 function visible(root, scene, state) {
     const tiles = scene._spriteset?._tilemap;
     if (tiles?.worldVisible !== true) return false;
+    if(state.wall) {
+        if(tiles._needsRepaint || tiles._mapData!==state.data || state.before===802 ||
+            (root.$gameScreen?._flashColor?.[3]||0)>=200)return false;
+        // D2,4 through D6,6 form the inspected ragged cave opening; the two
+        // lower outside corners are not replaced by this native scene.
+        for(let y=4;y<=6;y++)for(let x=15;x<=19;x++) {
+            if(y===6 && (x===15||x===19))continue;
+            if(state.data[(3*32+y)*25+x]!==768+8*y+x-13)return false;
+        }
+        return true;
+    }
     return state.cell === undefined ? scene._spriteset.x !== state.screenX || scene._spriteset.y !== state.screenY :
         !tiles._needsRepaint && tiles._mapData === state.data && state.data[state.cell] !== state.before;
 }

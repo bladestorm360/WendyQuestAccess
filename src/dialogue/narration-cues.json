@@ -4228,5 +4228,9 @@
   "ability-upgrade": {
     "text": "A white flash fills the screen as it shakes.",
     "beats": []
+  },
+  "cauldron-wall-breaks": {
+    "text": "The cavern wall bursts open.",
+    "beats": []
   }
 }
