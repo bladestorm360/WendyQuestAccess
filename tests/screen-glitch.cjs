@@ -42,7 +42,7 @@ module.exports=(fixture,stock)=>{
    const filter=f.scene.filters.at(-1);assert.equal(filter.slices,10);assert.equal(filter.offset,100);
    assert.deepEqual(Array.from(filter.red),[0,0]);return filter;};
   const erase=()=>{g.eraseFilter('rgb');f.scene.updateTKMfilters();};
-  const paint=(draw=true)=>{f.narration.glitchPresent(f.scene);f.frame(draw);};
+  const paint=(draw=true)=>{f.graphics.frameCount++;f.narration.glitchPresent(f.scene);f.narration.present(f.scene);if(draw)f.renderer.emit('postrender');};
   return {add,erase,paint,c};
  }
  for(const [m,e,p,i]of sites){
@@ -63,6 +63,29 @@ module.exports=(fixture,stock)=>{
   if(mode==='preload')f.scene._wqaPreloads=new Set([{}]);
   n.paint(false);if(mode==='erased-before-paint')n.erase();f.renderer.emit('postrender');
   assert.equal(f.played.length,0,mode+' is not a painted screen glitch');f.narration.leave(f.scene);
+ }
+ // Cauldron keeps one native controller across its transfer. The new map
+ // constructs another PIXI filter from that controller, not another effect.
+ for(const event of [37,38,39])for(const painted of [true,false]){
+  const f=fixture(58,event,0),n=attach(f);f.interpreter._index=11;
+  const rows=f.interpreter._list;
+  assert.deepEqual(rows[18].parameters,[0,57,7,4,6,2]);
+  const old=n.add();n.paint(painted);assert.equal(f.played.length,painted?1:0);
+  f.narration.pause(f.scene);
+  const next={...f.scene,filters:[],_TKMFilters:[]};
+  next.getTKMFilterObj=()=>[next];
+  f.scene=next;f.host.manager._scene=next;f.graphics.app.stage=next;
+  f.nativeMap._mapId=57;f.root.$dataMap=read('Map057.json');
+  f.interpreter._mapId=57;f.interpreter._eventId=5;
+  f.interpreter._list=f.root.$dataMap.events[5].pages[0].list;f.interpreter._index=3;
+  next.updateTKMfilters();const recreated=next.filters[0];
+  assert.notEqual(recreated,old);assert.equal(recreated._controller,old._controller);
+  n.paint();assert.equal(f.played.length,1,'one confirmed effect across native scene recreation');
+  f.played[0].emit('ended');n.paint();
+  assert.equal(f.played.length,1,'no duplicate queued behind the carried voice');
+  n.erase();const fresh=n.add();assert.notEqual(fresh._controller,old._controller);
+  n.paint();assert.equal(f.played.length,2,'a genuinely new native effect still speaks');
+  f.narration.leave(next);
  }
  // Exact common112 invocations are two pulses of one animation, including
  // every secret battle page. A second real invocation must announce again.

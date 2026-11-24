@@ -15,8 +15,20 @@ for (const [id, cue] of Object.entries(cues)) {
 // producer can finish or change tiles before observation is safe. Registered
 // actor identity determines the caption; the rendered balloon confirms it.
 function question(root, scene, balloon) {
-    if (balloon?._balloonId !== 2 || !(balloon._duration > 0)) return null;
+    if (!(balloon?._duration > 0)) return null;
     const map = root.$gameMap, actor = balloon.targetObject;
+    // Map32 preloads its first Frostyna portrait before Wendy's opening
+    // exclamation. Recover only this exact active scene's drawn balloon once
+    // native readiness returns; the regular receipt shares its sprite guard.
+    if (balloon._balloonId === 1) {
+        const script=map?._interpreter;
+        if(map?._mapId!==32 || script?._mapId!==32 || script._eventId!==5 ||
+            script._list!==root.$dataMap?.events?.[5]?.pages?.[0]?.list ||
+            script._index<3 || script._index>12 || actor!==root.$gamePlayer ||
+            balloon._target?._character!==actor)return null;
+        return {id:'startled-wendy',actor,actorId:-1,sprite:balloon._target,balloon,visual:1};
+    }
+    if (balloon._balloonId !== 2) return null;
     const actorId = actor === root.$gamePlayer ? -1 : actor?._eventId;
     const cue = actors[map?._mapId]?.[actorId];
     if (!cue || !actor || (actorId !== -1 && map._events?.[actorId] !== actor) ||

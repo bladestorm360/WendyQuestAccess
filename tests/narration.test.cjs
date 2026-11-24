@@ -529,6 +529,7 @@ require('./narration-continuity.cjs')(fixture, commandContext, emoteMethods);
 require('./tyler-entry.cjs')(fixture, commandContext, stock, emoteMethods);
 require('./tyler-audit.cjs')(fixture,stock);
 require('./screen-glitch.cjs')(fixture,stock);
+require('./frostyna-path-reaction.cjs')(fixture,commandContext,emoteMethods);
 require('./skill-visuals.cjs')(fixture,stock);
 require('./guard-visuals.cjs')(fixture,stock,process.argv[3]||stock);
 require('./ice-machine-entry.cjs')(fixture,commandContext);

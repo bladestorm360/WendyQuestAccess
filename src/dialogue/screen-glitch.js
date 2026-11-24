@@ -4,7 +4,7 @@
 // Observe the actual attached, updated PIXI filter after native readiness,
 // never the crackle sound or a future story switch. All scans are capped32.
 function createGlitchTracker(root) {
-    const seen=new WeakSet(),groups=new WeakSet(),epilogues=new WeakMap();
+    const seen=new WeakSet(),controllers=new WeakSet(),groups=new WeakSet(),epilogues=new WeakMap();
     function groupFor(scene,filter) {
         const script=scene._wqaBattleStarted?root.$gameTroop?._interpreter:root.$gameMap?._interpreter;
         let child=script;
@@ -37,11 +37,15 @@ function createGlitchTracker(root) {
         for(const filter of filters){
             if(!filter||seen.has(filter)||!visible(scene,filter))continue;
             const group=groupFor(scene,filter);
-            if(groups.has(group)){seen.add(filter);continue;}
-            return {id:'epilogue-glitch',visual:-9,filter,group};
+            // A native transfer preserves the controller but rebuilds its PIXI
+            // filter. Confirmed controller identity spans that scene boundary.
+            // Never mark it on admission: an unpainted request may be retired
+            // by loading before its first actual visible frame.
+            if(controllers.has(filter._controller)||groups.has(group)){seen.add(filter);continue;}
+            return {id:'epilogue-glitch',visual:-9,filter,controller:filter._controller,group};
         }
         return null;
     }
-    return {capture,visible,admit(state){seen.add(state.filter);},confirm(state){groups.add(state.group);}};
+    return {capture,visible,admit(state){seen.add(state.filter);},confirm(state){controllers.add(state.controller);groups.add(state.group);}};
 }
 module.exports={createGlitchTracker};
