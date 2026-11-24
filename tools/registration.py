@@ -359,7 +359,18 @@ def quest_notification(original):
 
 
 def managers_notification(original):
+    # Preserve both original handlers, including the retail console-only return.
+    # The callback copies an error only when a safe cave snapshot already exists.
+    error_sites = {}
+    for name in ('catchException', 'onError'):
+        marker = f'SceneManager.{name} = function('.encode()
+        start = original.index(marker)
+        body = original.index(b'{', start) + 1
+        argument = b'e' if name == 'catchException' else b'event'
+        error_sites[body] = (b'\n    try{globalThis.WendyQuestAccessNativeError?.("' + name.encode() +
+                             b'",' + argument + b');}catch{}\n')
     return insert(original, MANAGERS_SHA, {
+        **error_sites,
         # Use the cache selected by the native loader. The opening Elder's
         # parallel interpreter re-requests the same loaded face every update.
         25496: b'    const wqaScene=this._wqaInterpreterPreload?SceneManager._scene:null;\n'

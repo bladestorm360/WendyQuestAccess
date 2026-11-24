@@ -13,8 +13,9 @@ const { createField } = require('../src/world/field');
 const { createCaveTiming } = require('../src/world/cave-timing');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
-function verifyCaveField(c, load, configureMotion) {
-    const previousView = { width: c.Graphics.width, height: c.Graphics.height };
+function verifyCaveField(c, load, configureMotion, diagnosis = null) {
+    const previousView = { width: c.Graphics.width, height: c.Graphics.height,
+        _wqaFootstepsEnabled: c.Graphics._wqaFootstepsEnabled, _wqaCaveTimingEnabled: c.Graphics._wqaCaveTimingEnabled };
     Object.assign(c.Graphics, { width: c.$dataSystem.advanced.screenWidth, height: c.$dataSystem.advanced.screenHeight });
     function setup(id, x, y, viewX, viewY) {
         const run = load(id), guards = configureMotion(run, x, y, viewX, viewY);
@@ -24,7 +25,8 @@ function verifyCaveField(c, load, configureMotion) {
     }
     const keys = ['Input', '$gameTemp', '$gameMessage', '$gameScreen', '$dataCommonEvents', 'addEventListener',
         'WendyQuestAccessFieldMove', 'WendyQuestAccessAutowalkInput', 'WendyQuestAccessFieldEvent',
-        'WendyQuestAccessCaveEventAccepted', 'WendyQuestAccessSceneLeaving', 'WendyQuestAccessFieldChanged', 'WendyQuestAccessCaveTimingMoved'];
+        'WendyQuestAccessCaveEventAccepted', 'WendyQuestAccessSceneLeaving', 'WendyQuestAccessFieldChanged', 'WendyQuestAccessCaveTimingMoved',
+        'WendyQuestAccessFootstep', 'WendyQuestAccessGuardFootstep'];
     const saved = Object.fromEntries(keys.map(key => [key, c[key]]));
     const originalScene = c.SceneManager._scene, app = c.Graphics.app;
     const members = c.$gameParty.members, inBattle = c.$gameParty.inBattle;
@@ -35,6 +37,25 @@ function verifyCaveField(c, load, configureMotion) {
     const packets = [], records = [], accepted = [], diagnostics = [];
     const worker = Object.assign(new EventEmitter(), { unref() {}, postMessage: packet => packets.push(packet) });
     let field, fixture, guards, source, repeatChecked = false, pendingArrival = false, playerHandoff = false;
+    let diagnosticFeet = null;
+    const footCounts = { player: 0, guard: 0 };
+    const poseTrace = [];
+    if (diagnosis) {
+        const { createFootsteps } = require('../src/world/footsteps');
+        c.Graphics._wqaFootstepsEnabled = diagnosis.footsteps;
+        c.Graphics._wqaCaveTimingEnabled = true;
+        const sound = { cues: CUE, soundscapeVoices: 16, isPrepared: () => true, retire() {},
+            play(_scene,_hrtf,_cue,_gain,_bearing,current,_complete,source) {
+                if (!current()) return false;
+                if (source === 'footstep') footCounts.player++;
+                if (source === 'guardStep') footCounts.guard++;
+                return true;
+            } };
+        diagnosticFeet = createFootsteps(c, value => field.ready(value,true), sound,
+            () => ({enabled:true,footsteps:diagnosis.footsteps,footstepVolume:70,caveTiming:true,caveVolume:70,hrtf:false}));
+        c.WendyQuestAccessFootstep = (owner,player) => diagnosticFeet.landed(owner,player);
+        c.WendyQuestAccessGuardFootstep = (owner,guard) => diagnosticFeet.guardLanded(owner,guard);
+    }
     const computeCosts = [];
     const automaticCost = { calls: 0, total: 0, peak: 0, framePeak: 0 };
     let measureDepth = 0;
@@ -391,6 +412,7 @@ function verifyCaveField(c, load, configureMotion) {
             }
         }
         const oldX = player.x, oldY = player.y;
+        if (diagnosis) poseTrace.push([c.Graphics.frameCount,player.x,player.y,source._eventId,source._index]);
         if (!source._list) player.moveByInput();
         if (!preferences.autowalk && [196, 199, 200].includes(fixture.id) && manualDrive === 'static' &&
             (oldX !== player.x || oldY !== player.y)) {
@@ -433,6 +455,32 @@ function verifyCaveField(c, load, configureMotion) {
     }
 
     try {
+        if (diagnosis) {
+            preferences.autowalk = true;nativeLoot = true;nativePickup = 9;
+            start(196,11,49,0,0);
+            select('Barrel','Objects',[2,38]);ask('directions');
+            let obtained=false;
+            for(let frame=0;frame<16000;frame++) {
+                tick();obtained ||= c.$gameSelfSwitches.value([196,9,'A']);
+                if(obtained&&!source._list&&!fixture.player.isMoving()&&!field.autowalk.active(scene)&&
+                    !c.Graphics._wqaCaveAutoPending&&!packets.length)break;
+            }
+            assert(obtained,'Reported barrel approach completes');
+            for(let frame=0;frame<600;frame++)tick();
+            nativeLoot=false;select('Checkpoint','Checkpoints',[16,6]);ask('directions');
+            for(let frame=0;frame<16000&&source._eventId!==21;frame++)tick();
+            assert.equal(source._eventId,21,'Checkpoint reached without input stall');
+            assert(!guards.some(guard=>guard.isStarting()),'No capture during paired journey');
+            if(diagnosis.footsteps)assert(footCounts.player>0,'Native footsteps-on notifications execute');
+            else assert.equal(footCounts.player,0,'Native footsteps-off notifications are suppressed');
+            assert(footCounts.guard>0,'Guard sounds remain independent of player footsteps');
+            const digest=require('node:crypto').createHash('sha256').update(JSON.stringify(poseTrace)).digest('hex');
+            const result={footsteps:diagnosis.footsteps,footCounts,frames:c.Graphics.frameCount,poses:poseTrace.length,
+                traceSha256:digest,reportedTileVisited:poseTrace.some(p=>p[1]===10&&p[2]===14),checkpoint:source._eventId,
+                target:[fixture.player.x,fixture.player.y],routes:diagnostics.length};
+            console.log('Footstep-paired native cave replay '+JSON.stringify(result));
+            return result;
+        }
         // A single Directions request drives each guarded manual route.
         // The only later key in these cases deliberately tests a remaining leg.
         for (const test of [
@@ -763,6 +811,7 @@ function verifyCaveField(c, load, configureMotion) {
             if (!automatic) assert(repeatChecked, 'Directions repeated a remaining leg during interpolation');
         }
     } finally {
+        diagnosticFeet?.leave(scene);
         field.leave(scene);
         Object.assign(c, saved);
         c.Game_Interpreter.prototype.setup = childSetup;

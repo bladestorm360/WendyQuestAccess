@@ -74,6 +74,7 @@ function boot(root, nodeRequire, nodeProcess) {
     let caveTiming = null;
     let soundscape = null;
     let field = null;
+    let fieldDiagnostics = null;
     let settings = null;
     let settingsScene = null;
     let frontendControl = null;
@@ -187,8 +188,8 @@ function boot(root, nodeRequire, nodeProcess) {
         dialogue = createDialogueObserver(host, notifications);
         narration = createNarration(root, host, () => audioPreferences);
         credits = createCredits(root, host, notifications, host.speechPreferences);
-        const { denied: fieldKeyDenied, routed: fieldRouteResult, caveTiming: caveTimingResult } =
-            createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
+        fieldDiagnostics = createFieldDiagnostics(root, host, nodeRequire, nodeProcess);
+        const { denied: fieldKeyDenied, routed: fieldRouteResult, caveTiming: caveTimingResult } = fieldDiagnostics;
         field = createField(root, host, notifications, fieldRouteResult);
         mapBanner = createMapBannerObserver(root, host, notifications, field.ready);
         interaction = createInteractionPrompt(root, host, field.interactionReady, notifications, field.appendInteraction);
@@ -944,7 +945,11 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessVehicleReady = function (scene) {
         try { vehicleNotice?.observe(scene); } catch { vehicleNotice?.leave(scene); }
     };
+    root.WendyQuestAccessNativeError = function (producer, error) {
+        try { fieldDiagnostics?.fault(producer, error); } catch { /* Preserve the native error handler. */ }
+    };
     root.WendyQuestAccessFieldControlLost = function (scene) {
+        try { fieldDiagnostics?.controlLost(scene); } catch { /* Observation cannot affect native control. */ }
         vehicleNotice?.leave(scene);
         interaction?.leave(scene);
         quests?.suspend(scene);
@@ -959,6 +964,7 @@ function boot(root, nodeRequire, nodeProcess) {
     };
 
     root.WendyQuestAccessFieldMove = function (scene, direction, succeeded) {
+        try { if (succeeded) fieldDiagnostics?.capture(scene); } catch { /* Copy only admitted cave state. */ }
         try { field?.chaseMoved(scene, direction, succeeded); } catch { /* Keep native movement independent. */ }
         try { field?.autowalk.moved(scene, direction, succeeded); } catch { field?.autowalk.stop(scene); }
         try { beacon?.moved(scene, direction, succeeded); } catch { beacon?.stop(scene); }

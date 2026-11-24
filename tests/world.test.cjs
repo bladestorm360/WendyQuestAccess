@@ -1394,6 +1394,12 @@ async function main() {
         await require('./airship-foot.cjs').verifyAirshipFoot(c, load, read, verifyWorker);
         return;
     }
+    if (process.argv.includes('--cave-footsteps')) {
+        const index=process.argv.indexOf('--cave-footsteps'),value=process.argv[index+1];
+        assert(['on','off'].includes(value));
+        require('./cave-field.cjs').verifyCaveField(c,load,configureMotion,{footsteps:value==='on'});
+        return;
+    }
     if (process.argv.includes('--cave-field')) {
         require('./cave-field.cjs').verifyCaveField(c, load, configureMotion);
         return;
