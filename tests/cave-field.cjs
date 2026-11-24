@@ -402,6 +402,8 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
                 const floor = player.findEventsAt(x,y).find(event => player.canTriggerEvent(event,[1,2],false) && event.list()?.length > 1);
                 if (floor) {
                     const action = acceptedAction(c,scene,floor);
+                    assert(!(fixture.id === 201 && floor._eventId === 2),
+                        'Final chase exit must be activated by Autowalk, never a simulated player step');
                     assert(!automaticCaveAction(action), 'automatic puzzle events cannot use simulated player movement');
                     assert(action?.exit || checkpointTarget(fixture.id,floor._eventId,floor._pageIndex,floor._trigger),
                         'only room exits and checkpoints receive a simulated player step');
@@ -805,6 +807,11 @@ function verifyCaveField(c, load, configureMotion, diagnosis = null) {
             }
             assert.deepEqual(accepted.filter(id => id !== 2), [4, 9, 11, 13, 24, 26, 27, 28, 29]);
             assert.equal(source._eventId, 2, 'The destination remained the staircase passage');
+            if (automatic) {
+                assert.deepEqual([fixture.player.x,fixture.player.y], [20,0], 'Autowalk takes the final chase step');
+                assert(fixture.gameMap.isEventRunning(), 'The native end scene owns control before another patrol frame');
+                assert(!records.some(row => row.activate || row.manualHandoff), 'The chase has no manual terminal handoff');
+            }
             if (!automatic) assert(repeatChecked, 'Directions repeated a remaining leg during interpolation');
         }
         // The fifth cave room is not a timed patrol map. Its verified scene

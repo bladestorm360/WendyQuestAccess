@@ -1401,6 +1401,7 @@ async function main() {
         return;
     }
     if (process.argv.includes('--cave-crossings')) {
+        verifyCaveProgression(c, load, snapshot, verifyRoute, read);
         await verifyCaveCrossings(c, load, configureMotion, motionRequest, verifyMotion, verifyWorker);
         return;
     }

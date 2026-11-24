@@ -15,11 +15,16 @@ const EXITS = {
 // 198 has no selectable actions; native capture/reset owns it. Exclude shrine197/outdoor206.
 function automaticCaveMap(id) { return [196, 199, 200, 201, 202].includes(id); }
 
-// Owner scope: crystals and puzzle scene triggers only. Checkpoints, pickups
-// and exits retain the ordinary player interaction, even inside these rooms.
+// Owner scope: crystals and puzzle scene triggers, plus the exact chase
+// terminal. Stopping before201:2 leaves Wendy exposed to the pursuing guard.
+// All other exits, checkpoints and pickups remain player-owned.
 function automaticCaveAction(action) {
-    return !!action && automaticCaveMap(action.origin) &&
-        !!(action.crystal || action.line || action.chase !== undefined || action.stairs);
+    if (!action || !automaticCaveMap(action.origin)) return false;
+    const transfer = action.list?.[6];
+    const chaseTerminal = action.origin === 201 && action.event?._eventId === 2 &&
+        action.exit === EXITS[201][2] && transfer?.code === 201 &&
+        transfer.parameters?.[0] === 0 && transfer.parameters[1] === 202;
+    return !!(action.crystal || action.line || action.chase !== undefined || action.stairs || chaseTerminal);
 }
 
 const LINE = [9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];

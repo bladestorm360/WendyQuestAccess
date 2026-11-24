@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { createCaveProgress } = require('../src/world/puzzles/cave-progression');
+const { createCaveProgress, acceptedAction, automaticCaveAction } = require('../src/world/puzzles/cave-progression');
 const { captureWorld } = require('../src/world/snapshot');
 const { solveRoute } = require('../src/world/routes.cjs');
 
@@ -54,6 +54,23 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
     function expectLocal(outcome) {
         assert.deepEqual(progress.settle(scene), { outcome, arrived: false });
         assert.equal(progress.settle(scene), null);
+    }
+
+    // Use the real native pages: exactly one exit may be automatic.
+    for (const [map,id] of [[196,20],[196,22],[199,3],[199,26],[200,2],[200,11],
+        [201,1],[201,2],[202,4],[197,10],[206,11]]) {
+        const fixture = load(map);
+        const action = acceptedAction(c,scene,fixture.gameMap._events[id]);
+        assert.equal(automaticCaveAction(action),map===201 && id===2,
+            `Only the final chase exit is automatic, checked ${map}:${id}`);
+        if (map===201 && id===2) {
+            assert(action);
+            const list = action.list.slice();
+            list[6] = {code:201,parameters:[0,197,8,23,0,0]};
+            assert(!automaticCaveAction({...action,list}), 'changed transfer target cannot inherit chase authority');
+            assert(!automaticCaveAction({...action,origin:202}), 'other maps cannot inherit chase authority');
+            assert(!automaticCaveAction({...action,event:{_eventId:1}}), 'previous-room exit stays manual');
+        }
     }
 
     for (const id of [22, 24]) {
