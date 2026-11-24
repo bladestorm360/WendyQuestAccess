@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([string]$ResourceReceipt = (Join-Path $PSScriptRoot '../.build/installer/runtime-budget.json'))
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $folder = Join-Path $root '.build/installer'
@@ -22,5 +22,5 @@ cl /nologo /std:c++17 /O2 /MT /GS /sdl /guard:cf /W4 /EHsc /Fo"$folder/runtime-h
 exit /b %errorlevel%
 "@
 [IO.File]::WriteAllText($script, ($body -replace "`r?`n", "`r`n"), [Text.Encoding]::ASCII)
-& python (Join-Path $root 'tools/run-build.py') --memory-mb 512 --wait-seconds 180 -- cmd.exe /d /c $script
+& python (Join-Path $root 'tools/run-build.py') --memory-mb 512 --wait-seconds 180 --receipt $ResourceReceipt -- cmd.exe /d /c $script
 exit $LASTEXITCODE

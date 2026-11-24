@@ -33,7 +33,7 @@ namespace WendyQuestAccessInstaller {
    }catch(Exception error) {
     string result=Json.Serialize(new {ok=false,message=error.Message});string report=Option(args,"--report");
     if(report!=null)File.WriteAllText(report,result,new UTF8Encoding(false));
-    else MessageBox.Show(error.Message,"Wendy Quest Access installer",MessageBoxButtons.OK,MessageBoxIcon.Error);
+    else MessageBox.Show(error.Message,"Wendy Quest Screen Reader installer",MessageBoxButtons.OK,MessageBoxIcon.Error);
     return 1;
    }
   }
@@ -166,9 +166,9 @@ namespace WendyQuestAccessInstaller {
   readonly ComboBox action=new ComboBox();readonly Button start=new Button(),browse=new Button(),readme=new Button(),close=new Button();
   bool busy;
   public InstallerForm() {
-   Text="Wendy Quest Access installer";Size=new Size(650,490);MinimumSize=Size;StartPosition=FormStartPosition.CenterScreen;
+   Text="Wendy Quest Screen Reader installer";Size=new Size(650,490);MinimumSize=Size;StartPosition=FormStartPosition.CenterScreen;
    Font=new Font("Segoe UI",11);AutoScaleMode=AutoScaleMode.Font;
-   heading.ReadOnly=true;heading.Multiline=true;heading.BorderStyle=BorderStyle.None;heading.Text="Wendy Quest Access "+((Dictionary<string,object>)Setup.Json.DeserializeObject(Setup.Resource("release.json")))["version"]+"\r\nInstall, verify or remove the accessibility mod. Save and close the game first.";
+   heading.ReadOnly=true;heading.Multiline=true;heading.BorderStyle=BorderStyle.None;heading.Text=((Dictionary<string,object>)Setup.Json.DeserializeObject(Setup.Resource("release.json")))["displayName"]+"\r\nInstall, verify or remove the accessibility mod. Save and close the game first.";
    heading.AccessibleName="Installer instructions";heading.SetBounds(20,16,590,66);heading.TabIndex=0;
    var label=new Label{Text="&Game folder",AutoSize=true,Location=new Point(20,96)};
    folder.SetBounds(20,122,480,28);folder.AccessibleName="Game folder";folder.TabIndex=1;folder.Text=Setup.DetectGame();
@@ -179,7 +179,7 @@ namespace WendyQuestAccessInstaller {
    status.SetBounds(20,224,590,150);status.TabIndex=4;status.Text="Ready. Saves and mod preferences are retained.";
    start.Text="&Continue";start.SetBounds(20,394,140,36);start.TabIndex=5;start.Click+=Begin;
    readme.Text="&ReadMe";readme.SetBounds(180,394,140,36);readme.TabIndex=6;readme.Click+=delegate{
-    using(var text=new Form{Text="Wendy Quest Access ReadMe",Size=new Size(760,620),StartPosition=FormStartPosition.CenterParent}){
+    using(var text=new Form{Text="Wendy Quest Screen Reader ReadMe",Size=new Size(760,620),StartPosition=FormStartPosition.CenterParent}){
      var box=new TextBox{Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,Dock=DockStyle.Fill,Text=Setup.Resource("ReadMe.txt"),AccessibleName="ReadMe",WordWrap=true};
      text.Controls.Add(box);text.Shown+=delegate{box.Focus();box.SelectionStart=0;box.SelectionLength=0;};text.ShowDialog(this);}};
    close.Text="&Close";close.SetBounds(470,394,140,36);close.TabIndex=7;close.Click+=delegate{Close();};

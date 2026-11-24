@@ -55,6 +55,7 @@ def main():
     for key,file in [('tilesets','Tilesets.json'),('commonEvents','CommonEvents.json'),('mapInfos','MapInfos.json')]:inputs['package.nw/data/'+file]=manifest[key]
     runtime={name:file_sha(install.GAME/name) for name in ['node.dll','nw.dll','nw_elf.dll','ffmpeg.dll','v8_context_snapshot.bin']}
     release={'schema':1,'version':args.version,'source':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+             'displayName':'Wendy Quest Screen Reader V'+args.version.split('-')[0].removesuffix('.0')+(' - private test build' if '-test-build' in args.version else ''),
              'development':bool(dirty),'build':install.BUILD,'plan':plan,'inputs':inputs,'runtime':runtime,
              'files':inventory(package),'bakerModules':modules}
     config=stage/'release.json';config.write_text(json.dumps(release,sort_keys=True,indent=2)+'\n',encoding='utf8')
@@ -64,7 +65,7 @@ def main():
             if p.is_file():zip.write(p,p.relative_to(package).as_posix())
     readme=stage/'ReadMe.txt';readme.write_bytes(text_readme())
     notices=stage/'ThirdPartyNotices.txt';notices.write_text(
-      'Wendy Quest Access - third-party notices\n\nOriginal mod implementation: bladestorm360.\n'
+      'Wendy Quest Screen Reader - third-party notices\n\nOriginal mod implementation: bladestorm360.\n'
       'Game files, artwork, runtime and generated map geometry are not distributed.\n'
       'Navigation WAVs: author-owned FFPR Core default cue bank; pinned input hashes are retained in source.\n'
       'Voiced descriptions: original captions, Microsoft Zira Desktop synthesis, Opus encoding.\n\n'
@@ -72,8 +73,8 @@ def main():
         for p in sorted(payload.rglob('*')) if p.is_file() and ('LICENSES' in p.parts or p.parent.name=='audio-deps' and p.suffix=='.txt'))+'\n',encoding='utf8')
     version=args.version.split('-')[0]+'.0'
     meta=stage/'AssemblyInfo.cs';meta.write_text('using System.Reflection;\n'
-       '[assembly: AssemblyTitle("Wendy Quest Access installer")]\n'
-       '[assembly: AssemblyProduct("Wendy Quest Access")]\n'
+       '[assembly: AssemblyTitle("Wendy Quest Screen Reader installer")]\n'
+       '[assembly: AssemblyProduct("Wendy Quest Screen Reader")]\n'
        f'[assembly: AssemblyVersion("{version}")]\n[assembly: AssemblyFileVersion("{version}")]\n'
        f'[assembly: AssemblyInformationalVersion("{args.version}+{release["source"]}")]\n',encoding='utf8')
     exe=stage/'WendyQuestAccessSetup.exe'

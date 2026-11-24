@@ -3,7 +3,8 @@ param(
     [string]$PrismArchive = (Join-Path $PSScriptRoot '.deps/prism-windows-x64.zip'),
     [string]$AudioSdkRoot = (Join-Path $PSScriptRoot '.deps/audio-sdk'),
     [switch]$VerifySpeechPipe,
-    [switch]$VerifyAudio
+    [switch]$VerifyAudio,
+    [string]$ResourceReceipt = (Join-Path $PSScriptRoot ' .build/native-build-budget.json'.Trim())
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,5 +18,5 @@ $payloadBuilder = Join-Path $PSScriptRoot 'tools/build.py'
 $buildArguments = @('--prism-archive', $PrismArchive, '--vcvars', $vcvars, '--audio-sdk', $AudioSdkRoot)
 if ($VerifySpeechPipe) { $buildArguments += '--verify-speech-pipe' }
 if ($VerifyAudio) { $buildArguments += '--verify-audio' }
-& python $runner --memory-mb 512 -- python $payloadBuilder @buildArguments
+& python $runner --memory-mb 512 --receipt $ResourceReceipt -- python $payloadBuilder @buildArguments
 exit $LASTEXITCODE
