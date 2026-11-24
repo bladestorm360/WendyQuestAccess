@@ -208,6 +208,20 @@ function islandDismount(entry, page) {
     return { map: 113, x: 46, y: 2, facing: 6, sameScene: true, name: 'Secret Island boat landing' };
 }
 
+// Exact native boarding transfer, kept out of the on-foot static graph.
+function boatBoarding(entry,page,common) {
+    const list=page?.list;
+    if(entry?.id!==5 || entry.pages?.[1]!==page || page.trigger!==1 || page.priorityType!==0 ||
+        page.conditions.switch1Id!==38 || !page.conditions.switch1Valid || list?.length!==15 ||
+        !parametersAre(list[0],[250,250,0]) || !parametersAre(list[1],[221,221,0]) ||
+        !parametersAre(list[2],[81,81,0,0,0]) || !common?.[139]?.list ||
+        list[3]?.code!==357 || list[3].parameters[0]!=='Ayatam_HighQualityQuestSystem' ||
+        list[3].parameters[1]!=='completeQuestObjective' || list[6]?.code!==111 ||
+        list[7]?.code!==357 || list[7].parameters[1]!=='startQuest' || list[10]?.code!==123)return null;
+    const edge=transferTo(list[13],26);
+    return landingIs(edge,113,17,6)&&edge.direction===6 ? {...edge,name:'Boat boarding',boards:true}:null;
+}
+
 const SHIP_PORTS = {
     30: { map: 26, x: 29, y: 14, direction: 0, facing: 4, turn: 17, name: 'Float Fort port' },
     31: { map: 49, x: 2, y: 13, direction: 2, facing: 6, turn: 18, name: 'Breaded Bay port' }
@@ -757,5 +771,5 @@ function pageMayTransfer(page, common) {
     return found;
 }
 
-module.exports = { pageMayTransfer, houseStair, houseBranches, transferOptions, catalogTransferOptions, cauldronIntroductionFinished,
+module.exports = { boatBoarding, pageMayTransfer, houseStair, houseBranches, transferOptions, catalogTransferOptions, cauldronIntroductionFinished,
     SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount, worldDiscovery, worldFacingEntrances };

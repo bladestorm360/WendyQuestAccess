@@ -124,6 +124,7 @@ def bundle():
         './event-knowledge': 'world/event-knowledge.js',
         './event-contexts.json': 'world/event-contexts.json',
         './transfer-bookmarks': 'world/transfer-bookmarks.js',
+        './boat-journey': 'world/boat-journey.js',
         './local-detour': 'world/local-detour.js',
         './airship-journey': 'world/airship-journey.js',
         './transfer-events.cjs': 'world/transfer-events.cjs',

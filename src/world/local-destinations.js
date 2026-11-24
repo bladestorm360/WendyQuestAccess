@@ -263,7 +263,20 @@ function floorClearsOnUse(entry,page) {
                 return matches&&next.priorityType===0&&next.list.length===2&&next.list[0].code===214&&next.list[1].code===0;
             }));
         }
-        floorCompletions.set(page,!!clears);
+        // The first secret-route glitch erases itself on both branches.
+        // Its two common events are the already qualified visual filter pair;
+        // it cannot transfer, fight, offer a choice or become a lasting wall.
+        const glitch=entry.id===189 && entry.name==='SecretEndingGlitch1' && page===entry.pages[0] &&
+            page.list.length===15 && [111,117,250,230,117,101,401,121,214,0,411,214,0,412,0]
+                .every((code,i)=>page.list[i].code===code) &&
+            page.list[0].parameters.join(',')==='0,452,1' &&
+            page.list[1].parameters.join(',')==='40' && page.list[4].parameters.join(',')==='41' &&
+            page.list[7].parameters.join(',')==='452,452,0';
+        const simpleGlitch=/^SecretEndingGlitch\d+$/.test(entry.name||'') && page===entry.pages[0] &&
+            page.list.length===9 && [117,250,230,117,101,401,121,214,0].every((code,i)=>page.list[i].code===code) &&
+            page.list[0].parameters.join(',')==='40' && page.list[3].parameters.join(',')==='41' &&
+            page.list[6].parameters[0]===page.list[6].parameters[1] && page.list[6].parameters[2]===0;
+        floorCompletions.set(page,!!clears||glitch||simpleGlitch);
     }
     return floorCompletions.get(page);
 }

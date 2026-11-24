@@ -127,6 +127,21 @@ def fixture(runtime, installed):
     (app / 'fixture.js').write_text('''
 const receipt = require('path').join(require('path').dirname(process.mainModule.filename), 'receipt.json');
 const write = data => require('fs').writeFileSync(receipt, JSON.stringify(data));
+// Decode the exact new Opus bytes on the pinned Chromium host, silently and
+// sequentially. Native producer/paint/ordering tests are separate fixtures.
+(async()=>{
+    const fs=require('fs'),pack=fs.readFileSync('wendyquest-access/narration.webmpack');
+    const rows=JSON.parse(fs.readFileSync('caption-voices.json','utf8'));
+    const decoder=new OfflineAudioContext(1,1,48000),decoded=[];
+    for(const [id,offset,length] of rows){
+        const bytes=Uint8Array.from(pack.subarray(offset,offset+length));
+        const audio=await decoder.decodeAudioData(bytes.buffer);
+        if(!(audio.duration>0))throw Error('Empty caption audio: '+id);
+        decoded.push({id,seconds:audio.duration});
+    }
+    fs.writeFileSync(receipt+'.caption-voices',JSON.stringify(decoded));
+})().catch(error=>{write({error:String(error)});nw.App.quit();});
+
 window.addEventListener('error', event => { write({ error: event.message }); nw.App.quit(); });
 document.hasFocus = () => true;
 var Utils = { RPGMAKER_NAME: 'MZ', RPGMAKER_VERSION: '1.8.0' };
@@ -2846,6 +2861,16 @@ parentPort.on('message', message => {
         shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / name, service / name)
     shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'narration.webmpack',
                     service / 'narration.webmpack')
+    catalog=json.loads((ROOT/'src/dialogue/narration-cues.json').read_text(encoding='utf8'))
+    pack=(service/'narration.webmpack').read_bytes();offset=4*len(catalog);rows=[]
+    selected={'shrine-lights','shrine-reunion','grunt-ambush','party-jailed','jail-impact',
+              'sir-chicken-advances','chomps-walks-away','jail-breach','ability-upgrade'}
+    for index,name in enumerate(catalog):
+        length=struct.unpack_from('<I',pack,4*index)[0]
+        if name in selected:rows.append([name,offset,length])
+        offset+=length
+    if len(rows)!=9 or offset!=len(pack):raise ValueError('Caption decode catalog differs from exact pack')
+    (app/'caption-voices.json').write_text(json.dumps(rows),encoding='utf8')
     shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'audio-worker.cjs', service / 'production-audio-worker.cjs')
     (service / 'audio-worker.cjs').write_text('''
 const { parentPort } = require('worker_threads');
@@ -3140,6 +3165,10 @@ def main():
         if not sleep.get('naturalEnd') or not sleep.get('pausedDuringLoading'):
             raise RuntimeError('Incomplete slow sleep continuation')
         print('Verified the full original sleep recording at80 percent across the actual30-frame fade, native transfer, paused loading and the next ready scene, retaining its playhead through natural completion.')
+        caption_voices=json.loads(receipt.with_suffix('.json.caption-voices').read_text(encoding='utf8'))
+        if len(caption_voices)!=9 or any(not row['seconds']>0 for row in caption_voices):
+            raise RuntimeError('New caption recordings failed exact packaged Chromium decoding')
+        print('Verified all nine new/changed shrine, jail and upgrade recordings decode in the pinned Chromium host.')
         skill_voices = receipt.with_suffix('.json.skill-voices').read_text(encoding='utf8').splitlines()
         if len(skill_voices) != 13 or len({line.split()[0] for line in skill_voices}) != 13:
             raise RuntimeError('Not every requested skill recording decoded')

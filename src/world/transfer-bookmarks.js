@@ -1,6 +1,6 @@
 'use strict';
 
-const { transferOptions, cauldronIntroductionFinished, SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount,
+const { boatBoarding, transferOptions, cauldronIntroductionFinished, SHIP_PORTS, shipPort, ISLAND_DOCK, islandDismount,
     worldDiscovery } = require('./transfer-events.cjs');
 const { discoveryEntrance, worldEntranceRevealed } = require('./world-destinations');
 const { travelMode, vehicleOnMap } = require('./vehicle-navigation');
@@ -20,7 +20,8 @@ function liveEntrances(root, event, state, mode, spoilers) {
     const common = root.$dataCommonEvents;
     const craft = mode === 'ship' && vehicleOnMap(map, mode);
     let choices = [];
-    if (mode === 'walk') choices = transferOptions(map._mapId, entry, page, common).filter(edge => gateAllows(edge.gate, state));
+    if (mode === 'walk') choices = map._mapId===26&&id===5 ? [boatBoarding(entry,page,common)] :
+        transferOptions(map._mapId, entry, page, common).filter(edge => gateAllows(edge.gate, state));
     else if (craft && id === ISLAND_DOCK && root.$gameSwitches?.value?.(224) === false)
         choices = [islandDismount(entry, page)];
     else if (craft) choices = [shipPort(entry, page, common)];
@@ -136,7 +137,8 @@ function createTransferBookmarks(root, host) {
             vehicleOnMap(root.$gameMap, 'ship') !== edge.craft || edge.craft._driving !== false)) return clear();
         const firstCauldronWalk = map === 32 && (direction || player._direction) === 2 &&
             root.$gameSelfSwitches?.value?.([32, 5, 'A']) === false;
-        pending = { scene, player, ownerMap: root.$gameMap, map, x, y, bookmark, firstCauldronWalk };
+        pending = { scene, player, ownerMap: root.$gameMap, map, x:edge.boards?18:x, y, bookmark, firstCauldronWalk,
+            ...(edge.boards?{boarding:true,reservedX:x,reservedY:y}:{}) };
     }
 
     function settle(scene) {
@@ -149,9 +151,16 @@ function createTransferBookmarks(root, host) {
         }
         if (!pending) return null;
         const landing = pending;
+        // Native boat boarding may settle its walking transfer one update
+        // before the vehicle mount. Retain only that exact ready position;
+        // navigation never presses the boarding action or waits for it.
+        if(landing.boarding && root.$gamePlayer===landing.player && root.$gameMap===landing.ownerMap &&
+            root.$gameMap._mapId===landing.map && root.$gamePlayer._x===landing.reservedX &&
+            root.$gamePlayer._y===landing.reservedY && travelMode(root.$gameMap,root.$gamePlayer)==='walk')return null;
         clear();
         const player = root.$gamePlayer;
         const { bookmark, map, x, y } = landing;
+        if (landing.boarding && (travelMode(root.$gameMap,player)!=='ship' || player._vehicleGettingOn)) return null;
         if ((scene === landing.scene) !== !!landing.sameScene || player !== landing.player || root.$gameMap !== landing.ownerMap ||
             root.$gameMap._mapId !== map || player._x !== x ||
             (landing.discovery && !discoveryComplete(root, landing.discovery))) return null;
@@ -229,7 +238,15 @@ function createTransferBookmarks(root, host) {
                 scene._wqaBookmarkEntrance = false;
                 scene._wqaBookmarkLanding = false;
             }
-            if (!retain && (approach?.scene === scene || (pending && pending.scene !== scene))) clear();
+            // A reserved native transfer owns its inert ticket while the new
+            // scene creates/preloads resources. Never mistake destination
+            // initialization for an unrelated old-scene cancellation.
+            const player=root.$gamePlayer;
+            const entering=pending && !pending.edge && pending.scene!==scene && pending.player===player &&
+                root.$gameMap===pending.ownerMap &&
+                (player._transferring && player._newMapId===pending.map && player._newX===(pending.reservedX??pending.x) && player._newY===(pending.reservedY??pending.y) ||
+                 root.$gameMap._mapId===pending.map && (player._x===pending.x || pending.boarding && player._x===pending.reservedX) && player._y===pending.y);
+            if (!retain && !entering && (approach?.scene === scene || (pending && pending.scene !== scene))) clear();
         }
     };
 }

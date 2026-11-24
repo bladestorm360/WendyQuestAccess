@@ -29,7 +29,15 @@ function transferMap(id, map, geometry, flags, common) {
             pages.some(page => page.trigger === 1 && page.list.length === 2 &&
                 page.list[0]?.code === 214 && page.list[1]?.code === 0 &&
                 Object.entries(page.conditions).some(([key, value]) => key.endsWith('Valid') && value === true));
-        if (clearedEncounter || clearedFloorScene) continue;
+        // Float Fort's entrance actor runs an unavoidable native arrival
+        // scene, walks away and enables its erase page before field control.
+        // Keeping its initial body here falsely cuts the town in half.
+        const fortArrival=id===26 && event===4 && pages.length===2 && pages[0].trigger===3 &&
+            pages[0].conditions.switch1Valid && pages[0].conditions.switch1Id===38 &&
+            pages[1].conditions.switch1Valid && pages[1].conditions.switch1Id===250 &&
+            pages[1].list.length===2 && pages[1].list[0].code===214 &&
+            pages[0].list.some(row=>row.code===121 && row.parameters.join(',')==='250,250,0');
+        if (clearedEncounter || clearedFloorScene || fortArrival) continue;
 
         const cell = indexOf(geometry, x, y);
         if (cell < 0) continue;

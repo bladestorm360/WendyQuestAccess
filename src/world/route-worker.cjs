@@ -273,6 +273,12 @@ parentPort.on('message', message => {
                     request.terrainTransfer, cancelled));
                 result = routeThroughTerrain(base, live, request, manifest.maps[map].controls, cancelled, access) || result;
             }
+            if(request.boatFallback && map===113 && live.mode==='walk' &&
+                ['unreachable','approachBlocked'].includes(result.status)) {
+                const boat=transferRoute(base,map,live,request,request.boatFallback,cancelled);
+                if(boat && ['ready','enemyBlocked','iceRoute','controlRoute','interrupted','npcBlocked'].includes(boat.status))
+                    result={...boat,boatFallback:true};
+            }
             if (request.detour && live.mode === 'walk' && !request.motion && !request.area &&
                 (['unreachable', 'approachBlocked'].includes(result.status) ||
                     result.status === 'interrupted' && result.boundaryEvent !== request.event &&
