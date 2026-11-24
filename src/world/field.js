@@ -600,7 +600,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 if (!job.timing)
                     return status(job, host.graphics._wqaCaveTimingEnabled ?
                         'Cave timing audio is unavailable. Request directions again.' :
-                        'This crossing uses Cave timing cues in Audio. Turn them on and request directions.');
+                        'This crossing uses Cave timing assist in Secret Island settings. Turn it on and request directions.');
                 const { legs, more, activate, facing } = result;
                 const endText = more ? undefined : activate ?
                     '1 ' + PATROL_HEADINGS[activate] + '.' :

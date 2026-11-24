@@ -63,4 +63,6 @@ Static PE inspection confirmed x64 for the addon and both audio SDKs. The addon 
 
 ## Cave crossing direction
 
+Cave timing assist, its volume and ping preview are under F8 → Secret Island, visible only on the outside island and cave field maps. Existing saved audio keys/values are retained. Global Audio and Sound previews omit cave controls.
+
 The cave cue uses the same compass directions as the route beacon. A westward start plays on the left and an eastward start on the right. North is centered. South uses the rear position and a pitch of 88 percent in either stereo or HRTF. Stereo puts both north and south in the center. The first ping points along the first leg. The ping moves to the direction of each next leg after Wendy takes the matching steps. [Cave crossing controls](puzzles-and-secrets.md#live-crossing-cues) · [Native cue rendering](../src/services/windows/spatial-cue.hpp)
