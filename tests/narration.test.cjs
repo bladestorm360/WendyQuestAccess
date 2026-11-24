@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 159);
+assert.equal(Object.keys(clips).length, 160);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -36,7 +36,7 @@ for (const [id, { beats }] of Object.entries(cues)) {
         }
     }
 }
-assert.equal(locators.size, 295);
+assert.equal(locators.size, 296);
 assert.match(cues['party-vanishes'].text, /gather into her.*party fits on the elevator/);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
@@ -515,7 +515,7 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 159 clips, 295 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 160 clips, 296 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
 
 require('./finale-narration.cjs')(fixture, commandContext, stock);
 require('./screen-jolt.cjs')(fixture, commandContext, stock);
@@ -531,6 +531,7 @@ require('./tyler-audit.cjs')(fixture,stock);
 require('./screen-glitch.cjs')(fixture,stock);
 require('./skill-visuals.cjs')(fixture,stock);
 require('./guard-visuals.cjs')(fixture,stock,process.argv[3]||stock);
+require('./ice-machine-entry.cjs')(fixture,commandContext);
 
 // Momentum descriptions use the native branch, actual rendered crystal and
 // the established FIFO; a later crystal cannot interrupt the first recording.

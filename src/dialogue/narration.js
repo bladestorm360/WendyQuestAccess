@@ -24,8 +24,8 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//159 original recordings; measured pack 1,949,192 bytes.
-const PACK_LIMIT = 1904 * 1024;
+//160 original recordings; measured pack 1,971,103 bytes.
+const PACK_LIMIT = 1928 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -411,6 +411,16 @@ function createNarration(root, host, preferences) {
 
     function mechEntry(scene) {
         const map = root.$gameMap, interpreter = map?._interpreter;
+        // The Ice Cream Machine's portrait preload can hide its initial route
+        // request too. Recover only this exact still-running jump/landing beat.
+        if (map?._mapId === 27) {
+            if (!voiceReady() || !enabled() || !ready(scene) || scene._wqaIceMachineEntrySeen ||
+                interpreter?._eventId !== 29 || interpreter._index < 1 || interpreter._index > 20 ||
+                interpreter._list !== root.$dataMap?.events?.[29]?.pages?.[0]?.list ||
+                owner?.scene === scene && owner.queue.some(state => state.sourceKey === '27/29/0/1')) return;
+            accepted(scene, interpreter, map._events[29], undefined, -6, 1, true);
+            return;
+        }
         if (!voiceReady() || !enabled() || !ready(scene) || map?._mapId !== 16 ||
             interpreter?._eventId !== 39 || interpreter._index < 7 || interpreter._index > 22 ||
             interpreter._list !== root.$dataMap?.events?.[39]?.pages?.[0]?.list) return;
@@ -699,6 +709,7 @@ function createNarration(root, host, preferences) {
                     state.idle.visible(scene, map, root.$gamePlayer) : visibleActorCue(scene, state);
                 if(state.confirmed && state.visual===-9)glitches.confirm(state);
                 if (state.confirmed && state.bit) scene._wqaIdleNarrationMask |= state.bit;
+                if (state.confirmed && state.id === 'ice-machine-arrives') scene._wqaIceMachineEntrySeen = true;
                 if(state.confirmed && state.id==='tyler-arrives') {
                     scene._wqaTylerEntrySeen=state.sourceKey;scene._wqaTylerEntryMap=map._mapId;
                     if(state.sourceKey==='181/15/2/0')scene._wqaTylerEntryObserved=true;

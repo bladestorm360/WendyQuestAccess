@@ -4102,5 +4102,19 @@
   "skill-guard": {
     "text": "Wendy braces behind her crossed spatulas.",
     "beats": []
+  },
+  "ice-machine-arrives": {
+    "text": "The Ice Cream Machine leaps into view, landing with a crash that shakes the ground.",
+    "beats": [
+      [
+        27,
+        29,
+        0,
+        1,
+        29,
+        null,
+        -6
+      ]
+    ]
   }
 }

@@ -533,13 +533,13 @@ def objects_notification(original):
         # After acceptance of an authored actor's route. The rendered actor,
         # current event list and resource gates are checked in the observer.
         286102: b'\n        if(Graphics._wqaNarrationEnabled&&'
-                b'(this._mapId===16||this._mapId===20||this._mapId===63||this._mapId===77||'
+                b'(this._mapId===27&&this._eventId===29&&this._index===1||this._mapId===16||this._mapId===20||this._mapId===63||this._mapId===77||'
                 b'this._mapId===103||this._mapId===106||this._mapId===107||this._mapId===108||'
                 b'this._mapId===110||this._mapId===134||this._mapId===197||this._mapId===97||'
                 b'this._mapId===15&&this._eventId===60||this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
                 b'this._mapId===188||this._mapId===115||this._mapId===39||this._mapId===13))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,'
-                b'(this._mapId===15&&this._eventId===60||this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
+                b'(this._mapId===27&&this._eventId===29&&this._index===1||this._mapId===15&&this._eventId===60||this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
                 b'this._mapId===63&&this._eventId===19||this._mapId===188||this._mapId===115||'
                 b'this._mapId===39||this._mapId===13&&this._eventId===5&&[70,77].includes(this._index))?-6:undefined);',
         # Native emotes, Frostyna's flash, and the two identical door approaches.
@@ -750,7 +750,9 @@ def map_notification(original):
     }
     if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 13 && !this._wqaArrivalObserved)
         globalThis.WendyQuestAccessProloguePresent?.(this);
-    if (Graphics._wqaNarrationEnabled && $gameMap._mapId === 16 && this._wqaMechDoubleNarrationMask !== 3)
+    if (Graphics._wqaNarrationEnabled && ($gameMap._mapId === 16 && this._wqaMechDoubleNarrationMask !== 3 ||
+        $gameMap._mapId === 27 && !this._wqaIceMachineEntrySeen && $gameMap._interpreter?._eventId === 29 &&
+        $gameMap._interpreter._index >= 1 && $gameMap._interpreter._index <= 20))
         globalThis.WendyQuestAccessMechEntryPresent?.(this);
     if (Graphics._wqaNarrationEnabled && this._wqaTylerEntryMap !== $gameMap._mapId &&
         ($gameMap._mapId === 15 && $gameMap._events?.[60]?._pageIndex === 1 ||

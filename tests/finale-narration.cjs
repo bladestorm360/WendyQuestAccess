@@ -61,6 +61,10 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
                 reveal = () => { show();f.nativeMap.filters.rgb = {}; };
             } else if (id.startsWith('tyler-')) reveal = () => actor._jumpCount = 20;
             else if (id === 'prologue-islands' || id === 'prologue-ruins') reveal = () => f.nativeMap._displayX++;
+            else if (id === 'ice-machine-arrives') {
+                actor._characterName = source.sprite._characterName = '~ICM';actor._characterIndex = 5;
+                reveal = () => { actor._jumpCount = 10; };
+            }
             else if (id === 'prologue-emblem') reveal = image(4, 'pictures/MECHBORGLOGO');
             else if (id === 'wendy-wakes') { actor._transparent = true;reveal = () => { actor._transparent = false;f.switches.add(22); }; }
             else if (id === 'wendy-looks-around') reveal = () => actor._direction = 4;

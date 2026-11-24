@@ -47,6 +47,15 @@ function captureFinale(root, scene, id) {
 
 function finaleVisible(root, host, scene, state) {
     const { id } = state;
+    if (id === 'ice-machine-arrives') {
+        const pos = state.sprite?.worldTransform;
+        return state.actor._characterName === '~ICM' && state.actor._characterIndex === 5 &&
+            state.sprite._characterName === '~ICM' && !state.actor._transparent &&
+            renderedSprite(state.sprite, scene._spriteset._tilemap) &&
+            pos?.tx >= 0 && pos.tx <= host.graphics.width && pos.ty >= 0 && pos.ty <= host.graphics.height &&
+            (state.actor._jumpCount > 0 || state.actor._realX === 21 && state.actor._realY === 6 &&
+                (scene._spriteset.x !== state.screenX || scene._spriteset.y !== state.screenY));
+    }
     if (id === 'elder-tater-shout') return renderedSprite(state.sprite, scene._spriteset._tilemap) &&
         (scene._spriteset.x !== state.screenX || scene._spriteset.y !== state.screenY);
     if (id === 'wendy-arrival-ripple') {
