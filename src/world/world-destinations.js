@@ -2,6 +2,7 @@
 
 const { worldFacingEntrances, transferOptions, shipPort } = require('./transfer-events.cjs');
 const { DIRECTIONS } = require('./geometry.cjs');
+const { contextualEvent } = require('./event-knowledge');
 const { vehicleOnMap } = require('./vehicle-navigation');
 
 const RUINS = [162, 207, 164, 208, 165, 166, 161, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176,
@@ -195,7 +196,7 @@ function discoveryEntrance(map, event) {
 function worldBoundaryName(root, id, spoilers) {
     if (root.$gameMap._mapId === 113 && !worldEntranceRevealed(root, id, spoilers)) return '';
     const entrance = discoveryEntrance(root.$gameMap._mapId, root.$gameMap._events?.[id]);
-    return entrance ? 'Discovery marker' : '';
+    return entrance ? contextualEvent(root, root.$gameMap._events[id], {name:'Discovery marker',category:'events'}, spoilers).name : '';
 }
 
 module.exports = { worldDestination, worldEventDescription, worldBoundaryName, discoveryEntrance, worldMapExit, worldEntranceRevealed, FLOAT_FORT_ENTRANCE };

@@ -59,7 +59,7 @@ async function verifyAirshipFoot(c, load, read, verifyWorker) {
         assert(!craft.isLandOk(49,7,2));
         erased._erased=false;erased.setPosition(f.map.events[90].x,f.map.events[90].y);
         let alternate=0,disconnected=0;
-        const markers=walk.objects.filter(t=>t.name==='Discovery marker');
+        const markers=walk.objects.filter(t=>t.category==='events' && t.name.startsWith('Discover '));
         const candidates=markers.map(t=>({event:t.id}));
         for(const t of markers) {
             const request={x:walk.x,y:walk.y,event:t.id,field:true,stopBeforeEvent:true};

@@ -855,7 +855,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
             assert.equal(walking.live.mode, 'walk');
             if (reveal) {
                 await followEntrance(reveal, entrance);
-                assert.match(records.at(-1).name, /Discovery marker toward Walking marker/);
+                assert.equal(records.at(-1).name, require('../src/world/event-contexts.json')['113:'+reveal+':0'][0]+' toward Walking marker');
                 assert.match(formatSpeech(records.at(-1)), /^\d+ (?:north|south|east|west)/);
                 assert.doesNotMatch(formatSpeech(records.at(-1)), /Walking marker/);
                 source.command357 = ([plugin, name, , args]) => {

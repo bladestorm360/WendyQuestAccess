@@ -1,6 +1,7 @@
 'use strict';
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
+const { contextualEvent } = require('./event-knowledge');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
 const { floorClearsOnUse, localDestination, iceOpensPassage, iceMeltChanges, inactiveFloorScene, concealedDestination,
     chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, npcPassage } = require('./local-destinations');
@@ -41,7 +42,7 @@ function eventTarget(root, mode, event, entry, page, spoilers = false, questMark
     // Leave its painted quest waypoint eligible even without an object entry.
     if (target?.category === 'objects' && !questPageHasAction(page)) return undefined;
     if (target && mode === 'airship' && target.category !== 'exits') return null;
-    return worldMapExit(root, mode, event, entry, page, target);
+    return contextualEvent(root, event, worldMapExit(root, mode, event, entry, page, target), spoilers);
 }
 
 function terrainDelta(changes, layers, flags, count) {

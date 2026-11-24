@@ -411,9 +411,12 @@ def objects_notification(original):
     preload = (b'{const wqaPrior=ImageManager._wqaInterpreterPreload;'
                b'ImageManager._wqaInterpreterPreload=true;try{')
     restore_preload = b'}finally{ImageManager._wqaInterpreterPreload=wqaPrior;}}'
+    termination = original.index(b'    this._list = null;', original.index(b'Game_Interpreter.prototype.terminate = function()'))
     companions_entry = original.index(b'        this.setupChild(commonEvent.list, eventId);') + len(
         b'        this.setupChild(commonEvent.list, eventId);')
     return insert(original, OBJECTS_SHA, {
+        termination: b'    if(this===$gameMap?._interpreter&&SceneManager._scene?._wqaMapRestored)'
+                     b'globalThis.WendyQuestAccessEventCompleted?.(SceneManager._scene,this);\n',
         companions_entry: b'\n        if(Graphics._wqaNarrationEnabled&&params[0]===65&&'
                           b'this._mapId===98&&this._eventId===19&&this._index===34&&'
                           b'this._childInterpreter?._list===commonEvent.list)'
@@ -795,7 +798,7 @@ def map_notification(original):
             wqaIcon.scale.x > 0 && wqaIcon.children[0]?.texture?.valid))
             globalThis.WendyQuestAccessInteractionUpdate?.(this, wqaIcon);
         if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaCaveAutoPending || Graphics._wqaCaveChasePending || Graphics._wqaCaveManualPending ||
-            Graphics._wqaBookmarkTransferPending) &&
+            Graphics._wqaBookmarkTransferPending || Graphics._wqaEventKnowledgePending) &&
             !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||
             (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||

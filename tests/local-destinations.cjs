@@ -291,7 +291,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 assert.equal(gate, undefined, 'finished guard page is retired');
                 continue;
             }
-            assert.equal(gate?.name, stage === variants ? final : 'Scene trigger', id + '/' + stage);
+            assert.equal(gate?.name, stage === variants ? final : require('../src/world/event-contexts.json')[id + ':' + event + ':' + c.$gameMap._events[event]._pageIndex][0], id + '/' + stage);
             const path = solveRoute(location.geometry, view.live, { x: view.x, y: view.y, event, field: true,
                 handoffs: gate.handoffs });
             assert.equal(path.status, 'ready', id + '/' + stage);
@@ -641,7 +641,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     for (const id of [78, 90, 124, 159, 185]) {
         const entries = view.objects.filter(item => item.id === id);
         assert.deepEqual(entries.map(({ name, category, eventAction }) => [name, category, eventAction]),
-            [[id <= 124 ? 'Discovery marker' : id === 159 ? 'Encounter trigger' : 'Scene trigger', 'events', 'step']]);
+            [[require('../src/world/event-contexts.json')['113:' + id + ':0'][0], 'events', 'step']]);
     }
     const ruinsAmbush = load(172);
     ruinsAmbush.player.setPosition(5, 5);

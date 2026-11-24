@@ -26,6 +26,7 @@ const { createTreasureReward } = require('./world/treasure-reward');
 const { createAutosaveNotice } = require('./world/autosave-notice');
 const { createVehicleNotice } = require('./world/vehicle-navigation');
 const { createField } = require('./world/field');
+const eventKnowledge = require('./world/event-knowledge');
 const { createFieldDiagnostics } = require('./world/field-diagnostics');
 const { createWallAudio } = require('./world/wall-audio');
 const { createFootsteps } = require('./world/footsteps');
@@ -450,7 +451,10 @@ function boot(root, nodeRequire, nodeProcess) {
                 else if (context.kind === 'credits') credits.command(context.scene, action);
             }
         });
-        host.dialoguePresented = field.dialoguePresented;
+        host.dialoguePresented = (scene, paint) => {
+            try { eventKnowledge.dialoguePresented(root, scene, paint); } catch { /* Preserve native dialogue speech. */ }
+            field.dialoguePresented(scene, paint);
+        };
         root.WendyQuestAccessPadSample = function (index, mapping, id, pressed, axisX, axisY) {
             try { return controller.sample(index, mapping, id, pressed, axisX, axisY); } catch { return 0; }
         };
@@ -790,7 +794,8 @@ function boot(root, nodeRequire, nodeProcess) {
         if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaCaveProgressPending &&
             !root.Graphics._wqaCaveAutoPending && !root.Graphics._wqaCaveChasePending && !root.Graphics._wqaCaveManualPending &&
             !root.Graphics._wqaBookmarkTransferPending && !root.Graphics._wqaWallEnabled &&
-            !root.Graphics._wqaFootstepsEnabled && !root.Graphics._wqaCaveTimingEnabled) ||
+            !root.Graphics._wqaFootstepsEnabled && !root.Graphics._wqaCaveTimingEnabled &&
+            !root.Graphics._wqaEventKnowledgePending) ||
             fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||
             !root.document.hasFocus()) return;
         const renderer = root.Graphics.app?.renderer;
@@ -804,12 +809,17 @@ function boot(root, nodeRequire, nodeProcess) {
                 root.SceneManager._wqaNativeAutosaves || !root.document.hasFocus()) return;
             try {
                 if (!field) initialize();
+                eventKnowledge.commitReady(root, scene);
                 field.observeReady(scene);
                 if (root.Graphics._wqaWallEnabled) wall.arm(scene);
                 if (root.Graphics._wqaFootstepsEnabled) footsteps.arm(scene);
                 if (root.Graphics._wqaCaveTimingEnabled) caveTiming.warm(scene);
             } catch { /* Native field input remains available. */ }
         });
+    };
+
+    root.WendyQuestAccessEventCompleted = function (scene, interpreter) {
+        try { eventKnowledge.completed(root, scene, interpreter); } catch { /* Native termination always continues. */ }
     };
 
     root.WendyQuestAccessCaveEventAccepted = function (scene, event) {

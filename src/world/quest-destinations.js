@@ -94,7 +94,7 @@ function collectQuestDestinations(root, scene, mode) {
 
 function questDestinationLabel(entry, lease, ordinary) {
     const safe = ordinary || destination(entry, lease.page, lease.trigger, lease.map?._mapId);
-    const name = (safe?.category !== 'events' && safe?.name) || treasureName(entry, lease.page) ||
+    const name = ((safe?.category !== 'events' || safe?.eventContext) && safe?.name) || treasureName(entry, lease.page) ||
         (lease.waypoint ? eventName(entry) : '');
     if (lease.waypoint) {
         const anchor = name.replace(/^quest\s*marker\s*/i, '');
