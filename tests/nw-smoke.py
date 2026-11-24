@@ -594,7 +594,7 @@ const interval = setInterval(() => {
             tap('Escape');
             tap('Escape');
             choose('Audio');
-            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 20).map(item => item.textContent);
+            const audio = Array.from(document.querySelectorAll('dialog button')).slice(0, 17).map(item => item.textContent);
             const narration = Array.from(document.querySelectorAll('dialog button'))
                 .map(button => button.textContent).filter(line => /Cutscene descriptions|cutscene description/i.test(line));
             choose('Soundscape');
