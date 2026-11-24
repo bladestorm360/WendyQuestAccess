@@ -826,6 +826,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     const leg = chaseGuide.approach(job.scene, result);
                     if (leg) return present(job, leg);
                 }
+                // A route can expose only its first eight legs. Its event
+                // boundary is still farther away; walk this safe prefix and
+                // recapture before adding the final interaction step.
+                if(job.caveWalk && result.more)return startCaveSegment(job,result.legs,null,false,undefined,true);
                 if (job.caveWalk && result.boundary && caveAction(job.scene, root.$gameMap._events[result.boundaryEvent]))
                     return startCaveSegment(job, [...result.legs, { direction: result.boundary, tiles: 1 }],
                         null, true, result.boundaryEvent, true);
@@ -1588,15 +1592,17 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             const result = guideFor(job.scene)?.review(job.scene, snapshot.objects, snapshot.x, snapshot.y);
             if (!result) return retire(job.scene);
             if (!result.target) return status(job, result.text);
-            // Recovery guidance must use the configured automatic mode too.
-            // The room exit already owns verified crystal/checkpoint routing;
-            // manual guide options would strand automatic travel at a crystal.
-            const automaticExit = snapshot.map === 200 && preferences().autowalk &&
-                snapshot.objects.find(target => target.id === 11 && target.category === 'exits');
+            // Shift+G shares the configured movement mode in every cave room.
+            // Its room exit retains the verified prerequisite/event route;
+            // manual guide alternatives must not silently override Autowalk.
+            // The separate full-solve toggle owns pickups and automatic exits.
+            const nextRoom={196:20,199:26,200:11,201:2,202:4}[snapshot.map];
+            const automaticExit = preferences().autowalk && nextRoom &&
+                snapshot.objects.find(target => target.id === nextRoom && target.category === 'exits');
             if (automaticExit) {
                 selectGuideTarget(automaticExit);
                 job.action = 'directions';
-                return timedRoute(job, snapshot, automaticExit);
+                return timed ? timedRoute(job, snapshot, automaticExit) : route(job,snapshot,automaticExit);
             }
             selectGuideTarget(result.target);
             job.guide = result.text;
@@ -1725,7 +1731,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         }
         const reporting = action === 'navigationReport';
         const navigation = navigationRequest({ action, scene });
-        const canWaitForStep = action === 'mapName' || action === 'mapDescription' || navigation && (!timedCave(root.$gameMap?._mapId) || action==='puzzleGuide' && solver.enabled());
+        const canWaitForStep = action === 'mapName' || action === 'mapDescription' || navigation && (!timedCave(root.$gameMap?._mapId) || action==='puzzleGuide');
         const idle = canWaitForStep && root.$gameMap?.inactiveTime >= 30;
         if (!ready(scene, reporting || canWaitForStep, idle) || sequence >= 0x7ffffffe) return false;
         const player = root.$gamePlayer;

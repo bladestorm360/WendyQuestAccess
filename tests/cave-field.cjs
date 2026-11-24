@@ -513,6 +513,7 @@ function verifyCaveField(c, load, configureMotion, options = null) {
     }
 
     try {
+        if(options?.guideAutowalk)return require('./cave-guide-autowalk.cjs').verify({c,field,preferences,start,tick,ask,select,render,records,accepted,diagnostics,getScene:()=>scene,getFixture:()=>fixture});
         if(solving) {
             return require('./cave-solver-journeys.cjs').verifySolverJourneys({c,field,preferences,solverHarness,
                 start,tick,ask,records,accepted,diagnostics,metrics:()=>({automaticCost,replyCost,callbackOutliers}),getFixture:()=>fixture,getScene:()=>scene});

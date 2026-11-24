@@ -1405,6 +1405,9 @@ async function main() {
         await verifyCaveCrossings(c, load, configureMotion, motionRequest, verifyMotion, verifyWorker);
         return;
     }
+    if (process.argv.includes('--cave-guide-autowalk')) {
+        require('./cave-field.cjs').verifyCaveField(c,load,configureMotion,{guideAutowalk:true});return;
+    }
     if (process.argv.includes('--cave-solver')) {
         require('./cave-field.cjs').verifyCaveField(c, load, configureMotion, {solver:true});
         return;
