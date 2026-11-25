@@ -1,5 +1,6 @@
 'use strict';
 
+const { optionalSceneAvoidance } = require('./local-destinations');
 const { localCaveObject } = require('./shared-caves');
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
@@ -252,6 +253,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
         tileset: map._tilesetId, aircraft: aircraftAt(map), airshipAvailable,
         npcPassage: mode === 'walk' ? npcPassage(map) : undefined,
         stableEncounters: mode === 'walk' && DUNGEON_ROUTES.has(id),
+        ...(mode==='walk'&&id===76 ? {avoidScenes:optionalSceneAvoidance(root)} : {}),
         ...(GATE_SWITCHES[id] ? { terrainMap: id, terrainSwitch: GATE_SWITCHES[id],
             terrainGate: root.$gameSwitches?.value?.(GATE_SWITCHES[id]) } : {}),
         ...(id === 55 ? { pullStage: root.$gameVariables?.value?.(4) } : {}),

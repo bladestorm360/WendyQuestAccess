@@ -436,6 +436,19 @@ function npcPassage(map) {
         event._x === passage.x && event._y === passage.y ? passage : null;
 }
 
+// Preserve the verified no-Eggward route after the earlier sequence breaks.
+// These optional meeting/mention tiles can be walked around. Sir Chicken's
+// repeated north-path warning53 remains a real native routing prerequisite.
+function optionalSceneAvoidance(root) {
+    if(root.$gameMap?._mapId!==76||root.$gameSwitches?.value?.(462)!==true||
+        root.$gameSwitches.value(463)!==true||root.$gameSwitches.value(90)!==false)return undefined;
+    return [50,51,76,77,79].filter(id=>{
+        const event=root.$gameMap._events?.[id],page=root.$dataMap?.events?.[id]?.pages?.[0];
+        return event&&!event._erased&&event._pageIndex===0&&event._trigger===1&&event._priorityType===0&&
+            page?.list.some(row=>row.code===121&&row.parameters[0]===(id===50||id===51?90:465));
+    });
+}
+
 function mapBoardDirectionsObtained(root, page) {
     const condition = page.list?.[0];
     const args = condition?.parameters;
@@ -625,6 +638,6 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { floorClearsOnUse, localDestination, localHandoffName, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
+module.exports = { optionalSceneAvoidance, floorClearsOnUse, localDestination, localHandoffName, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
     visibleChestBarrier, closedRuinsDoorReason, npcPassage,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

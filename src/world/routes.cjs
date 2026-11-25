@@ -943,6 +943,18 @@ function solveRoute(geometry, snapshot, request, cancelled = () => false) {
     const world = composeWorld(geometry, snapshot, cancelled);
     if (!world) return { status: 'cancelled' };
     const onFoot = world.mode === 'walk' && request.field === true && !request.area && !request.vehicle;
+    if(onFoot&&Array.isArray(snapshot.avoidScenes)&&snapshot.avoidScenes.length<=8) {
+        const ids=new Set(snapshot.avoidScenes.filter(id=>Number.isInteger(id)&&id!==request.event));
+        const blocked=world.blocked.slice();
+        for(const event of world.events)if(ids.has(event.id)&&!event.erased&&!event.through){
+            const cell=indexOf(world,event.x,event.y);if(cell>=0)blocked[cell]=1;
+        }
+        // Route preference only: never hide an explicitly selected scene,
+        // alter native collision or bypass a required warning/event. If no
+        // native detour exists, retain the ordinary prerequisite solver.
+        const preferred=solveWorldRoute({...world,blocked},request,cancelled);
+        if(['ready','interrupted','cancelled'].includes(preferred.status))return preferred;
+    }
     const stable = onFoot && snapshot.stableEncounters === true;
     const preferred = stable && encounterRoute(geometry, snapshot, world, request, cancelled, false, true);
     if (preferred) return preferred;
