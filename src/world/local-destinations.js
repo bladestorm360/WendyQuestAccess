@@ -449,6 +449,19 @@ function optionalSceneAvoidance(root) {
     });
 }
 
+// The ordinary quest still points to Eggward during the alternate departure.
+// Once Wendy has actually seen the first local glitch, expose the real north
+// exit as the continuation, not one of the unrelated generic mention scenes.
+// This is navigation only: the player still activates both glitches, all
+// warning stages and the native exit that commits the sequence break.
+function sunriseSequenceExit(root) {
+    if (!optionalSceneAvoidance(root) || root.$gameMap._events?.[95]?._erased !== true ||
+        root.$gameSwitches.value(466) === true) return false;
+    const event=root.$gameMap._events?.[2],page=root.$dataMap?.events?.[2]?.pages?.[event?._pageIndex];
+    return !!event && !event._erased && event._trigger===1 && event._priorityType===0 &&
+        page?.list.some(row=>row.code===201&&row.parameters.join(',')==='0,113,43,28,0,0');
+}
+
 function mapBoardDirectionsObtained(root, page) {
     const condition = page.list?.[0];
     const args = condition?.parameters;
@@ -638,6 +651,6 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { optionalSceneAvoidance, floorClearsOnUse, localDestination, localHandoffName, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
+module.exports = { optionalSceneAvoidance, sunriseSequenceExit, floorClearsOnUse, localDestination, localHandoffName, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
     visibleChestBarrier, closedRuinsDoorReason, npcPassage,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

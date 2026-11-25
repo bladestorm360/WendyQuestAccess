@@ -7,7 +7,7 @@ const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { contextualEvent } = require('./event-knowledge');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
 const { floorClearsOnUse, localDestination, iceOpensPassage, iceMeltChanges, inactiveFloorScene, concealedDestination,
-    chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, npcPassage } = require('./local-destinations');
+    chillcrestQuestExit, sunriseSequenceExit, WEST_CHILLCREST, pendingOfficeExit, npcPassage } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit,
     worldEntranceRevealed } = require('./world-destinations');
 const { collectQuestDestinations, questDestinationLabel, questPageHasAction } = require('./quest-destinations');
@@ -118,6 +118,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
     const events = [];
     const objects = [];
     const quests = !routesOnly && scene ? collectQuestDestinations(root, scene, mode) : null;
+    const sunriseExit = !routesOnly && scene && mode === 'walk' && sunriseSequenceExit(root);
     const tiles = routing ? new Set(map._tileEvents) : null;
     for (const event of map._events) {
         if (!event || (event._erased && mode !== 'airship' && !airshipAvailable)) continue;
@@ -150,7 +151,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                         transferOptions(id, entry, page, root.$dataCommonEvents).length > 0) });
         }
         if (routesOnly || event._erased || !spoilers && concealedDestination(id, event)) continue;
-        const quest = quests?.get(eventId);
+        const quest = sunriseExit && [50,51].includes(eventId) ? undefined : quests?.get(eventId);
         if (!action && !quest?.waypoint) {
             // The office has a visible access path before its native
             // entrance page is enabled. Broad browsing keeps the entrance.
@@ -159,6 +160,10 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             continue;
         }
         const target = action ? eventTarget(root, mode, event, entry, page, spoilers, !!quest) : undefined;
+        // Do not leave deliberate optional meeting/mention choices ambiguous
+        // beside the alternate quest continuation. Eggward is already named
+        // by the current native objective and the first glitch conversation.
+        if(target && sunriseExit && [50,51,76,77,79].includes(eventId)) target.name='Eggward conversation';
         if (target && (!quest || target.category !== 'events')) {
             if (label) target.name = label(eventId, target.name);
             objects.push({ id: eventId, x, y, ...target });
@@ -180,6 +185,10 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                 entryDirection, eventAction: eventAction ?? (touch ? event._priorityType === 1 ? 'bump' : 'step' : undefined),
                 bumpDirections, handoffs, quest });
         }
+    }
+    if (sunriseExit) {
+        const exit=objects.find(item=>item.category==='exits'&&item.id===2);
+        if(exit)objects.push({...exit,name:'North exit to world map',category:'quests',sunriseExit:true,eventAction:'step'});
     }
     // Follow the published rescue objective through the native region
     // exits when the current map has no painted objective marker.

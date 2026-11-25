@@ -5,7 +5,7 @@ const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName, worldEntranceRevealed, FLOAT_FORT_ENTRANCE } = require('./world-destinations');
-const { localHandoffName, iceOpensPassage, chillcrestQuestExit, concealedDestination,
+const { localHandoffName, iceOpensPassage, chillcrestQuestExit, sunriseSequenceExit, concealedDestination,
     visibleChestBarrier, closedRuinsDoorReason, BREAKFAST_HANDOFFS, npcPassage, passiveFloorPage } = require('./local-destinations');
 const { transferOptions, pageMayTransfer } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
@@ -323,6 +323,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
             (!job.questExit || chillcrestQuestExit(root)) &&
+            (!job.sunriseExit || sunriseSequenceExit(root)) &&
             (!job.breakfastObjective || root.$gameParty?.getNav?.() === job.breakfastObjective) &&
             (!job.enemyCurrent || job.enemyCurrent()) &&
             (!job.npcCurrent || job.npcCurrent()) &&
@@ -515,6 +516,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             }
             if ((job.quest && !questDestinationCurrent(root, job.scene, job.quest)) ||
                 (job.questExit && !chillcrestQuestExit(root)) ||
+                (job.sunriseExit && !sunriseSequenceExit(root)) ||
                 (job.breakfastObjective && root.$gameParty?.getNav?.() !== job.breakfastObjective)) {
                 job.quest = null;
                 job.scene._wqaQuestNavigation = false;
@@ -729,7 +731,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                     caveAction(job.scene, root.$gameMap._events[job.target]))
                     return startCaveSegment(job, result.legs, null, true, job.target, true);
                 const exit = !result.land && !job.entrance?.sameScene &&
-                    (job.entrance || job.destination?.category === 'exits' || job.questExit || job.breakfastObjective === 'quest26') &&
+                    (job.entrance || job.destination?.category === 'exits' || job.questExit || job.sunriseExit || job.breakfastObjective === 'quest26') &&
                     routeBoundary(root, job.target, preferences().spoilers === true, job.entrance, job.mode).exit;
                 const exitEvent = exit && root.$gameMap._events?.[job.target];
                 const bump = job.eventAction === 'bump' || !!exitEvent && exitEvent._trigger === 1 && exitEvent._priorityType === 1;
@@ -855,7 +857,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const record={ kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
                     guide: job.guide, activate, exit, useExit,
                     boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent, preferences().spoilers === true)),
-                    manualHandoff: !!handoff || !!boundaryName && (job.action === 'puzzleGuide' || job.mode === 'ship' || timedCave(job.map)),
+                    manualHandoff: !!handoff || !!boundaryName && (job.sunriseExit || job.action === 'puzzleGuide' || job.mode === 'ship' || timedCave(job.map)),
                     more: result.more === true };
                 follow(job,result,record);
             }
@@ -968,6 +970,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         job.target = destination.event;
         job.eventAction = target.eventAction;
         job.questExit = target.questExit === true;
+        job.sunriseExit = target.sunriseExit === true;
         job.point = target.point === true;
         job.vehicle = target.vehicle && { type: target.vehicle, x: target.x, y: target.y };
         job.nearestLanding = target.nearestLanding === true;
