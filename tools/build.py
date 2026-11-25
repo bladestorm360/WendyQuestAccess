@@ -109,6 +109,7 @@ def bundle():
         './world/autosave-notice': 'world/autosave-notice.js',
         './terrain-control-labels.cjs': 'world/terrain-control-labels.cjs',
         './terrain-journey': 'world/terrain-journey.js',
+        './shared-caves': 'world/shared-caves.js',
         './world/field': 'world/field.js',
         './world/wall-audio': 'world/wall-audio.js',
         './world/footsteps': 'world/footsteps.js',

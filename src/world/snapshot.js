@@ -1,5 +1,7 @@
 'use strict';
 
+const { localCaveObject } = require('./shared-caves');
+
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { contextualEvent } = require('./event-knowledge');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
@@ -25,6 +27,7 @@ const DUNGEON_ROUTES = new Set([
 
 function eventTarget(root, mode, event, entry, page, spoilers = false, questMarker = false) {
     const map = root.$gameMap._mapId;
+    if(map===48&&!localCaveObject(root,event))return null;
     const patrol = mode === 'walk' && patrolDestination(map, event, page);
     if (patrol) return patrol;
     if ((!spoilers && concealedDestination(map, event)) || !pageHasInteraction(page) ||

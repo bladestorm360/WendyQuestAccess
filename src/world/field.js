@@ -822,7 +822,12 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 job.enemyCurrent = () => currentEnemy(root, result);
                 const record = { kind: 'routeDirections', name: job.label, legs: result.legs,
                     enemyBlocked: true, boundary: result.boundary, more: result.more === true, afterEnemy: next };
-                follow(job, result, record);
+                // A remote goal has no local event until its final entrance
+                // is admitted. This certified prefix ends before the enemy,
+                // not at that entrance. Keep the remote journey intact and
+                // walk the owned point course; moving blockers still recapture
+                // the original destination through the normal silent reroute.
+                follow(job, result, record, job.remote ? { ...job, target: undefined, point: true, quest: null } : job);
             }
             else if (result?.status === 'interrupted') {
                 if (!job.autowalk && job.map === 201) {

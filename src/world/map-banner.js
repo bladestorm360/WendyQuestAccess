@@ -1,5 +1,7 @@
 'use strict';
 
+const { sharedCaveArea } = require('./shared-caves');
+
 // Native transfer destinations with empty display names. Floor and house
 // numbers distinguish locations without naming occupants or rewards.
 const LOCAL_NAMES = Object.freeze({
@@ -40,6 +42,7 @@ function numberedHouseName(id) {
 
 function mapPlace(root) {
     const id = root.$gameMap?._mapId;
+    if(id===48&&sharedCaveArea(root)>0)return 'Nugget Mines';
     const name = root.$dataMap?.displayName;
     return typeof name === 'string' && name.length <= 240 && name.trim() || LOCAL_NAMES[id] || '';
 }
