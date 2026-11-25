@@ -180,7 +180,7 @@ companion._mainSprite = companion;
 let delayed;
 companion.ActionTargetAnimation = (_action, animation) =>
     [animation === 'FryArrow' ? 0 : 12, 0];
-c.SkillUtility = { ExtractMetaData: item => item.note ? JSON.parse(item.note.slice(item.note.indexOf('{'))) : {} };
+c.SkillUtility = { ExtractMetaData: item => item.note?.includes('{') ? JSON.parse(item.note.slice(item.note.indexOf('{'))) : {} };
 c.BattleHelper = {
     GetSubActorSprite: id => companion._actor === actors[id] ? companion : null,
     GetBattlerSprite: subject => subject === ally._battler ? ally : null
@@ -282,6 +282,27 @@ battle._action = action(skills[52]);
 battle.invokeNormalAction(right._battler, ally._battler);
 advance(40);
 assert.equal(seen.at(-1), 'Wendy, 17 HP damage.');
+{
+    const enemies=data('Enemies.json');
+    assert.equal(enemies[54].actions[0].skillId,110);
+    assert.equal(enemies[12].actions[0].skillId,87);
+    assert.equal(skills[87].animationId,skills[110].animationId);
+    assert.equal(skills[110].message1,'');assert.equal(skills[110].message2,'');
+    assert(skills[110].effects.some(e=>e.code===21&&e.dataId===36&&e.value1===1));
+    const original=right._battler.originalName;right._battler.originalName=()=> 'Blandhawk';
+    for(const id of [87,110,110]) {
+        advance(180);
+        battle._action=Object.assign(action(skills[id]),{subject:()=>right._battler});
+        const before=seen.length;
+        walk.call(right,45+before*10,0,12,0,null,undefined,undefined,battle._action);
+        walk.call(right,45+before*10,0,12,0,null,undefined,undefined,battle._action);
+        frame();assert.deepEqual(seen.slice(before),['Blandhawk attacks.']);
+        battle.invokeNormalAction(right._battler,ally._battler);advance(40);
+        assert.deepEqual(seen.slice(before),['Blandhawk attacks.','17 damage.']);
+    }
+    right._battler.originalName=original;
+    console.log('Verified ordinary and guaranteed-Bland introductory Blandhawk strikes, native movement admission, one callout before damage and genuine repeat actions.');
+}
 console.log('Verified basic actor, companion and enemy attribution, miss, and native special attack text parity.');
 console.log('Verified the installed damage popup for HP, recovery, miss, block, visible modifiers and unsigned FP, with repeated events and animation gating.');
 console.log('Throttled completed popup to formatted receipt', delay.toFixed(2), 'ms. 250 stable updates',

@@ -41,7 +41,9 @@ function enemyLabel(scene, enemy) {
 // The game uses separate lightweight skills for regular companion turns and
 // enemy melee or arrows. Native action text still owns named special moves.
 const COMPANION_ATTACKS = new Set([9, 12, 14, 17]);
-const ENEMY_ATTACKS = new Set([1, 48, 49, 51, 56, 81, 82, 83, 84, 85, 87, 88, 90, 91, 92, 95, 96, 97, 98, 106]);
+//110 is Blandhawk's guaranteed-Bland onboarding strike. It shares87's
+//visible melee animation and has no displayed ability heading.
+const ENEMY_ATTACKS = new Set([1, 48, 49, 51, 56, 81, 82, 83, 84, 85, 87, 88, 90, 91, 92, 95, 96, 97, 98, 106, 110]);
 
 function attackSource(scene, performer, subject, action) {
     if (!action?.isSkill?.()) return;

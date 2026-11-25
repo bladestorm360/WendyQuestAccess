@@ -334,3 +334,10 @@ Wendy's charge uses only “Wendy charges.” Native script leaves1.2seconds bef
 Verification: tests/skill-visuals.cjs extracts all ten transformed native factories outside Git and checks19 base/upgraded/stage paths, actual particle returns/attachments, rendered confirmation, multi-particle once-per-action guards, hidden/detached/loading/disabled/wrong-action negatives, NVDA and native charge/attack timing. Matching NW decodes every new clip from the production pack and retains the timed-word regression. Audible whole-game confirmation remains owner-side.
 
 Guard now uses the same optional [skill visual narration](cutscene-description.md#guard-pose): “Wendy braces behind her crossed spatulas.” It is admitted by the real native pose change and displayed Guard frame, once per action. This adds no help text, input or timing behavior; Guard details remain “No description available.”
+
+
+## Blandhawk's guaranteed-Bland introductory attack
+
+Enemy12 uses native skill87; the onboarding Enemy54 uses110. Both use animation130 and have empty displayed action messages. The introductory variant guarantees state36 (Bland), while the ordinary strike has a15percent state chance. It is the same visible regular attack, not a separately named special move. `damage-popup.ENEMY_ATTACKS` now includes110, so the existing native movement/start and per-action identity pipeline says Blandhawk attacks before its number/status results. No hidden skill name, chance or internal onboarding label is spoken. Basic attacks, popup damage and state effects remain native; repeated genuine actions remain audible and the same action cannot announce twice.
+
+`tests/battle-damage.test.cjs` compares those original data entries and runs original startMove/invokeNormalAction/popup rendering for87,110 and another110. Every action gives one heading before17damage in the fixture. It also retains the full companion/basic/special/forced-Double-Laser damage regression. The prior fixture's metadata stand-in now accepts plain non-metadata notes, matching these original skills. No new hook, particle, recording or timing/input change. Actual audible gameplay remains owner confirmation.
