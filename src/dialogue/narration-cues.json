@@ -4232,5 +4232,29 @@
   "cauldron-wall-breaks": {
     "text": "The cavern wall bursts open.",
     "beats": []
+  },
+  "map-opens": {
+    "text": "A map slides into view.",
+    "beats": []
+  },
+  "map-closes": {
+    "text": "The map slides out of view.",
+    "beats": []
+  },
+  "map-wendy": {
+    "text": "Wendy's marker drops onto the map and bounces.",
+    "beats": []
+  },
+  "map-quest": {
+    "text": "A quest marker drops onto the map and bounces.",
+    "beats": []
+  },
+  "map-marks": {
+    "text": "Pink symbols mark locations on the atlas.",
+    "beats": []
+  },
+  "map-erases": {
+    "text": "Symbols fade from the atlas.",
+    "beats": []
   }
 }

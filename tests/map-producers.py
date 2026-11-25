@@ -78,6 +78,21 @@ if sys.argv[2:] == ['cauldron-drain']:
     sys.exit()
 
 
+if sys.argv[2:] == ['atlas-commands']:
+    source = objects_notification((Path(sys.argv[1]) / OBJECTS_REL.relative_to('package.nw')).read_bytes()).decode('utf8')
+    methods = []
+    for owner, names in [('Game_Interpreter', ['command232', 'picturePoint']),
+                         ('Game_Picture', ['initialize', 'initBasic', 'initTarget', 'initTone', 'initRotation',
+                                           'show', 'move', 'updateMove', 'applyEasing', 'calcEasing', 'easeIn', 'easeOut', 'easeInOut']),
+                         ('Game_Screen', ['movePicture', 'realPictureId', 'picture']),
+                         ('Game_Message', ['clear'])]:
+        for name in names:
+            start = source.index(f'{owner}.prototype.{name} = function(')
+            methods.append(source[start:source.index('\n};', start) + 3])
+    print(json.dumps(methods))
+    sys.exit()
+
+
 if sys.argv[2:] == ['narration-commands']:
     source = objects_notification((Path(sys.argv[1]) / OBJECTS_REL.relative_to('package.nw')).read_bytes()).decode('utf8')
     methods = []

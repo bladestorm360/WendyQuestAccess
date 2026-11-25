@@ -1,5 +1,6 @@
 'use strict';
 
+const { createAtlasTracker } = require('./atlas-visuals');
 const jailVisuals = require('./jail-visuals');
 const cues = require('./narration-cues.json');
 const { currentTylerEntry } = require('./tyler-visuals');
@@ -25,8 +26,8 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//169 original recordings; measured pack 2,096,130 bytes.
-const PACK_LIMIT = 2048 * 1024;
+//175 original recordings; the six diagram clips extend the verified169-clip pack.
+const PACK_LIMIT = 2176 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -50,6 +51,7 @@ function unpackClips(root, bytes) {
 
 function createNarration(root, host, preferences) {
     const glitches=createGlitchTracker(root);
+    const atlas=createAtlasTracker(root,host.graphics);
     const skillActions=new WeakMap();
     let pack = null;
     let loading = null;
@@ -82,10 +84,10 @@ function createNarration(root, host, preferences) {
         return audio.narration?.enabled && (nvda()?host.speechPreferences().enabled:audio.enabled&&audio.narration.volume>0);
     }
 
-    function warm(scene) {
+    function warm(scene, atlasPending = false) {
         const prologue = [188, 115].includes(root.$gameMap?._mapId);
         const battle=scene?._wqaBattleStarted&&ready(scene,false,true);
-        if (nvda() || !enabled() || pack || loading || failed || !ready(scene,false,battle) || !prologue && !battle &&
+        if (nvda() || !enabled() || pack || loading || failed || !ready(scene,false,battle) || !prologue && !battle && !atlasPending &&
             (root.$gameMap._interpreter?._list || !scene._wqaFieldReady && !idleReady(scene))) return;
         // Chromium reads the fixed package path asynchronously in a settled
         // field frame. Native boundaries retire the request before loading.
@@ -160,7 +162,7 @@ function createNarration(root, host, preferences) {
         if (!keepPlayback) stopClip();
     }
 
-    function pendingCount() { return reactions.length + carried.length + (owner?.queue.length || 0); }
+    function pendingCount() { return atlas.size + reactions.length + carried.length + (owner?.queue.length || 0); }
 
     // A confirmed description is already visible information. Keep only its
     // caption ID after its source scene retires; actor/interpreter pointers and
@@ -171,6 +173,7 @@ function createNarration(root, host, preferences) {
         if (owner && (!scene || owner.scene === scene)) {
             for (const state of owner.queue) {
                 if (state.confirmed && carried.length < QUEUE_LIMIT) carried.push(state.id);
+                else if(state.visual===-14)atlas.retain(state);
             }
         }
         leave(scene, false, keepReactions, true);
@@ -370,6 +373,26 @@ function createNarration(root, host, preferences) {
         const context = owner ?? begin(scene, state.interpreter);
         if (pendingCount() >= QUEUE_LIMIT) return;
         context.queue.push(state);environment = null;scene._wqaEnvironmentPending = false;
+    }
+
+    function atlasAccepted(scene,script,id) {
+        if(!enabled() || !scene?._wqaMapRestored || pendingCount()>=QUEUE_LIMIT)return;
+        atlas.accepted(scene,script,id);
+    }
+
+    function atlasPresent(scene) {
+        if(!enabled()){atlas.retire(scene);return;}
+        if(!ready(scene))return;
+        // Resource boundaries retain inert receipts only. Warmup and render
+        // checks run here, after the same native readiness gates as narration.
+        if(!voiceReady()){if(failed)atlas.retire(scene);else warm(scene,true);return;}
+        const states=atlas.take(scene);
+        if(!states.length)return;
+        if(owner&&owner.scene!==scene)leave(owner.scene);
+        const context=owner??begin(scene);
+        context.hasReactions=true;
+        for(const state of states)if(pendingCount()<QUEUE_LIMIT)
+            context.queue.push({...state,order:++sequence});
     }
 
     function skillAccepted(scene,actor,sprite,key) {
@@ -660,6 +683,7 @@ function createNarration(root, host, preferences) {
     }
 
     function visibleActorCue(scene, state) {
+        if(state.visual===-14)return atlas.visible(scene,state);
         if(state.visual===-13)return root.$gameScreen._flashColor?.[3]>0 &&
             scene._spriteset._tilemap.worldVisible===true &&
             (scene._spriteset.x!==state.screenX || scene._spriteset.y!==state.screenY);
@@ -745,6 +769,7 @@ function createNarration(root, host, preferences) {
                 const map = root.$gameMap;
                 state.confirmed = state.battleVisible ? state.battleVisible() : state.idle ? map.inactiveTime < state.idle.end &&
                     state.idle.visible(scene, map, root.$gamePlayer) : visibleActorCue(scene, state);
+                if(state.confirmed && state.visual===-14)atlas.confirm(state);
                 if(state.confirmed && state.visual===-9)glitches.confirm(state);
                 if (state.confirmed && state.bit) scene._wqaIdleNarrationMask |= state.bit;
                 if (state.confirmed && state.id === 'ice-machine-arrives') scene._wqaIceMachineEntrySeen = true;
@@ -764,7 +789,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { cancel(scene){host.cancelNarrationSpeech?.();leave(scene);}, skillAccepted, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
+    return { atlasAccepted, atlasPresent, cancel(scene){atlas.retire(scene);host.cancelNarrationSpeech?.();leave(scene);}, skillAccepted, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 169);
+assert.equal(Object.keys(clips).length, 175);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -107,6 +107,8 @@ function fixture(m, e, page, warm = true) {
     return { scene, graphics, root, host, interpreter, nativeMap, renderer, spriteset, status, switches,
         played, playback, narration, actor, balloon, frame };
 }
+
+require('./atlas-scenes.cjs')(fixture,stock);
 
 const sceneCommands=JSON.parse(execFileSync('python',['-B',path.join(__dirname,'map-producers.py'),
     path.join(stock,'package.nw'),'narration-commands'],{encoding:'utf8',timeout:5000}));
@@ -515,7 +517,7 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 169 clips, 304 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 175 clips, 304 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
 
 require('./finale-narration.cjs')(fixture, commandContext, stock);
 require('./screen-jolt.cjs')(fixture, commandContext, stock);

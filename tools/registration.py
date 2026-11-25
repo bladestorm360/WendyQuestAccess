@@ -427,6 +427,10 @@ def objects_notification(original):
     companions_entry = original.index(b'        this.setupChild(commonEvent.list, eventId);') + len(
         b'        this.setupChild(commonEvent.list, eventId);')
     return insert(original, OBJECTS_SHA, {
+        # After the native move is accepted, retain only the known diagram
+        # slots; the callback qualifies exact common-list and command sites.
+        289729: b'    if(Graphics._wqaNarrationEnabled&&[27,38,41,42,43,44,45,50].includes(params[0]))'
+                b'globalThis.WendyQuestAccessAtlasAccepted?.(SceneManager._scene,this,params[0]);\n',
         termination: b'    if(this===$gameMap?._interpreter&&SceneManager._scene?._wqaMapRestored)'
                      b'globalThis.WendyQuestAccessEventCompleted?.(SceneManager._scene,this);\n',
         companions_entry: b'\n        if(Graphics._wqaNarrationEnabled&&params[0]===65&&'
@@ -785,6 +789,7 @@ def map_notification(original):
         globalThis.WendyQuestAccessQuestionsPresent?.(this);
     if (Graphics._wqaNarrationEnabled && this.filters?.length && this._TKMFilters?.length)
         globalThis.WendyQuestAccessScreenGlitchPresent?.(this);
+    if (Graphics._wqaNarrationEnabled && this._wqaAtlasPending) globalThis.WendyQuestAccessAtlasPresent?.(this);
     if (this._wqaNarrationActive || this._wqaEnvironmentPending || this._wqaReactionReceipts || Graphics._wqaNarrationContinuation) globalThis.WendyQuestAccessNarrationPresent?.(this);
     // The opening has no controllable field before its first visual beat.
     // Warm asynchronously only after the normal map/resource readiness gates.

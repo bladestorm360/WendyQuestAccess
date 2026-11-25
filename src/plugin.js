@@ -856,6 +856,12 @@ function boot(root, nodeRequire, nodeProcess) {
         catch { scene._wqaPreloadOverflow = true; }
     };
 
+    root.WendyQuestAccessAtlasAccepted = function(scene,script,id) {
+        try { narration?.atlasAccepted(scene,script,id); } catch { narration?.cancel(scene); }
+    };
+    root.WendyQuestAccessAtlasPresent = function(scene) {
+        try { narration?.atlasPresent(scene); } catch { narration?.cancel(scene); }
+    };
     root.WendyQuestAccessNarrationAccepted = function (scene, interpreter, actor, switched, visual) {
         try { narration?.accepted(scene, interpreter, actor, switched, visual); } catch { narration?.cancel(scene); }
     };
