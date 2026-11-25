@@ -1093,6 +1093,13 @@ const interval = setInterval(() => {
             choose('Navigation');
             choose('Autowalk, off');
             autowalkStep++;
+        } else if (autowalkStep === 7 && menuStatus() === '' &&
+            Array.from(document.querySelectorAll('dialog button')).some(item => item.textContent === 'Autowalk, off')) {
+            // The preceding Ctrl+backslash save can still own IndexedDB when
+            // this synthetic rapid click lands. Native change() rejects it;
+            // retry only while the unchanged off label proves no toggle was
+            // accepted. Never skip the real save-completion assertion below.
+            choose('Autowalk, off');
         } else if (autowalkStep === 7 && menuStatus() === 'Navigation settings saved') {
             tap('Escape');
             tap('Escape');
@@ -3169,7 +3176,7 @@ def main():
         caption_voices=json.loads(receipt.with_suffix('.json.caption-voices').read_text(encoding='utf8'))
         if len(caption_voices)!=19 or any(not row['seconds']>0 for row in caption_voices):
             raise RuntimeError('New caption recordings failed exact packaged Chromium decoding')
-        print('Verified all eleven selected shrine, jail, upgrade, Sir Chicken and cavern-wall recordings decode in the pinned Chromium host.')
+        print('Verified all19 selected shrine, jail, map, departure and other story recordings decode in the pinned Chromium host.')
         skill_voices = receipt.with_suffix('.json.skill-voices').read_text(encoding='utf8').splitlines()
         if len(skill_voices) != 13 or len({line.split()[0] for line in skill_voices}) != 13:
             raise RuntimeError('Not every requested skill recording decoded')
