@@ -7,13 +7,18 @@ const {createTransferBookmarks}=require('../src/world/transfer-bookmarks');
 const {createField}=require('../src/world/field');
 const fs=require('node:fs'),zlib=require('node:zlib');
 const {performance}=require('node:perf_hooks');
+// Process CPU includes background fixture/V8 workers. Prefer the callback
+// thread and report both clocks: quota pauses affect elapsed time, while
+// Windows CPU accounting is coarse. Neither clock proves live game latency.
+const cpuUsage=(process.threadCpuUsage||process.cpuUsage).bind(process);
+const cpuLabel=process.threadCpuUsage?'current-thread CPU':'process CPU';
 module.exports=async(c,load,read,verifyWorker)=>{
  c.$dataCommonEvents=read('CommonEvents.json');c.$dataMapInfos=read('MapInfos.json');
  c.$gameParty._quests=[null];c.$gameParty.getNav=()=>null;c.$gameParty._actors=[1,5,3,4];
  c.$gameParty.members=()=>[4];c.$gameParty.inBattle=()=>false;
  const regional=[56,59,60],farther=Array.from({length:10},(_,i)=>61+i),base=[11,23,33,38,39,51,52,54,77,90,250,462,463,464,465,624];
  const state={switches:base.slice(),variables:{5:0,10:4,14:6,119:39.5,120:27.5}};
- let peak=0,combinedPeak=0;
+ let peak=0,combinedPeak=0,cpuPeak=0,combinedCpuPeak=0,lastCpu=0,worstWallCpu=0;
  load(113,state).player.setPosition(43,28);
  const before=Array.from({length:200},(_,i)=>worldEntranceRevealed(c,i+1,false));
  for(const id of regional)assert(!worldEntranceRevealed(c,id,false),'earlier skip flags do not reveal this region');
@@ -86,17 +91,22 @@ module.exports=async(c,load,read,verifyWorker)=>{
     arrive:r=>{records.push(r);return records.length;},endArrival(){}});
   c.WendyQuestAccessAutowalkInput=field.autowalk.input;c.WendyQuestAccessFieldMove=field.autowalk.moved;
   c.WendyQuestAccessFieldChanged=field.changed;c.WendyQuestAccessFieldEvent=()=>{};
-  const ask=key=>{const begin=performance.now();assert(field.command(key));renderer.emit('postrender');
-   const elapsed=performance.now()-begin;peak=Math.max(peak,elapsed);return elapsed;};
+  const ask=key=>{const cpu=cpuUsage(),begin=performance.now();assert(field.command(key));renderer.emit('postrender');
+   const elapsed=performance.now()-begin,used=cpuUsage(cpu);lastCpu=(used.user+used.system)/1000;
+   if(elapsed>peak){peak=elapsed;worstWallCpu=lastCpu;}cpuPeak=Math.max(cpuPeak,lastCpu);return elapsed;};
   if(target===59){
    for(let n=0;n<16&&records.at(-1)?.category!=='Exits';n++)ask('nextCategory');
    for(let n=0;n<200&&records.at(-1)?.name!=='Cracked Cove';n++)ask('nextDestination');
    assert.equal(records.at(-1)?.name,'Cracked Cove');
   }else{scene._wqaSettingsActive=true;assert(field.selectBookmark(scene,bookmark));scene._wqaSettingsActive=false;}
-  const submission=ask('directions'),packet=packets.at(-1);assert.equal(packet.request.event,target);
-  let route,receipt=0;await verifyWorker(f,packet.request,packet.live,r=>{route=r;const begin=performance.now();worker.emit('message',{
-   epoch:packet.epoch,sequence:packet.sequence,map:packet.map,result:r});receipt=performance.now()-begin;});
-  const begin=performance.now();renderer.emit('postrender');combinedPeak=Math.max(combinedPeak,submission+receipt+performance.now()-begin);
+  const submission=ask('directions'),submittedCpu=lastCpu,packet=packets.at(-1);assert.equal(packet.request.event,target);
+  let route,receipt=0,receiptCpu=0;await verifyWorker(f,packet.request,packet.live,r=>{route=r;
+   const cpu=cpuUsage(),begin=performance.now();worker.emit('message',{
+    epoch:packet.epoch,sequence:packet.sequence,map:packet.map,result:r});receipt=performance.now()-begin;
+   const used=cpuUsage(cpu);receiptCpu=(used.user+used.system)/1000;});
+  const cpu=cpuUsage(),begin=performance.now();renderer.emit('postrender');
+  combinedPeak=Math.max(combinedPeak,submission+receipt+performance.now()-begin);
+  const used=cpuUsage(cpu);combinedCpuPeak=Math.max(combinedCpuPeak,submittedCpu+receiptCpu+(used.user+used.system)/1000);
   courses.push({own,auto,target,status:route.status});
   if(target!==59){
    assert(['ready','interrupted','iceRoute','controlRoute','terrainExit','npcBlocked','enemyBlocked'].includes(route.status),
@@ -116,5 +126,5 @@ module.exports=async(c,load,read,verifyWorker)=>{
  }
  console.log(`Breakfast reveal: native466 unlocks exactly3 immediate introductions without quest25; native cavern26 handoff, transfer parity, spoiler/future/bridge negatives and native manual/Autowalk to Cracked Cove pass${saved?', including the exact player save, named quest records and world tile changes':''}.`);
  console.log(`Verified ${courses.length} production-field regional direction requests in both movement modes, including all3 immediate entrance courses from the exact player state when supplied.`);
- console.log(`Throttled Breakfast field browse/submission peak ${peak.toFixed(2)} ms; combined request/response CPU peak ${combinedPeak.toFixed(2)} ms. Actual gameplay, audio and whole-game responsiveness remain separate.`);
+ console.log(`Throttled Breakfast field browse/submission elapsed peak ${peak.toFixed(2)} ms (${worstWallCpu.toFixed(2)} ms ${cpuLabel} at that sample), ${cpuLabel} peak ${cpuPeak.toFixed(2)} ms; combined request/response elapsed peak ${combinedPeak.toFixed(2)} ms, ${cpuLabel} peak ${combinedCpuPeak.toFixed(2)} ms. Actual gameplay, audio and whole-game responsiveness remain separate.`);
 };
