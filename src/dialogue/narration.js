@@ -1,6 +1,7 @@
 'use strict';
 
 const { createDepartureTracker } = require('./departures');
+const { createRecruitmentVisuals } = require('./recruitment-visuals');
 const { createAtlasTracker } = require('./atlas-visuals');
 const jailVisuals = require('./jail-visuals');
 const cues = require('./narration-cues.json');
@@ -27,7 +28,7 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//177 original recordings: six map and two departure clips extend the verified169-clip pack.
+//180 recordings: recruitment adds three clips and revises one anonymous arrival.
 const PACK_LIMIT = 2176 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
@@ -54,6 +55,7 @@ function createNarration(root, host, preferences) {
     const glitches=createGlitchTracker(root);
     const atlas=createAtlasTracker(root,host.graphics);
     const departures=createDepartureTracker(root,host.graphics);
+    const recruitment=createRecruitmentVisuals(root,host.graphics,()=>++sequence);
     const skillActions=new WeakMap();
     let pack = null;
     let loading = null;
@@ -164,7 +166,7 @@ function createNarration(root, host, preferences) {
         if (!keepPlayback) stopClip();
     }
 
-    function pendingCount() { return departures.size + atlas.size + reactions.length + carried.length + (owner?.queue.length || 0); }
+    function pendingCount() { return recruitment.size + departures.size + atlas.size + reactions.length + carried.length + (owner?.queue.length || 0); }
 
     // A confirmed description is already visible information. Keep only its
     // caption ID after its source scene retires; actor/interpreter pointers and
@@ -177,6 +179,7 @@ function createNarration(root, host, preferences) {
                 if (state.confirmed && carried.length < QUEUE_LIMIT) carried.push(state.id);
                 else if(state.visual===-14)atlas.retain(state);
                 else if(state.visual===-15)departures.retain(state);
+                else if(state.visual===-16)recruitment.retain(state);
             }
         }
         leave(scene, false, keepReactions, true);
@@ -210,6 +213,10 @@ function createNarration(root, host, preferences) {
     }
 
     function accepted(scene, interpreter, actor, switched, visual, commandIndex = interpreter._index, recovery = false) {
+        // Preserve only exact native action metadata across portrait/character
+        // loading. No sprite, asset, voice or worker work runs in that phase.
+        if(enabled()&&scene?._wqaMapRestored&&pendingCount()<QUEUE_LIMIT&&
+            recruitment.jump(scene,interpreter,actor,switched,visual,commandIndex))return true;
         if(visual===-13) {
             if(!voiceReady() || !enabled() || !ready(scene) || pendingCount()>=QUEUE_LIMIT ||
                 interpreter._list!==root.$dataCommonEvents?.[58]?.list || interpreter._index!==4)return;
@@ -379,7 +386,19 @@ function createNarration(root, host, preferences) {
     }
 
     function departureAccepted(scene,script) {
-        if(enabled()&&scene?._wqaMapRestored&&pendingCount()<QUEUE_LIMIT)departures.accepted(scene,script);
+        if(enabled()&&scene?._wqaMapRestored&&pendingCount()<QUEUE_LIMIT){
+            departures.accepted(scene,script);recruitment.party(scene,script);
+        }
+    }
+    function recruitmentPresent(scene){
+        if(!enabled()){recruitment.retire(scene);return;}
+        if(!ready(scene))return;
+        if(!voiceReady()){if(failed)recruitment.retire(scene);else warm(scene,true);return;}
+        const states=recruitment.take(scene);if(!states.length)return;
+        if(owner&&owner.scene!==scene)leave(owner.scene);
+        const context=owner??begin(scene);context.hasReactions=true;
+        for(const state of states)if(pendingCount()<QUEUE_LIMIT)
+            context.queue.push({...state,frame:host.graphics.frameCount});
     }
     function departurePresent(scene) {
         if(!enabled()){departures.retire(scene);return;}
@@ -700,6 +719,7 @@ function createNarration(root, host, preferences) {
     }
 
     function visibleActorCue(scene, state) {
+        if(state.visual===-16)return recruitment.visible(scene,state);
         if(state.visual===-15)return departures.visible(scene,state);
         if(state.visual===-14)return atlas.visible(scene,state);
         if(state.visual===-13)return root.$gameScreen._flashColor?.[3]>0 &&
@@ -807,7 +827,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { departureAccepted, departurePresent, atlasAccepted, atlasPresent, cancel(scene){departures.retire(scene);atlas.retire(scene);host.cancelNarrationSpeech?.();leave(scene);}, skillAccepted, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
+    return { recruitmentPresent, retireRecruitment:recruitment.retire, departureAccepted, departurePresent, atlasAccepted, atlasPresent, cancel(scene){recruitment.retire(scene);departures.retire(scene);atlas.retire(scene);host.cancelNarrationSpeech?.();leave(scene);}, skillAccepted, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

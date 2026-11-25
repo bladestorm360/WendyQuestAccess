@@ -24,7 +24,7 @@
     ]
   },
   "baconator-landing": {
-    "text": "A second figure drops from above and shakes the ground.",
+    "text": "A large man leaps into view. The ground shakes as he lands.",
     "beats": [
       [
         77,
@@ -1808,11 +1808,11 @@
     "beats": []
   },
   "idle-hud-slides": {
-    "text": "Wendy’s status display slides away.",
+    "text": "Wendy\u2019s status display slides away.",
     "beats": []
   },
   "idle-dozes": {
-    "text": "Zs drift over Wendy’s head as she dozes.",
+    "text": "Zs drift over Wendy\u2019s head as she dozes.",
     "beats": []
   },
   "idle-map-dark": {
@@ -4263,6 +4263,34 @@
   },
   "archaeologist-leaves": {
     "text": "The archaeologist leaves.",
+    "beats": []
+  },
+  "tatoria-aside": {
+    "text": "Tatoria hops aside.",
+    "beats": [
+      [
+        77,
+        25,
+        0,
+        98,
+        26
+      ]
+    ]
+  },
+  "officer-aside": {
+    "text": "Gregg hops out of the way.",
+    "beats": [
+      [
+        191,
+        3,
+        0,
+        45,
+        3
+      ]
+    ]
+  },
+  "companions-reappear": {
+    "text": "Wendy's companions reappear, with Baconator among them.",
     "beats": []
   }
 }

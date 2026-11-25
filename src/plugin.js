@@ -894,6 +894,9 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessTylerEntryPresent = function (scene) {
         try { narration?.tylerEntry(scene); } catch { narration?.cancel(scene); }
     };
+    root.WendyQuestAccessRecruitmentPresent = function(scene){
+        try{narration?.recruitmentPresent(scene);}catch{narration?.cancel(scene);}
+    };
 
     root.WendyQuestAccessMechEntryPresent = function (scene) {
         try { narration?.mechEntry(scene); } catch { narration?.cancel(scene); }
@@ -928,6 +931,9 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessNarrationTransition = function (scene, next) {
         if (next && (next === root.Scene_Map || next === root.Scene_Battle)) narration?.pause(scene);
         else narration?.cancel();
+        // Carry confirmed speech only. Pending recruitment actors belong to
+        // this scene; ordinary same-map image loading uses Pausing above.
+        narration?.retireRecruitment(scene);
     };
     root.WendyQuestAccessNarrationLeaving = function (scene) { narration?.cancel(scene); };
 

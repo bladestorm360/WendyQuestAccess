@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 177);
+assert.equal(Object.keys(clips).length, 180);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -36,7 +36,7 @@ for (const [id, { beats }] of Object.entries(cues)) {
         }
     }
 }
-assert.equal(locators.size, 304);
+assert.equal(locators.size, 306);
 assert.match(cues['party-vanishes'].text, /gather into her.*party fits on the elevator/);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
@@ -101,6 +101,7 @@ function fixture(m, e, page, warm = true) {
     }
     function frame(paint = true) {
         graphics.frameCount++;
+        if(scene._wqaRecruitmentPending)narration.recruitmentPresent(scene);
         narration.present(scene);
         if (paint) renderer.emit('postrender');
     }
@@ -122,6 +123,7 @@ function commandContext(f) {
     return c;
 }
 require('./departure-scenes.cjs')(fixture,stock,commandContext);
+require('./recruitment-scenes.cjs')(fixture,stock,commandContext);
 
 for (const id of ['double-first-entrance', 'elder-tater-freed']) {
     for (const [m, e, p, i, a, switched] of cues[id].beats) {
@@ -519,7 +521,7 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 177 clips, 304 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 180 clips, 306 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
 
 require('./finale-narration.cjs')(fixture, commandContext, stock);
 require('./screen-jolt.cjs')(fixture, commandContext, stock);
