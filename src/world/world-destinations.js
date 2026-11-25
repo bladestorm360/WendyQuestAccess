@@ -79,7 +79,13 @@ function worldEntranceRevealed(root, id, spoilers, questMarker = false) {
     // completion, not the earlier route-enabling flag or Spoiler mode.
     if (id === 43 && (on(54) || on(452) || on(453)) || id === 25 && on(267) || id === 71 && on(97)) return true;
     const prerequisites = INTRODUCTIONS[id];
-    return !prerequisites || prerequisites.some(quest => learnedQuest(root, quest));
+    // The north Sunrise departure commits TrueNoEggward without starting the
+    // normal Eggward quest25. It marks the Cracked Cove approach on the
+    // atlas. Accept that branch for the same immediate introductions;
+    // entering Caffeine Caverns starts26 normally, introducing farther areas.
+    // Their later quests/bridges and unrelated secrets stay gated.
+    return !prerequisites || on(466) && prerequisites.includes(25) ||
+        prerequisites.some(quest => learnedQuest(root, quest));
 }
 
 function transfersTo(command, map) {

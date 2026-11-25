@@ -1323,6 +1323,7 @@ async function verifyWorker(fixture, request, live, verify = result => verifyRou
 }
 
 async function main() {
+    if(process.argv.includes('--breakfast-reveal')){await require('./breakfast-reveal.cjs')(c,load,read,verifyWorker);return;}
     if(process.argv.includes('--sunrise-sequence')){await require('./sunrise-sequence.cjs')(c,load,read,verifyWorker);return;}
     if(process.argv.includes('--sunrise-bypass')){await require('./sunrise-bypass.cjs')(c,load,read,verifyWorker);return;}
     if(process.argv.includes('--breaded-exit')){await require('./breaded-exit.cjs')(c,load,read,verifyWorker);return;}
