@@ -71,7 +71,7 @@ Choose a category, then a destination. Categories include NPCs, merchants, objec
 
 During the alternate Sunrise Bay departure, after the first glitch, select **North exit to world map** under Quests. Directions keep this goal through the remaining glitch and warnings. Trigger each scene yourself, then request directions again to continue.
 
-After that departure, **Cracked Cove** and **Brekky Byway** appear under Exits without Spoiler mode. Take Cracked Cove toward Caffeine Caverns; entering the caverns introduces the farther Breakfast areas normally.
+After that departure, **Cracked Cove** and **Brekky Byway** appear under Exits without Spoiler mode. Speak to the Cracked Cove officer, recruit **Baconator in Brekky Byway**, then return to the officer to enter Caffeine Caverns. Entering the caverns introduces the farther Breakfast areas normally.
 
 The All category combines destinations and bookmarks. The filter switches between all active current-map destinations and reachable destinations. Directions explain known blockers and guide you to required conversations, crystals or exits. Spoiler mode is initially off. Events gain contextual names after you encounter them in that playthrough; spoiler mode names them immediately. Save normally to retain that history. Older saves learn repeating scenes when encountered again. Save locations or selected destinations under F8, Navigation, Bookmarks. Bookmarks persist between sessions and can route across supported maps and unlocked vehicles.
 
