@@ -319,6 +319,8 @@ An inert receipt retains the native base/picture instance, same-map scene identi
 
 ## Footsteps-and-fade departures
 
+The later [recruitment narration reports](recruitment-narration.md) separately track the owner-reported Brekky arrivals/regroup and Gregg's jump. Those pending fixes are not part of the verified departure coverage below.
+
 The optional captions Frydusa flees and The archaeologist leaves cover the Oasis escape60:87:0:50 and all four returning archaeologists:48:21:1:22,49:24:1:21,62:2:1:19 and60:87:0:84. These scenes show a fade with footsteps and a character absent afterward; there is no visible running path to narrate. `dialogue/departures.js` owns exact common38 acceptance receipts. It preserves native picture/event progression and only describes the removal after native scene/resource/fade readiness reopens and postrender confirms the attached character sprite's hidden/empty graphic. A switch or sound alone is insufficient.
 
 The existing command117 continuation after native child creation now notifies this bounded observer for common38. Exact root-map interpreter/list/index and child identity qualify one genuine activation. Receipts are inert across the same-map fade and the archaeologists' autorun page replacement; actors are never sent to workers. Shared queue admission remains eight, the actual character collection bound512, initial receipt lifetime600frames and unpainted ready-queue lifetime240frames. Recorded and NVDA descriptions use the existing FIFO and confirmed-playback continuation. No dialogue confirmation, NPC interaction, native wait or movement is added.
