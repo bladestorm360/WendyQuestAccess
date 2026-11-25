@@ -34,7 +34,7 @@ def stage_narration():
     if not clips or len(clips) > 177 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
         raise ValueError('Malformed narration clips')
     pack = struct.pack('<' + 'I' * len(clips), *(len(clip) for clip in clips)) + b''.join(clips)
-    #177 original recordings; the six diagram clips extend the verified169-clip pack.
+    #177 original recordings: six map and two departure clips extend the verified169-clip pack.
     if len(pack) > 2176 * 1024:
         raise ValueError('Narration clips exceed their playback budget')
     target = OUT / 'wendyquest-access/narration.webmpack'

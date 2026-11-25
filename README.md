@@ -111,3 +111,5 @@ The mod's settings and bookmarks live in its local user profile and are retained
 ## Credits
 
 Original accessibility implementation by bladestorm360. Wendy Quest and its artwork, text and runtime belong to their respective owners and are not included. Navigation samples are reused from the author's FFPR Core mod. PRISM, SDL3, OpenAL Soft and their required notices ship with the mod; see ThirdPartyNotices.txt and the installed LICENSES/audio-deps folders. The OpenAL Soft source and HRTF dataset attribution are included there.
+
+Atlas opening, marking and closing animations, Frydusa's escape and the four archaeologists' departures also have brief optional visual descriptions.

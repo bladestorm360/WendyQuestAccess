@@ -49,6 +49,13 @@ function bookName(entry) {
 }
 
 function excludedDestination(entry, page, map) {
+    // Breaded Bay's top east trigger can only be entered from the active
+    // trigger directly below it. Both have the same unconditional world
+    // reservation; reaching that approach has already left the map. Keep the
+    // seven usable boundary tiles, not this redundant covered destination.
+    if(map===49&&entry.id===3&&entry.x===27&&entry.y===7&&page.trigger===1&&page.priorityType===0&&
+        page.list.length===3&&page.list[0].code===357&&page.list[0].parameters[1]==='disableAutoMarker'&&
+        page.list[1].code===201&&page.list[1].parameters.join(',')==='0,113,39,9,0,0')return true;
     // This retired Saltcaster-return scene is parked beyond Fry Fields'
     // walkable terrain. Its active story flag does not create a real exit.
     if (map===14 && entry.id===25 && entry.name==='(OLD VERSION) BackToRussetwood' &&

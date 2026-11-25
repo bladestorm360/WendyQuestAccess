@@ -27,7 +27,7 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//177 original recordings; the six diagram clips extend the verified169-clip pack.
+//177 original recordings: six map and two departure clips extend the verified169-clip pack.
 const PACK_LIMIT = 2176 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
