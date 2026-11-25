@@ -1,6 +1,6 @@
 # Recruitment narration reports — November25
 
-The owner first requested durable reports, then authorized fixing this sequence. Implementation and the full narration regression pass; final runtime, installation/recovery, exact security and local deployment are in progress. The single status ledger is [feature-checkpoint](feature-checkpoint.md#recruitment-scene-narration-reports--november25). Native locators below use zero-based command indices from the pinned build26578620; no game source is reproduced here.
+The owner first requested durable reports, then authorized fixing this sequence. Implementation, documentation, offline checks, exact security and local deployment are complete. Installed plan24f496e2/source013baab includes all five cues below; actual gameplay/audio remain owner confirmation. [Deployment and reproduction](deployment.md#recruitment-arrivals-regroup-and-greggs-hop) · [Single status ledger](feature-checkpoint.md#recruitment-scene-narration-reports--november25). Native locators below use zero-based command indices from the pinned build26578620; no game source is reproduced here.
 
 | Reported dialogue anchor | Verified native visual | Coverage and required correction |
 |---|---|---|
