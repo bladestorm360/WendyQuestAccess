@@ -1,6 +1,6 @@
 # Wendy Quest Screen Reader V0.5
 
-An accessibility mod for **WendyQuest: Legend of the Four Corner Stones** on Windows. It provides spoken menus and dialogue, destination browsing, directions, optional autowalk, spatial navigation sounds, battle timing assistance and optional voiced animation descriptions.
+An accessibility mod for **WendyQuest: Legend of the Four Corner Stones** on Windows. It provides spoken menus and dialogue, destination browsing, directions, optional autowalk, spatial navigation sounds, battle timing assistance and optional voiced animation descriptions. Atlas and departure scenes are included.
 
 **Private test build, version 0.5.0-test-build.** For invited testers; the repository remains private. This package includes the latest navigation, battle, puzzle and animation-description fixes. The installer is unsigned.
 
@@ -17,7 +17,6 @@ Requires 64-bit Windows 10 or 11, .NET Framework 4.8, and the English Steam game
 The installer generates navigation data from your own game files. It preserves saves and preferences, and retains the original scripts for removal. Keep the installer ZIP for updates or repair. If the selected game folder requires administrator access, run the installer as administrator only when needed.
 
 For an update or repair, close the game and run the newer installer using Install or update. **Verify installed files** checks an existing installation. **Remove mod** restores the original scripts and removes the mod's files while retaining saves and preferences. Changed or unrecognized files are preserved; an interrupted update is recovered on the next run. Do not delete the game's `.wendyquest-access-recovery` folder while the mod is installed. Steam verification may replace patched scripts; reinstall the mod afterward.
-Atlas opening, marking and closing animations, Frydusa's escape and the four archaeologists' departures also have brief optional visual descriptions.
 
 
 ## First steps

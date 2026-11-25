@@ -2864,12 +2864,13 @@ parentPort.on('message', message => {
     catalog=json.loads((ROOT/'src/dialogue/narration-cues.json').read_text(encoding='utf8'))
     pack=(service/'narration.webmpack').read_bytes();offset=4*len(catalog);rows=[]
     selected={'shrine-lights','shrine-reunion','grunt-ambush','party-jailed','jail-impact',
-              'sir-chicken-advances','chomps-walks-away','jail-breach','ability-upgrade','chicken-falls','cauldron-wall-breaks'}
+              'sir-chicken-advances','chomps-walks-away','jail-breach','ability-upgrade','chicken-falls','cauldron-wall-breaks',
+              'map-opens','map-closes','map-wendy','map-quest','map-marks','map-erases','frydusa-leaves','archaeologist-leaves'}
     for index,name in enumerate(catalog):
         length=struct.unpack_from('<I',pack,4*index)[0]
         if name in selected:rows.append([name,offset,length])
         offset+=length
-    if len(rows)!=11 or offset!=len(pack):raise ValueError('Caption decode catalog differs from exact pack')
+    if len(rows)!=19 or offset!=len(pack):raise ValueError('Caption decode catalog differs from exact pack')
     (app/'caption-voices.json').write_text(json.dumps(rows),encoding='utf8')
     shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'audio-worker.cjs', service / 'production-audio-worker.cjs')
     (service / 'audio-worker.cjs').write_text('''
@@ -3166,7 +3167,7 @@ def main():
             raise RuntimeError('Incomplete slow sleep continuation')
         print('Verified the full original sleep recording at80 percent across the actual30-frame fade, native transfer, paused loading and the next ready scene, retaining its playhead through natural completion.')
         caption_voices=json.loads(receipt.with_suffix('.json.caption-voices').read_text(encoding='utf8'))
-        if len(caption_voices)!=11 or any(not row['seconds']>0 for row in caption_voices):
+        if len(caption_voices)!=19 or any(not row['seconds']>0 for row in caption_voices):
             raise RuntimeError('New caption recordings failed exact packaged Chromium decoding')
         print('Verified all eleven selected shrine, jail, upgrade, Sir Chicken and cavern-wall recordings decode in the pinned Chromium host.')
         skill_voices = receipt.with_suffix('.json.skill-voices').read_text(encoding='utf8').splitlines()
