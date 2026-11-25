@@ -1,5 +1,6 @@
 'use strict';
 
+const { createDepartureTracker } = require('./departures');
 const { createAtlasTracker } = require('./atlas-visuals');
 const jailVisuals = require('./jail-visuals');
 const cues = require('./narration-cues.json');
@@ -26,7 +27,7 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//175 original recordings; the six diagram clips extend the verified169-clip pack.
+//177 original recordings; the six diagram clips extend the verified169-clip pack.
 const PACK_LIMIT = 2176 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
@@ -52,6 +53,7 @@ function unpackClips(root, bytes) {
 function createNarration(root, host, preferences) {
     const glitches=createGlitchTracker(root);
     const atlas=createAtlasTracker(root,host.graphics);
+    const departures=createDepartureTracker(root,host.graphics);
     const skillActions=new WeakMap();
     let pack = null;
     let loading = null;
@@ -162,7 +164,7 @@ function createNarration(root, host, preferences) {
         if (!keepPlayback) stopClip();
     }
 
-    function pendingCount() { return atlas.size + reactions.length + carried.length + (owner?.queue.length || 0); }
+    function pendingCount() { return departures.size + atlas.size + reactions.length + carried.length + (owner?.queue.length || 0); }
 
     // A confirmed description is already visible information. Keep only its
     // caption ID after its source scene retires; actor/interpreter pointers and
@@ -174,6 +176,7 @@ function createNarration(root, host, preferences) {
             for (const state of owner.queue) {
                 if (state.confirmed && carried.length < QUEUE_LIMIT) carried.push(state.id);
                 else if(state.visual===-14)atlas.retain(state);
+                else if(state.visual===-15)departures.retain(state);
             }
         }
         leave(scene, false, keepReactions, true);
@@ -373,6 +376,20 @@ function createNarration(root, host, preferences) {
         const context = owner ?? begin(scene, state.interpreter);
         if (pendingCount() >= QUEUE_LIMIT) return;
         context.queue.push(state);environment = null;scene._wqaEnvironmentPending = false;
+    }
+
+    function departureAccepted(scene,script) {
+        if(enabled()&&scene?._wqaMapRestored&&pendingCount()<QUEUE_LIMIT)departures.accepted(scene,script);
+    }
+    function departurePresent(scene) {
+        if(!enabled()){departures.retire(scene);return;}
+        if(!ready(scene))return;
+        if(!voiceReady()){if(failed)departures.retire(scene);else warm(scene,true);return;}
+        const states=departures.take(scene);if(!states.length)return;
+        if(owner&&owner.scene!==scene)leave(owner.scene);
+        const context=owner??begin(scene);context.hasReactions=true;
+        for(const state of states)if(pendingCount()<QUEUE_LIMIT)
+            context.queue.push({...state,frame:host.graphics.frameCount,order:++sequence});
     }
 
     function atlasAccepted(scene,script,id) {
@@ -683,6 +700,7 @@ function createNarration(root, host, preferences) {
     }
 
     function visibleActorCue(scene, state) {
+        if(state.visual===-15)return departures.visible(scene,state);
         if(state.visual===-14)return atlas.visible(scene,state);
         if(state.visual===-13)return root.$gameScreen._flashColor?.[3]>0 &&
             scene._spriteset._tilemap.worldVisible===true &&
@@ -789,7 +807,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { atlasAccepted, atlasPresent, cancel(scene){atlas.retire(scene);host.cancelNarrationSpeech?.();leave(scene);}, skillAccepted, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
+    return { departureAccepted, departurePresent, atlasAccepted, atlasPresent, cancel(scene){departures.retire(scene);atlas.retire(scene);host.cancelNarrationSpeech?.();leave(scene);}, skillAccepted, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

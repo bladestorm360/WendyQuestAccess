@@ -433,7 +433,9 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessAtlasAccepted?.(SceneManager._scene,this,params[0]);\n',
         termination: b'    if(this===$gameMap?._interpreter&&SceneManager._scene?._wqaMapRestored)'
                      b'globalThis.WendyQuestAccessEventCompleted?.(SceneManager._scene,this);\n',
-        companions_entry: b'\n        if(Graphics._wqaNarrationEnabled&&params[0]===65&&'
+        companions_entry: b'\n        if(Graphics._wqaNarrationEnabled&&params[0]===38&&SceneManager._scene?._wqaMapRestored)'
+                          b'globalThis.WendyQuestAccessDepartureAccepted?.(SceneManager._scene,this);'
+                          b'if(Graphics._wqaNarrationEnabled&&params[0]===65&&'
                           b'this._mapId===98&&this._eventId===19&&this._index===34&&'
                           b'this._childInterpreter?._list===commonEvent.list)'
                           b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-5);',
@@ -789,6 +791,7 @@ def map_notification(original):
         globalThis.WendyQuestAccessQuestionsPresent?.(this);
     if (Graphics._wqaNarrationEnabled && this.filters?.length && this._TKMFilters?.length)
         globalThis.WendyQuestAccessScreenGlitchPresent?.(this);
+    if (Graphics._wqaNarrationEnabled && this._wqaDeparturePending) globalThis.WendyQuestAccessDeparturePresent?.(this);
     if (Graphics._wqaNarrationEnabled && this._wqaAtlasPending) globalThis.WendyQuestAccessAtlasPresent?.(this);
     if (this._wqaNarrationActive || this._wqaEnvironmentPending || this._wqaReactionReceipts || Graphics._wqaNarrationContinuation) globalThis.WendyQuestAccessNarrationPresent?.(this);
     // The opening has no controllable field before its first visual beat.

@@ -4256,5 +4256,13 @@
   "map-erases": {
     "text": "Symbols fade from the atlas.",
     "beats": []
+  },
+  "frydusa-leaves": {
+    "text": "Frydusa flees.",
+    "beats": []
+  },
+  "archaeologist-leaves": {
+    "text": "The archaeologist leaves.",
+    "beats": []
   }
 }
