@@ -1,6 +1,6 @@
 # Release procedure
 
-The owner authorized public source and GitHub downloads on November27. The first public mod release is **0.5.0**, tag **v0.5.0**. The reusable setup has its own version **1.0.0**. Routine fixes still use focused local deployment; rebuild setup only when its acquisition, compatibility or offline control contract changes. Publishing future releases remains a deliberate release action, rather than a build side effect.
+The owner authorized public source and GitHub downloads on November27. The current public mod release is **1.0.0**, tag **v1.0.0**. It corrects the owner's intended release label; the initial0.5.0 public/private assets are withdrawn after verified replacement. The reusable setup has its own version **1.0.0**. Routine fixes still use focused local deployment; rebuild setup only when its acquisition, compatibility or offline control contract changes. Publishing future releases remains a deliberate release action, rather than a build side effect.
 
 ## Source and player guide
 
@@ -16,7 +16,7 @@ The source-only Windows workflow checks the guide, JavaScript syntax, online met
 
 ## Online setup and versioned package
 
-From the clean checkpoint, run tools/package-release.py through tools/run-build.py, with --version0.5.0, a fresh --stage outside Git under the C: analysis workspace and --output pointing to dist/WendyQuestAccess-0.5.0-payload.zip. Do not overwrite the frozen private test ZIP. The builder refuses dirty source and existing output. It never tags, uploads, publishes or launches the game.
+From the clean checkpoint, run tools/package-release.py through tools/run-build.py, with --version1.0.0, a fresh --stage outside Git under the C: analysis workspace and --output pointing to dist/WendyQuestAccess-1.0.0-payload.zip. The owner explicitly authorized removal of the obsolete private test ZIP after V1.0 verification. The builder refuses dirty source and existing output. It never tags, uploads, publishes or launches the game.
 
 The stage contains the standalone WendyQuestAccessSetup.exe, versioned payload bytes, canonical ReadMe.txt, ThirdPartyNotices.txt, SHA256SUMS.txt and local manifests/receipts. Publish only the setup, versioned payload ZIP, two guides/notices and checksums. The payload ZIP contains release.json, engine.cjs, bake.cjs, recipes.json, WendyQuestInstallRuntime.exe and the mod payload. It contains no original game script, map JSON, derived geometry, artwork, saves or game runtime DLLs. Copy/literal recipes retain original game ranges as references; the local baker reads the player's own pinned data.
 
@@ -39,15 +39,17 @@ Re-run affected gameplay fixtures when gameplay code changes; otherwise retain r
 
 Verify trusted dependency hashes/signatures and the final compiler inputs. Sign with an owner-controlled trusted certificate if available, inner binaries before the outer setup; never invent a signature. No suitable certificate is currently available, so the README discloses the unsigned installer. Scan the exact setup, payload ZIP and expanded package with current Microsoft Defender, recording scanner signature, engine/definition versions, time, hashes and results. A clean scan does not guarantee reputation acceptance. Do not disable protections or strip download-origin metadata.
 
-Commit/push the release source and verify origin/main. Record the clean-checkout and exact-payload evidence. Create the immutable v0.5.0 source tag and a draft release; upload only the five approved assets. Download the draft assets through GitHub and compare their exact hashes before public availability. Change repository visibility under the owner's explicit authorization, publish the stable/latest release, then check anonymous release metadata, asset SHA/size, the real shipped setup download/install path and the complete rendered root README. No authentication or repository token belongs in the installer.
+Commit/push the release source and verify origin/main. Record the clean-checkout and exact-payload evidence. Create the immutable v1.0.0 source tag and a draft release; upload only the five approved assets. Download the draft assets through GitHub and compare their exact hashes before public availability. Change repository visibility under the owner's explicit authorization, publish the stable/latest release, then check anonymous release metadata, asset SHA/size, the real shipped setup download/install path and the complete rendered root README. No authentication or repository token belongs in the installer.
 
 ## Local deployment and closure
 
 With the game closed, use the final setup at the established Steam target. Verify all installed identities, root release receipt and16 originals; compare saves and browser-backed preferences before/after. Re-run installation to prove the real endpoint's up-to-date result. Refresh only the sole optional recovery copy after success. Keep the canonical native recovery directory in the game; the root release receipt is separate from that schema.
 
-Consolidate reproducible commands, source/asset hashes, verification limits, public URL/ref and scanner evidence in the existing release-final/verification.json and defender.txt. Update the ordered checkpoint, release/deployment records and memory. Push and verify closure. Remove disposable source exports, expanded packages, isolated mirrors, test outputs and build/stage files; keep final distribution assets and the one optional recovery. Preserve unique source/research inputs and the frozen earlier private test artifact. Unconfirmed physical audio/gameplay and the old intermittent cave-input issue remain separate from installer verification.
+Consolidate reproducible commands, source/asset hashes, verification limits, public URL/ref and scanner evidence in the existing release-final/verification.json and defender.txt. Update the ordered checkpoint, release/deployment records and memory. Push and verify closure. Remove disposable source exports, expanded packages, isolated mirrors, test outputs and build/stage files; keep final distribution assets and the one optional recovery. Preserve unique source/research inputs. Remove superseded0.5 public/private distribution files after the V1.0 replacement verifies. Unconfirmed physical audio/gameplay and the old intermittent cave-input issue remain separate from installer verification.
 
 ## V0.5 verified private artifact
+
+Historical record: the owner subsequently authorized removing this obsolete private-test ZIP after V1.0 verification.
 
 Completed November24 at frozen source58ec36400d56e2fa5ba94e42a453f0a0dd8ec202. Archive dist/Wendy Quest Screen Reader V0.5-test-build.zip is5,788,412bytes, SHA2568a582bdd4433d499862d926bb40e503effc971836713ce94ec4e14e7ae973416; metadata0.5.0-test-build, development false. README/embedded/plain guide and version resources match. The final archive, executable and expanded embedded payload pass signed Microsoft Defender scans; the original executable is unsigned, as disclosed. Its four outer files contain no game data or private logs.
 
@@ -57,6 +59,8 @@ Consolidated verification/security/local rehearsal/cleanup evidence: C:/Games/De
 
 
 ## V0.5 verified public release
+
+Historical record: the owner subsequently corrected this label to V1.0 and requested removal of the superseded release assets.
 
 Public stable/latest v0.5.0 is frozen at a1431561ead3f39a505c72d578b39ba057f83a18. Setup1.0.0 is207872bytes/SHA25614466e1ee9fe97948adca13949cde68815dda69b86d16161a8fe62e91c1fd130; WendyQuestAccess-0.5.0-payload.zip is5979259bytes/SHA256e711476bc8b9882a4ed8584c5a9c802b7cc75d1ea89a1f382a92d5a3daa3955f. The guide/notices/checksums accompany them. [Public downloads](https://github.com/bladestorm360/WendyQuestAccess/releases/tag/v0.5.0) and complete GitHub root README are verified without authentication.
 

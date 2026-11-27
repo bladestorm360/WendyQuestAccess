@@ -1,4 +1,4 @@
-# Wendy Quest Screen Reader V0.5
+# Wendy Quest Screen Reader V1.0
 
 ## Purpose
 
