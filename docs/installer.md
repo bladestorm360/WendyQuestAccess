@@ -31,3 +31,5 @@ To extend the updater, retain the no-fetch fast path, exact repository/asset tru
 ## Platform references
 
 Checked November27: [GitHub release asset metadata, SHA-256 and public downloads](https://docs.github.com/en/rest/releases/assets) and [Microsoft signing and reputation limits](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options). The receipt/archive checks provide integrity; they do not claim a trusted publisher signature or universal scanner acceptance.
+
+November27 completion: public tag a143156/v0.5.0 and setup1.0.0 pass the full synthetic, native mirror, actual anonymous endpoint and local install/current/verify checks. The optional progress-file observer tolerates a concurrent write collision; it never abandons the child transaction for missing status text. See the [public release record](release.md#v05-verified-public-release) and [deployment evidence](deployment.md#november27-public-github-installer-release).
