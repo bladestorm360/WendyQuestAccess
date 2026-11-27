@@ -10,6 +10,7 @@ const { localHandoffName, handoffCaption, iceOpensPassage, chillcrestQuestExit, 
 const { transferOptions, pageMayTransfer } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { readoutLimit, chunkReadout, createRouteReadout } = require('./route-readout');
+const { destinationName } = require('./destination-names');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { createBoatJourney } = require('./boat-journey');
 const { createLocalDetour } = require('./local-detour');
@@ -43,7 +44,8 @@ function routeBoundary(root, eventId, spoilers, edge, mode = 'walk') {
     if (map._mapId === 113 && !worldEntranceRevealed(root, eventId, spoilers))
         return { boundaryName: 'Unmarked passage' };
     const target = eventTarget(root, mode, event, entry, page, spoilers);
-    const name = target?.category === 'exits' ? target.name.replace(/^(?:return to|to) /i, '') : '';
+    const publicName=target&&destinationName(map,eventId,target.name);
+    const name = target?.category === 'exits' ? publicName.replace(/^(?:return to|to) /i, '') : '';
     if (name && name !== 'Exit' && name !== 'Map') return { exit: name };
     const options = edge ? [edge] : transferOptions(map._mapId, entry, page, root.$dataCommonEvents);
     const destination = options[0]?.map;
@@ -51,7 +53,7 @@ function routeBoundary(root, eventId, spoilers, edge, mode = 'walk') {
         const exit = destination === 113 ? 'the world map' : root.$dataMapInfos?.[destination]?.name;
         if (exit && !/^Map\d+$/i.test(exit)) return { exit };
     }
-    if (target?.category === 'events' || target?.category === 'checkpoints') return { boundaryName: target.name };
+    if (target?.category === 'events' || target?.category === 'checkpoints') return { boundaryName: publicName };
     return {};
 }
 
@@ -815,7 +817,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 // A warning conversation is a player-owned stopping point.
                 startBeaconApproach(job, result, gate.event);
                 follow(job, result, { kind: 'routeDirections', name: job.label, legs: result.legs,
-                    npcBlocker: gate.name, facing: result.arrival.facing, more: result.more === true },
+                    npcBlocker: destinationName(root.$gameMap,gate.event,gate.name), facing: result.arrival.facing, more: result.more === true },
                 { ...job, target: gate.event, point: false, controlPrerequisite:false });
             }
             else if (result?.status === 'enemyBlocked') {

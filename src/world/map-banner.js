@@ -23,7 +23,7 @@ const LOCAL_NAMES = Object.freeze({
     142: 'Burgenburg house 1', 143: 'Nuggedor house 5', 144: 'Burgenburg house 3',
     145: 'Nuggedor house 7', 146: 'Sunrise Bay house 1', 147: 'Sunrise Bay house 2',
     148: 'Sunrise Bay house 3', 149: 'Sunrise Bay coffee mud baths', 150: "Helly's Surf Shop",
-    151: 'Sunrise Bay shop 3', 152: 'Scrambled Shores house', 153: 'Bacon Beach house',
+    151: 'Sunrise Bay bookshop', 152: 'Scrambled Shores house', 153: 'Bacon Beach house',
     154: 'Nuggedor house 2', 155: 'Nuggedor house 4', 156: 'Nuggedor house 6',
     157: "Baconator's house, first floor", 158: "Baconator's house, second floor",
     159: 'Patty Pit house 1', 160: 'Patty Pit house 2',

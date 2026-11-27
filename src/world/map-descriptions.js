@@ -88,7 +88,7 @@ const maps = Object.freeze({
     146: COAST_HOUSE, 147: COAST_HOUSE, 148: COAST_HOUSE,
     149: 'Wooden benches and bins of clothing line the coffee mud-bath business. A table stands on a dark rug in the middle.',
     150: "A long wooden counter divides Helly's Surf Shop. A candle lights the counter, with cabinets along the back wall.",
-    151: 'Cabinets, books and a counter fill a compact shop. Barrels and a bright rug occupy the front.',
+    151: 'A bookcase, book stacks and books on the counter fill a compact bookshop. Cabinets line the back wall, with barrels and a bright rug toward the front.',
     152: COAST_HOUSE, 153: COAST_HOUSE, 154: DESERT_HOUSE, 155: DESERT_HOUSE, 156: DESERT_HOUSE,
     157: 'A winding hall links several furnished rooms with blue stone walls. A fireplace lights the far room, and stairs rise on the opposite side.',
     158: 'A long upper hall links bedrooms furnished with shelves, barrels and small tables. Bright windows light the north wall.',

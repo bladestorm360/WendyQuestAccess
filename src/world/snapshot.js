@@ -2,6 +2,7 @@
 
 const { optionalSceneAvoidance } = require('./local-destinations');
 const { localCaveObject } = require('./shared-caves');
+const { numberDestinations } = require('./destination-names');
 
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { contextualEvent } = require('./event-knowledge');
@@ -223,6 +224,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
     if (!routesOnly && mode === 'walk') objects.push(...boardingTargets(map));
     if (!routesOnly && mode === 'airship') objects.push({ id: 517, x: player._x, y: player._y, name: 'Nearest landing site',
         category: 'vehicles', nearestLanding: true });
+    if(!routesOnly)numberDestinations(map,objects);
     for (const bookmark of bookmarks) {
         if (bookmark.map !== id || bookmark.mode !== mode) continue;
         const label = { id: bookmarkId(bookmark.id), category: 'bookmarks', name: bookmark.name };

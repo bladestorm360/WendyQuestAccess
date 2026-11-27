@@ -174,7 +174,7 @@ function localHandoffName(map, event) {
 // selection, including its explicit discovery/encounter overrides.
 function handoffCaption(handoff, publicName, spoilers, activate = false) {
     const name = publicName || (handoff && (spoilers ? handoff : 'Scene trigger'));
-    return activate && name === 'Scene trigger' ? undefined : name;
+    return activate && /^Scene trigger(?: \d+)?$/.test(name) ? undefined : name;
 }
 
 // Duplicate trigger tiles can retain their original page after another tile
