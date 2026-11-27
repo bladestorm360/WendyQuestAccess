@@ -51,6 +51,7 @@ def bundle():
         './runtime/audio': 'runtime/audio.js',
         './dialogue/narration': 'dialogue/narration.js',
         './departures': 'dialogue/departures.js',
+        './healing-visuals': 'dialogue/healing-visuals.js',
         './recruitment-visuals': 'dialogue/recruitment-visuals.js',
         './atlas-visuals': 'dialogue/atlas-visuals.js',
         './idle-narration': 'dialogue/idle-narration.js',
