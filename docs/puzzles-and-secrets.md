@@ -367,3 +367,11 @@ Verification: tests/puzzle-speech.test.cjs checks exact full/brief text, ordinar
 
 
 The Secret Island panel also provides the default-off complete cave solver. With Autowalk and Automatic interactions on, Shift+G collects available cave pickups, uses native checkpoints/crystals/events and transfers, then stops after the chase. Messages retain Confirm. See [complete cave solving](navigation.md#complete-cave-solving-and-native-state-reconciliation) for resume, cancellation and the native one-way pickup limit.
+
+### Other hidden Steam achievements
+
+November27: the local Steam app3339970 binary achievement schema marks exactly three of13 achievements hidden: True Friends, I Can Do This All By Myself (frygorlessachievement), and Rebellious Phase (donthealatstartachievement). The last two are the other hidden achievements requested by the owner. The schema is primary platform metadata, read-only, not the player's achievement progress; no Steam state was modified.
+
+I Can Do This All By Myself is granted in014:5/page1/19 in the alternate post-Frydusa return-to-Frygor-house branch with the normal Frygor recruitment state absent. Defeat Frydusa before recruiting Frygor and return to his house for that scene. Rebellious Phase is granted in016:27/page0/8 when Wendy's HP is below20 and the refusal counter variable9 has reached13. Keep trying the Crispy Beach exit without healing after the opening battle until the final refusal; it is a repeated exit interaction, not a no-healing whole-game run.
+
+Read-only schema locator: Steam/appcache/stats/UserGameStatsSchema_3339970.bin. The official public global-achievement page could not be opened by the browsing tool; a secondary public list agrees on the two display names and hidden status, but the precise conditions above come from native map scripts, not that guide. Existing complete239-map/common/troop achievement audit remains valid; no implementation or unlock manipulation is added.
