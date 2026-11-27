@@ -1,6 +1,6 @@
 # Online installer ownership
 
-The reusable .NET4.8 x64 shell follows the author's FFX stable-release contract while retaining Wendy Quest's existing local native utility and durable transaction engine. No game is launched. Setup1.0.0 and mod0.5.0 have independent versions. This document covers installer changes only; gameplay systems remain Closed.
+The reusable .NET4.8 x64 shell follows the author's FFX stable-release contract while retaining Wendy Quest's existing local native utility and durable transaction engine. No game is launched. Setup1.0.0 and the mod version are tracked independently; the corrected current mod version is1.0.0. This document covers installer changes only; gameplay systems remain Closed.
 
 ## Acquisition and current-install decision
 
@@ -33,3 +33,5 @@ To extend the updater, retain the no-fetch fast path, exact repository/asset tru
 Checked November27: [GitHub release asset metadata, SHA-256 and public downloads](https://docs.github.com/en/rest/releases/assets) and [Microsoft signing and reputation limits](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options). The receipt/archive checks provide integrity; they do not claim a trusted publisher signature or universal scanner acceptance.
 
 November27 completion: public tag a143156/v0.5.0 and setup1.0.0 pass the full synthetic, native mirror, actual anonymous endpoint and local install/current/verify checks. The optional progress-file observer tolerates a concurrent write collision; it never abandons the child transaction for missing status text. See the [public release record](release.md#v05-verified-public-release) and [deployment evidence](deployment.md#november27-public-github-installer-release).
+
+The owner corrected the public label to V1.0 without changing installer logic. The refreshed setup and the prior reusable setup both recognize the actual installed1.0.0 as current with no package fetch or managed-file writes. The superseded0.5 asset set/private ZIP are removed; [current release](release.md#v10-corrected-public-release).
