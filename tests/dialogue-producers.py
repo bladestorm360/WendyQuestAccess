@@ -62,6 +62,7 @@ for name, tail in [
     ("Sprite_BattleScreenParticipant['prototype']['StateAnimationCleanUp']", "},Sprite_Battler['prototype']['initialize']"),
     ("BattleManager['displayExp']", "},Game_Unit['prototype']['makeActions']"),
     ("Game_Battler['prototype']['getMomentum']", "},Game_Battler['prototype']['addMomentum']"),
+    ("Game_Actor['prototype']['getMomentumMax']", "},Game_Actor['prototype']['getNextMomentumChanceRate']"),
     ("Game_Battler['prototype']['addMomentum']", "},Game_Battler['prototype']['setMomentum']"),
     ("Game_Battler['prototype']['setMomentum']", "},Game_Battler['prototype']['getMomentumMax']"),
     ("BattleHelper['SpawnMomentumCrystal']", "},BattleHelper['IsBattleScene']"),

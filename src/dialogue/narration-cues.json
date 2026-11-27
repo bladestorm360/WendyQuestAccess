@@ -4049,11 +4049,11 @@
     "beats": []
   },
   "momentum-collected": {
-    "text": "A momentum crystal appears and bounces, then flies into the Momentum meter.",
+    "text": "A momentum crystal bounces into the Momentum meter.",
     "beats": []
   },
   "momentum-full": {
-    "text": "A momentum crystal appears and bounces, then disappears in a small starburst with a breaking sound.",
+    "text": "A momentum crystal bounces, then vanishes in a starburst.",
     "beats": []
   },
   "skill-crispy-shield": {

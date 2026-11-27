@@ -180,13 +180,13 @@ async function verifyBattleOutcomes() {
     return receipt;
 }
 
-async function verifyLevelUp() {
+async function verifyLevelUp(level) {
     const f = await enter(mapData(19));
     const { c, scene, settings } = f;
     const data = name => JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw', 'data', name), 'utf8'));
     const actor = data('Actors.json')[1];
     const currentClass = data('Classes.json')[actor.classId];
-    const learning = currentClass.learnings.find(entry => entry.level === 5);
+    const learning = currentClass.learnings.find(entry => entry.level === level);
     assert(learning);
     const skill = data('Skills.json')[learning.skillId];
 
@@ -208,7 +208,7 @@ async function verifyLevelUp() {
     let coroutine = null;
     c.CoroutineManager = { StartAnonymousCoroutine(task) { coroutine = task(); } };
     const wendy = Object.assign(new c.Game_Actor(), { _level: learning.level, mhp: 40, mmp: 20, didLevelUp: true,
-        currentClass: () => currentClass, getMomentumMax: () => 2, setMomentum() {}, clearStates() {} });
+        level:learning.level, currentClass: () => currentClass, setMomentum() {}, clearStates() {} });
 
     wendy.displayLevelUp([skill]);
     assert(coroutine);
@@ -222,18 +222,29 @@ async function verifyLevelUp() {
     assert.deepEqual(f.packets(), [], 'level-up speech waits for native autosave');
     c.SceneManager._wqaNativeAutosaves = 0;
     f.until(() => f.packets().length === 1);
-    assert.match(formatSpeech(f.packets()[0]), /Wendy is now level 5/);
+    assert(formatSpeech(f.packets()[0]).includes(`Wendy is now level ${level}`));
     assert.match(formatSpeech(f.packets()[0]), /Health increased|Freshness increased/);
     f.advance();
     f.until(() => f.packets().length === 2);
     const message = formatSpeech(f.packets()[1]);
     assert(message.includes(skill.name));
-    assert(message.includes('momentum pip'));
+    assert(!message.includes('momentum pip'));
+    assert.match(message, /Use [123] Momentum/);
+    assert.match(message, /\+1 Momentum increased/);
+    const gesture = { key: 'i', keyCode: 73, code: 'KeyI', preventDefault() {}, stopPropagation() {} };
+    f.dispatchWindowEvent('keydown', gesture);f.dispatchWindowEvent('keyup', gesture);
+    assert.equal(formatSpeech(f.records.findLast(record => record.kind === 'menuDetails')),
+        'Momentum pip. A golden diamond with a white border.');
+    assert(f.window.pause, 'Details cannot advance the native unlock message');
+    f.advance();
+    const count=f.records.filter(record=>record.kind==='menuDetails').length;
+    f.dispatchWindowEvent('keydown', gesture);f.dispatchWindowEvent('keyup', gesture);
+    assert.equal(f.records.filter(record=>record.kind==='menuDetails').length,count,'retired pip art is unavailable');
 }
 
 (async () => {
     const receipt = await verifyBattleOutcomes();
-    await verifyLevelUp();
+    for (const level of [5,10,15]) await verifyLevelUp(level);
     console.log('Verified installed victory rewards, delayed Momentum, defeat, level-up and skill pages through the native message renderer.');
     console.log('Throttled settled battle result to synthetic render and formatted receipt', receipt.toFixed(2), 'ms.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,7 +1,7 @@
 'use strict';
 
 const { enemyArt, fieldArt, portraitArt } = require('./character-art');
-const { rewardIconArt } = require('../services/dialogue-icons.cjs');
+const { dialogueIconArt } = require('../services/dialogue-icons.cjs');
 const { readMomentum } = require('../battle/outcomes');
 // These blank events sit over the obelisks painted in the tilemap.
 const DAVE_STATUES = new Map([
@@ -329,7 +329,7 @@ function createDialogueObserver(host, notifications) {
             if (action !== 'details' && action !== 'speakerDetails' || !pageIsCurrent(context) ||
                 context.page.automatic) return false;
             const { paint, end } = context.page;
-            const icon = rewardIconArt(paint.text.slice(0, end));
+            const icon = dialogueIconArt(paint.text.slice(0, end));
             if (icon) {
                 submit(context, { kind: 'menuDetails', lines: icon });
                 return true;
@@ -345,7 +345,7 @@ function createDialogueObserver(host, notifications) {
             current.diagramAvailable = current.hasReview = !!diagramIsCurrent(current);
             const pageVisible = pageIsCurrent(current);
             current.speakerAvailable = !!(pageVisible && (current.page.paint.speaker || current.page.paint.portrait ||
-                rewardIconArt(current.page.paint.text.slice(0, current.page.end))));
+                dialogueIconArt(current.page.paint.text.slice(0, current.page.end))));
             return current.diagramAvailable || pageVisible ? current : null;
         },
         announce(context, record) {

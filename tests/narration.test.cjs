@@ -554,8 +554,8 @@ require('./ice-machine-entry.cjs')(fixture,commandContext);
  assert.equal(f.played.length,0);f.frame();assert.equal(f.played[0].id,'momentum-collected');
  normal.phase=capped.phase=2;f.frame();assert.equal(f.played.length,1);
  f.played[0].emit('ended');f.frame();assert.equal(f.played[1].id,'momentum-full');
- assert.match(cues['momentum-collected'].text,/flies into the Momentum meter/);
- assert.match(cues['momentum-full'].text,/momentum crystal.*starburst.*breaking sound/);
+ assert.equal(cues['momentum-collected'].text,'A momentum crystal bounces into the Momentum meter.');
+ assert.equal(cues['momentum-full'].text,'A momentum crystal bounces, then vanishes in a starburst.');
  f.narration.leave(f.scene);assert(f.played[1].paused);
  console.log('Verified both rendered Momentum branches and uninterrupted recorded-caption order.');
 }

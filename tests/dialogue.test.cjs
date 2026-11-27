@@ -1298,6 +1298,9 @@ async function verifySpeakerDetails() {
     f.advance();
     assert.equal(formatSpeech({ kind: 'dialoguePage', text: 'Try a \x01177\x02 today.' }),
         'Try a Junior Bacon Cheeseburger today.');
+    assert.equal(formatSpeech({ kind: 'dialoguePage', text: 'Use 3\x0118\x02 Momentum. \x0118\x02 +1 Momentum increased.' }),
+        'Use 3 Momentum. +1 Momentum increased.');
+    assert.equal(formatSpeech({ kind: 'dialogueChoice', text: '3\x0118\x02' }), '3 momentum pip');
     Object.assign(tilemap, { worldVisible: true, worldAlpha: 1 });
     for (const [map, id] of [[104, 78], [105, 73]]) {
         showRenderedSpeakers(map, [id]);

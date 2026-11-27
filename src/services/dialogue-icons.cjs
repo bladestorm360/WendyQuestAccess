@@ -58,11 +58,21 @@ function rewardIconArt(text) {
     return labels[index] ? ['Item icon. ' + labels[index] + '.'] : null;
 }
 
+function dialogueIconArt(text) {
+    const reward = rewardIconArt(text);
+    if (reward) return reward;
+    if (typeof text === 'string' && text.length <= 384 && /\x0118\x02/.test(text))
+        return ['Momentum pip. A golden diamond with a white border.'];
+    return null;
+}
+
 function dialogueText(text, reward = false) {
     if (typeof text !== 'string' || text.length > 384) return '';
     if (reward) text = rewardIcon(text)?.[2] ?? text;
-    return text.replace(/\x01(\d+)\x02/g, (_, index) => ` ${labels[index] ?? 'icon'} `)
+    // Dialogue already spells out Momentum and its numeric cost/gain. Keep
+    // the decorative pip artwork on Details, without changing native text.
+    return text.replace(/\x01(\d+)\x02/g, (_, index) => reward && index === '18' ? ' ' : ` ${labels[index] ?? 'icon'} `)
         .replace(/\u202B/g, '').replace(/\s+/g, ' ').trim();
 }
 
-module.exports = { dialogueText, rewardIconArt };
+module.exports = { dialogueText, rewardIconArt, dialogueIconArt };
