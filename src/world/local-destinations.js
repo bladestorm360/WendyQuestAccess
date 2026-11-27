@@ -251,8 +251,15 @@ function floorClearsOnUse(entry,page) {
             rows[1].parameters.slice(0,4).join(',')==='120,120,0,0' &&
             rows.slice(0,2).every(row=>Number.isInteger(row.parameters[4])&&row.parameters[4]>=0&&row.parameters[4]<100) &&
             rows[2].parameters.join(',')==='624,624,0' && rows[3].parameters.join(',')==='159';
+        // A native autosave request followed by its own completion flag is
+        // a removable floor prerequisite, provided the ordinary erase-page
+        // proof below succeeds. No other plugin command is inferred safe.
+        const autosave=rows.length===2 && rows[0].code===357 && rows[1].code===123 &&
+            rows[0].parameters[0]==='WendyQuest' && rows[0].parameters[1]==='RequestAutoSave' &&
+            rows[0].parameters[2]==='RequestAutoSave' && rows[0].parameters[3] &&
+            Object.keys(rows[0].parameters[3]).length===0;
         const flags=rows.filter(row=>[121,123].includes(row.code));
-        let clears=rows.length>0 && rows.every(row=>row.indent===0&&(FLOOR_COMPLETION_ROWS.has(row.code)||atlas&&[122,117].includes(row.code))&&
+        let clears=rows.length>0 && rows.every(row=>row.indent===0&&(FLOOR_COMPLETION_ROWS.has(row.code)||atlas&&[122,117].includes(row.code)||autosave&&row.code===357)&&
             (row.code!==205 || row.parameters[1]?.repeat===false && row.parameters[1].list?.length<=64 &&
                 row.parameters[1].list.every(move=>move.code===0||move.code>=15&&move.code<=44)));
         if (clears && rows.some(row=>row.code===214)) clears=true;

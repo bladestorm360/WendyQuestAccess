@@ -11,6 +11,34 @@ const { MAX_LANDINGS, validTile, readCatalog } = require('../src/world/walking-c
 const { timedCave } = require('../src/world/puzzles/cave');
 const { movingEnemy } = require('../src/world/destinations');
 
+// These two native arrival scenes remove their own obstruction before field
+// control returns. This is an offline connection proof, never permission for
+// Autowalk to run a scene or recruit anyone. Live routing retains the trigger.
+function arrivalClears(id, entry, map) {
+    const [first, done] = entry.pages;
+    if (entry.pages.length !== 2 || !done || done.list.length !== 2 ||
+        done.list[0].code !== 214 || done.list[1].code !== 0) return false;
+    const active = Object.keys(done.conditions).filter(key => key.endsWith('Valid') && done.conditions[key]);
+    if (active.length !== 1) return false;
+    if (id === 77 && entry.id === 25 && entry.name === 'TatoriaAppears') {
+        const rows = first.list;
+        return first.trigger === 1 && first.priorityType === 0 && rows.length === 228 &&
+            done.conditions.selfSwitchValid && done.conditions.selfSwitchCh === 'A' &&
+            rows[220].code === 129 && rows[220].parameters.join(',') === '2,0,false' &&
+            rows[225].code === 123 && rows[225].parameters.join(',') === 'A,0' &&
+            rows[226].code === 214 && rows[225].indent === 0 && rows[226].indent === 0 &&
+            !rows.some(row => [201,301,355,356].includes(row.code));
+    }
+    if (id !== 87 || entry.id !== 86 || entry.name !== 'EnemyIntro' ||
+        first.image.characterName !== '~Axoflopl' || first.list.length !== 1 || first.list[0].code !== 0 ||
+        !done.conditions.switch1Valid || done.conditions.switch1Id !== 94) return false;
+    const source = map.events[85], rows = source?.pages[0]?.list;
+    return source?.name === 'FirstTimeEntry' && source.pages[0].trigger === 3 && rows?.length === 55 &&
+        rows[40].code === 301 && rows[40].parameters.join(',') === '0,151,false,false' &&
+        rows[51].code === 121 && rows[51].indent === 0 && rows[51].parameters.join(',') === '94,94,0' &&
+        !rows.some(row => [201,355,356].includes(row.code));
+}
+
 function transferMap(id, map, geometry, flags, common) {
     const events = [];
     const exits = [];
@@ -37,7 +65,7 @@ function transferMap(id, map, geometry, flags, common) {
             pages[1].conditions.switch1Valid && pages[1].conditions.switch1Id===250 &&
             pages[1].list.length===2 && pages[1].list[0].code===214 &&
             pages[0].list.some(row=>row.code===121 && row.parameters.join(',')==='250,250,0');
-        if (clearedEncounter || clearedFloorScene || fortArrival) continue;
+        if (clearedEncounter || clearedFloorScene || fortArrival || arrivalClears(id, entry, map)) continue;
 
         const cell = indexOf(geometry, x, y);
         if (cell < 0) continue;

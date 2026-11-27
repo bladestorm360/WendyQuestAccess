@@ -1,5 +1,13 @@
 # Cross-map transfer investigation
 
+## Breakfast Isles cavern and restored bridge connections
+
+November27: Shellside from world113 at40,29 or43,28 must use the connected Cracked Cove191 entrance, then Caffeine Caverns87 and the appropriate island exit. The east cave landing72,8 was wrongly isolated by the initial EnemyIntro86 body. Native FirstTimeEntry85 completes encounter151 and sets94, selecting that body's erase page. The offline compiler now proves that exact removal. It also proves Brekky Byway77:25's native self-A/erase completion after recruitment. These are detached connectivity facts; the live solver still uses current collision and stops at the real prerequisite. No event, conversation, recruitment or battle is automatically executed by this change.
+
+Cracked Cove191:36's exact RequestAutoSave/self-A pair qualifies only with its matching unconditional erase page. Unknown plugin commands, extra scripts and changed completion pages remain opaque. Unrelated CollisionOn9 remains a wall. The Byway's east/west passage is disconnected before97 and connected after its authored bridge tile edits; the worker may use that shorter restored alternative. Entrance approach directions and visited-landing loop prevention remain unchanged.
+
+[Regression fixture](../tests/breakfast-connections.test.cjs) checks11 onward Caffeine exits,40 worker requests for ten destinations across both bridge states and both control modes, four real field consumers and negative source qualifications. The owner's unique save/log remain outside Git in wendy-momentum-dialogue. All239 map geometry binaries stay identical; only the manifest and two-stage regional connection metadata are refreshed. Full navigation regression and final installation evidence belong to the shared November27 checkpoint. Worker round trips are CPU-throttled fixture measurements, not real-game response times; physical gameplay remains owner confirmation.
+
 ## Installed build 26578620
 
 The bounded in-memory scan read the 239 installed map JSON files. It found 1,065 direct native Transfer Player commands. Of these, 1,000 are on ordinary action or touch event pages, and 524 are the first executable command on those pages. A direct command can still be in a choice, an event branch or a developer map. One target coordinate is outside its destination map, at Map 185 event 18 page 0 command 6. Sixteen commands target their own map.
