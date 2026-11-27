@@ -88,7 +88,7 @@ def main():
        f'[assembly: AssemblyInformationalVersion("1.0.0+{release["source"]}")]\n',encoding='utf8')
     exe=stage/'WendyQuestAccessSetup.exe'
     compiler=Path(os.environ['WINDIR'])/'Microsoft.NET/Framework/v4.0.30319/csc.exe'
-    command=[str(compiler),'/nologo','/target:winexe','/platform:x64','/optimize+','/warnaserror+',
+    command=[str(compiler),'/nologo','/target:winexe','/platform:x64','/optimize+','/warnaserror+','/main:WendyQuestAccessInstaller.Setup',
       '/out:'+str(exe),'/win32manifest:'+str(ROOT/'installer/app.manifest'),
       '/resource:'+str(config)+',release.json','/resource:'+str(controls)+',control.zip','/resource:'+str(readme)+',ReadMe.txt',
       *['/reference:'+name+'.dll' for name in ['System','System.Core','System.Drawing','System.Windows.Forms','System.IO.Compression','System.IO.Compression.FileSystem','System.Web.Extensions']],

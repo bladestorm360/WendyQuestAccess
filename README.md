@@ -21,7 +21,9 @@ The installer is unsigned. Windows may display an unknown-publisher warning. It 
 
 ## Install
 
-Requires 64-bit Windows 10 or 11, .NET Framework 4.8, an internet connection for installation or updates, and the English Steam game: App 3339970, build 26578620. Separate Python, Node.js or mod-loader installations are not required.
+Requires 64-bit Windows 10 or 11, .NET Framework 4.8 and the English Steam game: App 3339970, build 26578620. Separate Python, Node.js or mod-loader installations are not required. The standard installer needs internet access for installation and updates. The manual ZIP works offline after downloading.
+
+### Standard installer
 
 1. Save and close Wendy Quest. Let Steam finish any update.
 2. Download [WendyQuestAccessSetup.exe](https://github.com/bladestorm360/WendyQuestAccess/releases/latest/download/WendyQuestAccessSetup.exe).
@@ -35,6 +37,18 @@ Keep the installer for future updates. Updates preserve saves, bookmarks and pre
 **Verify installed files** checks the local installation without downloading an update. **Remove mod** restores the original scripts and removes the mod while retaining saves and preferences. Both actions work offline. Interrupted changes are recovered on the next run. Unrecognized or externally changed files are preserved instead of overwritten. If access is denied for a protected game folder, rerun the installer as administrator.
 
 Keep the game's .wendyquest-access-recovery folder while the mod is installed. Steam file verification can replace patched scripts; rerun the installer afterward if needed.
+
+### Manual or offline installation
+
+1. Download [WendyQuestAccess-1.0.0-manual.zip](https://github.com/bladestorm360/WendyQuestAccess/releases/download/v1.0.0/WendyQuestAccess-1.0.0-manual.zip).
+2. Use **Extract All** to unpack it into a folder outside the game folder. Keep all extracted files together, including the payload ZIP.
+3. Save and close Wendy Quest. Run **Install.cmd** from the extracted folder.
+4. At the prompt, enter the full folder containing **WendyQuest.exe**, then press Enter. Steam's **Browse local files** can locate it. Keep the command window open until installation completes.
+5. Start NVDA and launch the game normally through Steam. Use **NVDA+Space bar** to select focus mode.
+
+The included command files verify the game, apply required patches, generate navigation data locally and preserve recovery files. No connection is needed during these operations. This installs the version bundled in the ZIP; download a newer manual ZIP and repeat these steps to update. Saves and preferences are retained.
+
+Keep the extracted folder for **Verify.cmd** to check installed files or **Remove.cmd** to restore the original scripts. Both ask for the same game folder and work offline. If access is denied, run the command file as administrator. Keep the game's .wendyquest-access-recovery folder until the mod is removed.
 
 ## Keys
 
