@@ -4317,5 +4317,9 @@
   "assembly-door-opens": {
     "text": "The metal door slides up.",
     "beats": [[105,12,1,116,-1,null,-6]]
+  },
+  "stones-white-light": {
+    "text": "White light fills the screen.",
+    "beats": [[107,3,3,107,-1,null,-6]]
   }
 }

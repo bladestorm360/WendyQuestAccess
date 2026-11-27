@@ -62,6 +62,18 @@ function captureFinale(root, scene, id, recovery = false) {
 
 function finaleVisible(root, host, scene, state) {
     const { id } = state;
+    if(id==='stones-white-light') {
+        const light=picture(root,host,scene,28,'white'),script=root.$gameMap._interpreter;
+        if(root.$gameMap._mapId!==107 || script?._eventId!==3 || script._index<110 || script._index>116 ||
+            script._list!==root.$dataMap?.events?.[3]?.pages?.[3]?.list || !light ||
+            light.data._opacity<200 || light.sprite.worldAlpha<200/255)return false;
+        const pose=light.sprite.worldTransform,frame=light.sprite._frame,anchor=light.sprite.anchor;
+        if(!frame || !anchor || pose.b!==0 || pose.c!==0 || !(pose.a>0) || !(pose.d>0))return false;
+        const x=pose.tx-frame.width*pose.a*anchor.x,y=pose.ty-frame.height*pose.d*anchor.y;
+        // This is the later Corner Stone reaction's actual full-screen white
+        // picture28, distinct from Chomps's earlier sacrifice picture29.
+        return x<=0 && y<=0 && x+frame.width*pose.a>=host.graphics.width && y+frame.height*pose.d>=host.graphics.height;
+    }
     if(id==='assembly-door-opens') {
         const door=picture(root,host,scene,1,'pictures/FINALBOSSDOOR'),map=root.$gameMap;
         // This world-space panel moves176→96 over180 native frames. Match
