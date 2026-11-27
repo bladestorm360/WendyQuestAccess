@@ -6,6 +6,7 @@ const root=__dirname,release=JSON.parse(fs.readFileSync(path.join(root,'release.
 const [action,gameArg,workArg]=process.argv.slice(2);
 const game=path.resolve(gameArg),work=path.resolve(workArg);
 const recovery='.wendyquest-access-recovery',transaction='.wendyquest-access-transaction';
+const installedRelease='WendyQuestAccess-release.json';
 const registry='package.nw/js/plugins.js';
 const hash=data=>crypto.createHash('sha256').update(data).digest('hex');
 const fail=message=>{throw Error(message);};
@@ -59,7 +60,7 @@ function allowed(key){
  relative(key);return Object.hasOwnProperty.call(release.plan.stock,key)||
   key==='package.nw/js/plugins/WendyQuestAccess.js'||key.startsWith('package.nw/wendyquest-access/')||
   /^package\.nw\/wendyquest-access-geometry\/([1-9][0-9]{0,2}\.wqg|manifest\.json|breakfast\.json)$/.test(key)||
-  key===recovery+'/plan.json'||key.startsWith(recovery+'/')&&Object.hasOwnProperty.call(release.plan.stock,key.slice(recovery.length+1));
+  key===installedRelease||key===recovery+'/plan.json'||key.startsWith(recovery+'/')&&Object.hasOwnProperty.call(release.plan.stock,key.slice(recovery.length+1));
 }
 function prune(file){
  let parent=path.dirname(file);
@@ -107,6 +108,14 @@ function oldInstallation(){
  return {plan,originals};
 }
 function checkExisting(old){
+ const marker=target(installedRelease);
+ if(fs.existsSync(marker)){
+  const value=JSON.parse(read(marker,4096));
+  if(value.schema!==1||Object.keys(value).sort().join()!=='archiveSha256,planSha256,schema,source,version'||
+   !/^\d{1,5}\.\d{1,5}\.\d{1,5}$/.test(value.version)||!/^([a-f0-9]{40}|[a-f0-9]{64})$/.test(value.source)||
+   !/^[a-f0-9]{64}$/.test(value.archiveSha256)||!/^[a-f0-9]{64}$/.test(value.planSha256))
+   fail('Changed installation metadata was preserved.');
+ }
  const permitted=old?owned(old.plan):{};
  for(const folder of ['package.nw/wendyquest-access','package.nw/wendyquest-access-geometry'])
   for(const key of Object.keys(inventory(target(folder))))if(!Object.hasOwnProperty.call(permitted,folder+'/'+key))fail('Unrecognized mod file will be preserved: '+folder+'/'+key);
@@ -182,6 +191,7 @@ function main(){
   for(const key of Object.keys(owned(old.plan)))changes.set(key,null);
   for(const key of Object.keys(old.plan.stock))changes.set(recovery+'/'+key,null);
   changes.set(recovery+'/plan.json',null);
+  changes.set(installedRelease,null);
  }else{
   progress('Generating navigation data from your game.');
   const maps=path.join(work,'maps'),args=process.argv;
@@ -193,7 +203,15 @@ function main(){
   for(const key of Object.keys(release.plan.payload))changes.set('package.nw/'+key,read(path.join(root,'payload',key)));
   for(const key of Object.keys(expected))changes.set('package.nw/wendyquest-access-geometry/'+key,read(path.join(maps,key)));
   for(const [key,data]of Object.entries(originals))changes.set(recovery+'/'+key,data);
-  changes.set(recovery+'/plan.json',Buffer.from(JSON.stringify(release.plan,null,2)+'\n'));
+  const planBytes=Buffer.from(JSON.stringify(release.plan,null,2)+'\n');
+  changes.set(recovery+'/plan.json',planBytes);
+  const download=JSON.parse(read(path.join(work,'download.json'),4096));
+  if(download.schema!==1||download.tag!=='v'+release.version||!/^[a-f0-9]{64}$/.test(download.sha256))fail('Missing verified download identity.');
+  // The receipt is part of the same durable transaction as every mod file.
+  // Its plan hash avoids a circular archive/manifest hash and detects a later
+  // developer deployment before an updater calls the installation current.
+  changes.set(installedRelease,Buffer.from(JSON.stringify({schema:1,version:release.version,source:release.source,
+   archiveSha256:download.sha256,planSha256:hash(planBytes)},null,2)+'\n'));
  }
  progress(action==='uninstall'?'Restoring the original game.':'Installing and verifying the update.');
  apply(changes,originals[registry]);

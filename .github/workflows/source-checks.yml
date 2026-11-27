@@ -1,0 +1,23 @@
+name: Source checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  source-only:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Guide and authored JavaScript
+        shell: pwsh
+        run: |
+          node tests/readme.test.cjs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node --check installer/engine.cjs
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m py_compile tools/package-release.py
+      - name: Bounded online installer fixtures
+        shell: pwsh
+        run: ./tests/check-online-installer.ps1 -Output "$env:RUNNER_TEMP/WendyQuestInstallerChecks"
+      - name: Bounded native installer utility
+        shell: pwsh
+        run: ./installer/build-runtime.ps1 -ResourceReceipt "$env:RUNNER_TEMP/WendyQuestRuntimeBudget.json"

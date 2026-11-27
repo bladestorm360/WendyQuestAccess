@@ -18,7 +18,7 @@ using Microsoft.Win32;
 
 namespace WendyQuestAccessInstaller {
  static class Setup {
-  public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 2097152 };
+  public static readonly JavaScriptSerializer Json = new JavaScriptSerializer { MaxJsonLength = 2097152, RecursionLimit = 24 };
   [STAThread] static int Main(string[] args) {
    try {
     Application.EnableVisualStyles();Application.SetCompatibleTextRenderingDefault(false);
@@ -45,8 +45,8 @@ namespace WendyQuestAccessInstaller {
    }
   }
   public static string Sha(Stream stream) {using(var sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-","").ToLowerInvariant();}
-  static string FileSha(string file) {Direct(file);using(var input=File.OpenRead(file))return Sha(input);}
-  static void Direct(string file) {
+  internal static string FileSha(string file) {Direct(file);using(var input=File.OpenRead(file))return Sha(input);}
+  internal static void Direct(string file) {
    string at=Path.GetFullPath(file);
    if(!Regex.IsMatch(at,@"^[A-Za-z]:\\"))throw new IOException("Choose a folder on a local drive.");
    for(;;){if((File.Exists(at)||Directory.Exists(at))&&(File.GetAttributes(at)&FileAttributes.ReparsePoint)!=0)
@@ -59,30 +59,52 @@ namespace WendyQuestAccessInstaller {
    if(value.IndexOf('"')>=0||value.IndexOf('\0')>=0||value.IndexOf('\n')>=0)throw new IOException("Unsupported path character.");
    return "\""+value.TrimEnd('\\')+"\"";
   }
+  internal static string HashBytes(byte[] data) {using(var input=new MemoryStream(data,false))return Sha(input);}
+  public static string ReadMe(string game) {
+   if(!String.IsNullOrWhiteSpace(game)) {
+    string file=Path.Combine(Path.GetFullPath(game),@"package.nw\wendyquest-access\ReadMe.txt");Direct(file);
+    if(File.Exists(file)&&new FileInfo(file).Length<256*1024)return File.ReadAllText(file,Encoding.UTF8);
+   }return Resource("ReadMe.txt");
+  }
   public static string Run(string action,string gameFolder,string workRoot,Action<string> progress) {
+   return Run(action,gameFolder,workRoot,progress,new GitHubUpdates());
+  }
+  internal static string Run(string action,string gameFolder,string workRoot,Action<string> progress,IReleaseSource source) {
+   if(!new[]{"install","verify","uninstall"}.Contains(action))throw new IOException("Unsupported installer action.");
    if(String.IsNullOrWhiteSpace(gameFolder))throw new IOException("Select the folder containing WendyQuest.exe.");
    string game=Path.GetFullPath(gameFolder);Direct(game);
    if(Process.GetProcessesByName("WendyQuest").Length>0)throw new IOException("Save and close Wendy Quest first.");
-   var release=(Dictionary<string,object>)Json.DeserializeObject(Resource("release.json"));
-   var runtimes=(Dictionary<string,object>)release["runtime"];
-   var inputs=(Dictionary<string,object>)release["inputs"];
+   string localManifest=Resource("release.json");var baseline=(Dictionary<string,object>)Json.DeserializeObject(localManifest);
+   var runtimes=(Dictionary<string,object>)baseline["runtime"];var inputs=(Dictionary<string,object>)baseline["inputs"];
    string manifest=Path.GetFullPath(Path.Combine(game,@"..\..\appmanifest_3339970.acf"));Direct(manifest);
-   Direct(Path.Combine(game,"WendyQuest.exe"));
-   progress("Checking the supported Steam installation.");
+   Direct(Path.Combine(game,"WendyQuest.exe"));progress("Checking the supported Steam installation.");
    using(var manifestLease=new FileStream(manifest,FileMode.Open,FileAccess.Read,FileShare.Read))
    using(var runtimeLease=new RuntimeLease(game,runtimes))
    using(var launcher=new FileStream(Path.Combine(game,"WendyQuest.exe"),FileMode.Open,FileAccess.Read,FileShare.None)) {
     if(Sha(launcher)!=(string)inputs["WendyQuest.exe"])throw new IOException("Unsupported Wendy Quest launcher.");
     if(manifestLease.Length>65536)throw new IOException("Unexpected Steam manifest size.");
     string text;using(var reader=new StreamReader(manifestLease,Encoding.UTF8,true,4096,true))text=reader.ReadToEnd();
-    var fields=new Dictionary<string,string>{{"appid","3339970"},{"buildid",(string)release["build"]},{"StateFlags","4"},{"installdir",new DirectoryInfo(game).Name}};
+    var fields=new Dictionary<string,string>{{"appid","3339970"},{"buildid",(string)baseline["build"]},{"StateFlags","4"},{"installdir",new DirectoryInfo(game).Name}};
     foreach(var field in fields)if(!Regex.IsMatch(text,"(?im)^\\s*\""+field.Key+"\"\\s+\""+Regex.Escape(field.Value)+"\"\\s*$"))
-      throw new IOException("Let Steam finish updating. This installer requires build "+release["build"]+".");
+     throw new IOException("Let Steam finish updating. This installer requires build "+baseline["build"]+".");
+    GitHubRelease latest=null;
+    if(action=="install") {
+     progress("Checking GitHub for the latest release.");latest=source.Check();
+     if(InstalledRelease.Current(game,latest,baseline))return Json.Serialize(new{ok=true,alreadyCurrent=true,
+      message="Version "+latest.Tag.Substring(1)+" is already up to date. No package was downloaded."});
+    }
     string parent=workRoot??Path.Combine(Path.GetTempPath(),"WendyQuestAccessInstall");Direct(parent);Directory.CreateDirectory(parent);
     string work=Path.Combine(parent,Guid.NewGuid().ToString("N"));Directory.CreateDirectory(work);
     try {
-     Extract(work,(Dictionary<string,object>)release["files"]);
-     File.WriteAllText(Path.Combine(work,"release.json"),Resource("release.json"),new UTF8Encoding(false));
+     if(latest!=null) {
+      progress("Downloading and verifying "+latest.Tag+".");
+      var package=ReleasePackage.Open(source.Fetch(latest),latest,baseline);package.Extract(work);
+      File.WriteAllBytes(Path.Combine(work,"release.json"),package.Manifest);
+      File.WriteAllText(Path.Combine(work,"download.json"),Json.Serialize(new{schema=1,tag=latest.Tag,sha256=latest.Digest}),new UTF8Encoding(false));
+     }else {
+      Extract(work,(Dictionary<string,object>)baseline["controlFiles"],"control.zip");
+      File.WriteAllText(Path.Combine(work,"release.json"),localManifest,new UTF8Encoding(false));
+     }
      File.Copy(Path.Combine(game,"v8_context_snapshot.bin"),Path.Combine(work,"v8_context_snapshot.bin"));
      var start=new ProcessStartInfo(Path.Combine(work,"WendyQuestInstallRuntime.exe")) {
       Arguments=Arg(game)+" "+Arg(Path.Combine(work,"engine.cjs"))+" "+action+" "+Arg(game)+" "+Arg(work),
@@ -94,18 +116,16 @@ namespace WendyQuestAccessInstaller {
       while(!process.WaitForExit(200)) {
        string file=Path.Combine(work,"progress.txt");
        if(File.Exists(file)){string now=File.ReadAllText(file);if(now!=prior){progress(now);prior=now;}}
-       // No forced timeout during mutation: the durable transaction journal
-       // recovers an interrupted install on its next run.
-       if(clock.Elapsed.TotalSeconds>180&&prior!="Still working; keep this installer open."){
-        progress("Still working; keep this installer open.");clock.Restart();}
+       // Never terminate a mutation on a clock: the durable journal owns
+       // crash recovery and restores the installed-release receipt as well.
+       if(clock.Elapsed.TotalSeconds>180){progress("Still working; keep this installer open.");clock.Restart();}
       }
       string report=Path.Combine(work,"result.json");
       if(!File.Exists(report))throw new IOException("Installer utility stopped before completion (exit "+process.ExitCode+"). Run the installer again to recover any interrupted update.");
       string result=File.ReadAllText(report);var outcome=(Dictionary<string,object>)Json.DeserializeObject(result);
-      if(process.ExitCode!=0&&(bool)outcome["ok"])throw new IOException("Installer utility exited unexpectedly.");
-      return result;
+      if(process.ExitCode!=0&&(bool)outcome["ok"])throw new IOException("Installer utility exited unexpectedly.");return result;
      }
-    }finally { RemoveWork(work); }
+    }finally {RemoveWork(work);}
    }
   }
   sealed class RuntimeLease:IDisposable {
@@ -118,8 +138,8 @@ namespace WendyQuestAccessInstaller {
    }
    public void Dispose(){foreach(var stream in streams)stream.Dispose();streams.Clear();}
   }
-  static void Extract(string folder,Dictionary<string,object> files) {
-   using(Stream stream=Assembly.GetExecutingAssembly().GetManifestResourceStream("payload.zip"))
+  static void Extract(string folder,Dictionary<string,object> files,string resource) {
+   using(Stream stream=Assembly.GetExecutingAssembly().GetManifestResourceStream(resource))
    using(var zip=new ZipArchive(stream,ZipArchiveMode.Read)) {
     if(zip.Entries.Count!=files.Count||files.Count>128)throw new InvalidDataException("Invalid installer file count.");
     long total=0;var seen=new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -168,7 +188,7 @@ namespace WendyQuestAccessInstaller {
   public InstallerForm() {
    Text="Wendy Quest Screen Reader installer";Size=new Size(650,490);MinimumSize=Size;StartPosition=FormStartPosition.CenterScreen;
    Font=new Font("Segoe UI",11);AutoScaleMode=AutoScaleMode.Font;
-   heading.ReadOnly=true;heading.Multiline=true;heading.BorderStyle=BorderStyle.None;heading.Text=((Dictionary<string,object>)Setup.Json.DeserializeObject(Setup.Resource("release.json")))["displayName"]+"\r\nInstall, verify or remove the accessibility mod. Save and close the game first.";
+   heading.ReadOnly=true;heading.Multiline=true;heading.BorderStyle=BorderStyle.None;heading.Text=((Dictionary<string,object>)Setup.Json.DeserializeObject(Setup.Resource("release.json")))["displayName"]+"\r\nInstall, verify or remove the accessibility mod. Save and close the game first. Install checks GitHub; verify and remove work offline.";
    heading.AccessibleName="Installer instructions";heading.SetBounds(20,16,590,66);heading.TabIndex=0;
    var label=new Label{Text="&Game folder",AutoSize=true,Location=new Point(20,96)};
    folder.SetBounds(20,122,480,28);folder.AccessibleName="Game folder";folder.TabIndex=1;folder.Text=Setup.DetectGame();
@@ -180,7 +200,7 @@ namespace WendyQuestAccessInstaller {
    start.Text="&Continue";start.SetBounds(20,394,140,36);start.TabIndex=5;start.Click+=Begin;
    readme.Text="&ReadMe";readme.SetBounds(180,394,140,36);readme.TabIndex=6;readme.Click+=delegate{
     using(var text=new Form{Text="Wendy Quest Screen Reader ReadMe",Size=new Size(760,620),StartPosition=FormStartPosition.CenterParent}){
-     var box=new TextBox{Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,Dock=DockStyle.Fill,Text=Setup.Resource("ReadMe.txt"),AccessibleName="ReadMe",WordWrap=true};
+     var box=new TextBox{Multiline=true,ReadOnly=true,ScrollBars=ScrollBars.Vertical,Dock=DockStyle.Fill,Text=Setup.ReadMe(folder.Text),AccessibleName="ReadMe",WordWrap=true};
      text.Controls.Add(box);text.Shown+=delegate{box.Focus();box.SelectionStart=0;box.SelectionLength=0;};text.ShowDialog(this);}};
    close.Text="&Close";close.SetBounds(470,394,140,36);close.TabIndex=7;close.Click+=delegate{Close();};
    Controls.AddRange(new Control[]{heading,label,folder,browse,action,status,start,readme,close});AcceptButton=start;CancelButton=close;

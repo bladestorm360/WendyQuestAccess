@@ -1,82 +1,51 @@
 # Release procedure
 
-This procedure prepares a local release for review. Publishing, uploading artifacts, creating a release tag and changing repository visibility remain separate owner-authorized actions. The repository stays private during the current preparation. Use the owner's selected version. The designated private test release is **Wendy Quest Screen Reader V0.5**, metadata **0.5.0-test-build**. It is authorized for local packaging and the owner's private distribution; no public upload, tag or visibility change is authorized. For a test build, use the suffix **-test-build**, never beta.
+The owner authorized public source and GitHub downloads on November27. The first public mod release is **0.5.0**, tag **v0.5.0**. The reusable setup has its own version **1.0.0**. Routine fixes still use focused local deployment; rebuild setup only when its acquisition, compatibility or offline control contract changes. Publishing future releases remains a deliberate release action, rather than a build side effect.
 
-The workflow follows Blackmoon Prophecy's canonical README/plain-text guide and accessible standalone installer, and FFPR's frozen source/dependency, exact artifact, scanner and recovery checks. Their project-specific publication and storage rules do not replace Wendy Quest's own permissions or build policy.
+## Source and player guide
 
-Routine local fixes use the focused payload build, exact affected checks and scans, and the established local deployment path. **Do not rebuild or package the standalone installer for each deployment.** Package it only when preparing the designated release candidate. Reuse unchanged installer evidence; a local fix does not itself reopen release packaging. This is the owner's November22 clarification.
+Use the actual C: project and the owner's bladestorm360/WendyQuestAccess remote. Review current content and all newly public history for original game bodies, assets, saves, logs and credentials before changing visibility. Original mod additions, factual source locators and insertion recipes are eligible; game inputs and generated geometry stay outside every Git tree and release.
 
-## 1. Freeze source and inputs
+README.md is the canonical complete player guide and GitHub landing page. Keep FFPR Core's Purpose, Known Issues, Install, Keys and Credits headings. Start with a basic feature list; include every current default input and NVDA focus mode (NVDA+Space bar). Do not add named puzzles, mechanics, walkthroughs or ending details. tests/readme.test.cjs checks headings, bindings and the relevant spoiler exclusions. tools/package-release.py derives the matching accessible labeled-row ReadMe.txt; the downloaded payload installs it alongside ThirdPartyNotices.txt. No second hand-maintained guide is used.
 
-- Confirm the actual C: checkout, main branch, user-controlled origin and private visibility. Update README.md, affected feature documents and the single feature checkpoint. Commit and push all repository-eligible changes; verify origin/main contains that commit.
-- Use the supported English Windows x64 Steam build26578620, App3339970. Retain the canonical original scripts in the installed recovery folder. Keep game scripts, maps, extracted analysis, saves and generated geometry outside Git and the release ZIP.
-- Validate dependency hashes through tools/registration.py and tools/build.py. PRISM0.18.3, SDL3.4.4, OpenAL Soft1.25.2, the matching NW0.48.4 archive and FFPR cue hashes are pinned by the existing build. Preserve all upstream license and corresponding-source/HRTF notices.
-- New releases use the canonical build.ps1 with VerifySpeechPipe and VerifyAudio. It invokes the shared bounded runner at512MB, one worker, below-normal priority. For a focused gameplay fix, reuse verified unchanged native binaries and rebuild only the bundle/changed payload under the focused-build contract; preserve its source/hash evidence. Never run a second project build tree concurrently.
-- Compile installer/native-runtime-host.cpp with the same x64 compiler and static CRT, GS/SDL/CFG/ASLR/NX protections, using the recipe in installer/build-runtime.ps1. That recipe always uses tools/run-build.py. No game launch occurs.
+## Clean build and dependencies
 
-## 2. Complete verification
+Freeze a clean committed source revision. build.ps1 takes the verified PRISM archive and audio SDK, using tools/run-build.py with one512MB enforced process tree, below-normal priority and bounded CPU. For a public release, reproduce that build from a fresh source export with VerifySpeechPipe and VerifyAudio, compare the authored bundle/data and record binary provenance. PRISM0.18.3, SDL3.4.4, OpenAL Soft1.25.2 and FFPR audio inputs remain pinned by tools/build.py. Keep licenses and corresponding-source/HRTF notices. installer/build-runtime.ps1 separately compiles the x64 static-CRT local installer utility through the same admission runner; do not nest its runner within another reserved tree.
 
-Run changed producer and integration fixtures against the outside-Git canonical stock fixture. The narration changes require tests/narration.test.cjs and tests/field.test.cjs, plus tests/nw-smoke.py on the pinned standalone NW runtime. Use the shared bounded runner; keep scratch under C:/Games/Dev/WendyQuestAccess-analysis. The NW fixture uses a hidden synthetic application, silent speech/audio and its own profile. It does not launch Wendy Quest. Preserve runtime/gameplay confirmation as a separate status. The old broad dialogue fixture has a documented Salt-guide mirror gap (feature-checkpoint.md, November21); its synthetic solveRoute-only response omits the production solveSaltRoute fallback. Do not claim that whole fixture passes or reopen the closed puzzle design from that known fixture limitation. The production native/worker evidence and current focused narration/runtime checks remain distinct.
+The source-only Windows workflow checks the guide, JavaScript syntax, online metadata/archive/current-state fixtures and native installer utility compilation without game files. Full payload construction needs the pinned external SDK inputs. Real installation/bake and native game-function fixtures additionally require the owner's supported Steam installation and external originals. CI does not claim those private-input checks.
 
-Check dependency identities, Windows x64 binaries, required licenses and source organization. The installer must reproduce all16 native transformations and all241 geometry files exactly. Its patch recipes contain original mod additions and references into the player's files, never original game bodies. The map baker contains only original mod modules; it reads the player's own data locally using the game's hash-pinned Node runtime. No external runtimes or downloads are required by players.
+## Online setup and versioned package
 
-## 3. Build the installer ZIP
+From the clean checkpoint, run tools/package-release.py through tools/run-build.py, with --version0.5.0, a fresh --stage outside Git under the C: analysis workspace and --output pointing to dist/WendyQuestAccess-0.5.0-payload.zip. Do not overwrite the frozen private test ZIP. The builder refuses dirty source and existing output. It never tags, uploads, publishes or launches the game.
 
-From a clean committed tree, run tools/package-release.py with --version, --stage and --output. Stage must be a fresh C: analysis directory outside Git; output should be a new versioned ZIP under the ignored dist folder. The V0.5 output is dist/Wendy Quest Screen Reader V0.5-test-build.zip, with staging at C:/Games/Dev/WendyQuestAccess-analysis/wendy-release-v05. Later releases use a fresh versioned name. The tool does not overwrite an existing release, tag, push or publish. The --development switch permits a dirty-tree rehearsal only with a -dev version; those artifacts are not publishable.
+The stage contains the standalone WendyQuestAccessSetup.exe, versioned payload bytes, canonical ReadMe.txt, ThirdPartyNotices.txt, SHA256SUMS.txt and local manifests/receipts. Publish only the setup, versioned payload ZIP, two guides/notices and checksums. The payload ZIP contains release.json, engine.cjs, bake.cjs, recipes.json, WendyQuestInstallRuntime.exe and the mod payload. It contains no original game script, map JSON, derived geometry, artwork, saves or game runtime DLLs. Copy/literal recipes retain original game ranges as references; the local baker reads the player's own pinned data.
 
-The builder generates ReadMe.txt from README.md, checks ASCII compatibility, freezes the source commit, fingerprints the game/runtime/map inputs, writes source-free copy/literal recipes and embeds the package in WendyQuestAccessSetup.exe. Its .NET Framework4.8 x64 compilation uses the bounded runner. ZIP entries have explicit compressed-package, file-count, declared-size and actual-copy bounds; inherited Node options/path are cleared. The ZIP contains exactly:
+The setup embeds only a small offline control archive (engine and utility), the baseline compatibility manifest and fallback guide. See [installer ownership](installer.md) for transport, no-download, path limits, journal and receipt contracts. Later compatible payload versions can reuse the exact same setup EXE; include it in each latest release so the permanent latest/download link keeps working. Increase minimumSetup only for an actual contract change. Do not mutate published payload bytes under an existing version/tag.
 
-- WendyQuestAccessSetup.exe
-- ReadMe.txt
-- ThirdPartyNotices.txt
-- SHA256SUMS.txt
+## Exact verification
 
-The archive contains no game runtime DLLs, scripts, artwork, map JSON, derived geometry, saves or private logs. The generated release.json and receipt.json in local staging record the version, source commit, expected identities, file counts and archive hash. The executable also carries version/source metadata.
+Run tests/check-online-installer.ps1 with an outside-Git Output and the final Stage. Its fixture transport is compiled only into OnlineHarness.exe, never the distributed setup. Run tests/public-installer.test.py on a new isolated mirror and tests/installer-package.test.py for the final standalone controls/runtime-option isolation. Verify:
 
-## 4. Rehearse the exact installer
+- Fresh install and upgrade from the actual previous installation; exact16 native,48 payload and241 locally generated geometry identities, with16 original recovery scripts.
+- Healthy current release: one metadata check, zero payload fetches, no temporary work directory or installation writes. A missing owned file requests repair; downgrade is refused without fetching.
+- A later compatible payload updates using the unchanged setup code. Verify/remove work offline with no release lookup.
+- Corrupt/truncated/oversized ZIPs, duplicate/escaping/device paths, bad asset URLs/digests, wrong game/runtime and closed-game lease failures stop before mutation.
+- Unknown/externally changed files are preserved. Unicode/spaces, inherited Node options isolation, canonical original recovery, save/settings sentinels and accessible keyboard controls remain correct.
+- Actual abrupt mutation failure restores the full previous installation, including the root installed-release receipt, on the next run. Ordinary failures also restore before reporting. Interrupted staging and unsafe journals retain their existing checks.
 
-Run tests/public-installer.test.py with the final staging folder and a fresh outside-Git mirror folder under the bounded runner. It uses copies of mutable scripts and hard links for immutable local inputs to avoid duplicate large runtime files. No game is started. Acceptance includes:
+Re-run affected gameplay fixtures when gameplay code changes; otherwise retain revision-matched coverage with exact unchanged-file evidence. Game execution/control and live capture require their separate permission. Fixture timing is not real-game responsiveness.
 
-- Keyboard-accessible named controls and focusable instructions/status.
-- Fresh install and exact file verification; missing-file repair.
-- Upgrade from the current installed predecessor and removal back to stock.
-- Save/preferences preservation, Unicode/spaced paths and temporary-folder cleanup.
-- Rejection/preservation of changed or unknown files.
-- Recovery from an injected process termination during an actual update, followed by a successful verification; interrupted pre-mutation staging recovery.
+## Security and publication
 
-Also verify unsupported runtime/build rejection and the closed-game lease. Do not rely only on successful process exit: compare every installed native, payload, geometry and recovery hash. Keep concise evidence and peak resource receipts. Reuse exact source-matched evidence when only documentation or version metadata changes; repeat affected checks for new implementation or unresolved failures.
+Verify trusted dependency hashes/signatures and the final compiler inputs. Sign with an owner-controlled trusted certificate if available, inner binaries before the outer setup; never invent a signature. No suitable certificate is currently available, so the README discloses the unsigned installer. Scan the exact setup, payload ZIP and expanded package with current Microsoft Defender, recording scanner signature, engine/definition versions, time, hashes and results. A clean scan does not guarantee reputation acceptance. Do not disable protections or strip download-origin metadata.
 
-## 5. Scan and sign the final bytes
+Commit/push the release source and verify origin/main. Record the clean-checkout and exact-payload evidence. Create the immutable v0.5.0 source tag and a draft release; upload only the five approved assets. Download the draft assets through GitHub and compare their exact hashes before public availability. Change repository visibility under the owner's explicit authorization, publish the stable/latest release, then check anonymous release metadata, asset SHA/size, the real shipped setup download/install path and the complete rendered root README. No authentication or repository token belongs in the installer.
 
-Inspect signing-certificate availability. Sign and timestamp original executables with a valid owner certificate when available, then regenerate checksums and the outer ZIP. Never invent a publisher or add self-signed trust. If signing is unavailable, record NotSigned and the reputation limitation explicitly in the local release evidence; public publication still requires separate authorization. The owner has explicitly authorized the V0.5 private test package for private shipping; disclose its actual unsigned status in the ReadMe and evidence without adding a routine approval.
+## Local deployment and closure
 
-Use the trusted installed Microsoft Defender scanner on the exact final ZIP, installer executable and extracted payload. Verify all expected hashes before and after scanning. Retain scanner signature/platform/engine/definition versions, scan exit/status, detections and final SHA256 identities. Investigate detections without disabling protection or uploading private artifacts. A clean local scan does not guarantee acceptance by every scanner or Windows reputation service.
+With the game closed, use the final setup at the established Steam target. Verify all installed identities, root release receipt and16 originals; compare saves and browser-backed preferences before/after. Re-run installation to prove the real endpoint's up-to-date result. Refresh only the sole optional recovery copy after success. Keep the canonical native recovery directory in the game; the root release receipt is separate from that schema.
 
-## 6. Install locally and close preparation
-
-For a designated release-candidate rehearsal, with Wendy Quest closed, use this exact standalone installer's Install or update action at the established Steam target. Routine fixes instead use the verified local installation functions and their closed-game lease, without packaging another installer. The installer holds the Steam manifest stable and denies new launcher opens. Check all resulting files, canonical originals and the unchanged save/config set. Verify the sole optional recovery against the new installation, then retire its old contents. Do not launch the game automatically.
-
-Consolidate the receipt in docs/deployment.md and the single checkpoint. Retain the requested final ZIP and at most one optional build recovery. Remove expanded staging, mirrored game links, test runtimes, recordings, build output and disposable logs. Keep at most20 long-term development logs and the separately retained gameplay captures. Preserve saves/settings, installed files, unique research and required canonical original recovery. Commit/push the closure and verify the remote ref and private visibility again.
-
-## 7. Public release, only when authorized
-
-Choose the real version, remove the preparation-only sentence from README.md, finish owner gameplay checks and repeat the frozen-artifact steps. Review the release notes and supported build, hashes, signature state and known limitations. A later explicit publication request can authorize the relevant visibility change, V<version> tag and artifact upload. This preparation alone authorizes none of them.
-
-## Installer ownership and recovery design
-
-installer/Setup.cs owns the accessible Windows Forms UI, Steam folder detection, exact runtime checks, manifest/launcher leases, embedded-file integrity and temporary-directory lifetime. It runs as the current user and starts only the original installer utility, never the game. The utility's process tree is limited to512MB and25percent CPU, below-normal priority; the Node heap is limited to128MB. These are installer budgets, separate from shared development admission.
-
-installer/engine.cjs owns allowlisted target paths, current/recovery verification, local geometry generation, patch replay and the transaction. It blocks junctions/symlinks and unsupported or externally changed files. Before mutation it records a durable journal and backups; native plugin registration is inactive while files change and is activated last. Hashes are rechecked before replacement and after installation. On failure it restores the previous installation. Interrupted staging never changes game files; interrupted mutation restores from verified backups on the next run. Unknown recovery contents stop cleanup for preservation. Successful operations remove their transaction and temporary data. Uninstall touches only recorded mod-owned files and restores verified originals. Saves and the NW profile are outside the write set.
-
-Changes to patch producers require regeneration of recipes and native checks. Changes to map semantics use the existing baker and route tests, not a separate installer implementation of navigation. Changes to target ownership or transaction order require the full isolated installer rehearsal. Source locators and behavioral explanations belong in documentation; original game source never does.
-
-
-## V0.5 guide and source inventory
-
-November24 owner-authorized private test package. ReadMe coverage is reconciled against settings/menu.js, keyboard.js, navigation-keys.js, controller-bindings.js and secret-island.js; menu/details, field/Autowalk, cave progression, battle timing and soundscape producers and their existing source-matched feature records. It includes both keyboard layouts, review/Details/vitals/Gold, persistent settings/defaults, controller mode, ordinary manual interaction boundaries, cave-only automation/full solving, Salt's terrain/chest-first guidance, cross-map/vehicle continuation, spoiler/history policy, beacons/walls/actual footsteps, recorded/NVDA descriptions and speech options. The existing intermittent cave-input issue is disclosed as unconfirmed, separate from passing offline checks. No gameplay redesign or speculative fix is part of release packaging.
-
-README.md remains the single ASCII-compatible user guide; the package derives labeled-row ReadMe.txt from it, avoiding missing repository-only links. Windows Forms and assembly metadata identify Wendy Quest Screen Reader V0.5/private test, while the existing executable filename and mod/settings/recovery IDs remain stable. Metadata is0.5.0-test-build, with the frozen source hash. No owner code-signing certificate with a private key is available in CurrentUser or LocalMachine stores; the guide discloses unsigned status. Current private-shipping authorization does not authorize public publication or visibility changes. Build/runtime/compiler resource receipts are retained with concise exact-artifact verification; generated output is cleaned after delivery and local rehearsal.
-
+Consolidate reproducible commands, source/asset hashes, verification limits, public URL/ref and scanner evidence in the existing release-final/verification.json and defender.txt. Update the ordered checkpoint, release/deployment records and memory. Push and verify closure. Remove disposable source exports, expanded packages, isolated mirrors, test outputs and build/stage files; keep final distribution assets and the one optional recovery. Preserve unique source/research inputs and the frozen earlier private test artifact. Unconfirmed physical audio/gameplay and the old intermittent cave-input issue remain separate from installer verification.
 
 ## V0.5 verified private artifact
 
