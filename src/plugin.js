@@ -416,7 +416,7 @@ function boot(root, nodeRequire, nodeProcess) {
                     if (action === 'battleAppearance') return !battleTargets.controlOwner(scene) &&
                         battleFocus.command(battleFocus.controlOwner(scene), action);
                     const handled = menus.command(menus.controlOwner(scene), action);
-                    if (handled || action === 'gold') return handled;
+                    if (handled || action === 'gold') return handled || field.command('fieldGold');
                     if (battleFocus.command(battleFocus.controlOwner(scene), action) ||
                         battleTargets.command(battleTargets.controlOwner(scene), action) ||
                         dialogue.command(scene, action) || credits.command(scene, action)) return true;

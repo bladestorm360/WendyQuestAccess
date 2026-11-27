@@ -125,6 +125,7 @@ def bundle():
         './destination-names': 'world/destination-names.js',
         './enemy-walk': 'world/enemy-walk.js',
         './consumed-events': 'world/consumed-events.js',
+        './field-inspection': 'world/field-inspection.js',
         './world/cave-timing': 'world/cave-timing.js',
         './spatial-direction': 'world/spatial-direction.js',
         './snapshot': 'world/snapshot.js',

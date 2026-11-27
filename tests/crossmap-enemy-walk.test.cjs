@@ -18,14 +18,14 @@ async function fixture(automatic,blocking){
  const enemies=f.gameMap.events().filter(e=>activeMovingEnemy(c,e)),enemy=enemies[0];assert(enemy);
  for(const actor of enemies)erased(actor);
  if(blocking){Object.assign(enemy,{_erased:false,_through:false,_priorityType:1});enemy.setPosition(70,9);}
- const renderer=new EventEmitter(),packets=[],records=[];
+ const renderer=new EventEmitter(),packets=[],records=[],guards=[];
  const makeScene=()=>({_wqaFieldReady:true,_active:true,_fadeDuration:0,_fadeOpacity:0});
  let scene=makeScene();c.SceneManager._scene=scene;c.SceneManager._nextScene=null;c.Graphics.app={stage:scene,renderer};
  const preferences={autowalk:automatic,fullRouteReadout:true};
  const worker=Object.assign(new EventEmitter(),{unref(){},postMessage(p,b){packets.push(structuredClone(p,{transfer:b||[]}));}});
  const field=createField(c,{manager:c.SceneManager,graphics:c.Graphics,hasFocus:()=>true,screenFading:()=>false,
   navigationPreferences:()=>preferences,makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),createRouteWorker:()=>worker},
-  {open(r){records.push(r);return records.length;},close(){},arrive(r){records.push(r);return records.length;},endArrival(){}});
+  {open(r,valid){records.push(r);guards.push(valid);return records.length;},close(){},arrive(r){records.push(r);return records.length;},endArrival(){}});
  let stepped=0;
  c.WendyQuestAccessFieldChanged=field.changed;c.WendyQuestAccessAutowalkInput=field.autowalk.input;
  c.WendyQuestAccessFieldMove=(scene,direction,succeeded)=>{if(succeeded)stepped=direction;field.autowalk.moved(scene,direction,succeeded);};
@@ -42,10 +42,35 @@ async function fixture(automatic,blocking){
  function step(){stepped=0;f.player.moveByInput();
   for(let n=0;f.player.isMoving()&&n<64;n++)f.player.updateMove();
   frame();return stepped;}
- return {f,enemy,field,records,packets,preferences,frame,reply,first,step,get scene(){return scene;},
+ return {f,enemy,field,records,guards,packets,preferences,frame,reply,first,step,get scene(){return scene;},
   newScene(){scene=makeScene();c.SceneManager._scene=scene;c.Graphics.app.stage=scene;return scene;}};
 }
 (async()=>{
+ {
+  const q=await fixture(true,false),scene=q.scene,bitmap={isReady:()=>true};
+  const hud=scene._statusWindow={parent:scene,worldVisible:true,worldAlpha:1,bitmap,offsetY:0,
+   battler:{actor:()=>({name:'Wendy'})}};
+  const sprite=parent=>({parent,worldVisible:true,worldAlpha:1,bitmap,scale:{x:1,y:1}});
+  const text=value=>{const item={...sprite(hud),_dirty:false,_currentString:value};
+   item.children=[...value].map(()=>sprite(item));return item;};
+  hud._HPIcon=sprite(hud);hud._numberSprite=text('2');hud._dividerSprite=text('/');hud._totalSprite=text('10');
+  scene._windowLayer={};const contents={isReady:()=>true};
+  const gold=scene._goldWindow={parent:scene._windowLayer,worldVisible:true,worldAlpha:1,openness:255,
+   contentsOpacity:255,contents,_wqaShopGold:{contents,value:123,currency:'G'}};
+  q.f.player.moveByInput();assert(q.f.player.isMoving());
+  assert(q.field.controlOwner(scene).vitals,'controller status is available during a real step');
+  assert(q.field.command('fieldVitals'));q.frame();
+  assert.match(formatSpeech(q.records.at(-1)),/HP 2 of 10/);assert(q.field.autowalk.active(scene));
+  assert(q.field.command('fieldGold'));q.frame();assert.equal(q.records.at(-1).name,'123 G');
+  assert(q.field.autowalk.active(scene));assert.equal(q.packets.length,0,'HUD requests do not replan or retire the route');
+  gold.worldVisible=false;assert(!q.field.command('fieldGold'));assert(q.field.autowalk.active(scene));
+  while(q.f.player.isMoving())q.f.player.updateMove();
+  assert(q.step()>0,'same native course continues on its next input');
+  assert(q.field.command('mapName'));q.frame();assert(q.field.autowalk.active(scene));
+  scene._wqaSettingsActive=true;q.field.controlLost(scene);
+  assert(!q.field.autowalk.active(scene));assert(!q.guards.at(-1)(),'opening a real menu retires status speech and movement');
+  q.field.leave(scene);
+ }
  for(const automatic of [false,true]){const q=await fixture(automatic,false);
   assert.equal(q.first.result.status,automatic?'ready':'interrupted');
   if(automatic)assert.equal(q.first.result.entrance,73);else assert.equal(q.first.result.boundaryEvent,102);

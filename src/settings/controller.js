@@ -5,7 +5,7 @@ const { MENU_ACTIONS, FIELD_ACTIONS, FIELD_MODE_ACTIONS, REVIEW_ACTIONS, BATTLE_
     recoveryMask } = require('./controller-bindings');
 const QUEUE_LIMIT = 4;
 const FIELD_MODE = ['settings', ...FIELD_MODE_ACTIONS];
-const MOVING_MODE = ['beaconStop'];
+const MOVING_MODE = ['beaconStop','fieldVitals'];
 const FRONT_MODE = ['settings'];
 const DIALOGUE_MODE = ['repeat', 'speakerDetails', 'puzzleStop'];
 const DIAGRAM_MODE = [...REVIEW_ACTIONS, ...DIALOGUE_MODE];

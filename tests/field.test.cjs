@@ -1114,6 +1114,14 @@ async function verifySurfaceField(tilesets) {
     f.frame();
     assert(routePackets.at(-1).request.candidates);
     reply(routePackets.at(-1));
+    // Events is now available in flight; select Vehicles explicitly instead
+    // of assuming it is the next nonempty category after Exits.
+    for(let n=0;n<8&&f.packets.filter(p=>p.kind==='fieldTarget').at(-1)?.category!=='Vehicles';n++) {
+        f.dispatchWindowEvent('keydown',{key:'l',keyCode:76,shiftKey:true});
+        f.dispatchWindowEvent('keyup',{key:'l',keyCode:76,shiftKey:true});f.frame();
+        assert(routePackets.at(-1).request.candidates);reply(routePackets.at(-1));
+    }
+    assert.equal(f.packets.filter(p=>p.kind==='fieldTarget').at(-1)?.category,'Vehicles');
     const landing = request();
     assert.equal(landing.live.mode, 'airship');
     assert(landing.request.landing);

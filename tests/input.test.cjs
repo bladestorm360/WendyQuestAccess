@@ -360,6 +360,11 @@ pad.axes[2] = -0.8;
 poll();
 flush();
 assert.deepEqual(commands.splice(0).map(record => record.action), ['modeEntered', 'beaconStop']);
+pad.axes[2]=0;poll();field.vitals=true;
+poll(8);poll();poll(2);poll();flush();
+assert.deepEqual(commands.splice(0).map(record=>record.action),['modeEntered','fieldVitals'],
+    'painted vitals stay available in controller mod mode during movement');
+field.vitals=false;
 field.navigationOnly = field.autowalkActive = false;
 pad.axes[2] = 0;
 poll();

@@ -2,6 +2,8 @@
 
 const { captureWorld, eventTarget, bookmarkId, includeSavedBookmarks } = require('./snapshot');
 const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
+const { goldPaint, goldLabel } = require('../menus/shop');
+const { createFieldInspection } = require('./field-inspection');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName, worldEntranceRevealed, FLOAT_FORT_ENTRANCE } = require('./world-destinations');
@@ -127,6 +129,18 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     let inFlight = null;
     let sequence = 0;
     let speech = 0;
+    const inspection=createFieldInspection(root,host,(scene,moving)=>ready(scene,moving,true),notifications,(scene,action,probe)=>{
+        if(action==='fieldVitals')return probe?fieldVitalsVisible(scene):fieldVitals(scene,host.graphics);
+        if(action==='fieldGold') {
+            const painted=goldPaint(scene,(scene,window)=>!!window&&window.parent===scene._windowLayer&&
+                window.worldVisible&&window.worldAlpha>0&&window.openness===255&&window.contentsOpacity>0&&window.contents?.isReady?.());
+            const name=goldLabel(painted);
+            return name&&(probe?true:{kind:'fieldStatus',name});
+        }
+        if(action==='mapName')return probe||{kind:'fieldStatus',name:mapPlace(root)||'Map name unavailable'};
+        if(action==='mapDescription')return probe||{kind:'mapDescription',description:mapDescription(root)||'No description is available for this map.'};
+        return false;
+    });
     let arrivalScene = null;
     let renderOwner = null;
     let control = null;
@@ -1569,17 +1583,6 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (navigationRequest(job) && inFlight) return;
         if (movingReport) return present(job, job.text, true);
         if (job.action === 'status') return status(job, job.text);
-        if (job.action === 'mapName') return status(job, mapPlace(root) || 'Map name unavailable');
-        if (job.action === 'mapDescription') return present(job, { kind: 'mapDescription',
-            description: mapDescription(root) || 'No description is available for this map.' });
-        if (job.action === 'fieldVitals') {
-            // The map scene owns its attached RadialStatus. Read the glyphs
-            // after this frame only while the same HUD is still presented.
-            const record = fieldVitals(job.scene, host.graphics);
-            if (record) present(job, record);
-            else retire(job.scene);
-            return;
-        }
         const routing = job.action === 'directions';
         if (job.caveWalk) {
             if(job.caveWalk.solverToken && !solver.current(job.caveWalk.solverToken))return retire(job.scene);
@@ -1719,6 +1722,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return active?.scene === scene && active.action === 'directions' && preferences().autowalk;
     }
     function command(action, text, controller = false, keepCaveTiming = false, automaticReadout = false) {
+        if(['fieldVitals','fieldGold','mapName','mapDescription'].includes(action))
+            return inspection.request(host.manager._scene,action);
         if(BROWSE.has(action)||['directions','puzzleGuide','puzzleStop','beaconStop'].includes(action))enemyWalk.cancel();
         const stoppedReadout=!automaticReadout&&readout.cancel();
         if (BROWSE.has(action) || ['directions', 'puzzleGuide', 'puzzleStop'].includes(action)) clearCleanupWalk();
@@ -1884,7 +1889,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (!settled && !ready(scene, true)) return null;
             if (control?.scene !== scene) control = { kind: 'field', scene };
             control.navigationOnly = !settled;
-            control.vitals = settled && fieldVitalsVisible(scene);
+            control.vitals = fieldVitalsVisible(scene);
             control.puzzle = !!guideFor(scene);
             control.puzzleActive = salt.active(scene) || cave.active(scene) || !!host.caveTiming?.active(scene) ||
                 (active?.scene === scene && active.action === 'directions' && timedCave(root.$gameMap._mapId));
@@ -2072,9 +2077,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         idleInput(scene) {
             const waking = scene._wqaNavigationWake;
             scene._wqaNavigationWake = false;
+            const inspected=waking&&inspection.activity(scene);
             // Automatic movement and scheduled waits are player activity.
             // Let updateInactive own its timer reset at the native input site.
-            return (autowalk.active(scene) || solver.active()) && ready(scene, true, true) ||
+            return inspected || (autowalk.active(scene) || solver.active()) && ready(scene, true, true) ||
                 waking && active?.scene === scene && ready(scene, true, active.idle);
         },
         interactionReady(scene) {
@@ -2143,6 +2149,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return !!(root.$gameMap?._needsRefresh && ready(scene, true, false, true));
         },
         controlLost(scene) {
+            inspection.cancel();
             enemyWalk.leave(scene);
             readout.cancel();
             if(scene?._wqaSettingsActive)solver.stop();
@@ -2153,6 +2160,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (control?.scene === scene) control = null;
         },
         leave(scene, mapEventId) {
+            inspection.cancel();
             enemyWalk.leave(scene,mapEventId);
             readout.cancel();
             if(mapEventId!==undefined)solver.accepted(root.$gameMap?._mapId,mapEventId);
