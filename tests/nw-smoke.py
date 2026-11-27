@@ -2884,12 +2884,12 @@ parentPort.on('message', message => {
               'sir-chicken-advances','chomps-walks-away','jail-breach','ability-upgrade','chicken-falls','cauldron-wall-breaks',
               'map-opens','map-closes','map-wendy','map-quest','map-marks','map-erases','frydusa-leaves','archaeologist-leaves',
               'bacon-bridge-landing','baconator-landing','tatoria-aside','officer-aside','companions-reappear',
-              'momentum-collected','momentum-full','frygor-approaches'}
+              'momentum-collected','momentum-full','frygor-approaches','office-lights-out','office-lights-on'}
     for index,name in enumerate(catalog):
         length=struct.unpack_from('<I',pack,4*index)[0]
         if name in selected:rows.append([name,offset,length])
         offset+=length
-    if len(rows)!=27 or offset!=len(pack):raise ValueError('Caption decode catalog differs from exact pack')
+    if len(rows)!=29 or offset!=len(pack):raise ValueError('Caption decode catalog differs from exact pack')
     (app/'caption-voices.json').write_text(json.dumps(rows),encoding='utf8')
     shutil.copyfile(ROOT / '.build' / 'payload' / 'wendyquest-access' / 'audio-worker.cjs', service / 'production-audio-worker.cjs')
     (service / 'audio-worker.cjs').write_text('''
@@ -3188,9 +3188,9 @@ def main():
             raise RuntimeError('Incomplete slow sleep continuation')
         print('Verified the full original sleep recording at80 percent across the actual30-frame fade, native transfer, paused loading and the next ready scene, retaining its playhead through natural completion.')
         caption_voices=json.loads(receipt.with_suffix('.json.caption-voices').read_text(encoding='utf8'))
-        if len(caption_voices)!=27 or any(not row['seconds']>0 for row in caption_voices):
+        if len(caption_voices)!=29 or any(not row['seconds']>0 for row in caption_voices):
             raise RuntimeError('New caption recordings failed exact packaged Chromium decoding')
-        print('Verified all27 selected shrine, jail, map, departure, recruitment and Momentum recordings decode in the pinned Chromium host.')
+        print('Verified all29 selected shrine, jail, map, departure, recruitment, office and Momentum recordings decode in the pinned Chromium host.')
         skill_voices = receipt.with_suffix('.json.skill-voices').read_text(encoding='utf8').splitlines()
         if len(skill_voices) != 13 or len({line.split()[0] for line in skill_voices}) != 13:
             raise RuntimeError('Not every requested skill recording decoded')

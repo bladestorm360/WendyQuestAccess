@@ -28,8 +28,8 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//181 recordings, including the alternate-route Frygor arrival.
-const PACK_LIMIT = 2176 * 1024;
+//183 recordings, including the office blackout and its actual later reveal.
+const PACK_LIMIT = 2184 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -773,8 +773,9 @@ function createNarration(root, host, preferences) {
     function present(scene) {
         // Exact cutscene entry recovery after native fade/tile/portrait gates.
         // No work or pointer is carried through the protected loading phase.
-        if(voiceReady() && enabled() && ready(scene)) {
+        if(enabled() && ready(scene)) {
             const cue=jailVisuals.site(root);
+            if(cue && !voiceReady()){warm(scene,true);return;}
             if(cue && !scene._wqaJailNarrationSeen?.has(cue.id) &&
                 !owner?.queue.some(state=>state.id===cue.id))
                 accepted(scene,cue.script,cue.actor,cue.switched,-6,cue.index,true);
@@ -815,7 +816,7 @@ function createNarration(root, host, preferences) {
                     scene._wqaTylerEntrySeen=state.sourceKey;scene._wqaTylerEntryMap=map._mapId;
                     if(state.sourceKey==='181/15/2/0')scene._wqaTylerEntryObserved=true;
                 }
-                if(state.confirmed && ['grunt-ambush','party-jailed','jail-breach','shrine-lights','shrine-reunion','chomps-door-open'].includes(state.id))
+                if(state.confirmed && ['grunt-ambush','party-jailed','jail-breach','shrine-lights','shrine-reunion','chomps-door-open','office-lights-out','office-lights-on'].includes(state.id))
                     (scene._wqaJailNarrationSeen ||= new Set()).add(state.id);
                 if (state.confirmed && state.id === 'assistance-chest') scene._wqaAssistanceReveal = true;
                 if (state.confirmed && map?._mapId === 16) {

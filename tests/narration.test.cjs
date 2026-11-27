@@ -18,7 +18,7 @@ function map(id) {
 const raw = fs.readFileSync(path.resolve('.build/payload/wendyquest-access/narration.webmpack'));
 const response = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength);
 const clips = unpackClips(globalThis, response);
-assert.equal(Object.keys(clips).length, 181);
+assert.equal(Object.keys(clips).length, 183);
 const locators = new Set();
 for (const [id, { beats }] of Object.entries(cues)) {
     assert.equal(Buffer.from(clips[id]).subarray(0, 4).toString('hex'), '1a45dfa3');
@@ -36,7 +36,7 @@ for (const [id, { beats }] of Object.entries(cues)) {
         }
     }
 }
-assert.equal(locators.size, 307);
+assert.equal(locators.size, 321);
 assert.match(cues['party-vanishes'].text, /gather into her.*party fits on the elevator/);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
@@ -165,6 +165,7 @@ for(const visible of [false,true]) {
     assert.equal(f.played[0]?.id,visible?'party-vanishes':undefined);
 }
 require('./chomps-door.cjs')(fixture,stock);
+require('./office-lights.cjs')(fixture,stock);
 console.log('Verified the old-RPG companion disappearance through native common/actor commands, prior visibility and actual cleared sprite.');
 
 const emoteMethods = JSON.parse(execFileSync('python', ['-B', path.join(__dirname, 'map-producers.py'),
@@ -510,7 +511,7 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 181 clips, 307 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 183 clips, 321 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
 
 require('./finale-narration.cjs')(fixture, commandContext, stock);
 require('./screen-jolt.cjs')(fixture, commandContext, stock);

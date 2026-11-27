@@ -2,10 +2,15 @@
 const assert=require('node:assert/strict'),vm=require('node:vm'),path=require('node:path');
 const {execFileSync}=require('node:child_process');
 module.exports=(fixture,stock)=>{
+ const admission=JSON.parse(execFileSync('python',['-B',path.join(__dirname,'map-producers.py'),
+  path.join(stock,'package.nw'),'narration-ready'],{encoding:'utf8',timeout:6000}));
  const native=JSON.parse(execFileSync('python',['-B',path.join(__dirname,'map-producers.py'),
   path.join(stock,'package.nw'),'terrain-paint'],{encoding:'utf8',timeout:6000}));
  for(const nvda of [false,true])for(const invalid of [null,'one-cell','offscreen','wrong-list','late','repaint']){
   const f=fixture(97,8,1),player=f.actor(-1),tiles=f.spriteset._tilemap,spoken=[];
+  const entry=vm.createContext({...f.root,Graphics:f.graphics,WendyQuestAccessNarrationPresent:f.narration.present});
+  const update=vm.runInContext('(function(){'+admission+'})',entry);
+  const frame=paint=>{f.graphics.frameCount++;update.call(f.scene);if(paint!==false)f.renderer.emit('postrender');};
   if(nvda){f.host.speechPreferences=()=>({descriptionVoice:'nvda',enabled:true});
    f.host.describeNarration=(text,ready)=>{assert(ready());spoken.push(text);return true;};}
   const count=()=>nvda?spoken.length:f.played.length;
@@ -20,7 +25,7 @@ module.exports=(fixture,stock)=>{
    const at=JSON.parse(row.parameters[3].coordinates),tile=/^D(\d+),(\d+)$/.exec(row.parameters[3].tileId);
    assert(tile);c.Tilemap.prototype.SetMapData.call(tiles,+at.x,+at.y,+at.z,768+8*(+tile[2])+(+tile[1]));
   }
-  for(let n=0;n<160;n++)f.frame();assert.equal(count(),0,'blackout/tile work is silent');
+  for(let n=0;n<160;n++)frame();assert.equal(count(),0,'blackout/tile work is silent');
   f.interpreter._index=68;f.scene._wqaTerrainWork=0;f.status._brightness=255;
   // Portrait preloading can skip the movement admission entirely. Recover the
   // exact visible door while Wendy is stationary in Frostyna's next paragraph.
@@ -29,11 +34,11 @@ module.exports=(fixture,stock)=>{
   if(invalid==='wrong-list')f.interpreter._list=[];
   if(invalid==='late')f.interpreter._index=84;
   if(invalid==='repaint')tiles._needsRepaint=true;
-  f.frame(false);assert.equal(count(),0,'postrender owns publication');f.renderer.emit('postrender');
+  frame(false);assert.equal(count(),0,'postrender owns publication');f.renderer.emit('postrender');
   assert.equal(count(),invalid?0:1,String(invalid));
   if(!invalid){if(nvda)assert.deepEqual(spoken,['Chomps has smashed the door open.']);
    else {assert.equal(f.played[0].id,'chomps-door-open');f.played[0].emit('ended');}
-   for(let n=0;n<40;n++)f.frame();assert.equal(count(),1,'one description in the real script window');}
+   for(let n=0;n<40;n++)frame();assert.equal(count(),1,'one description in the real script window');}
   assert.deepEqual([player.candidate._realX,player.candidate._realY],[3,12],'no movement needed for the door reveal');
   f.narration.leave(f.scene);
  }

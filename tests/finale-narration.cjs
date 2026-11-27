@@ -37,7 +37,16 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
                 return data;
             };
             let reveal;
-            if(id==='shrine-lights') {
+            if(id==='office-lights-out') {
+                const parent=f.spriteset._pictureContainer_upper={children:[]};
+                f.status._pictures[1]={_name:'black',_opacity:255};
+                const sprite={parent,_pictureId:1,_pictureName:'black',texture:{valid:false},worldVisible:true,worldAlpha:1,
+                    _frame:{width:1264,height:990},anchor:{x:0,y:0},worldTransform:{a:4,b:0,c:0,d:4,tx:-100,ty:-100}};
+                parent.children.push(sprite);reveal=()=>sprite.texture.valid=true;
+            } else if(id==='office-lights-on') {
+                actor._characterName=source.sprite._characterName='~BeefThief';
+                f.status._pictures[1]={_name:'black',_opacity:255};reveal=()=>delete f.status._pictures[1];
+            } else if(id==='shrine-lights') {
                 const mask=f.spriteset._lightmask={parent:f.spriteset,worldVisible:true,_sprites:[{}]};
                 reveal=()=>mask._sprites=[];
             } else if(id==='shrine-reunion') {

@@ -2,6 +2,11 @@
 const {renderedSprite}=require('../runtime/rendered-sprite');
 function site(root) {
     const map=root.$gameMap, script=map?._interpreter;
+    if(map?._mapId===103 && [2,3,4,16,17,18,19].includes(script?._eventId) &&
+        script._list===root.$dataMap?.events?.[script._eventId]?.pages?.[0]?.list) {
+        if(script._index>=8 && script._index<=16)return {script,index:8,actor:root.$gamePlayer,id:'office-lights-out'};
+        if(script._index>=27 && script._index<=33)return {script,index:27,actor:map._events[9],id:'office-lights-on'};
+    }
     const table=map?._mapId===97 ? [[8,1,56,83,56,-1,undefined,'chomps-door-open']] :
         map?._mapId===49 ? [[14,1,56,89,55,-1,51,'grunt-ambush']] :
         map?._mapId===134 ? [[6,0,10,24,6,-1,undefined,'party-jailed'],[10,1,71,99,70,11,77,'jail-breach']] :
@@ -23,6 +28,27 @@ function visibleActor(root,host,scene,id,name) {
         pos.ty>=0 && pos.ty<=host.graphics.height ? actor : null;
 }
 function visible(root,host,scene,state) {
+    if(state.id==='office-lights-out' || state.id==='office-lights-on') {
+        const dark=root.$gameScreen?._pictures?.[1],sprites=[];let count=0;
+        for(const key of ['_pictureContainer_upper','_pictureContainer_mid','_pictureContainer_lower']) {
+            const parent=scene._spriteset[key],children=parent?.children;
+            if(!Array.isArray(children))continue;
+            if((count+=children.length)>128)return false;
+            for(const sprite of children)if(sprite._pictureId===1 && sprite._pictureName==='black' && renderedSprite(sprite,parent))
+                sprites.push(sprite);
+        }
+        if(state.id==='office-lights-on')return !dark && !sprites.length &&
+            scene._spriteset._tilemap.worldVisible===true && !!visibleActor(root,host,scene,9,'~BeefThief');
+        if(dark?._name!=='black' || dark._opacity<250)return false;
+        return sprites.some(sprite=>{
+            const p=sprite.worldTransform,r=sprite._frame,anchor=sprite.anchor;
+            if(!p || !r || !anchor || p.b!==0 || p.c!==0 || !(p.a>0) || !(p.d>0))return false;
+            const left=p.tx-anchor.x*r.width*p.a,top=p.ty-anchor.y*r.height*p.d;
+            // The authored picture starts outside the viewport and is scaled
+            // to cover it. Its center need not be onscreen to prove darkness.
+            return left<=0 && top<=0 && left+r.width*p.a>=host.graphics.width && top+r.height*p.d>=host.graphics.height;
+        });
+    }
     if(state.id==='chomps-door-open') {
         const map=root.$gameMap,data=root.$dataMap,tilemap=scene._spriteset._tilemap,tiles=tilemap?._mapData;
         if(data.width!==34 || data.height!==40 || tiles?.length!==34*40*6 ||

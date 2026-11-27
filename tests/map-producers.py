@@ -64,6 +64,13 @@ if sys.argv[2:] == ['interaction']:
     sys.exit()
 
 
+if sys.argv[2:] == ['narration-ready']:
+    source, _ = decode(map_notification((PLUGINS / MAP_REL.name).read_bytes()).decode('utf8'))
+    start = source.index('        const wqaReveal = $gameMap._interpreter;')
+    end = source.index('globalThis.WendyQuestAccessNarrationPresent?.(this);', start)
+    print(json.dumps(source[start:end + len('globalThis.WendyQuestAccessNarrationPresent?.(this);')]))
+    sys.exit()
+
 if sys.argv[2:] == ['terrain-paint']:
     text, _ = decode(map_notification((PLUGINS / MAP_REL.name).read_bytes()).decode('utf8'))
     print(json.dumps([between(text, "Tilemap['prototype']['SetMapData']=function(", "},Tilemap['prototype']['updateTransform']") + '};']))
@@ -78,7 +85,7 @@ if sys.argv[2:] == ['cauldron-drain']:
     sys.exit()
 
 
-if sys.argv[2:] == ['atlas-commands']:
+if sys.argv[2:] in (['atlas-commands'], ['office-pictures']):
     source = objects_notification((Path(sys.argv[1]) / OBJECTS_REL.relative_to('package.nw')).read_bytes()).decode('utf8')
     methods = []
     for owner, names in [('Game_Interpreter', ['command232', 'picturePoint']),
@@ -87,6 +94,11 @@ if sys.argv[2:] == ['atlas-commands']:
                          ('Game_Screen', ['movePicture', 'realPictureId', 'picture']),
                          ('Game_Message', ['clear'])]:
         for name in names:
+            start = source.index(f'{owner}.prototype.{name} = function(')
+            methods.append(source[start:source.index('\n};', start) + 3])
+    if sys.argv[2:] == ['office-pictures']:
+        for owner, name in [('Game_Interpreter','command231'),('Game_Interpreter','command235'),
+                            ('Game_Screen','showPicture'),('Game_Screen','erasePicture')]:
             start = source.index(f'{owner}.prototype.{name} = function(')
             methods.append(source[start:source.index('\n};', start) + 3])
     print(json.dumps(methods))
