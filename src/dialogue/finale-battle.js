@@ -18,14 +18,18 @@ function bossFlash(root, scene, interpreter) {
     if (interpreter !== root.$gameTroop?._interpreter ||
         interpreter?._list !== root.$dataTroops?.[96]?.pages?.[5]?.list) return null;
     const id = interpreter._index === 7 ? 'double-mech-explosion' :
-        interpreter._index === 15 ? 'double-mech-explosion-again' : '';
+        interpreter._index === 15 ? 'double-mech-explosion-again' :
+        interpreter._index === 25 ? 'double-mech-whiteout' : '';
     const sprites = scene._spriteset?._enemySprites;
     if (!id || !Array.isArray(sprites) || sprites.length > 16) return null;
     const actor = sprites.find(sprite => sprite._enemy?._enemyId === 38);
     const art = actor?._mainSprite || actor;
     return actor && { id, visible: () => actor.parent === scene._spriteset?._battleField &&
         actor.worldVisible && actor.worldAlpha > 0 && art.worldVisible && art.worldAlpha > 0 &&
-        art.bitmap?.isReady?.() && root.$gameScreen?._flashColor?.[3] > 0 };
+        art.bitmap?.isReady?.() && (id==='double-mech-whiteout' ?
+            root.$gameScreen?._tone?.slice(0,3).every(value=>value>=128) &&
+            scene._spriteset?._baseColorFilter?.uniforms?.colorTone?.slice(0,3).every(value=>value>=128) :
+            root.$gameScreen?._flashColor?.[3] > 0) };
 }
 
 function combinedStones(root, scene, actor, combined, stones) {

@@ -4487,5 +4487,9 @@
   "mech-shield-vanishes": {
     "text": "The gold lattice shielding the Double Big Mech vanishes.",
     "beats": []
+  },
+  "double-mech-whiteout": {
+    "text": "White light engulfs the Double Big Mech.",
+    "beats": []
   }
 }

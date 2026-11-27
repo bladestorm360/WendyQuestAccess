@@ -366,3 +366,7 @@ The full239-map source audit finds122 direct common38 callers. Seven occur insid
 ### Double Big Mech shield removal
 
 Native BattleSceneArranger SuperShieldApply/Cleanup and troop96/page4 prove a scrolling gold triangular lattice disappears after skill123; no separate beam is created by CornerStone. The new caption observes only the exact drawn ShieldOverlay on enemy38 at cleanup, then its removed attachment after render. The existing stones-unite text, recording and factory hook stay unchanged. tests/shield-release.cjs executes the original apply/cleanup and checks recorded/NVDA, wrong source, hidden/loading and unpainted cases. Game timing and physical playback remain owner confirmation.
+
+### Final battle whiteout before MechBorg's curse
+
+Troop96/page5 commands22–27 play the final destruction sound, maintain the screen impulse and fade the battle white over180frames; the curse uses per-letter escape waits and automatic close. Enemy38 explicitly has no automatic collapse. The map object's destruction at107:18/page5 is later, under the transition. The new whiteout caption uses command223 and verifies both the game tone and actual base color-filter uniforms after render. tests/finale-whiteout.cjs executes the native tween/filter writers; explosion text/audio and the later map crumble recording remain unchanged. No invented falling parts or beam.

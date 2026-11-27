@@ -64,6 +64,20 @@ if sys.argv[2:] == ['interaction']:
     sys.exit()
 
 
+if sys.argv[2:] == ['screen-tint']:
+    methods = []
+    for file, owner, names in [('rmmz_objects.js', 'Game_Screen', ['startTint','updateTone','tone']),
+                               ('rmmz_objects.js', 'Game_Interpreter', ['command223']),
+                               ('rmmz_sprites.js', 'Spriteset_Base', ['updateBaseFilters']),
+                               ('rmmz_core.js', 'ColorFilter', ['setColorTone'])]:
+        raw = (Path(sys.argv[1]) / 'js' / file).read_bytes()
+        source = (objects_notification(raw) if file == 'rmmz_objects.js' else raw).decode('utf8')
+        for name in names:
+            start = source.index(f'{owner}.prototype.{name} = function(')
+            methods.append(source[start:source.index('\n};', start) + 3])
+    print(json.dumps(methods))
+    sys.exit()
+
 if sys.argv[2:] == ['narration-ready']:
     source, _ = decode(map_notification((PLUGINS / MAP_REL.name).read_bytes()).decode('utf8'))
     start = source.index('        const wqaReveal = $gameMap._interpreter;')

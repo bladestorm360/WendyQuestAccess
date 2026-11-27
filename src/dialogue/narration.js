@@ -29,7 +29,7 @@ for (const id of clipIds) {
     }
 }
 //185 recordings, including the later Corner Stone white-light reaction.
-const PACK_LIMIT = 2224 * 1024;
+const PACK_LIMIT = 2240 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;

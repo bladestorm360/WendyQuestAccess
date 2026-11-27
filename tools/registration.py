@@ -420,6 +420,8 @@ LIGHTNING_EVENTS = {12: 31, 13: 9, 14: 28, 15: 35, 16: 40, 17: 20, 161: 3,
 
 
 def objects_notification(original):
+    tint_entry = original.index(b';', original.index(b'$gameScreen.startTint',
+        original.index(b'Game_Interpreter.prototype.command223 = function('))) + 1
     lightning = json.dumps(LIGHTNING_EVENTS, separators=(',', ':')).encode()
     preload = (b'{const wqaPrior=ImageManager._wqaInterpreterPreload;'
                b'ImageManager._wqaInterpreterPreload=true;try{')
@@ -570,6 +572,8 @@ def objects_notification(original):
         287095: b'\n        if(Graphics._wqaNarrationEnabled&&'
                 b'(params[1]>=1&&params[1]<=10))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,params[1]);',
+        tint_entry: b'\n    if(Graphics._wqaNarrationEnabled&&this===$gameTroop?._interpreter&&$gameTroop._troopId===96&&this._index===25)'
+                b'globalThis.WendyQuestAccessFinaleBattle?.(SceneManager._scene,this);',
         288646: b'\n    if(Graphics._wqaNarrationEnabled&&this._list===globalThis.$dataCommonEvents?.[58]?.list&&this._index===4)'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-13);'
                 b'if(Graphics._wqaNarrationEnabled&&this._mapId===134&&this._eventId===2&&this._index===15)'
