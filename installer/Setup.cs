@@ -115,7 +115,10 @@ namespace WendyQuestAccessInstaller {
       var clock=Stopwatch.StartNew();string prior="";
       while(!process.WaitForExit(200)) {
        string file=Path.Combine(work,"progress.txt");
-       if(File.Exists(file)){string now=File.ReadAllText(file);if(now!=prior){progress(now);prior=now;}}
+       // A concurrent status write is optional feedback. A sharing collision
+       // must never abandon a live transaction or clean its working files.
+       try {if(File.Exists(file)){string now=File.ReadAllText(file);if(now!=prior){progress(now);prior=now;}}}
+       catch(IOException) { }
        // Never terminate a mutation on a clock: the durable journal owns
        // crash recovery and restores the installed-release receipt as well.
        if(clock.Elapsed.TotalSeconds>180){progress("Still working; keep this installer open.");clock.Restart();}

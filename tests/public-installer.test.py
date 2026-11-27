@@ -91,8 +91,9 @@ def main():
  # The ordinary exception path must restore immediately, including the new
  # receipt, without requiring another installer run.
  (crash/'engine.cjs').write_text(engine.replace(needle,needle+"if(item.key===installedRelease)throw Error('Injected fixture failure');"),encoding='utf8')
- failure=subprocess.run([str(crash/'WendyQuestInstallRuntime.exe'),str(game),str(crash/'engine.cjs'),'install',str(game),str(crashwork)],cwd=crash,timeout=120)
- assert failure.returncode!=0 and not json.loads((crashwork/'result.json').read_text())['ok']
+ ordinarywork=base/'ordinary-work';ordinarywork.mkdir();shutil.copyfile(crashwork/'download.json',ordinarywork/'download.json')
+ failure=subprocess.run([str(crash/'WendyQuestInstallRuntime.exe'),str(game),str(crash/'engine.cjs'),'install',str(game),str(ordinarywork)],cwd=crash,timeout=180)
+ assert failure.returncode!=0 and json.loads((ordinarywork/'result.json').read_text())=={'ok':False,'message':'Injected fixture failure'}
  assert snapshot()==first and not (game/'.wendyquest-access-transaction').exists()
  run('install',package=advanced,network=(1,1));second=snapshot();assert second!=first
  result=run('install',package=advanced,network=(1,0));assert result['alreadyCurrent'] and snapshot()==second

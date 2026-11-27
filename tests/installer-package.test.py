@@ -7,7 +7,7 @@ def main():
  parser.add_argument('--failure-root',type=Path);args=parser.parse_args()
  stage=args.stage.resolve();game=args.game.resolve()
  if not game.is_relative_to(Path(r'C:/Games/Dev/WendyQuestAccess-analysis')) or (game/'.wendyquest-access-recovery').exists():raise ValueError('Use a stock outside-Git analysis mirror')
- work=stage/'smoke-work';work.mkdir();exe=stage/'WendyQuestAccessSetup.exe'
+ work=stage/'smoke-work';work.mkdir(exist_ok=True);assert not list(work.iterdir());exe=stage/'WendyQuestAccessSetup.exe'
  sha=lambda data:hashlib.sha256(data).hexdigest()
  def snapshot():return {p.relative_to(game).as_posix():sha(p.read_bytes()) for p in game.rglob('*') if p.is_file()}
  def run(action):
@@ -32,11 +32,12 @@ def main():
   # A real exception after the release receipt was written must recover in
   # the same invocation. This modified engine exists only in the fixture.
   base=args.failure_root.resolve();assert base.is_relative_to(Path(r'C:/Games/Dev/WendyQuestAccess-analysis'))
-  crash=base/'crash-runtime';crashwork=base/'crash-work';needle='else write(file,data);'
+  crash=base/'crash-runtime';crashwork=base/'ordinary-work';crashwork.mkdir();needle='else write(file,data);'
+  (crashwork/'download.json').write_bytes((base/'crash-work/download.json').read_bytes())
   engine=(stage/'package/engine.cjs').read_text();assert engine.count(needle)==1
   (crash/'engine.cjs').write_text(engine.replace(needle,needle+"if(item.key===installedRelease)throw Error('Injected fixture failure');"),encoding='utf8')
   failed=subprocess.run([str(crash/'WendyQuestInstallRuntime.exe'),str(game),str(crash/'engine.cjs'),'install',str(game),str(crashwork)],cwd=crash,timeout=180)
-  assert failed.returncode!=0 and not json.loads((crashwork/'result.json').read_text())['ok']
+  assert failed.returncode!=0 and json.loads((crashwork/'result.json').read_text())=={'ok':False,'message':'Injected fixture failure'}
   assert snapshot()==installed and not (game/'.wendyquest-access-transaction').exists()
  run('uninstall');assert snapshot()==before
  subprocess.run([str(exe),'--self-test'],check=True,timeout=15)
