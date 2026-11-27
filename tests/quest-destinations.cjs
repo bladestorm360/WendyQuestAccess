@@ -105,7 +105,7 @@ async function verifyQuestDestinations(c, game, read, load, verifyRoute, verifyW
     const chestScene = stage(chest, 'quest4');
     const chestTargets = targets(chestScene, true);
     const chestTarget = chestTargets.objects.find(row => row.category === 'quests' && row.id === 14);
-    assert.match(chestTarget.name, /^(?:Chest|Treasure)$/, 'quest treasure retains a type-only label');
+    assert.match(chestTarget.baseName??chestTarget.name, /^(?:Chest|Treasure)$/, 'quest treasure retains a type-only label');
     assert(chestTargets.objects.some(row => row.category === 'treasure' && row.id === 14));
     assert(questDestinationCurrent(c, chestScene, chestTarget.quest));
     const floor = chest.gameMap._events[14];
@@ -204,8 +204,8 @@ async function verifyQuestDestinations(c, game, read, load, verifyRoute, verifyW
     const openScene = stage(open, 'quest10');
     assert.deepEqual(quests(openScene).filter(row => [31, 32, 33].includes(row.id)).map(row => row.id), [31, 32, 33]);
     const buttons = targets(openScene, true).objects.filter(row => row.category === 'objects' && [31, 32, 33].includes(row.id));
-    assert.deepEqual(buttons.map(({ id, name, showBlocked }) => ({ id, name, showBlocked })), [31, 32, 33].map(id =>
-        ({ id, name: 'Gate switch', showBlocked: true })));
+    assert.deepEqual(buttons.map(({ id, name, showBlocked }) => ({ id, name, showBlocked })), [31, 32, 33].map((id,index) =>
+        ({ id, name: 'Gate switch '+(index+1), showBlocked: true })));
     for (const button of buttons) assert.equal(open.gameMap._events[button.id]._trigger, 0);
     assert(!targets(openScene).objects.some(row => row.category === 'events' && [31, 32, 33].includes(row.id)));
     const selected = quests(openScene).find(row => row.id === 31);

@@ -154,7 +154,7 @@ SCENE_LEAVING = (narration_leaving(b'this._scene', mode='cancel') + b'if(this._s
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
                  b'SceneManager._scene?._wqaAutosaveNotice||SceneManager._scene?._wqaCreditsActive||'
                  b'SceneManager._scene?._wqaInteractionActive||SceneManager._scene?._wqaTreasureDue||'
-                 b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaReadoutActive||SceneManager._scene?._wqaCaveReview||'
+                 b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaReadoutActive||SceneManager._scene?._wqaEnemyWalkPending||SceneManager._scene?._wqaCaveReview||'
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
@@ -511,7 +511,7 @@ def objects_notification(original):
         232058: b'if(this===$gamePlayer&&SceneManager._scene?._wqaBookmarkLanding)'
                 b'globalThis.WendyQuestAccessBookmarkLandingAccepted?.(SceneManager._scene,this);'
                 + MAP_LEAVING + b'\n        ',  # Native landing after isLandOk
-        222789: b'if(this===$gamePlayer&&(SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaAutowalkCleanup||SceneManager._scene?._wqaBookmarkEntrance||Graphics._wqaCaveSolverActive))'
+        222789: b'if(this===$gamePlayer&&(SceneManager._scene?._wqaAutowalkActive||SceneManager._scene?._wqaEnemyWalkPending||SceneManager._scene?._wqaAutowalkCleanup||SceneManager._scene?._wqaBookmarkEntrance||Graphics._wqaCaveSolverActive))'
                 b'direction=globalThis.WendyQuestAccessAutowalkInput?.(SceneManager._scene,this,direction,'
                 b'direction>0||$gameTemp.isDestinationValid())??direction;\n        ',
         222850: b'\n            if(this===$gamePlayer&&SceneManager._scene?._wqaFieldReady&&'
@@ -519,7 +519,7 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessFieldMove?.(SceneManager._scene,direction,this._movementSuccess);',
         249454: b'if(SceneManager._scene?._wqaFieldReady&&(Graphics._wqaWallEnabled||Graphics._wqaFootstepsEnabled||SceneManager._scene._wqaBeaconActive||'
                 b'SceneManager._scene._wqaCaveReview||SceneManager._scene._wqaCaveTimingActive||SceneManager._scene._wqaCaveChaseActive||'
-                b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaSoundscapeActive||'
+                b'SceneManager._scene._wqaAutowalkActive||SceneManager._scene._wqaEnemyWalkPending||SceneManager._scene._wqaSoundscapeActive||'
                 b'SceneManager._scene._wqaQuestTracking||SceneManager._scene._wqaQuestNavigation||'
                 b'SceneManager._scene._wqaRouteActive||SceneManager._scene._wqaInteractionActive||'
                 b'SceneManager._scene._wqaIceRoute))'
@@ -829,7 +829,7 @@ def map_notification(original):
             wqaIcon.scale.x > 0 && wqaIcon.children[0]?.texture?.valid))
             globalThis.WendyQuestAccessInteractionUpdate?.(this, wqaIcon);
         if (!Graphics._wqaFrontEndObserved || ((Graphics._wqaCaveProgressPending || Graphics._wqaCaveAutoPending || Graphics._wqaCaveSolverPending || Graphics._wqaCaveChasePending || Graphics._wqaCaveManualPending ||
-            Graphics._wqaBookmarkTransferPending || Graphics._wqaEventKnowledgePending) &&
+            Graphics._wqaBookmarkTransferPending || Graphics._wqaEnemyWalkPending || Graphics._wqaEventKnowledgePending) &&
             !$gameMap._interpreter?._list &&
             $gamePlayer._x === $gamePlayer._realX && $gamePlayer._y === $gamePlayer._realY) ||
             (Graphics._wqaCaveRecoveryPending && $gameMap._mapId !== 198) ||

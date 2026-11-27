@@ -805,7 +805,7 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessFieldReady = function (scene) {
         if ((field && !root.Graphics._wqaCaveRecoveryPending && !root.Graphics._wqaCaveProgressPending &&
             !root.Graphics._wqaCaveAutoPending && !root.Graphics._wqaCaveSolverPending && !root.Graphics._wqaCaveChasePending && !root.Graphics._wqaCaveManualPending &&
-            !root.Graphics._wqaBookmarkTransferPending && !root.Graphics._wqaWallEnabled &&
+            !root.Graphics._wqaBookmarkTransferPending && !root.Graphics._wqaEnemyWalkPending && !root.Graphics._wqaWallEnabled &&
             !root.Graphics._wqaFootstepsEnabled && !root.Graphics._wqaCaveTimingEnabled &&
             !root.Graphics._wqaEventKnowledgePending) ||
             fieldWaiting === scene || !supported() || root.SceneManager._scene !== scene ||

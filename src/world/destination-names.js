@@ -20,6 +20,7 @@ function numberDestinations(map,objects) {
     }
     snapshots.set(map,{map:map._mapId,names});
     for(const target of objects) {
+        target.baseName=target.name;
         const ordinal=names.get(key(target.name))?.get(target.id);
         if(ordinal)target.name+=` ${ordinal}`;
     }

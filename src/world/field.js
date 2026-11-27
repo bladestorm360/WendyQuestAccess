@@ -11,6 +11,7 @@ const { transferOptions, pageMayTransfer } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
 const { readoutLimit, chunkReadout, createRouteReadout } = require('./route-readout');
 const { destinationName } = require('./destination-names');
+const { createEnemyWalk } = require('./enemy-walk');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { createBoatJourney } = require('./boat-journey');
 const { createLocalDetour } = require('./local-detour');
@@ -138,8 +139,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     let manualCrossing = null;
     const preferences = host.navigationPreferences;
     const readout=createRouteReadout(root,host,ready,controller=>command('directions',undefined,controller,false,true));
+    const enemyWalk=createEnemyWalk(root,host,preferences);
     const solver = createCaveSolver(root,host.graphics,preferences);
     const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed, arrived, job) => {
+        if(record?.enemyBlocked)enemyWalk.park(scene,job,record,owner);
         if(record?.manualAutowalkStop)solver.stop();
         else if(arrived && job?.caveWalk?.solverToken)solver.wake();
         if (arrived && job?.caveWalk?.pickupEscape) {
@@ -177,6 +180,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         } else if (record && scene === host.manager._scene) command('navigationReport', record);
         else retire(scene);
     }, (scene, held) => (root.$gameMap?._needsRefresh || held) && ready(scene, true, false, true), rerouteAutowalk, cleanupAutowalk, (scene,player,direction) => {
+        const blocked=enemyWalk.cancel();
+        if(blocked){owner={...blocked.owner,scene};retire(scene);return blocked.job;}
         const solving=solver.active();
         if(solving)solver.stop();
         const pending=cleanupWalk;
@@ -430,12 +435,13 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const bump = gate === 'pull' && !handoff || !!edge && edge.action && root.$gameMap._events[event]?._trigger === 1;
         if (blocked) job.enemyCurrent = () => currentEnemy(root, result);
         startBeaconApproach(job, result, event);
-        return presentRoute(job, { kind: 'routeDirections', name: job.label, guide: text,
+        return follow(job, result, { kind: 'routeDirections', name: job.label, guide: text,
             legs: result.legs, facing: result.arrival.facing, more: result.more === true,
             exit: handoff || blocked ? undefined : exit, useExit: true, boundary: result.boundary,
             boundaryName: handoffCaption(handoff,publicName,preferences().spoilers === true),
-            manualHandoff: !!handoff, enemyBlocked: blocked,
-            bump, enter: edge?.action && !bump, reenter: result.reenter === true, takeExit: !!edge || bump });
+            manualHandoff: !!handoff, enemyBlocked: blocked, enemy:result.enemy,
+            bump, enter: edge?.action && !bump, reenter: result.reenter === true, takeExit: !!edge || bump },
+            {...job,target:event,point:false,quest:null});
     }
 
     function startBeaconApproach(job, result, event) {
@@ -841,14 +847,14 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                             enemyCurrent: obstacle => currentEnemy(root, obstacle), alreadyReported: true });
                 }
                 job.enemyCurrent = () => currentEnemy(root, result);
-                const record = { kind: 'routeDirections', name: job.label, legs: result.legs,
+                const record = { kind: 'routeDirections', name: job.label, legs: result.legs, enemy:result.enemy,
                     enemyBlocked: true, boundary: result.boundary, more: result.more === true, afterEnemy: next };
                 // A remote goal has no local event until its final entrance
                 // is admitted. This certified prefix ends before the enemy,
                 // not at that entrance. Keep the remote journey intact and
                 // walk the owned point course; moving blockers still recapture
                 // the original destination through the normal silent reroute.
-                follow(job, result, record, job.remote ? { ...job, target: undefined, point: true, quest: null } : job);
+                follow(job, result, record, job.remote || job.terrainOnward ? { ...job, target: undefined, point: true, quest: null } : job);
             }
             else if (result?.status === 'interrupted') {
                 if (!job.autowalk && job.map === 201) {
@@ -879,7 +885,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                         (!activate && !job.eventAction && worldBoundaryName(root, result.boundaryEvent, preferences().spoilers === true)),
                     manualHandoff: !!handoff || !!boundaryName && (job.sunriseExit || job.action === 'puzzleGuide' || job.mode === 'ship' || timedCave(job.map)),
                     more: result.more === true };
-                follow(job,result,record);
+                follow(job,result,record,(job.remote||job.terrainOnward)&&!job.target?{...job,target:undefined,point:true,quest:null}:job);
             }
             else if (job.remote && ['unreachable', 'approachBlocked', 'unavailable'].includes(result?.status))
                 status(job, 'No verified reachable entrance');
@@ -1022,7 +1028,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     function route(job, snapshot, target, area, motion) {
         const destination = setRouteTarget(job, target);
         job.area = area;
-        job.autowalk = (job.action !== 'puzzleGuide' || snapshot.map===19) && !job.journey && preferences().autowalk;
+        job.autowalk = (job.action !== 'puzzleGuide' || snapshot.map===19) && preferences().autowalk;
         if (job.autowalk) automaticSnapshot(snapshot, destination.event);
         job.caveAll=job.autowalk && solver.enabled() && caveSolverMap(snapshot.map);
         if (job.autowalk && (automaticCaveMap(snapshot.map) || job.caveAll)) {
@@ -1115,6 +1121,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     function rerouteAutowalk(job) {
         const { scene } = job;
         if (!preferences().autowalk || !ready(scene)) return false;
+        enemyWalk.cancel();
         retire(scene);
         host.beacon?.stop(scene);
         // Preserve the selected destination and journey owners. Timed caves
@@ -1271,7 +1278,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if (next.transfer) {
             job.label = 'Next exit';
             job.terrainOnward = true;
-            return submit(job, snapshot, { field: true, limit: 8, beacon: host.beacon?.enabled() === true,
+            job.autowalk=preferences().autowalk;
+            if(job.autowalk)automaticSnapshot(snapshot);
+            return submit(job, snapshot, { field: true, limit: 8, autowalk:job.autowalk, beacon: host.beacon?.enabled() === true,
                 transfer: terrainTransferRequest(job, next.transfer, next.breakfast, next.point, next.trail) }), true;
         }
         if (!next.target) return status(job, next.unavailable ||
@@ -1316,7 +1325,9 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             }
             job.label = target.name;
             job.terrainOnward = true;
-            return submit(job, snapshot, { field: true, limit: 8, beacon: host.beacon?.enabled() === true,
+            job.autowalk=preferences().autowalk;
+            if(job.autowalk)automaticSnapshot(snapshot);
+            return submit(job, snapshot, { field: true, limit: 8, autowalk:job.autowalk, beacon: host.beacon?.enabled() === true,
                 transfer: terrainTransferRequest(job, STONE_ISLAND) });
         }
         // Guards are moving hazards. Directions reads their current bearing
@@ -1541,6 +1552,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const trail = [...new Set([...selection.trail, tileKey(snapshot.map, snapshot.x, snapshot.y)])];
         job.remote = { bookmark, entrances: current, ground, island, state, selection: { ...selection, trail } };
         job.autowalk = preferences().autowalk;
+        if(job.autowalk)automaticSnapshot(snapshot);
         const point = bookmark.kind === 'point' ? { x: bookmark.x, y: bookmark.y } : undefined;
         const copy = ({ event, map, x, y, approach }) => ({ event, map, x, y, approach });
         const shipLanding = island && { event: island.event, x: island.x, y: island.y, facing: island.facing };
@@ -1707,6 +1719,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         return active?.scene === scene && active.action === 'directions' && preferences().autowalk;
     }
     function command(action, text, controller = false, keepCaveTiming = false, automaticReadout = false) {
+        if(BROWSE.has(action)||['directions','puzzleGuide','puzzleStop','beaconStop'].includes(action))enemyWalk.cancel();
         const stoppedReadout=!automaticReadout&&readout.cancel();
         if (BROWSE.has(action) || ['directions', 'puzzleGuide', 'puzzleStop'].includes(action)) clearCleanupWalk();
         const scene = host.manager._scene;
@@ -1937,6 +1950,10 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         },
         observeReady(scene) {
             if (!ready(scene) || solver.active() && solver.waitingNative()) return;
+            if(!autowalk.active(scene)) {
+                const blocked=enemyWalk.settle(scene);
+                if(blocked){browserOwner(scene);if(browser===blocked.owner.browser){owner={...blocked.owner,scene};return rerouteAutowalk({scene,controller:blocked.job.controller});}}
+            }
             if (cleanupWalk) {
                 const pending = cleanupWalk;
                 if (cleanupCurrent(pending) && !pending.accepted) return;
@@ -2032,6 +2049,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         },
         command,
         cancelAutowalk(scene) {
+            enemyWalk.cancel();
             solver.stop();
             clearCleanupWalk();
             if (iceRoute?.kind === 'control'||iceRoute?.remote&&iceRoute.autowalk) clearIceRoute(scene);
@@ -2125,6 +2143,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return !!(root.$gameMap?._needsRefresh && ready(scene, true, false, true));
         },
         controlLost(scene) {
+            enemyWalk.leave(scene);
             readout.cancel();
             if(scene?._wqaSettingsActive)solver.stop();
             retireArrival(scene, true);
@@ -2134,6 +2153,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (control?.scene === scene) control = null;
         },
         leave(scene, mapEventId) {
+            enemyWalk.leave(scene,mapEventId);
             readout.cancel();
             if(mapEventId!==undefined)solver.accepted(root.$gameMap?._mapId,mapEventId);
             solver.leave(scene,!!(caveEvent || caveResume || cleanupWalk || mapEventId>0));

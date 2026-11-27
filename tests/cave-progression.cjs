@@ -78,7 +78,7 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
         const other = id === 22 ? 24 : 22;
         const target = captureWorld(c, false).objects.find(item => item.id === other);
         assert.equal(target?.category, 'events');
-        assert.equal(target?.name, 'Patrol line trigger');
+        assert.equal(target?.baseName, 'Patrol line trigger');
         run(source, 0, 203);
         assert.equal(gameMap._events[other].x, 0);
         assert.equal(gameMap._events[other].y, 0);
@@ -163,7 +163,7 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
         fixture.player.setPosition(x, y);
         const view = captureWorld(c);
         const target = view.objects.find(item => item.id === event);
-        assert.equal(target.name, name);
+        assert.equal(target.baseName, name);
         assert.equal(target.category, category);
         const request = { x, y, event };
         verifyRoute(fixture, request, solveRoute(fixture.geometry, view.live, request));
@@ -175,7 +175,7 @@ function verifyCaveProgression(c, load, snapshot, verifyRoute, read) {
     const chests = treasure.objects.filter(item => item.category === 'treasure');
     assert.deepEqual(chests.map(item => item.id), chestIds);
     for (const chest of chests) {
-        assert.equal(chest.name, 'Chest');
+        assert.equal(chest.baseName, 'Chest');assert.match(chest.name,/^Chest \d+$/);
         const request = { x: 14, y: 16, event: chest.id };
         verifyRoute(checkedChamber, request, solveRoute(checkedChamber.geometry, treasure.live, request));
     }

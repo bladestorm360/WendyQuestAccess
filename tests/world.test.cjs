@@ -1648,8 +1648,8 @@ async function main() {
     const marker = { x: 43, y: 32, event: 33, waypoint: true, field: true };
     const blockedPeak = captureWorld(c);
     assert.equal(solveRoute(peak.geometry, blockedPeak.live, marker).status, 'unreachable');
-    assert.equal(blockedPeak.objects.find(item => item.id === 22)?.name, 'West exit to world map');
-    assert.equal(blockedPeak.objects.find(item => item.id === 27)?.name, 'Peak approach');
+    assert.equal(blockedPeak.objects.find(item => item.id === 22)?.baseName, 'West exit to world map');
+    assert.equal(blockedPeak.objects.find(item => item.id === 27)?.baseName, 'Peak approach');
     let nextIce;
     await verifyWorker(peak, marker, blockedPeak.live, result => {
         assert.equal(result.status, 'enemyBlocked');

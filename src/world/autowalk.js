@@ -176,14 +176,20 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
     }
 
     function input(scene, player, direction, manual) {
-        const continuation=manual&&cancelContinuation(scene,player,direction);
         const state = active;
+        // Bumping the exact blocked enemy can start combat without moving.
+        // Preserve that encounter intent; a real manual move still takes over.
+        const enemy=state?.blocked&&state.map._events?.[state.record.enemy];
+        const fighting=manual&&enemy&&activeMovingEnemy(root,enemy)&&!player.isThrough()&&
+            enemy._x===state.map.roundXWithDirection(player._x,direction)&&enemy._y===state.map.roundYWithDirection(player._y,direction);
+        const continuation=manual&&!fighting&&cancelContinuation(scene,player,direction);
         if (!state || state.scene !== scene || state.player !== player) {
             if (continuation) report(scene,{kind:'fieldStatus',name:'Autowalk stopped.',manualAutowalkStop:true},false,false,continuation);
             return direction;
         }
         if (manual) {
             stop(scene);
+            if(fighting)return direction;
             // Manual input ends automatic movement. The beacon can still
             // follow the player's accepted step toward the same destination.
             report(scene, { kind: 'fieldStatus', name: 'Autowalk stopped.', manualAutowalkStop:true }, false, false, state.job);
@@ -217,7 +223,10 @@ function createAutowalk(root, ready, preferences, report, refreshReady = () => f
             if (player._x !== arrival.x || player._y !== arrival.y ||
                 (record.land && !canLand(map, arrival.x, arrival.y))) return changed(state);
             if (record.enemyBlocked && !job.enemyCurrent?.()) return changed(state);
-            if (record.enemyBlocked) return end(state, { ...record, legs: [], more: false, directionsOnly: true });
+            if (record.enemyBlocked) {
+                if(!state.blocked){state.blocked=true;report(scene,{...record,legs:[],more:false,directionsOnly:true},false,false,job);}
+                return 0;
+            }
             return arrive(state, record);
         }
         if (state.gate) {

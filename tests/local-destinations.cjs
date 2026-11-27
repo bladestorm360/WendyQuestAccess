@@ -213,7 +213,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         player.setPosition(...start);
         const view = captureWorld(c, true, undefined, undefined, [], false, true);
         const target = view.objects.find(item => item.id === event);
-        assert.equal(target?.name, name, `map ${fixture.id}, event ${event}`);
+        assert.equal(target?.baseName, name, `map ${fixture.id}, event ${event}`);
         assert.equal(target.category, category);
         const request = { x: start[0], y: start[1], event, field: true };
         const result = solveRoute(geometry, view.live, request);
@@ -293,7 +293,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
                 assert.equal(gate, undefined, 'finished guard page is retired');
                 continue;
             }
-            assert.equal(gate?.name, stage === variants ? final : require('../src/world/event-contexts.json')[id + ':' + event + ':' + c.$gameMap._events[event]._pageIndex][0], id + '/' + stage);
+            assert.equal(gate?.baseName??gate?.name, stage === variants ? final : require('../src/world/event-contexts.json')[id + ':' + event + ':' + c.$gameMap._events[event]._pageIndex][0], id + '/' + stage);
             const path = solveRoute(location.geometry, view.live, { x: view.x, y: view.y, event, field: true,
                 handoffs: gate.handoffs });
             assert.equal(path.status, 'ready', id + '/' + stage);
@@ -315,7 +315,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const view = captureWorld(c, true, undefined, undefined, saved.entries);
         const counters = view.objects.filter(item => [4, 5].includes(item.id));
         assert.deepEqual(counters.map(({ id, category, name }) => [id, category, name]), [
-            [4, 'people', 'Kathryn'], [5, 'merchants', 'Kathryn']
+            [4, 'people', 'Kathryn 1'], [5, 'merchants', 'Kathryn 2']
         ]);
         assert.deepEqual(view.objects.filter(item => item.category === 'bookmarks').map(item =>
             [item.event, item.name]), [[4, 'Talk to Kathryn'], [5, 'Place an order']]);
@@ -372,7 +372,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     assert.equal(beachMap.events().find(event => event.isStarting()).eventId(), 30);
     const beforeTrigger = { ...fromBeach, field: true, event: 30, stopBeforeEvent: true };
     const trigger = beachView.objects.find(item => item.id === 30 && item.category === 'events');
-    assert.equal(trigger?.name, 'Scene trigger');
+    assert.equal(trigger?.baseName??trigger?.name, 'Scene trigger');
     assert.equal(trigger.eventAction, 'step');
     assert.equal(availability([beforeTrigger]).available[0], 1);
     assert.deepEqual(solveRoute(beach.geometry, beachView.live, beforeTrigger), prefix);
@@ -397,7 +397,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const next = solveRoute(beach.geometry, nextView.live, elderRequest);
     assert.equal(next.status, 'interrupted');
     assert.equal(next.boundaryEvent, 35);
-    assert(nextView.objects.some(item => item.id === 35 && item.name === 'Autosave checkpoint' && item.category === 'checkpoints'));
+    assert(nextView.objects.some(item => item.id === 35 && (item.baseName??item.name) === 'Autosave checkpoint' && item.category === 'checkpoints'));
     beach.player.setPosition(beachMap.event(21).x + 1, beachMap.event(21).y);
     const eastern = captureWorld(c);
     const reached = findReachable(beach.geometry, eastern.live, { x: eastern.x, y: eastern.y, candidates });
@@ -405,7 +405,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const road = load(13, { switches: [11] });
     const roadEvent = road.gameMap.event(16);
     road.player.setPosition(roadEvent.x - 1, roadEvent.y);
-    assert(captureWorld(c).objects.some(item => item.id === roadEvent.eventId() && item.name === 'East exit to world map'));
+    assert(captureWorld(c).objects.some(item => item.id === roadEvent.eventId() && (item.baseName??item.name) === 'East exit to world map'));
     console.log('Verified native Crispy Beach gate activation, next checkpoint, and direct access on the far side.');
 
     function eventAvailability(id, switches, events, visible) {
@@ -439,10 +439,10 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         exit.player.setPosition(1, 17);
         const view = captureWorld(c, true, undefined, {});
         assert.equal(new Set(view.objects.filter(item => item.category === 'exits' &&
-            /(?:West|East|South) exit/.test(item.name)).map(item => item.name)).size, 3);
+            /(?:West|East|South) exit/.test(item.baseName??item.name)).map(item => item.baseName??item.name)).size, 3);
         const quest = view.objects.find(item => item.category === 'quests');
         assert(quest?.questExit);
-        assert.equal(quest.name, 'West exit to world map');
+        assert.equal(quest.baseName??quest.name, 'West exit to world map');
         const route = solveRoute(exit.geometry, view.live, { x: 1, y: 17, event: quest.id, field: true, stopBeforeEvent: true });
         assert.equal(route.status, 'interrupted');
         assert.equal(route.boundary, 4);
@@ -457,7 +457,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const trailView = captureWorld(c, true, undefined, {});
         assert.equal(trailView.live.events.find(event => event.id === 35).action, false);
         const trailQuest = trailView.objects.find(item => item.questExit);
-        assert.equal(trailQuest?.name, 'North exit to world map');
+        assert.equal(trailQuest?.baseName??trailQuest?.name, 'North exit to world map');
         trail.player.setPosition(31, 6);
         const closest = captureWorld(c, false, undefined, {}).objects.find(item => item.questExit);
         assert.notEqual(closest?.id, trailQuest.id, 'a nearby parallel tile becomes the nearest');
@@ -495,7 +495,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     transfer(load(203), 1, [12, 11], 'First floor', 132, [12, 2]);
     const concealedCave = load(87);
     concealedCave.player.setPosition(12, 64);
-    assert(captureWorld(c).objects.some(item => item.id === 91 && item.name === 'Hidden cave entrance'),
+    assert(captureWorld(c).objects.some(item => item.id === 91 && (item.baseName??item.name) === 'Hidden cave entrance'),
         'native first-use tunnel has no discovery/map-piece gate and is available without Spoiler mode');
     assert(captureWorld(c).live.events.some(item => item.id === 91 && item.normal && item.action));
     transfer(concealedCave, 91, [12, 64], 'Hidden cave entrance', 205, [14, 4]);
@@ -587,14 +587,14 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     }
     const spent = load(53, { variables: { 4: 2 } });
     spent.player.setPosition(7, 10);
-    assert(!captureWorld(c).objects.some(item => item.name === 'Pull handle'));
+    assert(!captureWorld(c).objects.some(item => (item.baseName??item.name) === 'Pull handle'));
     for (const [mapId, ice, x, y] of [[14, 31, 53, 39], [15, 53, 46, 44], [29, 12, 3, 7], [134, 4, 4, 4]]) {
         const chest = coveredChests.get(mapId);
         const self = [`${mapId},${ice},A`];
         const iced = load(mapId, { self });
         iced.player.setPosition(x, y + 1);
         const before = captureWorld(c).objects;
-        assert.deepEqual(before.filter(item => item.id === ice).map(({ name, category }) => [name, category]),
+        assert.deepEqual(before.filter(item => item.id === ice).map(({ name, baseName=name, category }) => [baseName, category]),
             [['Ice block', 'objects']]);
         assert(!before.some(item => item.id === chest), 'blank chest is absent');
         const revealed = load(mapId, { self: [...self, `${mapId},${ice},B`, `${mapId},${chest},B`] });
@@ -604,7 +604,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         // command. Its action page need not update its static page image.
         Object.assign(prop, { _characterName: 'Chest', _x: x, _y: y });
         const after = captureWorld(c).objects;
-        assert.deepEqual(after.filter(item => item.id === chest).map(({ name, category }) => [name, category]),
+        assert.deepEqual(after.filter(item => item.id === chest).map(({ name, baseName=name, category }) => [baseName, category]),
             [['Chest', 'treasure']]);
         assert(!after.some(item => item.id === ice), 'melted ice is no longer actionable');
         const opened = load(mapId, { self: [...self, `${mapId},${ice},B`, `${mapId},${chest},A`] });
@@ -615,7 +615,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     c.$gameParty.members = () => [3];
     const forest = load(15, { switches: [18] });
     forest.player.setPosition(25, 24);
-    const forestTargets = captureWorld(c).objects.filter(item => item.name === 'Gate switch');
+    const forestTargets = captureWorld(c).objects.filter(item => (item.baseName??item.name) === 'Gate switch');
     assert.deepEqual(forestTargets.map(item => item.id), [31, 32, 33]);
     assert.equal(forest.gameMap._events[17]._pageIndex, 1);
     assert.equal(forest.player.canPass(24, 25, 8), false);
@@ -628,7 +628,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const house = load(116, { self });
         house.player.setPosition(5, 6);
         const targets = captureWorld(c).objects.filter(item => [7, 9, 10].includes(item.id));
-        assert.deepEqual(targets.map(item => [item.id, item.name, item.category]),
+        assert.deepEqual(targets.map(item => [item.id, item.baseName??item.name, item.category]),
             [[7, 'Pantry', 'objects'], [9, 'Pantry', 'objects'], [10, 'Pantry', 'objects']]);
     }
     const common = c.$dataCommonEvents;
@@ -638,17 +638,17 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const view = captureWorld(c, true, undefined, undefined, [], false, true);
     for (const id of [3, 4, 74]) {
         const entries = view.objects.filter(item => item.id === id);
-        assert.deepEqual(entries.map(({ name, category }) => [name, category]), [['Russetwood', 'exits']]);
+        assert.deepEqual(entries.map(({ name, baseName=name, category }) => [baseName, category]), [['Russetwood', 'exits']]);
     }
     for (const id of [78, 90, 124, 159, 185]) {
         const entries = view.objects.filter(item => item.id === id);
-        assert.deepEqual(entries.map(({ name, category, eventAction }) => [name, category, eventAction]),
+        assert.deepEqual(entries.map(({ name, baseName=name, category, eventAction }) => [baseName, category, eventAction]),
             [[require('../src/world/event-contexts.json')['113:' + id + ':0'][0], 'events', 'step']]);
     }
     const ruinsAmbush = load(172);
     ruinsAmbush.player.setPosition(5, 5);
     assert.deepEqual(captureWorld(c).objects.filter(item => item.id === 31)
-        .map(({ name, category, eventAction }) => [name, category, eventAction]), [['Heat Lamp', 'enemies', 'bump']]);
+        .map(({ name, baseName=name, category, eventAction }) => [baseName, category, eventAction]), [['Heat Lamp', 'enemies', 'bump']]);
     const clearedAmbush = load(172, { self: ['172,31,A'] });
     clearedAmbush.player.setPosition(5, 5);
     assert(!captureWorld(c).objects.some(item => item.id === 31));
@@ -659,7 +659,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const ruins = load(16, states);
         ruins.player.setPosition(52, 7);
         const exits = captureWorld(c).objects.filter(item => item.id === id);
-        assert.deepEqual(exits.map(({ name, category }) => [name, category]),
+        assert.deepEqual(exits.map(({ name, baseName=name, category }) => [baseName, category]),
             [[id === 21 ? 'East exit to world map' : 'Road to Russetwood', 'exits']]);
     }
     for (const [map, id, floor] of [[23, 2, 'Second floor'], [24, 1, 'First floor'],
@@ -670,24 +670,24 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const building = load(map);
         building.player.setPosition(2, 2);
         const stairs = captureWorld(c).objects.filter(item => item.id === id);
-        assert.deepEqual(stairs.map(({ name, category }) => [name, category]), [[floor, 'exits']], `stairs on map ${map}`);
+        assert.deepEqual(stairs.map(({ name, baseName=name, category }) => [baseName, category]), [[floor, 'exits']], `stairs on map ${map}`);
     }
     for (const self of [[], ['118,12,A', '118,13,A']]) {
         const reading = load(118, { self });
         reading.player.setPosition(9, 9);
         const books = captureWorld(c).objects.filter(item => [12, 13].includes(item.id));
-        assert.deepEqual(books.map(({ name, category }) => [name, category]), Array(2).fill(['Book', 'objects']));
+        assert.deepEqual(books.map(({ name, baseName=name, category }) => [baseName, category]), Array(2).fill(['Book', 'objects']));
     }
     const russetwood = load(12);
     russetwood.player.setPosition(6, 22);
     const townTargets = captureWorld(c).objects;
-    assert(townTargets.some(item => item.id === 11 && item.name === 'Barrel'));
-    assert(townTargets.some(item => item.id === 17 && item.category === 'people' && item.name === 'Old Bill'));
+    assert(townTargets.some(item => item.id === 11 && (item.baseName??item.name) === 'Barrel'));
+    assert(townTargets.some(item => item.id === 17 && item.category === 'people' && (item.baseName??item.name) === 'Old Bill'));
 
     const house = load(118);
     house.player.setPosition(11, 13);
     const residents = captureWorld(c).objects.filter(item => item.category === 'people');
-    assert.deepEqual(residents.map(({ name, eventAction }) => [name, eventAction]),
+    assert.deepEqual(residents.map(({ name, baseName=name, eventAction }) => [baseName, eventAction]),
         [['Tatoria', 'talk'], ['Frygor', 'talk']]);
     const departed = load(118, { self: ['118,5,A'] });
     departed.player.setPosition(11, 13);
@@ -723,7 +723,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         const view = captureWorld(c);
         const target = view.objects.find(item => item.id === id && item.category === kind);
         assert.equal(target?.eventAction, 'bump', `map ${map}, event ${id}`);
-        if (kind === 'events') assert.equal(target.name, 'Scene trigger');
+        if (kind === 'events') assert.equal(target.baseName??target.name, 'Scene trigger');
         const request = { x, y, event: id, bumpDirections: target.bumpDirections ?? 15, field: true };
         const route = solveRoute(geometry, view.live, request);
         assert.equal(route.status, 'ready', `map ${map}, event ${id} from ${x},${y}`);

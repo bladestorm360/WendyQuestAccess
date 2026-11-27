@@ -185,7 +185,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     const next = captureWorld(c);
     const entrance = next.objects.find(target => target.id === 13 && target.category === 'exits');
     assert.equal(entrance?.name, 'Secret Island');
-    assert.equal(next.objects.find(target => target.id === 90)?.name, 'Discovery marker');
+    assert.equal(next.objects.find(target => target.id === 90)?.baseName, 'Discovery marker');
     const step = { x: 47, y: 1, event: 13, field: true, handoffs: entrance.handoffs };
     assert.equal(solveRoute(coast.geometry, next.live, step).boundaryEvent, 90);
     const reachable = findReachable(coast.geometry, next.live, {
@@ -221,7 +221,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
     const shore = begin(206);
     shore.player.setPosition(9, 16);
     const islandExit = directions(shore, 4);
-    assert.equal(islandExit.target.name, 'South exit to world map');
+    assert.equal(islandExit.target.baseName??islandExit.target.name, 'South exit to world map');
     follow(shore, islandExit.result, 4);
     execute(shore.source);
     assert.deepEqual([shore.player._newMapId, shore.player._newX, shore.player._newY], [113, 48, 7]);
@@ -322,7 +322,8 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         sailing.player._vehicleType = 'ship';
         sailing.player.setPosition(18, 6);
         const view = captureWorld(c);
-        assert.equal(view.objects.find(item => item.id === event && item.category === 'events')?.name, 'Discovery marker');
+        const marker=view.objects.find(item => item.id === event && item.category === 'events');
+        assert.equal(marker?.baseName??marker?.name, 'Discovery marker');
         const request = { x: 18, y: 6, event, field: true, surface: true, stopBeforeEvent: true, autowalk: true };
         assert.equal(findReachable(sailing.geometry, view.live, { ...request, candidates: [request] }).available[0], 1);
         await verifyWorker(sailing, request, view.live, route => {
@@ -463,7 +464,7 @@ async function verifyVehicleNavigation(c, load, read, verifyWorker) {
         player.setPosition(...townLanding);
         const townList = captureWorld(c, true, undefined, owner).objects;
         assert(!townList.some(item => item.name.startsWith('Float Fort')));
-        assert(townList.some(item => item.category === 'exits' && item.name === 'West exit to world map'));
+        assert(townList.some(item => item.category === 'exits' && (item.baseName??item.name) === 'West exit to world map'));
         ask('directions');
         const townPacket = packets[0];
         assert.equal(townPacket?.request.transfer?.map,113);
