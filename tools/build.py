@@ -34,8 +34,8 @@ def stage_narration():
     if not clips or len(clips) > 190 or any(not clip.startswith(bytes.fromhex('1a45dfa3')) for clip in clips):
         raise ValueError('Malformed narration clips')
     pack = struct.pack('<' + 'I' * len(clips), *(len(clip) for clip in clips)) + b''.join(clips)
-    #185 recordings; the white-light caption adds8,660 bytes with its header.
-    # The measured2,250,427-byte pack needs one additional8-KiB increment.
+    #190 recordings. Seven new brief scene/healing captions fit the bounded
+    #2280-KiB pack; all183 previously installed recordings stay byte-identical.
     if len(pack) > 2280 * 1024:
         raise ValueError('Narration clips exceed their playback budget')
     target = OUT / 'wendyquest-access/narration.webmpack'

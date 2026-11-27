@@ -29,7 +29,7 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//185 recordings, including the later Corner Stone white-light reaction.
+//190 recordings, including the scene transitions and shared healing visuals.
 const PACK_LIMIT = 2280 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
