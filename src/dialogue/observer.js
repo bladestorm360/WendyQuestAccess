@@ -146,7 +146,13 @@ function createDialogueObserver(host, notifications) {
             if (!autoPaint) scene._wqaControllerReady = true;
             window._wqaAutoPaint = null;
             host.dialoguePresented?.(scene, paint);
-            submit(context, { kind: 'dialoguePage', text, speaker });
+            const record={ kind: 'dialoguePage', text, speaker };
+            // Automatic text has no player-held pause. Once its glyphs have
+            // actually rendered, retain this same speech through native close
+            // and resource handoff instead of retiring it with the window.
+            const confirmed=autoPaint&&notifications.confirmedPage?.(record,()=>currentScene(context));
+            if(confirmed)context.epoch=confirmed;
+            else submit(context, record);
         }
 
         const rewardShown = pageVisible && paint && context.epoch &&

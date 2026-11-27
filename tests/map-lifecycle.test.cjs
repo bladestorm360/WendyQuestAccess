@@ -183,7 +183,8 @@ function fixture(data, failSave = false, navigation) {
                 if (routeWorker === this) routePackets.push(packet);
                 else {
                     packets.push(packet);
-                    if (packet.kind !== 'cancel') timers.push(() => this.emit('message', 'ack'));
+                    if (packet.kind !== 'cancel') timers.push(() => this.emit('message', packet.preserveDescription ?
+                        {status:'ack',sequence:packet.sequence} : 'ack'));
                 }
             }
             unref() {}

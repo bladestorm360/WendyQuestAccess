@@ -64,4 +64,16 @@ function fixture(){
  const count=f.commands.length;f.output.notifications.open({kind:'notAValidRecord'},()=>true);f.deliver();
  assert.equal(f.output.counters.discarded,1);assert.equal(f.commands.length,count,'invalid output does not retry');
 }
-console.log('Verified actual worker append protocol, immediate following text, native-load rejection/replay in order, accepted-caption no replay, explicit cancellation and eight-record/no-dedup bounds.');
+{
+ const f=fixture();let visible=true;
+ const token=f.output.notifications.confirmedPage({kind:'dialoguePage',text:'Frygor has removed himself from your party.',speaker:''},()=>visible);
+ assert(token);f.start();visible=false;f.output.notifications.close(token);f.output.pauseDescriptions();
+ f.reply('P');assert.equal(f.commands.at(-1),'N\n');f.reply('D');
+ assert.equal(f.commands.filter(c=>c.startsWith('A')).length,1,'native loading admits no new output');
+ f.output.resumeDescriptions(()=>true);assert.equal(f.commands.at(-1),'AFrygor has removed himself from your party.\n');
+ f.output.notifications.open({kind:'dialoguePage',text:'The following battle message.'},()=>true);
+ f.accept(true);assert.equal(f.commands.at(-1),'AThe following battle message.\n');f.accept();
+ assert.equal(f.commands.filter(c=>c.includes('Frygor')).length,2,'one denied attempt, one accepted retry');
+ assert.equal(f.output.counters.submitted,2,'only departure and following text are accepted');
+}
+console.log('Verified actual worker append protocol, immediate following text, automatic-page close/loading continuation, native-load rejection/replay in order, accepted-caption no replay, explicit cancellation and eight-record/no-dedup bounds.');

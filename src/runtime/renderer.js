@@ -205,6 +205,16 @@ function createRenderer(host, waitForSpeechPreference = false) {
         // the readout owner may select this explicit continuation intent.
         continue: (focused,ready) => open(focused,ready,false,true),
         close,
+        confirmedPage(record,ready) {
+            // A fully painted automatic-close page has already been shown.
+            // Native closure/loading must not cancel its admitted speech;
+            // reuse the bounded confirmed-caption continuation transport.
+            if(record?.kind!=='dialoguePage'||speechEnabled!==true||!ready?.())return 0;
+            descriptions=true;host.descriptionFlowChanged?.(true);
+            for(const item of pending)Object.assign(item,{append:true,continueOutput:true,preserveDescription:true});
+            if(context&&isPresented?.())return submit(context,{...record,append:true},true)?context:0;
+            return open({...record,append:true},ready);
+        },
         describe(text,ready) {
             if(speechEnabled!==true||typeof ready!=='function'||!ready())return false;
             descriptions=true;host.descriptionFlowChanged?.(true);

@@ -1482,7 +1482,7 @@ async function main() {
 }
 
 if (require.main === module) {
-    const run = process.argv.includes('--endings') ? async () => {
+    const run = process.argv.includes('--automatic') ? verifyAutomaticClose : process.argv.includes('--endings') ? async () => {
         await verifyEndingDialogue();
         await verifyCredits();
     } : process.argv.includes('--speakers') ? verifySpeakerDetails : process.argv.includes('--cave-recovery') ? () => verifyCaveGuide(true) : main;
