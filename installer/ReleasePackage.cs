@@ -32,6 +32,7 @@ namespace WendyQuestAccessInstaller {
     var release=Setup.Json.DeserializeObject(new UTF8Encoding(false,true).GetString(raw))as Dictionary<string,object>;object value;
     if(release==null||!release.TryGetValue("schema",out value)||!(value is int)||(int)value!=2||
      GitHubUpdates.Text(release,"version")!=latest.Tag.Substring(1)||GitHubUpdates.Text(release,"build")!=GitHubUpdates.Text(baseline,"build")||
+     !Regex.IsMatch(GitHubUpdates.Text(release,"source"),@"\A(?:[a-f0-9]{40}|[a-f0-9]{64})\z")||
      !release.TryGetValue("development",out value)||!(value is bool)||(bool)value||
      GitHubUpdates.Number(GitHubUpdates.Text(release,"minimumSetup"))>GitHubUpdates.Number("1.0.0"))
      throw new InvalidDataException("This package needs a newer or compatible installer.");

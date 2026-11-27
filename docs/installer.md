@@ -27,3 +27,7 @@ installer/engine.cjs validates original inputs and existing ownership before gen
 tests/online-installer.cs tests real parsing, archive validation and current-file integrity with synthetic authored bytes. tests/online-installer-harness.cs injects only a fixture release source, compiling into a separate test executable; production has no arbitrary URL/package bypass. The real shell/leases/extraction/helper/engine are exercised on an external local mirror by tests/public-installer.test.py. The final standalone executable supplies offline verify/remove/accessibility and damaged-control rejection checks. Actual public endpoint installation is a separate final release check.
 
 To extend the updater, retain the no-fetch fast path, exact repository/asset trust boundary, offline controls and same-transaction receipt. Update minimumSetup only when a verified contract requires a newer shell. Never add original game bodies or locally generated map geometry to an archive. Record matching-source checks and gameplay limits in the ordered release checkpoint; physical game responsiveness is not inferred from fixture timing.
+
+## Platform references
+
+Checked November27: [GitHub release asset metadata, SHA-256 and public downloads](https://docs.github.com/en/rest/releases/assets) and [Microsoft signing and reputation limits](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/code-signing-options). The receipt/archive checks provide integrity; they do not claim a trusted publisher signature or universal scanner acceptance.

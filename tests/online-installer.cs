@@ -50,7 +50,7 @@ namespace WendyQuestAccessInstaller {
    foreach(string value in new[]{metadata.Replace("\"draft\":false","\"draft\":true"),metadata.Replace("\"prerelease\":false","\"prerelease\":true"),
     metadata.Replace("sha256:","sha1:"),metadata.Replace("https://github.com/","http://github.com/"),metadata.Replace("\"uploaded\"","\"pending\""),metadata.Replace("v0.5.0","v0.5.0-test")})Reject(()=>GitHubUpdates.ParseLatest(value),"release metadata");
    var badBytes=(byte[])zip.Clone();badBytes[0]^=1;Reject(()=>ReleasePackage.Open(badBytes,latest,release),"digest mismatch");
-   foreach(string key in new[]{"schema","minimumSetup","version","development","build"}) {
+   foreach(string key in new[]{"schema","minimumSetup","version","development","build","source"}) {
     var value=Copy(release);value[key]=key=="schema"?(object)99:key=="development"?(object)true:key=="minimumSetup"?"99.0.0":key=="version"?"0.5.1":"wrong";
     byte[] data=Zip(files,value,null);Reject(()=>ReleasePackage.Open(data,Latest(data,"0.5.0"),release),"package "+key);
    }

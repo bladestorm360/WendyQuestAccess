@@ -23,7 +23,7 @@ def main():
   command=[str(stage/'OnlineHarness.exe') if action=='install' else str(exe),'--'+action,'--game',str(game),'--work-root',str(work),'--report',str(report)]
   if action=='install':command+=['--fixture-package',str(package or stage/'payload.zip'),'--network-report',str(base/'network.json')]
   done=subprocess.run(command,timeout=120)
-  if network is not None:assert json.loads((base/'network.json').read_text())==dict(zip(['checks','fetches'],network))
+  if network is not None:assert json.loads((base/'network.json').read_text())=={'checks':network[0],'fetches':network[1]}
   result=json.loads(report.read_text());assert result['ok']==ok,(action,result)
   assert (done.returncode==0)==ok,(done.returncode,result)
   assert not list(work.iterdir()),'Installer temporary data must be removed'
@@ -88,6 +88,12 @@ def main():
  assert snapshot()!=first
  assert json.loads((game/'WendyQuestAccess-release.json').read_text())['version']=='0.5.1'
  run('verify');assert snapshot()==first,'Interrupted update must fully restore its previous installation'
+ # The ordinary exception path must restore immediately, including the new
+ # receipt, without requiring another installer run.
+ (crash/'engine.cjs').write_text(engine.replace(needle,needle+"if(item.key===installedRelease)throw Error('Injected fixture failure');"),encoding='utf8')
+ failure=subprocess.run([str(crash/'WendyQuestInstallRuntime.exe'),str(game),str(crash/'engine.cjs'),'install',str(game),str(crashwork)],cwd=crash,timeout=120)
+ assert failure.returncode!=0 and not json.loads((crashwork/'result.json').read_text())['ok']
+ assert snapshot()==first and not (game/'.wendyquest-access-transaction').exists()
  run('install',package=advanced,network=(1,1));second=snapshot();assert second!=first
  result=run('install',package=advanced,network=(1,0));assert result['alreadyCurrent'] and snapshot()==second
  run('install',False,network=(1,0));assert snapshot()==second,'No downgrade/download'

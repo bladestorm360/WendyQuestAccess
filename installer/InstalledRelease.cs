@@ -24,7 +24,8 @@ namespace WendyQuestAccessInstaller {
    Setup.Direct(receipt);Setup.Direct(record);
    if(!File.Exists(receipt)||Directory.Exists(Path.Combine(game,".wendyquest-access-transaction")))return false;
    var saved=ReadJson(receipt,4096);
-   if(!saved.ContainsKey("schema")||!(saved["schema"]is int)||(int)saved["schema"]!=1)return false;
+   if(saved.Count!=5||!saved.ContainsKey("schema")||!(saved["schema"]is int)||(int)saved["schema"]!=1||
+    !Regex.IsMatch(GitHubUpdates.Text(saved,"source"),@"\A(?:[a-f0-9]{40}|[a-f0-9]{64})\z"))return false;
    Version installed=GitHubUpdates.Number(GitHubUpdates.Text(saved,"version"));
    if(installed>release.Version)throw new InvalidOperationException("A newer mod version is already installed. No download or downgrade was performed.");
    if(installed!=release.Version||!saved.ContainsKey("archiveSha256")||Digest(saved["archiveSha256"])!=release.Digest)return false;
