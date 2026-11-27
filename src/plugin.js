@@ -918,6 +918,9 @@ function boot(root, nodeRequire, nodeProcess) {
     root.WendyQuestAccessFinaleBattle = function (scene, interpreter) {
         try { narration?.battleAccepted(scene, interpreter); } catch { narration?.cancel(scene); }
     };
+    root.WendyQuestAccessFinaleShield = function (scene, art) {
+        try { narration?.battleAccepted(scene, null, null, null, null, art); } catch { narration?.cancel(scene); }
+    };
     root.WendyQuestAccessFinaleStones = function (scene, actor, sprite, stones) {
         try { narration?.battleAccepted(scene, null, actor, sprite, stones); } catch { narration?.cancel(scene); }
     };

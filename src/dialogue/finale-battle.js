@@ -42,4 +42,20 @@ function combinedStones(root, scene, actor, combined, stones) {
             sprite.scale?.x > 0 && sprite.scale?.y > 0) };
 }
 
-module.exports = { finaleBattleReady, bossFlash, combinedStones };
+// The native state cleanup destroys this gold triangular lattice. Capture
+// its already drawn overlay at that exact call, then confirm its removal only
+// after rendering. The Corner Stone orbit producer remains independent.
+function shieldGone(root, scene, art) {
+    const script=root.$gameTroop?._interpreter,sprites=scene._spriteset?._enemySprites;
+    if(script?._list!==root.$dataTroops?.[96]?.pages?.[4]?.list ||
+        !Array.isArray(sprites) || sprites.length>16)return null;
+    const actor=sprites.find(value=>value._enemy?._enemyId===38 && value._mainSprite===art);
+    const overlay=art?.__SuperShieldOverlay;
+    if(!actor || !renderedSprite(overlay,art) ||
+        !String(overlay.bitmap?._url||'').endsWith('img/ParticleEffects/ShieldOverlay.png'))return null;
+    return {id:'mech-shield-vanishes',token:overlay,visible:()=>
+        actor.parent===scene._spriteset?._battleField && renderedSprite(art,actor) &&
+        (overlay.destroyed || overlay._destroyed || overlay.parent!==art)};
+}
+
+module.exports = { finaleBattleReady, bossFlash, combinedStones, shieldGone };

@@ -10,7 +10,7 @@ const { createGlitchTracker } = require('./screen-glitch');
 const { skillVisual } = require('./skill-visuals');
 const { renderedSprite } = require('../runtime/rendered-sprite');
 const { finaleVisible, captureFinale } = require('./finale-visuals');
-const { finaleBattleReady, bossFlash, combinedStones } = require('./finale-battle');
+const { finaleBattleReady, bossFlash, combinedStones, shieldGone } = require('./finale-battle');
 const commonReactions = require('./reaction-common');
 const environmentVisuals = require('./environment-visuals');
 const questionVisuals = require('./question-visuals');
@@ -29,7 +29,7 @@ for (const id of clipIds) {
     }
 }
 //185 recordings, including the later Corner Stone white-light reaction.
-const PACK_LIMIT = 2200 * 1024;
+const PACK_LIMIT = 2224 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -663,9 +663,9 @@ function createNarration(root, host, preferences) {
         return true;
     }
 
-    function battleAccepted(scene, interpreter, actor, sprite, stones) {
+    function battleAccepted(scene, interpreter, actor, sprite, stones, shield) {
         if (!voiceReady() || !enabled() || !finaleBattleReady(root, host, scene)) return;
-        const beat = actor ? combinedStones(root, scene, actor, sprite, stones) : bossFlash(root, scene, interpreter);
+        const beat = shield ? shieldGone(root,scene,shield) : actor ? combinedStones(root, scene, actor, sprite, stones) : bossFlash(root, scene, interpreter);
         if (!beat) return;
         interpreter = root.$gameTroop._interpreter;
         if (owner && (owner.scene !== scene || owner.list !== interpreter._list)) {
@@ -675,7 +675,7 @@ function createNarration(root, host, preferences) {
         const context = owner ?? begin(scene, interpreter);
         context.battle = true;
         if (pendingCount() >= QUEUE_LIMIT) return;
-        const token = actor ? sprite : interpreter._index;
+        const token = beat.token || (actor ? sprite : interpreter._index);
         if (context.lastBattleToken === token) return;
         context.lastBattleToken = token;
         context.queue.push({ id: beat.id, battleVisible: beat.visible, frame: host.graphics.frameCount, visual: -6 });

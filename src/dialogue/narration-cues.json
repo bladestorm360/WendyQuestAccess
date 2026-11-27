@@ -1808,11 +1808,11 @@
     "beats": []
   },
   "idle-hud-slides": {
-    "text": "Wendy\u2019s status display slides away.",
+    "text": "Wendy’s status display slides away.",
     "beats": []
   },
   "idle-dozes": {
-    "text": "Zs drift over Wendy\u2019s head as she dozes.",
+    "text": "Zs drift over Wendy’s head as she dozes.",
     "beats": []
   },
   "idle-map-dark": {
@@ -2182,7 +2182,15 @@
         115,
         -6
       ],
-      [106,11,1,0,11,null,-6]
+      [
+        106,
+        11,
+        1,
+        0,
+        11,
+        null,
+        -6
+      ]
     ]
   },
   "heart-elder-tater": {
@@ -4302,24 +4310,182 @@
   },
   "frygor-approaches": {
     "text": "Frygor approaches Wendy.",
-    "beats": [[14, 5, 1, 37, 35]]
+    "beats": [
+      [
+        14,
+        5,
+        1,
+        37,
+        35
+      ]
+    ]
   },
   "office-lights-out": {
     "text": "The lights go out.",
-    "beats": [[103,2,0,8,-1,null,-6],[103,3,0,8,-1,null,-6],[103,4,0,8,-1,null,-6],
-      [103,16,0,8,-1,null,-6],[103,17,0,8,-1,null,-6],[103,18,0,8,-1,null,-6],[103,19,0,8,-1,null,-6]]
+    "beats": [
+      [
+        103,
+        2,
+        0,
+        8,
+        -1,
+        null,
+        -6
+      ],
+      [
+        103,
+        3,
+        0,
+        8,
+        -1,
+        null,
+        -6
+      ],
+      [
+        103,
+        4,
+        0,
+        8,
+        -1,
+        null,
+        -6
+      ],
+      [
+        103,
+        16,
+        0,
+        8,
+        -1,
+        null,
+        -6
+      ],
+      [
+        103,
+        17,
+        0,
+        8,
+        -1,
+        null,
+        -6
+      ],
+      [
+        103,
+        18,
+        0,
+        8,
+        -1,
+        null,
+        -6
+      ],
+      [
+        103,
+        19,
+        0,
+        8,
+        -1,
+        null,
+        -6
+      ]
+    ]
   },
   "office-lights-on": {
     "text": "The lights come back on, revealing a hooded figure ahead.",
-    "beats": [[103,2,0,27,9,null,-6],[103,3,0,27,9,null,-6],[103,4,0,27,9,null,-6],
-      [103,16,0,27,9,null,-6],[103,17,0,27,9,null,-6],[103,18,0,27,9,null,-6],[103,19,0,27,9,null,-6]]
+    "beats": [
+      [
+        103,
+        2,
+        0,
+        27,
+        9,
+        null,
+        -6
+      ],
+      [
+        103,
+        3,
+        0,
+        27,
+        9,
+        null,
+        -6
+      ],
+      [
+        103,
+        4,
+        0,
+        27,
+        9,
+        null,
+        -6
+      ],
+      [
+        103,
+        16,
+        0,
+        27,
+        9,
+        null,
+        -6
+      ],
+      [
+        103,
+        17,
+        0,
+        27,
+        9,
+        null,
+        -6
+      ],
+      [
+        103,
+        18,
+        0,
+        27,
+        9,
+        null,
+        -6
+      ],
+      [
+        103,
+        19,
+        0,
+        27,
+        9,
+        null,
+        -6
+      ]
+    ]
   },
   "assembly-door-opens": {
     "text": "The metal door slides up.",
-    "beats": [[105,12,1,116,-1,null,-6]]
+    "beats": [
+      [
+        105,
+        12,
+        1,
+        116,
+        -1,
+        null,
+        -6
+      ]
+    ]
   },
   "stones-white-light": {
     "text": "White light fills the screen.",
-    "beats": [[107,3,3,107,-1,null,-6]]
+    "beats": [
+      [
+        107,
+        3,
+        3,
+        107,
+        -1,
+        null,
+        -6
+      ]
+    ]
+  },
+  "mech-shield-vanishes": {
+    "text": "The gold lattice shielding the Double Big Mech vanishes.",
+    "beats": []
   }
 }

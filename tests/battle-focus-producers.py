@@ -75,6 +75,16 @@ if sys.argv[2:] == ['skill-visuals']:
     sys.exit(0)
 
 
+if sys.argv[2:] == ['shield']:
+    methods = []
+    for name in ('SuperShieldApply', 'SuperShieldCleanup'):
+        start = battle.index("BattleAnimations['" + name + "']=function(")
+        end = battle.index('},BattleAnimations[', start)
+        methods.append(battle[start:end + 1] + ';')
+    print(json.dumps(methods))
+    sys.exit(0)
+
+
 if sys.argv[2:] == ['finale']:
     start = battle.index("BattleAnimations['CornerStone']=function(")
     end = battle.index("},BattleAnimations['IceCreamSelfDestruct']", start)

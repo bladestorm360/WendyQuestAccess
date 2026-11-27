@@ -1097,6 +1097,10 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
     # blank boss action messages and the forced intro Double Laser. No effect or wait is replaced.
     freezer_token = b'function(_0x545edf,_0x4eadf5,_0x1f43a8,_0x3accfc={}){'
     freezer_entry = original.index(freezer_token) + len(freezer_token)
+    shield_token = b'function(_0x30d89a){'
+    if original.count(shield_token) != 1:
+        raise ValueError('Ambiguous native shield cleanup')
+    shield_entry = original.index(shield_token) + len(shield_token)
     stones_entry = original.index(b"],$gameScreen['startTint']", original.index(b'_0x348760=[')) + 2
     # Observe only the requested native effect attachments. These calls do
     # not alter coroutines/input; narration confirms their real postrender art.
@@ -1136,6 +1140,7 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
     skill_hooks[attack_end] = b'globalThis.WendyQuestAccessSkillVisual?.(_0x3e461b,wqaBeefAttack,"beef-attack");'
     return insert(original, BATTLE_SHA, {
         **skill_hooks,
+        shield_entry: b'globalThis.WendyQuestAccessFinaleShield?.(SceneManager._scene,_0x30d89a);',
         stones_entry: b'globalThis.WendyQuestAccessFinaleStones?.(SceneManager._scene,_0x37cee4,_0xffdf2,_0x348760),',
         freezer_entry: b'if(_0x4eadf5==="MechDoubleLaser"||_0x4eadf5==="FreezerBurn"||_0x4eadf5==="BigMechPunch"||_0x4eadf5==="BigMechGun"||_0x4eadf5==="BigMechBoosterBash")'
                        b'globalThis.WendyQuestAccessAbilityAnimation?.(_0x545edf,this);',
