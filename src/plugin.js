@@ -601,7 +601,7 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessMenuReady = function (scene, kind) {
         if (!menus || root.SceneManager._scene !== scene) return;
-        try { menus.observe(scene, kind); } catch { menus.retire(scene); }
+        try { if(scene._wqaNarrationActive)narration?.present(scene);menus.observe(scene, kind); } catch { menus.retire(scene); }
     };
     root.WendyQuestAccessMenuLeaving = function (scene) { menus?.retire(scene); };
 
@@ -917,6 +917,9 @@ function boot(root, nodeRequire, nodeProcess) {
 
     root.WendyQuestAccessFinaleBattle = function (scene, interpreter) {
         try { narration?.battleAccepted(scene, interpreter); } catch { narration?.cancel(scene); }
+    };
+    root.WendyQuestAccessHealing = function (scene,hud,sprite) {
+        try { return narration?.healingAccepted(scene,hud,sprite)===true; } catch { return false; }
     };
     root.WendyQuestAccessFinaleShield = function (scene, art) {
         try { narration?.battleAccepted(scene, null, null, null, null, art); } catch { narration?.cancel(scene); }

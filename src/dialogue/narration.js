@@ -1,6 +1,7 @@
 'use strict';
 
 const { createDepartureTracker } = require('./departures');
+const { createHealing } = require('./healing-visuals');
 const { createRecruitmentVisuals } = require('./recruitment-visuals');
 const { createAtlasTracker } = require('./atlas-visuals');
 const jailVisuals = require('./jail-visuals');
@@ -29,7 +30,7 @@ for (const id of clipIds) {
     }
 }
 //185 recordings, including the later Corner Stone white-light reaction.
-const PACK_LIMIT = 2240 * 1024;
+const PACK_LIMIT = 2272 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -52,6 +53,7 @@ function unpackClips(root, bytes) {
 }
 
 function createNarration(root, host, preferences) {
+    const healing=createHealing(root,host);
     const glitches=createGlitchTracker(root);
     const atlas=createAtlasTracker(root,host.graphics);
     const departures=createDepartureTracker(root,host.graphics);
@@ -88,10 +90,11 @@ function createNarration(root, host, preferences) {
         return audio.narration?.enabled && (nvda()?host.speechPreferences().enabled:audio.enabled&&audio.narration.volume>0);
     }
 
-    function warm(scene, atlasPending = false) {
+    function warm(scene, atlasPending = false, heal = false) {
         const prologue = [188, 115].includes(root.$gameMap?._mapId);
         const battle=scene?._wqaBattleStarted&&ready(scene,false,true);
-        if (nvda() || !enabled() || pack || loading || failed || !ready(scene,false,battle) || !prologue && !battle && !atlasPending &&
+        const settled=()=>heal?healing.ready(scene):ready(scene,false,battle);
+        if (nvda() || !enabled() || pack || loading || failed || !settled() || !heal && !prologue && !battle && !atlasPending &&
             (root.$gameMap._interpreter?._list || !scene._wqaFieldReady && !idleReady(scene))) return;
         // Chromium reads the fixed package path asynchronously in a settled
         // field frame. Native boundaries retire the request before loading.
@@ -111,7 +114,7 @@ function createNarration(root, host, preferences) {
             if (loading?.xhr !== xhr) return;
             loading = null;
             scene._wqaNarrationLoading = false;
-            if (!ready(scene)) return;
+            if (!settled()) return;
             try {
                 if (xhr.status === 0 || xhr.status === 200) pack = unpackClips(root, xhr.response);
             } finally {
@@ -618,7 +621,7 @@ function createNarration(root, host, preferences) {
         if (clip || !context.queue[0]?.confirmed) return;
         const { id } = context.queue.shift();
         try {
-            if(nvda()){host.describeNarration?.(cues[id].text,()=>ready(context.scene,false,true));return;}
+            if(nvda()){host.describeNarration?.(cues[id].text,()=>context.healing?healing.ready(context.scene):ready(context.scene,false,true));return;}
             const setting = preferences().narration;
             const audio = new root.Audio();
             if (!audio.canPlayType(MIME)) return leave(context.scene);
@@ -663,6 +666,17 @@ function createNarration(root, host, preferences) {
         return true;
     }
 
+    function healingAccepted(scene,hud,sprite) {
+        if(!enabled()||!healing.ready(scene)||pendingCount()>=QUEUE_LIMIT)return false;
+        if(!voiceReady()){warm(scene,false,true);return false;}
+        if(hud&&owner?.queue.some(state=>state.healHud===hud&&state.healRoutine===hud.HPRoutineID))return true;
+        const state=hud?healing.capture(scene,hud,sprite):healing.enemy(scene);
+        if(!state)return false;
+        if(owner&&owner.scene!==scene)leave(owner.scene);
+        const context=owner??begin(scene);context.healing=true;
+        context.queue.push({...state,healHud:hud,healRoutine:hud?.HPRoutineID,frame:host.graphics.frameCount,order:++sequence});return true;
+    }
+
     function battleAccepted(scene, interpreter, actor, sprite, stones, shield) {
         if (!voiceReady() || !enabled() || !finaleBattleReady(root, host, scene)) return;
         const beat = shield ? shieldGone(root,scene,shield) : actor ? combinedStones(root, scene, actor, sprite, stones) : bossFlash(root, scene, interpreter);
@@ -683,6 +697,7 @@ function createNarration(root, host, preferences) {
 
     function mayPresent(context) {
         const { scene, interpreter, list } = context;
+        if(context.healing)return enabled()&&healing.ready(scene);
         if(context.skillEffect)return enabled()&&ready(scene,false,true);
         if(context.screenEffect)return enabled()&&ready(scene,false,true)&&context.mapId===root.$gameMap?._mapId;
         if(context.momentum)return enabled()&&ready(scene,false,true);
@@ -828,7 +843,7 @@ function createNarration(root, host, preferences) {
         });
     }
 
-    return { recruitmentPresent, retireRecruitment:recruitment.retire, departureAccepted, departurePresent, atlasAccepted, atlasPresent, cancel(scene){recruitment.retire(scene);departures.retire(scene);atlas.retire(scene);host.cancelNarrationSpeech?.();leave(scene);}, skillAccepted, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
+    return { healingAccepted, recruitmentPresent, retireRecruitment:recruitment.retire, departureAccepted, departurePresent, atlasAccepted, atlasPresent, cancel(scene){recruitment.retire(scene);departures.retire(scene);atlas.retire(scene);host.cancelNarrationSpeech?.();leave(scene);}, skillAccepted, accepted, entry, pause, jolt, environmentStart, glitchPresent, questionsPresent, mechEntry, tylerEntry, battleAccepted, momentumAccepted, prologue, idle, present, warm, leave, get needsPack() { return !nvda() && !pack && !loading && !failed; } };
 }
 
 module.exports = { createNarration, unpackClips };

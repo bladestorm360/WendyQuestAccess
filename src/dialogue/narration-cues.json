@@ -4491,5 +4491,13 @@
   "double-mech-whiteout": {
     "text": "White light engulfs the Double Big Mech.",
     "beats": []
+  },
+  "hp-healing-sparkles": {
+    "text": "Sparkles circle the HP meter as it fills.",
+    "beats": []
+  },
+  "frygor-heals": {
+    "text": "Frygor's HP bar refills.",
+    "beats": []
   }
 }

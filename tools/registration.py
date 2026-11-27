@@ -420,6 +420,7 @@ LIGHTNING_EVENTS = {12: 31, 13: 9, 14: 28, 15: 35, 16: 40, 17: 20, 161: 3,
 
 
 def objects_notification(original):
+    heal_entry = original.index(b'    return true;', original.index(b'Game_Interpreter.prototype.command331 = function('))
     tint_entry = original.index(b';', original.index(b'$gameScreen.startTint',
         original.index(b'Game_Interpreter.prototype.command223 = function('))) + 1
     lightning = json.dumps(LIGHTNING_EVENTS, separators=(',', ':')).encode()
@@ -572,6 +573,8 @@ def objects_notification(original):
         287095: b'\n        if(Graphics._wqaNarrationEnabled&&'
                 b'(params[1]>=1&&params[1]<=10))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,params[1]);',
+        heal_entry: b'if(Graphics._wqaNarrationEnabled&&this===$gameTroop?._interpreter&&$gameTroop._troopId===150&&this._index===54)'
+                    b'globalThis.WendyQuestAccessHealing?.(SceneManager._scene);',
         tint_entry: b'\n    if(Graphics._wqaNarrationEnabled&&this===$gameTroop?._interpreter&&$gameTroop._troopId===96&&this._index===25)'
                 b'globalThis.WendyQuestAccessFinaleBattle?.(SceneManager._scene,this);',
         288646: b'\n    if(Graphics._wqaNarrationEnabled&&this._list===globalThis.$dataCommonEvents?.[58]?.list&&this._index===4)'
@@ -1299,12 +1302,17 @@ def core_notification(original):
 
 
 def window_notification(original):
+    heal_factory = original.index(b'function(_0x44a7ed,_0x1a5641,_0x4ecb8b,')
+    heal_return = original.index(b',_0x3dd4d4);', heal_factory)
+
     # Sprite_Text.RedrawText has completed all canvas writes here. Remember
     # only attached inventory-vitals digits; later setText may dirty the
     # next animation value while these exact glyphs remain visible.
     return insert(original, WINDOW_SHA, {
         # Crystal.update has finished positioning this native phase-zero
         # sprite; the optional observer confirms actual postrender visibility.
+        heal_return: b',_0x4ecb8b==="Heal"&&Graphics._wqaNarrationEnabled&&_0x6ce301===SceneManager._scene?._statusWindow&&'
+                     b'globalThis.WendyQuestAccessHealing?.(SceneManager._scene,_0x6ce301,_0x3dd4d4)',
         103673: b'if(this.phase===0&&!this._wqaMomentumNarrationSeen&&Graphics._wqaNarrationEnabled&&'
                 b'SceneManager._scene?._wqaBattleStarted&&!SceneManager._nextScene&&!SceneManager._exiting&&'
                 b'!SceneManager._wqaNativeAutosaves&&!Graphics._wqaResize)'

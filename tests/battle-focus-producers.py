@@ -75,6 +75,19 @@ if sys.argv[2:] == ['skill-visuals']:
     sys.exit(0)
 
 
+if sys.argv[2:] == ['healing']:
+    helper, _ = decode(window_notification((installed / WINDOW_REL).read_bytes()).decode('utf8'))
+    start = helper.index("SpriteEffectHelper['CreateParticleEffectSprite']=function(")
+    end = helper.index('},SkillUtility', start)
+    hud, _ = decode((installed / STATS_REL).read_text(encoding='utf8'))
+    start_hp = hud.index("RadialStatus['prototype']['AddHPRoutine']=function*(")
+    end_hp = hud.index('},RadialStatus', start_hp)
+    sprites = (installed / 'package.nw/js/rmmz_sprites.js').read_text(encoding='utf8')
+    start_gauge = sprites.index('Sprite_Gauge.prototype.updateGaugeAnimation = function(')
+    print(json.dumps([helper[start:end+1]+';',hud[start_hp:end_hp+1]+';',
+        sprites[start_gauge:sprites.index('\n};',start_gauge)+3]]))
+    sys.exit(0)
+
 if sys.argv[2:] == ['shield']:
     methods = []
     for name in ('SuperShieldApply', 'SuperShieldCleanup'):
