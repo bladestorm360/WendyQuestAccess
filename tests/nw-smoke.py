@@ -321,6 +321,16 @@ function verifySettings() {
         tap('Enter');
         if (!menuStatus()?.includes('until you switch categories again')) throw Error('Category Help was not readable');
         tap('ArrowDown');
+        if (!document.activeElement.textContent.includes('Full route readout starts off'))
+            throw Error('Help omitted the new manual readout default');
+        tap('Enter');
+        if (!menuStatus()?.includes('one through twelve')) throw Error('Chunk size Help was not readable');
+        tap('ArrowDown');
+        if (!document.activeElement.textContent.includes('Automatically speak next leg of route starts off'))
+            throw Error('Help omitted the automatic continuation default');
+        tap('Enter');
+        if (!menuStatus()?.includes('queues speech')) throw Error('Continuation Help was not readable');
+        tap('ArrowDown');
         if (!document.activeElement.textContent.includes('Directions P')) throw Error('Help did not show the current directions key');
         tap('Enter');
         if (!menuStatus()?.includes('Previous category Shift+J')) throw Error('Help did not expose the pathfinder instructions');
@@ -601,7 +611,7 @@ const interval = setInterval(() => {
             const navigationBindings = Array.from(document.querySelectorAll('dialog button')).slice(0, 2).map(item => item.textContent);
             tap('Escape');tap('Escape');
             choose('Navigation');
-            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 10).map(item => item.textContent);
+            const navigation = Array.from(document.querySelectorAll('dialog button')).slice(0, 13).map(item => item.textContent);
             choose('Bookmarks');
             const bookmarks = Array.from(document.querySelectorAll('dialog button')).map(item => item.textContent);
             if (bookmarks.join('|') !== 'Return marker, Map 1, saved on foot|Back')
