@@ -815,7 +815,7 @@ function createNarration(root, host, preferences) {
                     scene._wqaTylerEntrySeen=state.sourceKey;scene._wqaTylerEntryMap=map._mapId;
                     if(state.sourceKey==='181/15/2/0')scene._wqaTylerEntryObserved=true;
                 }
-                if(state.confirmed && ['grunt-ambush','party-jailed','jail-breach','shrine-lights','shrine-reunion'].includes(state.id))
+                if(state.confirmed && ['grunt-ambush','party-jailed','jail-breach','shrine-lights','shrine-reunion','chomps-door-open'].includes(state.id))
                     (scene._wqaJailNarrationSeen ||= new Set()).add(state.id);
                 if (state.confirmed && state.id === 'assistance-chest') scene._wqaAssistanceReveal = true;
                 if (state.confirmed && map?._mapId === 16) {

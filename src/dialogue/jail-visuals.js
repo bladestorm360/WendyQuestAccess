@@ -2,7 +2,8 @@
 const {renderedSprite}=require('../runtime/rendered-sprite');
 function site(root) {
     const map=root.$gameMap, script=map?._interpreter;
-    const table=map?._mapId===49 ? [[14,1,56,89,55,-1,51,'grunt-ambush']] :
+    const table=map?._mapId===97 ? [[8,1,56,83,56,-1,undefined,'chomps-door-open']] :
+        map?._mapId===49 ? [[14,1,56,89,55,-1,51,'grunt-ambush']] :
         map?._mapId===134 ? [[6,0,10,24,6,-1,undefined,'party-jailed'],[10,1,71,99,70,11,77,'jail-breach']] :
         map?._mapId===197 ? [[18,0,18,22,17,-1,576,'shrine-lights'],
             [18,0,69,77,68,-1,573,'shrine-reunion'],[18,1,14,18,13,-1,573,'shrine-reunion']] : [];
@@ -22,6 +23,20 @@ function visibleActor(root,host,scene,id,name) {
         pos.ty>=0 && pos.ty<=host.graphics.height ? actor : null;
 }
 function visible(root,host,scene,state) {
+    if(state.id==='chomps-door-open') {
+        const map=root.$gameMap,data=root.$dataMap,tilemap=scene._spriteset._tilemap,tiles=tilemap?._mapData;
+        if(data.width!==34 || data.height!==40 || tiles?.length!==34*40*6 ||
+            tilemap.worldVisible!==true || tilemap._needsRepaint ||
+            !Number.isFinite(map._displayX) || !Number.isFinite(map._displayY) ||
+            map._displayX>6 || map._displayY>11 || map._displayX+host.graphics.width/48<4 ||
+            map._displayY+host.graphics.height/48<9)return false;
+        // The smash is heard behind a blackout. The nine native replacement
+        // tiles prove the subsequently painted broken doorway, independently
+        // of Wendy's forced walk or any asset-loading delay before that walk.
+        for(let y=0;y<3;y++)for(let x=0;x<3;x++)
+            if(tiles[(2*40+9+y)*34+4+x]!==768+8*y+x)return false;
+        return true;
+    }
     if(state.id==='grunt-ambush')return root.$gameSwitches.value(51) && [18,19,20,22].some(id=>{
         const actor=visibleActor(root,host,scene,id,'~MechGrunt'),spawn=root.$dataMap.events[id];
         return actor && (actor._realX!==spawn.x || actor._realY!==spawn.y);

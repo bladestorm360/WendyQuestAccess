@@ -329,6 +329,10 @@ An inert receipt retains the native base/picture instance, same-map scene identi
 
 ## Footsteps-and-fade departures
 
+November27 Chomps doorway correction:97:8/page1 blacks out at15, plays the smash at16, replaces the nine doorway cells18–50, fades in54, then starts Wendy's forced walk56 before Frostyna's key question68. The existing `chomps-door-open` recording now uses the painted-door visual branch, rather than interpreting Wendy's movement as the reveal. The exact ready script window56–83 can recover admission after portrait/tile loading. All nine expected replacement cells and their viewport intersection must be drawn; blackout, pending repaint, another page/list or a later script position cannot admit it. The same eight-entry FIFO and postrender gate own playback; one confirmed scene identity prevents repetition. No game timing, input or prior recording changes.
+
+`tests/chomps-door.cjs` executes the extracted native SetMapData publisher for all nine authored mutations and tests160 closed blackout/resource frames, stationary-Wendy recovery at Frostyna's paragraph, recorded/NVDA publication and visibility/ownership negatives. The complete181-clip/307-locator narration suite passes, including the shared fade/queue tests. This is offline evidence; audible gameplay confirmation remains separate.
+
 The [recruitment narration](recruitment-narration.md) separately covers the Brekky arrivals/regroup and Gregg's jump through exact native-action receipts and painted actors. These remain distinct from the verified departures below.
 
 The optional captions Frydusa flees and The archaeologist leaves cover the Oasis escape60:87:0:50 and all four returning archaeologists:48:21:1:22,49:24:1:21,62:2:1:19 and60:87:0:84. These scenes show a fade with footsteps and a character absent afterward; there is no visible running path to narrate. `dialogue/departures.js` owns exact common38 acceptance receipts. It preserves native picture/event progression and only describes the removal after native scene/resource/fade readiness reopens and postrender confirms the attached character sprite's hidden/empty graphic. A switch or sound alone is insufficient.

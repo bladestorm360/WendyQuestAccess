@@ -164,19 +164,8 @@ for(const visible of [false,true]) {
     follower.sprite._characterName='';f.frame(false);assert.equal(f.played.length,0);f.renderer.emit('postrender');
     assert.equal(f.played[0]?.id,visible?'party-vanishes':undefined);
 }
-{
-    const f=fixture(97,8,1),chomps=f.actor(8),player=f.actor(-1);
-    f.interpreter._index=10;f.narration.accepted(f.scene,f.interpreter,chomps.candidate,undefined,6);
-    f.balloon(6,chomps.candidate,chomps.sprite);f.frame();assert.equal(f.played[0]?.id,'hazy-chomps');
-    Object.assign(player.candidate,{_realX:3,_realY:12,forceMoveRoute(route){this._moveRoute=route;}});
-    Object.assign(f.interpreter,{_index:56,character:()=>player.candidate,setWaitMode(){}});
-    const c=commandContext(f);f.nativeMap.refreshIfNeeded=()=>{};
-    assert(c.Game_Interpreter.prototype.command205.call(f.interpreter,f.interpreter._list[56].parameters));
-    f.frame();assert.equal(f.played.length,1);player.candidate._realY=11;f.frame();
-    assert.equal(f.played.length,1);assert(!f.played[0].paused,'the door description queues behind the dizzy reaction');
-    f.played[0].emit('ended');f.frame();assert.equal(f.played[1]?.id,'chomps-door-open');
-}
-console.log('Verified the old-RPG companion disappearance through native common/actor commands, prior visibility and actual cleared sprite; native post-smash movement and noninterrupting Chomps queue.');
+require('./chomps-door.cjs')(fixture,stock);
+console.log('Verified the old-RPG companion disappearance through native common/actor commands, prior visibility and actual cleared sprite.');
 
 const emoteMethods = JSON.parse(execFileSync('python', ['-B', path.join(__dirname, 'map-producers.py'),
     path.join(stock, 'package.nw'), 'music-emotes'], { encoding: 'utf8', timeout: 5000 }));

@@ -56,6 +56,10 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
                 reveal=()=>actors[0].candidate._realX--;
             } else if(id==='party-jailed') {
                 actor._x=actor._y=2;reveal=()=>{actor._x=6;actor._y=5;};
+            } else if(id==='chomps-door-open') {
+                f.spriteset._tilemap._mapData=[...f.root.$dataMap.data];
+                reveal=()=>{for(let y=0;y<3;y++)for(let x=0;x<3;x++)
+                    f.spriteset._tilemap._mapData[(2*40+9+y)*34+4+x]=768+8*y+x;};
             } else if(id==='jail-breach') {
                 actor._characterName=source.sprite._characterName='~Chomps';
                 f.spriteset._tilemap._mapData=[...f.root.$dataMap.data];
