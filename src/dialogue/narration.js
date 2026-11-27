@@ -30,7 +30,7 @@ for (const id of clipIds) {
     }
 }
 //185 recordings, including the later Corner Stone white-light reaction.
-const PACK_LIMIT = 2272 * 1024;
+const PACK_LIMIT = 2280 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;
 const FLASH_LIMIT = 240;
@@ -831,7 +831,7 @@ function createNarration(root, host, preferences) {
                     scene._wqaTylerEntrySeen=state.sourceKey;scene._wqaTylerEntryMap=map._mapId;
                     if(state.sourceKey==='181/15/2/0')scene._wqaTylerEntryObserved=true;
                 }
-                if(state.confirmed && ['grunt-ambush','party-jailed','jail-breach','shrine-lights','shrine-reunion','chomps-door-open','office-lights-out','office-lights-on','elder-tater-freed','assembly-door-opens','stones-white-light'].includes(state.id))
+                if(state.confirmed && ['grunt-ambush','party-jailed','jail-breach','shrine-lights','shrine-reunion','chomps-door-open','office-lights-out','office-lights-on','elder-tater-freed','assembly-door-opens','stones-white-light','epilogue-white-fade'].includes(state.id))
                     (scene._wqaJailNarrationSeen ||= new Set()).add(state.id);
                 if (state.confirmed && state.id === 'assistance-chest') scene._wqaAssistanceReveal = true;
                 if (state.confirmed && map?._mapId === 16) {

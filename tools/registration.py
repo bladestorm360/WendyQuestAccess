@@ -817,6 +817,8 @@ def map_notification(original):
                 !this._wqaJailNarrationSeen?.has('assembly-door-opens') ||
              $gameMap._mapId === 107 && wqaReveal?._eventId === 3 && wqaReveal._index >= 110 && wqaReveal._index <= 116 &&
                 !this._wqaJailNarrationSeen?.has('stones-white-light') ||
+             $gameMap._mapId === 190 && wqaReveal?._eventId === 24 && wqaReveal._index >= 5 && wqaReveal._index <= 8 &&
+                !this._wqaJailNarrationSeen?.has('epilogue-white-fade') ||
              $gameMap._mapId === 103 && [2,3,4,16,17,18,19].includes(wqaReveal?._eventId) &&
                 (wqaReveal._index >= 8 && wqaReveal._index <= 16 && !this._wqaJailNarrationSeen?.has('office-lights-out') ||
                  wqaReveal._index >= 27 && wqaReveal._index <= 33 && !this._wqaJailNarrationSeen?.has('office-lights-on')));

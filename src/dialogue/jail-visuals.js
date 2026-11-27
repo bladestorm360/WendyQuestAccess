@@ -11,6 +11,7 @@ function site(root) {
         map?._mapId===106 ? [[11,1,0,6,0,11,undefined,'elder-tater-freed']] :
         map?._mapId===105 ? [[12,1,118,128,116,-1,undefined,'assembly-door-opens']] :
         map?._mapId===107 ? [[3,3,110,116,107,-1,undefined,'stones-white-light']] :
+        map?._mapId===190 ? [[24,0,5,8,0,-1,undefined,'epilogue-white-fade']] :
         map?._mapId===49 ? [[14,1,56,89,55,-1,51,'grunt-ambush']] :
         map?._mapId===134 ? [[6,0,10,24,6,-1,undefined,'party-jailed'],[10,1,71,99,70,11,77,'jail-breach']] :
         map?._mapId===197 ? [[18,0,18,22,17,-1,576,'shrine-lights'],

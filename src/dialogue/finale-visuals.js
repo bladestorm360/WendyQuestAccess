@@ -62,6 +62,15 @@ function captureFinale(root, scene, id, recovery = false) {
 
 function finaleVisible(root, host, scene, state) {
     const { id } = state;
+    if(id==='epilogue-white-fade') {
+        const script=root.$gameMap?._interpreter;
+        // Native fadeInForTransfer preserves _fadeWhite after finishing.
+        // Only the first epilogue paragraph can recover this actual white
+        // transfer; later dialogue or a black fade cannot claim it.
+        return root.$gameMap._mapId===190&&script?._eventId===24&&script._index>=5&&script._index<=8&&
+            script._list===root.$dataMap?.events?.[24]?.pages?.[0]?.list&&scene._fadeWhite===true&&
+            scene._fadeDuration===0&&scene._fadeOpacity===0&&scene._spriteset._tilemap.worldVisible===true;
+    }
     if(id==='stones-white-light') {
         const light=picture(root,host,scene,28,'white'),script=root.$gameMap._interpreter;
         if(root.$gameMap._mapId!==107 || script?._eventId!==3 || script._index<110 || script._index>116 ||

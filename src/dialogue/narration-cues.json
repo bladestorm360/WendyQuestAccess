@@ -4499,5 +4499,19 @@
   "frygor-heals": {
     "text": "Frygor's HP bar refills.",
     "beats": []
+  },
+  "epilogue-white-fade": {
+    "text": "The scene fades through white.",
+    "beats": [
+      [
+        190,
+        24,
+        0,
+        0,
+        -1,
+        null,
+        -6
+      ]
+    ]
   }
 }

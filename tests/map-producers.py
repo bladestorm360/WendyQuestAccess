@@ -64,6 +64,15 @@ if sys.argv[2:] == ['interaction']:
     sys.exit()
 
 
+if sys.argv[2:] == ['transfer-fade']:
+    source = (Path(sys.argv[1]) / 'js/rmmz_scenes.js').read_text(encoding='utf8')
+    methods = []
+    for owner,name in [('Scene_Map','fadeInForTransfer'),('Scene_Base','startFadeIn'),('Scene_Base','updateFade')]:
+        start = source.index(f'{owner}.prototype.{name} = function(')
+        methods.append(source[start:source.index('\n};',start)+3])
+    print(json.dumps(methods))
+    sys.exit()
+
 if sys.argv[2:] == ['screen-tint']:
     methods = []
     for file, owner, names in [('rmmz_objects.js', 'Game_Screen', ['startTint','updateTone','tone']),
