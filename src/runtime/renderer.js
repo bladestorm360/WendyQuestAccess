@@ -177,14 +177,14 @@ function createRenderer(host, waitForSpeechPreference = false) {
         catch { workerFailed(); }
     }
 
-    function open(focused, ready = host.titleStillReady, fieldFollowup = false) {
+    function open(focused, ready = host.titleStillReady, fieldFollowup = false, continuation = false) {
         if (nextContext >= 0x7ffffffe) return 0;
-        const append = descriptions || arrival && host.now() < arrival.expires &&
+        const append = continuation || descriptions || arrival && host.now() < arrival.expires &&
             (fieldFollowup || FIELD_FOLLOWUP.has(focused.kind));
         // A presented field notice can keep the arrival in the same FIFO.
         // After a native boundary, open a fresh gate and append at the
         // provider to any arrival already admitted before the boundary.
-        if (!descriptions&&(!append || !arrival.ready?.())) retireOutput();
+        if (!descriptions&&(!append || !continuation&&!arrival?.ready?.())) retireOutput();
         if (!append) arrival = null;
         const token = context = ++nextContext;
         isPresented = ready;
@@ -201,6 +201,9 @@ function createRenderer(host, waitForSpeechPreference = false) {
 
     const notifications = {
         open,
+        // A confirmed route chunk keeps the provider's existing FIFO. Only
+        // the readout owner may select this explicit continuation intent.
+        continue: (focused,ready) => open(focused,ready,false,true),
         close,
         describe(text,ready) {
             if(speechEnabled!==true||typeof ready!=='function'||!ready())return false;

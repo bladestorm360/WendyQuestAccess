@@ -217,6 +217,10 @@ function createTransferBookmarks(root, host) {
         },
         arm(scene, bookmark, edge) {
             clear();
+            // Inert speech intent travels only with the existing exact native
+            // event/list/reservation/landing proof. It supplies no game input.
+            if(!bookmark.autowalk&&edge.mode==='walk'&&host.navigationPreferences?.().autoRouteReadout===true)
+                bookmark={...bookmark,manualReadout:true};
             approach = { scene, bookmark, edge, map: root.$gameMap, player: root.$gamePlayer };
             scene._wqaBookmarkEntrance = true;
         },

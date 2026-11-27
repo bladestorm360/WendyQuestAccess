@@ -12,7 +12,9 @@ with tempfile.TemporaryDirectory(prefix='secret-island-menu-',dir=work) as folde
  app=runtime/'package.nw';app.mkdir()
  (app/'package.json').write_text(json.dumps({'name':'wqa-secret-island-ui-test','main':'index.html','window':{'show':False}}))
  receipt=app/'receipt.json'
- module=str(ROOT/'tests/secret-island-settings.cjs').replace('\\','/')
+ module_name=sys.argv[2] if len(sys.argv)>2 else 'secret-island-settings.cjs'
+ if module_name not in ('secret-island-settings.cjs','route-readout-settings.cjs'):raise ValueError('Unknown source-only settings fixture')
+ module=str(ROOT/'tests'/module_name).replace('\\','/')
  script="const fs=require('fs');const target="+json.dumps(str(receipt))+";async function run(){try{const result=await require("+json.dumps(module)+").verify(window);fs.writeFileSync(target,JSON.stringify(result));}catch(e){fs.writeFileSync(target,JSON.stringify({error:e.stack}));}finally{nw.App.quit();}};run();"
  (app/'index.html').write_text('<html><body><script>'+script+'</script></body></html>',encoding='utf-8')
  result,errors=nw['run_fixture']([str(runtime/'nw.exe'),f'--user-data-dir={runtime/"profile"}'],runtime,dict(os.environ))

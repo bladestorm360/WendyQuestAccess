@@ -85,8 +85,8 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
     c.$gameParty.inBattle = () => false;
     c.$gameMessage = { isBusy: () => false };
     c.$dataCommonEvents = common;
-    let spoilers = false;
-    const transfers = createTransferBookmarks(c, { graphics: c.Graphics, navigationPreferences: () => ({ spoilers }) });
+    let spoilers = false, manualReadout = false;
+    const transfers = createTransferBookmarks(c, { graphics: c.Graphics, navigationPreferences: () => ({ spoilers,autoRouteReadout:manualReadout }) });
     c.WendyQuestAccessBookmarkEntranceAccepted = transfers.accepted;
     c.WendyQuestAccessBookmarkTransferReserved = transfers.reserved;
     c.WendyQuestAccessSceneLeaving = transfers.leave;
@@ -138,7 +138,8 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
         assert(transfers.current(opened));
         load(132, { switches: [525] }).player.setPosition(3, 3);
         assert.equal(transfers.candidates().entrances.find(edge => edge.event === 2).map, 203);
-        for (const self of [[], ['87,91,A']]) {
+        for (const automatic of [false,true]) for (const self of [[], ['87,91,A']]) {
+            manualReadout=automatic;
             const cave = load(87, { self });
             cave.player.setPosition(12, 64);
             assert(transfers.candidates().entrances.some(candidate => candidate.event === 91),
@@ -147,9 +148,10 @@ async function verifyTransferBookmarks(c, load, verifyRoute, verifyWorker, commo
             const edge = reserveSpecial(cave, 91, [12, 64], 205);
             cave.gameMap._mapId = edge.map;
             cave.player.setPosition(edge.x, edge.y);
-            assert.deepEqual(transfers.settle({}), { ...marker, trail: ['205/14/4'] });
+            assert.deepEqual(transfers.settle({}), { ...marker, ...(automatic?{manualReadout:true}:{}),trail: ['205/14/4'] });
             spoilers = false;
         }
+        manualReadout=false;
         c.$gameSelfSwitches.setValue = (key, value) => {
             const before = c.$gameSelfSwitches.value;
             c.$gameSelfSwitches.value = check => check.join(',') === key.join(',') ? value : before(check);

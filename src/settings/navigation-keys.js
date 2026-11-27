@@ -60,6 +60,12 @@ function normalizeNavigation(saved, reserved = []) {
         bindings[layout] = proposed;
     }
     return { layout: saved?.layout === 'brackets' ? 'brackets' : 'letters', bindings, autowalk: saved?.autowalk === true,
+        // Owner override: start with concise chunks, while preserving either
+        // explicit saved choice. The leg count changes speech, never geometry.
+        fullRouteReadout: saved?.fullRouteReadout === true,
+        routeLegsPerReadout: Number.isInteger(saved?.routeLegsPerReadout) && saved.routeLegsPerReadout >= 1 &&
+            saved.routeLegsPerReadout <= 12 ? saved.routeLegsPerReadout : 3,
+        autoRouteReadout: saved?.autoRouteReadout === true,
         verbosePuzzleGuidance: saved?.verbosePuzzleGuidance !== false,
         caveAutomaticInteractions: saved?.caveAutomaticInteractions === true,
         speakAutowalkPath: saved?.speakAutowalkPath === true, reachableOnly: saved?.reachableOnly === true,

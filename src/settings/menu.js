@@ -215,7 +215,7 @@ function createSettingsMenu(root, host) {
         }, () => {
             saving = false;
             apply(previous);
-            if (session && (session.group === key || (isNavigation && (session.group === 'navigationBindings' || session.group === 'secretIsland')) || (isAudio && audioGroup(session.group))))
+            if (session && (session.group === key || (isNavigation && ['navigationBindings','navigationReadout','secretIsland'].includes(session.group)) || (isAudio && audioGroup(session.group))))
                 showGroup(session, session.selected);
             if (owner && owner.group === origin) {
                 status(owner, `Could not save ${subject.toLowerCase()}. Previous settings restored.`);
@@ -231,6 +231,7 @@ function createSettingsMenu(root, host) {
         else if (owner.group === 'speech') showSpeech(owner, selection);
         else if (owner.group === 'navigation') showNavigation(owner, selection);
         else if (owner.group === 'navigationBindings') showNavigationBindings(owner, selection);
+        else if (owner.group === 'navigationReadout') showRouteLegs(owner);
         else if (owner.group === 'battle') showBattle(owner);
         else if (owner.group === 'bookmarks') bookmarks.show(owner);
         else if (owner.group === 'secretIsland') secretIsland.show(owner,selection);
@@ -267,6 +268,8 @@ function createSettingsMenu(root, host) {
             ],
             Pathfinder: [
                 'Entering a category selects its nearest destination. Its distance order and your selection stay fixed as you move, until you switch categories again.',
+                'Full route readout starts off. Directions reads three direction legs at a time. Under Navigation, Route legs per readout selects one through twelve. Turn Full route readout on for the previous full directions style.',
+                'Automatically speak next leg of route starts off. Turn it on to hear the next chunk after completing the announced movement. It queues speech and stops at interactions. Confirmed map transfers resume only after arrival. These settings are independent of Autowalk. Cave patrol and chase guidance keep their existing timing.',
                 'Previous destination ' + binding('previousDestination') + '. Next destination ' +
                     binding('nextDestination') + '. Previous category ' + binding('previousCategory') + '. Next category ' +
                     binding('nextCategory') + '. Read selection ' + binding('currentDestination') + '. Directions ' + binding('directions') + '.',
@@ -500,6 +503,11 @@ function createSettingsMenu(root, host) {
             { ...navigation, autowalk: !navigation.autowalk }, 'autowalk', 'navigation'));
         const narration = button(owner, `Speak autowalk path, ${navigation.speakAutowalkPath ? 'on' : 'off'}`, () => change(owner,
             { ...navigation, speakAutowalkPath: !navigation.speakAutowalkPath }, 'speakAutowalkPath', 'navigation'));
+        const fullReadout = button(owner, `Full route readout, ${navigation.fullRouteReadout ? 'on' : 'off'}`, () => change(owner,
+            { ...navigation, fullRouteReadout: !navigation.fullRouteReadout }, 'fullRouteReadout', 'navigation'));
+        const readoutLegs = button(owner, `Route legs per readout, ${navigation.routeLegsPerReadout}`, () => showRouteLegs(owner));
+        const nextReadout = button(owner, `Automatically speak next leg of route, ${navigation.autoRouteReadout ? 'on' : 'off'}`, () => change(owner,
+            { ...navigation, autoRouteReadout: !navigation.autoRouteReadout }, 'autoRouteReadout', 'navigation'));
         const puzzleVerbosity = button(owner, `Verbose puzzle guidance, ${navigation.verbosePuzzleGuidance ? 'on' : 'off'}`, () => change(owner,
             { ...navigation, verbosePuzzleGuidance: !navigation.verbosePuzzleGuidance }, 'verbosePuzzleGuidance', 'navigation'));
         const keymap = button(owner, `Navigation keymap, ${LAYOUT_NAMES[layout]}`, () => change(owner,
@@ -515,11 +523,25 @@ function createSettingsMenu(root, host) {
                 change(owner, { ...navigation, [key]: !navigation[key] }, key, 'navigation'));
         }
         let focused = { autowalk, verbosePuzzleGuidance: puzzleVerbosity, speakAutowalkPath: narration, reachableOnly: reachable, spoilers,
+            fullRouteReadout: fullReadout, routeLegsPerReadout: readoutLegs, autoRouteReadout: nextReadout,
             ...beaconSpeech }[selection] || keymap;
         const savedPlaces = button(owner, 'Bookmarks', () => bookmarks.show(owner));
         if (selection === 'bookmarks') focused = savedPlaces;
         button(owner, 'Back', () => showRoot(owner, 'navigation'));
         focused.focus();
+    }
+
+    function showRouteLegs(owner) {
+        owner.group = 'navigationReadout';owner.capture = null;
+        owner.heading.textContent = 'Route legs per readout';owner.status.textContent = '';
+        owner.contents.textContent = '';
+        let focused;
+        for (let count=1;count<=12;count++) {
+            const item=button(owner,String(count),()=>change(owner,{...navigation,routeLegsPerReadout:count},'routeLegsPerReadout','navigation'));
+            item.setAttribute('aria-pressed',String(navigation.routeLegsPerReadout===count));
+            if(navigation.routeLegsPerReadout===count)focused=item;
+        }
+        button(owner,'Back',()=>showNavigation(owner,'routeLegsPerReadout'));focused.focus();
     }
 
     function showBattle(owner) {
@@ -679,6 +701,7 @@ function createSettingsMenu(root, host) {
     function back(owner) {
         if (owner.capture) showGroup(owner, owner.selected);
         else if (owner.group === 'navigationBindings') showKeyboard(owner, 'navigationBindings');
+        else if (owner.group === 'navigationReadout') showNavigation(owner,'routeLegsPerReadout');
         else if (owner.group === 'bookmarks') bookmarks.back(owner);
         else if (owner.unbinding) showController(owner);
         else if (owner.group === 'audioPreviews') leaveAudioPreviews(owner);

@@ -339,7 +339,7 @@ parentPort.on('message', message => {
             }
             if (['ready', 'interrupted', 'enemyBlocked', 'saltRoute', 'controlRoute', 'terrainExit', 'iceRoute',
                 'npcBlocked'].includes(result.status) &&
-                Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 8 &&
+                Number.isInteger(request.limit) && request.limit > 0 && request.limit <= 12 &&
                 result.legs.length > request.limit) {
                 result.more = true;
                 result.legs.length = request.limit;

@@ -207,7 +207,7 @@ function formatSpeech(message) {
         }
         case 'routeDirections': {
             const name = label(message);
-            if (!name || !Array.isArray(message.legs) || message.legs.length > 8) return '';
+            if (!name || !Array.isArray(message.legs) || message.legs.length > 12) return '';
             const directions = [];
             for (const leg of message.legs) {
                 const heading = HEADINGS[leg.direction];
@@ -216,6 +216,13 @@ function formatSpeech(message) {
             }
             const beaconOnly = message.beaconOnly === true;
             const more = !beaconOnly && message.more;
+            // A chunk ending before the real arrival cannot announce that
+            // arrival's facing, interaction or onward exit instruction.
+            if(message.chunkReadout&&more&&!beaconOnly) {
+                const guide=label({name:message.guide});
+                text=[directions.join(', '),guide].filter(Boolean).join('. ')+'.';
+                break;
+            }
             const parts = !beaconOnly && directions.length ? [directions.join(', ')] : [];
             const facing = HEADINGS[message.facing];
             const boundary = HEADINGS[message.boundary];

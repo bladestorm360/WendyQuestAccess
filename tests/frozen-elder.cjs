@@ -41,7 +41,8 @@ module.exports=async function verifyFrozenElder(fixture,mapData,tilesets){
     assert.deepEqual(result.arrival,{x:29,y:6,facing:8});
     f.routeReply({epoch:job.epoch,sequence:job.sequence,map:job.map,
         result:{...result,legs:result.legs.slice(0,8),more:true}});frame();
-    assert.equal(f.packets.at(-1).kind,'routeDirections');assert.match(formatSpeech(f.packets.at(-1)),/ice block/i);
+    assert.equal(f.packets.at(-1).kind,'routeDirections');assert.equal(f.packets.at(-1).prerequisite,'the ice block');
+    assert.doesNotMatch(formatSpeech(f.packets.at(-1)),/action button/i,'an incomplete chunk defers the melt instruction');
     assert.equal(f.packets.at(-1).facing,8);
     console.log('Verified the frozen Elder Tater quest uses the reachable ice interaction, native rectangle approach and standard prerequisite directions; unverified extra actions stay excluded.');
 };

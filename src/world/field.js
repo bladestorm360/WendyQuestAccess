@@ -9,6 +9,7 @@ const { localHandoffName, handoffCaption, iceOpensPassage, chillcrestQuestExit, 
     visibleChestBarrier, closedRuinsDoorReason, BREAKFAST_HANDOFFS, npcPassage, passiveFloorPage } = require('./local-destinations');
 const { transferOptions, pageMayTransfer } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
+const { readoutLimit, chunkReadout, createRouteReadout } = require('./route-readout');
 const { createTransferBookmarks } = require('./transfer-bookmarks');
 const { createBoatJourney } = require('./boat-journey');
 const { createLocalDetour } = require('./local-detour');
@@ -134,6 +135,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     let manualWait = null;
     let manualCrossing = null;
     const preferences = host.navigationPreferences;
+    const readout=createRouteReadout(root,host,ready,controller=>command('directions',undefined,controller,false,true));
     const solver = createCaveSolver(root,host.graphics,preferences);
     const autowalk = createAutowalk(root, ready, preferences, (scene, record, failed, arrived, job) => {
         if(record?.manualAutowalkStop)solver.stop();
@@ -282,7 +284,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         if(remote)scene._wqaAutowalkCleanup=cleanupWalk?.scene===scene;
     }
 
-    function retire(scene, stepping = false) {
+    function retire(scene, stepping = false, keepSpeech = false) {
         if (!owner || owner.scene !== scene) return;
         if (admission) Atomics.store(admission, 0, 0);
         host.caveTiming?.cancelPlan?.(scene, stepping);
@@ -294,7 +296,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         scene._wqaCaveReview = false;
         scene._wqaQuestNavigation = false;
         scene._wqaPreviewUntil = 0;
-        if (speech) notifications.close(speech);
+        if (speech && !keepSpeech) notifications.close(speech);
         speech = 0;
     }
 
@@ -310,6 +312,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
 
     function present(job, record, moving = false) {
         if (active !== job) return;
+        moving = moving || Number.isInteger(job.readoutToken);
         job.scene._wqaInteractionDeferred = false;
         if (!ready(job.scene, moving)) return;
         // Arrival and stop reports have their own command owner. Only
@@ -320,7 +323,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             record = { ...record, name: speakDestination ? job.label : record.name, directionsOnly: !speakDestination };
         }
         record = puzzleSpeech(job,record);
-        speech = notifications.open(record, () => active === job && ready(job.scene, moving) &&
+        const publish=job.autoReadout && notifications.continue ? notifications.continue : notifications.open;
+        speech = publish(record, () => (active === job || readout.current(job.readoutToken)) && ready(job.scene, moving) &&
             (!job.quest || questDestinationCurrent(root, job.scene, job.quest)) &&
             (!job.questExit || chillcrestQuestExit(root)) &&
             (!job.sunriseExit || sunriseSequenceExit(root)) &&
@@ -381,6 +385,16 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     }
 
     function presentRoute(job, record) {
+        if(job.action==='directions'&&!job.autowalk&&!job.caveWalk&&!timedCave(job.map)) {
+            record=chunkReadout(record,preferences());
+            if(job.mode==='walk'&&!job.area) {
+                const holder=owner,selection=browser,category=browser.category,id=browser.selections[category];
+                const actor=root.$gameMap._events?.[job.target],page=actor?._pageIndex,x=actor?._x,y=actor?._y;
+                job.readoutToken=readout.follow(job,record,()=>owner===holder&&browser===selection&&
+                    browser.category===category&&browser.selections[category]===id&&
+                    (!actor||root.$gameMap._events[job.target]===actor&&!actor._erased&&actor._pageIndex===page&&actor._x===x&&actor._y===y));
+            }
+        }
         present(job, job.beaconStarted && !preferences().speakBeaconPath ? { ...record, beaconOnly: true } : record);
     }
 
@@ -885,6 +899,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     }
 
     function submit(job, snapshot, request, filtering = false) {
+        if(!filtering&&job.action==='directions'&&!job.autowalk&&!job.caveWalk&&!job.area&&!timedCave(snapshot.map))
+            request={...request,limit:readoutLimit(preferences())};
         job.filter = filtering ? snapshot : null;
         job.request = request;
         try {
@@ -1688,7 +1704,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
     function pendingAutowalk(scene) {
         return active?.scene === scene && active.action === 'directions' && preferences().autowalk;
     }
-    function command(action, text, controller = false, keepCaveTiming = false) {
+    function command(action, text, controller = false, keepCaveTiming = false, automaticReadout = false) {
+        const stoppedReadout=!automaticReadout&&readout.cancel();
         if (BROWSE.has(action) || ['directions', 'puzzleGuide', 'puzzleStop'].includes(action)) clearCleanupWalk();
         const scene = host.manager._scene;
         const stoppedSolver=(action==='beaconStop'||action==='puzzleStop'||BROWSE.has(action)) && solver.stop();
@@ -1727,7 +1744,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             const walking = autowalk.stop(scene) || pendingAutowalk(scene) || cleaning || transfers.automatic(scene) ||
                 !!automaticIce || stoppedSolver;
             const beaming = host.beacon?.stop(scene);
-            if (!walking && !beaming && !waitingForIce) return false;
+            if (!walking && !beaming && !waitingForIce && !stoppedReadout) return false;
             transfers.clear();
             command('navigationReport', { kind: 'fieldStatus', name: walking ? 'Autowalk stopped.' : beaming ? 'Beacon stopped.' : 'Directions stopped.' });
             return true;
@@ -1768,7 +1785,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         const changes = active?.scene === scene && !active.performed ? active.changes.slice() : [];
         if (BROWSE.has(action) && changes.length < 16) changes.push(action);
         retireArrival(scene, false);
-        if (owner) retire(owner.scene, keepCaveTiming);
+        if (owner) retire(owner.scene, keepCaveTiming, automaticReadout);
         browserOwner(scene);
         if (BROWSE.has(action) || puzzle) {
             owner.remoteBookmark = owner.routeProgress = null;
@@ -1778,7 +1795,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             shoreJourney = null;
             transfers.clear();
         }
-        queue({ scene, action, changes, text, step, idle, controller, retries: 0 });
+        queue({ scene, action, changes, text, step, idle, controller, retries: 0, autoReadout:automaticReadout });
         // An accepted pathfinder key is activity in the native idle detector.
         // It never supplies a game action or changes the timer directly.
         if (canWaitForStep) scene._wqaNavigationWake = true;
@@ -1797,6 +1814,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
 
     return {
         ready,
+        cancelRouteReadout:readout.cancel,
+        readoutLanded:readout.landed,
         stopCaveSolver:solver.stop,
         autowalk,
         refreshBeacon, cancelBeaconRefresh,
@@ -1992,6 +2011,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 browserOwner(scene);
                 return rerouteAutowalk({scene});
             }
+            if(arrived?.manualReadout && preferences().autoRouteReadout && !preferences().autowalk &&
+                (detour||bookmark||boat))return command('directions',undefined,false,false,true);
             // Only native-ready progress changes requeue the active Salt guide.
             // Ordinary roaming steps do not repeat speech or assume presses.
             if (salt.observe(scene) && !active && !autowalk.active(scene)) return command('puzzleGuide');
@@ -2061,6 +2082,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             afterRender();
         },
         changed(scene, steppedActor) {
+            const following=readout.changed(scene,steppedActor);
+            if(following&&steppedActor===root.$gamePlayer)return retire(scene,true,true);
             if (cleanupWalk && !cleanupCurrent(cleanupWalk)) clearCleanupWalk();
             if (!steppedActor || steppedActor === root.$gamePlayer) autowalk.dirty(scene);
             const job = active;
@@ -2100,6 +2123,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             return !!(root.$gameMap?._needsRefresh && ready(scene, true, false, true));
         },
         controlLost(scene) {
+            readout.cancel();
             if(scene?._wqaSettingsActive)solver.stop();
             retireArrival(scene, true);
             const refresh = root.$gameMap?._needsRefresh && ready(scene, true, false, true);
@@ -2108,6 +2132,7 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
             if (control?.scene === scene) control = null;
         },
         leave(scene, mapEventId) {
+            readout.cancel();
             if(mapEventId!==undefined)solver.accepted(root.$gameMap?._mapId,mapEventId);
             solver.leave(scene,!!(caveEvent || caveResume || cleanupWalk || mapEventId>0));
             if (cleanupWalk) {

@@ -321,6 +321,10 @@ function boot(root, nodeRequire, nodeProcess) {
             nativeButton,
             controllerChanged: () => controller?.reset(),
             navigationChanged(value) {
+                if(navigationPreferences.fullRouteReadout!==value.fullRouteReadout ||
+                    navigationPreferences.routeLegsPerReadout!==value.routeLegsPerReadout ||
+                    navigationPreferences.autoRouteReadout!==value.autoRouteReadout ||
+                    navigationPreferences.autowalk!==value.autowalk)field.cancelRouteReadout();
                 if (navigationPreferences.autowalk && !value.autowalk || navigationPreferences.caveAutomaticInteractions && !value.caveAutomaticInteractions) field.cancelAutowalk(host.manager._scene);
                 navigationPreferences = value;
             },
@@ -996,6 +1000,7 @@ function boot(root, nodeRequire, nodeProcess) {
         try { wall?.move(scene, direction, succeeded); } catch { wall?.leave(scene); }
     };
     root.WendyQuestAccessFootstep = function (scene, player) {
+        try { field?.readoutLanded(scene,player); } catch { field?.cancelRouteReadout(); }
         try { footsteps?.landed(scene, player); } catch { footsteps?.leave(scene); }
     };
     root.WendyQuestAccessGuardFootstep = function (scene, guard) {

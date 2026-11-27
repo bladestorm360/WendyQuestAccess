@@ -434,7 +434,9 @@ async function verifyIceHandback(flags) {
     f.routeReply({ epoch: request.epoch, sequence: request.sequence, map: request.map,
         result: { ...result, legs: result.legs.slice(0, 8), more: true } });
     frame();
-    assert.match(formatSpeech(directions().at(-1)), /Route to the ice block.*More directions available/);
+    assert.doesNotMatch(formatSpeech(directions().at(-1)), /Route to the ice block|action button/,
+        'default chunk mode defers interaction instructions until its actual arrival');
+    assert.equal(directions().at(-1).prerequisite,'the ice block');
     player.setPosition(result.arrival.x, result.arrival.y);
     key('p');
     const near = routePackets.at(-1);

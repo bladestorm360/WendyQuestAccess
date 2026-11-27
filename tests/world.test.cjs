@@ -1764,4 +1764,4 @@ function changedCrossing(before, after) {
 }
 
 if(require.main===module)main().catch(error => { console.error(error); process.exitCode = 1; });
-module.exports={c,load,read,verifyWorker};
+module.exports={c,load,read,verifyWorker,verifyRoute};

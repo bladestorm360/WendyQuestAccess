@@ -154,7 +154,7 @@ SCENE_LEAVING = (narration_leaving(b'this._scene', mode='cancel') + b'if(this._s
 FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scene?._wqaDialogue||'
                  b'SceneManager._scene?._wqaAutosaveNotice||SceneManager._scene?._wqaCreditsActive||'
                  b'SceneManager._scene?._wqaInteractionActive||SceneManager._scene?._wqaTreasureDue||'
-                 b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
+                 b'SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaReadoutActive||SceneManager._scene?._wqaCaveReview||'
                  b'SceneManager._scene?._wqaSettingsActive||SceneManager._scene?._wqaWallAudio||'
                  b'Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady||'
                  b'SceneManager._scene?._wqaBeaconActive||SceneManager._scene?._wqaCaveTimingActive||'
@@ -164,13 +164,14 @@ FIELD_WATCHED = (b'(SceneManager._scene?._wqaMapAnnouncement||SceneManager._scen
                  b'SceneManager._scene?._wqaQuestTracking||SceneManager._scene?._wqaBookmarkEntrance||'
                  b'SceneManager._scene?._wqaBookmarkLanding||Graphics._wqaCaveSolverActive||SceneManager._scene?._wqaVehicleNotice)')
 ROUTE_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive||SceneManager._scene?._wqaCaveReview||'
+               b'SceneManager._scene?._wqaReadoutActive||'
                b'SceneManager._scene?._wqaWallAudio||SceneManager._scene?._wqaBeaconActive||'
                b'SceneManager._scene?._wqaCaveTimingActive||SceneManager._scene?._wqaAutowalkActive||'
                b'SceneManager._scene?._wqaSoundscapeSample||SceneManager._scene?._wqaQuestTracking)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 ACTOR_DIRTY = (b'if(SceneManager._scene?._wqaRouteActive&&(this===$gamePlayer||this._eventId!==undefined||'
                b'this._type==="boat"||this._type==="ship"||this._type==="airship")||'
-               b'SceneManager._scene?._wqaCaveReview&&this===$gamePlayer)'
+               b'(SceneManager._scene?._wqaCaveReview||SceneManager._scene?._wqaReadoutActive)&&this===$gamePlayer)'
                b'globalThis.WendyQuestAccessFieldChanged?.(SceneManager._scene);')
 ACTOR_STEP = ACTOR_DIRTY.replace(b'?.(SceneManager._scene);', b'?.(SceneManager._scene,this);')
 AUTO_DISCARD = (b'SceneManager._scene?._messageWindow?._wqaAutoPaint&&'
@@ -481,7 +482,7 @@ def objects_notification(original):
                 b'globalThis.WendyQuestAccessCaveTimingPose?.(SceneManager._scene);}\n        ',
         # Native interpolation has reached the reserved tile. updateMove
         # runs on moving characters, separately from jumping or relocation.
-        191826: b'\n        if(this===$gamePlayer&&Graphics._wqaFootstepsEnabled&&SceneManager._scene?._wqaFieldReady)'
+        191826: b'\n        if(this===$gamePlayer&&(Graphics._wqaFootstepsEnabled||SceneManager._scene?._wqaReadoutActive)&&SceneManager._scene?._wqaFieldReady)'
                 b'globalThis.WendyQuestAccessFootstep?.(SceneManager._scene,this);'
                 b'else if(Graphics._wqaCaveTimingEnabled&&this._trigger===2&&this._mapId===$gameMap?._mapId&&'
                 b'SceneManager._scene?._wqaFieldReady)'

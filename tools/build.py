@@ -121,6 +121,7 @@ def bundle():
         './soundscape-presentation': 'world/soundscape-presentation.js',
         './soundscape-preferences': 'settings/soundscape-preferences.js',
         './autowalk': 'world/autowalk.js',
+        './route-readout': 'world/route-readout.js',
         './world/cave-timing': 'world/cave-timing.js',
         './spatial-direction': 'world/spatial-direction.js',
         './snapshot': 'world/snapshot.js',

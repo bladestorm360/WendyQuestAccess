@@ -3154,7 +3154,9 @@ def main():
         if restarted or not reloaded.get('speechRestored') or reloaded.get('bindings') != ['Open mod settings, V', 'Repeat dialogue, T',
                 'Start or review puzzle guidance, Shift+U', 'Stop puzzle guidance, Ctrl+U'] or \
                 reloaded.get('controller') != ['Controller support, on', 'Toggle mod mode, RT', 'Next category, Unassigned'] or \
-                reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on', 'Verbose puzzle guidance, off',
+                reloaded.get('navigation') != ['Autowalk, on', 'Speak autowalk path, on',
+                                               'Full route readout, off', 'Route legs per readout, 3',
+                                               'Automatically speak next leg of route, off', 'Verbose puzzle guidance, off',
                                                'Navigation keymap, Brackets and backslash', 'Reachable destinations only, off', 'Spoiler mode, on',
                                                'Speak beacon destination on controller directions, on', 'Speak full path with beacon, on',
                                                'Bookmarks', 'Back'] or reloaded.get('battle') != ['Automatic perfect timing, on', 'Back'] or \

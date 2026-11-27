@@ -56,12 +56,14 @@ module.exports = async function verifyIceField(fixture, mapData, tilesets) {
         return formatSpeech(f.packets.at(-1));
     }
     const first = directions('interrupted');
-    assert.match(first, /scene trigger/i);
+    assert.match(first, /^\d+ (?:north|south|east|west)/);
+    if(!f.packets.at(-1).more)assert.match(first,/scene trigger/i);
     assert.doesNotMatch(first, /unreachable|Mech Double|heal/i);
     map._events[27]._erased = true;
     player.setPosition(25, 16);
     const second = directions('iceRoute');
-    assert.match(second, /ice block/i);
+    if(!f.packets.at(-1).more)assert.match(second,/ice block/i);
+    else assert.doesNotMatch(second,/action button/,'an early chunk cannot announce the distant melt action');
     assert(scene._wqaIceRoute, 'native melt handback retains the selected enemy destination');
     console.log('Verified spoken event-before-ice directions and retained original destination without story spoilers.');
 };
