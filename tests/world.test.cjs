@@ -937,7 +937,7 @@ async function verifyPatrolGuidance() {
         const actors = configureMotion(cave, 9, 38, 0, 28);
         const entries = captureWorld(c, false).objects.filter(item => item.patrol);
         assert.equal(entries.length, count);
-        assert(entries.every(item => item.category === 'enemies' && item.name === 'Mech Guard'));
+        assert(entries.every(item => item.category === 'enemies' && (item.baseName??item.name) === 'Mech Guard'));
         actors[0]._x++;
         assert.equal(captureWorld(c, false).objects.find(item => item.id === actors[0]._eventId)?.x, actors[0]._x);
         actors[0]._erased = true;

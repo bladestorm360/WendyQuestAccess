@@ -324,7 +324,7 @@ function verifyCaveField(c, load, configureMotion, options = null) {
         for (let count = 0; count < 16; count++) {
             ask('nextDestination');
             const record = records[records.length - 1];
-            if (record?.name === name && (!point || record.dx === point[0] - fixture.player.x &&
+            if ((record?.name===name || record?.name?.replace(/ \d+$/, '')===name) && (!point || record.dx === point[0] - fixture.player.x &&
                 record.dy === point[1] - fixture.player.y)) return;
         }
         assert.fail('Missing field destination ' + name + '. Reports ' + JSON.stringify([...new Set(records.map(record => record.name))]));

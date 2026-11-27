@@ -44,7 +44,7 @@ module.exports=async(c,load,read,verifyWorker)=>{
    c.$gameScreen={_brightness:255};c.$gameMessage={isBusy:()=>false};
    const worker=Object.assign(new EventEmitter(),{unref(){},postMessage(p,buffers){packets.push(structuredClone(p,{transfer:buffers||[]}));}});
    const field=createField(c,{graphics:c.Graphics,manager:c.SceneManager,hasFocus:()=>true,screenFading:()=>false,
-    navigationPreferences:()=>({spoilers:true,autowalk:automatic}),makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),createRouteWorker:()=>worker},
+    navigationPreferences:()=>({spoilers:true,autowalk:automatic,fullRouteReadout:true}),makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),createRouteWorker:()=>worker},
     {open(r){records.push(r);return records.length;},close(){}});
    const ask=key=>{assert(field.command(key));renderer.emit('postrender');};
    for(let i=0;i<12&&records.at(-1)?.category!=='Quests';i++)ask('nextCategory');

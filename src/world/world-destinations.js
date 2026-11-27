@@ -142,7 +142,7 @@ function worldDestination(root, mode, event, entry, page) {
             if (id === 43 && transferOptions(map, entry, page, root.$dataCommonEvents).some(edge =>
                 edge.map === 57 || edge.map === 58))
                 return { name: 'Cauldron', category: 'exits' };
-            if (mode === 'walk' && discoveryEntrance(map, event))
+            if (land && discoveryEntrance(map, event))
                 return { name: 'Discovery marker', category: 'events', eventAction: 'step' };
             const number = /^EnterSecretArea(\d+)$/.exec(entry.name)?.[1];
             if (number && transfersTo(list[1], RUINS[Number(number) - 1]))

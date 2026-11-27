@@ -35,18 +35,22 @@ function eventTarget(root, mode, event, entry, page, spoilers = false, questMark
     if ((!spoilers && concealedDestination(map, event)) || !pageHasInteraction(page) ||
         inactiveFloorScene(root, event, page) || excludedDestination(entry, page, map) ||
         (map === 113 && !worldEntranceRevealed(root, event._eventId, spoilers, questMarker))) return null;
-    let target = worldDestination(root, mode, event, entry, page);
+    // Flight selection describes the ground interaction (a boat boarding
+    // point must not become a generic scene merely because we are flying).
+    let target = worldDestination(root, mode==='airship'?'walk':mode, event, entry, page);
     if (target === undefined) target = localDestination(root, event, page);
     if (target === undefined) target = checkpointTarget(map, event._eventId, event._pageIndex, event._trigger)
         ? { name: 'Checkpoint', category: 'checkpoints' }
         : caveDestination(map, event, entry, page) || destination(entry, page, event._trigger, map, event._characterName) || undefined;
     if (!target) target = worldEventDescription(root, mode, event, page) ||
-        (mode === 'walk' && !timedCave(map) && eventDescription(root, entry, page, event)) ||
+        ((mode === 'walk'||mode === 'airship') && !timedCave(map) && eventDescription(root, entry, page, event)) ||
         target;
     // A marker-only page can be named like an ordinary prop in map data.
     // Leave its painted quest waypoint eligible even without an object entry.
     if (target?.category === 'objects' && !questPageHasAction(page)) return undefined;
-    if (target && mode === 'airship' && target.category !== 'exits') return null;
+    // Flight browsing includes ground events. The landing solver, not this
+    // label, must prove a native landing and a walkable approach to the goal.
+    if (target && mode === 'airship' && !['exits','events'].includes(target.category)) return null;
     return contextualEvent(root, event, worldMapExit(root, mode, event, entry, page, target), spoilers);
 }
 
@@ -177,7 +181,7 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
                     objects.push({ id: eventId, x, y, name: land.name, category: 'exits', shoreMap });
             }
         }
-        if (quest && target !== null && (mode !== 'airship' || target?.category === 'exits')) {
+        if (quest && target !== null && (mode !== 'airship' || ['exits','events'].includes(target?.category))) {
             const { entryDirection, eventAction, bumpDirections, handoffs } = target || {};
             // A painted quest marker can own a touch action even when its
             // native page has no separate scene or encounter to list.

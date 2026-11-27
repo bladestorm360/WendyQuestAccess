@@ -3,6 +3,7 @@
 const { GATE_SWITCHES } = require('./terrain-control-labels.cjs');
 const { houseStair, houseBranches } = require('./transfer-events.cjs');
 const { numberedHouseName, sunriseShopName } = require('./map-banner');
+const { consumedFloorPage } = require('./consumed-events');
 
 // Each locator describes the active page's native destination. The worker
 // still derives the interaction approach from live collision and priority.
@@ -200,6 +201,7 @@ function passiveFloorPage(page) {
 }
 
 function inactiveFloorScene(root, event, page) {
+    if(consumedFloorPage(root,event,page))return true;
     if (event._trigger !== 1 || event._pageIndex !== 0) return false;
     const map = root.$gameMap._mapId;
     const id = event._eventId;
@@ -221,8 +223,8 @@ function inactiveFloorScene(root, event, page) {
     const active = id => root.$gameSwitches?.value?.(id) === true;
     if (map === 119 && id >= 9 && id <= 13 && type === 0 && key === 33 && value === 0) {
         const inner = page.list[1];
-        return active(33) || (inner?.code === 111 && inner.indent === 1 &&
-            inner.parameters[0] === 0 && inner.parameters[1] === 448 && inner.parameters[2] === 1 && active(448));
+        return inner?.code === 111 && inner.indent === 1 &&
+            inner.parameters[0] === 0 && inner.parameters[1] === 448 && inner.parameters[2] === 1 && active(448);
     }
     if (map !== 25) return false;
     if ((id === 45 || id === 46) && type === 0 && key === 511 && value === 1) return active(511);

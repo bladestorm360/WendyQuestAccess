@@ -87,7 +87,8 @@ async function verifyAirshipFoot(c, load, read, verifyWorker) {
         });
         await verifyWorker(f,{x:walk.x,y:walk.y,candidates},walk.live,result=>assert.deepEqual(result,expanded));
 
-        for(const [automatic,savedPoint] of [[false,false],[true,false],[false,true],[true,true]]) {
+        for(const [automatic,savedPoint,startAboard] of [[false,false],[true,false],[false,true],[true,true],
+            [false,false,true],[true,false,true]]) {
             const native=begin(),{gameMap,player}=native,aircraft=gameMap.airship();
             const scene={_wqaFieldReady:true,_active:true,_fadeDuration:0,_fadeOpacity:0};
             const frames=new EventEmitter();c.SceneManager._scene=scene;c.Graphics.app={stage:scene,renderer:frames};
@@ -101,6 +102,19 @@ async function verifyAirshipFoot(c, load, read, verifyWorker) {
                 makeWord:()=>new Int32Array(new SharedArrayBuffer(4)),createRouteWorker:()=>worker},
             {open(record){records.push(record);return records.length;},close(){},
                 arrive(record){records.push(record);return records.length;},endArrival(){}});
+            if(startAboard) {
+                // Original native boarding/ascent, before selecting a goal.
+                player.setPosition(43,28);assert(player.getOnVehicle());
+                player._vehicleGettingOn=false;aircraft.getOn();player.setThrough(true);
+                for(let n=0;n<48;n++)aircraft.updateAirship();
+                assert.equal(travelMode(gameMap,player),'airship');
+                const flight=captureWorld(c,true,undefined,scene,[],false,true);
+                assert.deepEqual(flight.objects.filter(t=>t.category==='events').map(t=>t.id),
+                    walk.objects.filter(t=>t.category==='events').map(t=>t.id),
+                    'boarding preserves every eligible event, including discoveries and encounters');
+                const privateFlight=captureWorld(c,false,undefined,scene,[],false,false);
+                assert(!privateFlight.objects.some(t=>t.id===135),'unrevealed entrance remains hidden');
+            }
             c.WendyQuestAccessSceneLeaving=owner=>field.leave(owner);
             c.WendyQuestAccessBookmarkLandingAccepted=field.bookmarkLandingAccepted;
             c.WendyQuestAccessBookmarkEntranceAccepted=field.bookmarkEntranceAccepted;
@@ -139,11 +153,13 @@ async function verifyAirshipFoot(c, load, read, verifyWorker) {
                 }
                 assert.deepEqual([player._x,player._y],[result.arrival.x,result.arrival.y],JSON.stringify({record:records.at(-1),inputs,canMove:player.canMove()}));
             }
+            if(!startAboard) {
             const boarding=await route(goalEvent);assert(boarding.airshipBoarding);
             if(!automatic)assert.match(formatSpeech(records.at(-1)),/board the airship/i);
             follow(boarding);scene._wqaRouteActive=true;assert(player.triggerButtonAction());settle();
             for(let n=0;n<48;n++){aircraft.updateAirship();settle();}
             assert.equal(travelMode(gameMap,player),'airship');scene._wqaFieldReady=true;field.observeReady(scene);
+            }
             const flight=await route(goalEvent);assert(flight.land);assert(aircraft.isLandOk(flight.arrival.x,flight.arrival.y,2));
             follow(flight);scene._wqaRouteActive=true;assert(player.triggerButtonAction());
             assert(c.Graphics._wqaBookmarkTransferPending);
@@ -155,6 +171,7 @@ async function verifyAirshipFoot(c, load, read, verifyWorker) {
             assert(ground.distance<=2);
             if(savedPoint)assert.deepEqual([ground.arrival.x,ground.arrival.y],[44,24]);
             else assert.equal(field.bookmarkContext(scene)?.entity?.event,113);
+            assert(!gameMap.events().some(event=>event.isStarting()),'landing/approach does not trigger an event');
             field.leave(scene);
         }
         console.log('Verified 23 discoveries, 21 native landings, 6 disconnected foot routes, unlock negatives, erased landing blockers, shorter walks, worker availability/cancellation and manual/automatic board-flight-ground handoff; callback peak '+peak.toFixed(2)+' ms (throttled fixture).');

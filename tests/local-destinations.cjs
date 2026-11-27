@@ -419,8 +419,9 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
         return { fixture, view };
     }
     const houseScenes = [9, 10, 11, 12, 13];
-    eventAvailability(119, [], houseScenes, true);
-    for (const switches of [[448], [33], [462]]) {
+    eventAvailability(119, [], houseScenes, false);
+    eventAvailability(119, [33], houseScenes, true);
+    for (const switches of [[448], [33,448], [462]]) {
         const { fixture, view } = eventAvailability(119, switches, houseScenes, false);
         assert(view.objects.some(item => item.id === 3 && item.category === 'exits'));
         const goal = { x: 5, y: 10, targetX: 5, targetY: 11, field: true };
@@ -767,7 +768,7 @@ async function verifyLocalDestinations(c, load, verifyRoute, verifyWorker, read)
     const unlocked = load(113, { switches: [221] });
     unlocked.player.setPosition(46, 0);
     const closedDock = captureWorld(c, true, undefined, undefined, [], false, true).objects.filter(item => item.id === 94);
-    assert.deepEqual(closedDock.map(item => item.category), ['events'], 'an active floor touch does not promise boarding');
+    assert.deepEqual(closedDock, [], 'completed dock condition has no remaining action');
     c.$dataCommonEvents = common;
     console.log('Verified all audited solid transfers, native approach directions, and the generic Cauldron and dock entries.');
 

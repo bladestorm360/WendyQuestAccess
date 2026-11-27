@@ -290,9 +290,10 @@ console.log('Throttled 20 complete power and accuracy pairs', nativeTotal.toFixe
 {
 battle._phase = 'ActionCommand';
 automatic = true;
-let observedTotal = 0, nativeTotal = 0;
+let observedTotal = 0, nativeTotal = 0, measuredSweeps=0;
 const nativeVariants = [39, 11, 23].map(id => JSON.parse(states[id].note.slice(states[id].note.indexOf('{'))).ACSettings);
-for (const settings of [{}, ...nativeVariants, { Frozen: true }, { Soggy: true }]) {
+for (const settings of [{}, ...nativeVariants, actualFrozen,
+    ...nativeVariants.map(variant=>({...variant,...actualFrozen})), { Soggy: true }]) {
     for (const method of ['Power', 'Accuracy']) {
         const scenario = { ...narrow, settings, press: [], followCue: false };
         const result = run('observed' + method, scenario, false);
@@ -311,6 +312,7 @@ for (const settings of [{}, ...nativeVariants, { Frozen: true }, { Soggy: true }
         const baseline = run('native' + method, { ...scenario, press: presses }, false);
         assert.deepEqual(result.outcome, baseline.outcome);
         observedTotal += result.elapsed; nativeTotal += baseline.elapsed;
+        measuredSweeps++;
     }
 }
 const current = battle._currentActionCommand;
@@ -329,6 +331,6 @@ assert.equal(automaticInput(scene,current,0.93,0.9,0.95,1,false,0.4,0.55,0.2),fa
 assert.equal(automaticInput(scene,current,NaN,0.9,0.95,1,false,0.4,0.55,0),false);
 assert.equal(automaticInput(scene,current,0.4,0.9,0.95,1,true,0.4,0.55,0),false);
 console.log('Verified automatic native perfect timing, Frozen ice breaking, all meter variants, exact native scoring parity, disabled/manual behavior and lifecycle gates.');
-console.log('Throttled 11 complete native/automatic sweeps',nativeTotal.toFixed(2),observedTotal.toFixed(2),'ms.');
+console.log('Throttled '+measuredSweeps+' complete native/automatic sweeps',nativeTotal.toFixed(2),observedTotal.toFixed(2),'ms.');
 
 }

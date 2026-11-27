@@ -70,7 +70,16 @@ function createAirshipJourney(root, host) {
             if (selected.saved && snapshot.mode === 'airship' || state.stage === 'ground') clear();
         },
         landing(job, result) {
-            const state = current();
+            let state = current();
+            // A player can select an event after boarding independently of
+            // the walking-airship suggestion. Retain that exact ground goal
+            // through the existing native landing acceptance ticket as well.
+            const goal=job.destination,craft=vehicleOnMap(root.$gameMap,'airship');
+            if(job.mode==='airship'&&goal?.category==='events'&&craft?._driving&&
+                (!state||state.goal.id!==goal.id||state.goal.category!==goal.category)&&
+                serial<0x7ffffffe&&target(job.scene,goal))
+                state=trip={serial:++serial,player:root.$gamePlayer,map:root.$gameMap,craft,
+                    goal,stage:'flight',selectionMode:'airship'};
             if (!state || state.stage !== 'flight' || job.destination?.id !== state.goal.id ||
                 job.destination.category !== state.goal.category) return;
             state.discovery = result.discovery;
