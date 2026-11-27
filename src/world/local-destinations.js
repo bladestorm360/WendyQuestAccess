@@ -2,7 +2,7 @@
 
 const { GATE_SWITCHES } = require('./terrain-control-labels.cjs');
 const { houseStair, houseBranches } = require('./transfer-events.cjs');
-const { numberedHouseName } = require('./map-banner');
+const { numberedHouseName, sunriseShopName } = require('./map-banner');
 
 // Each locator describes the active page's native destination. The worker
 // still derives the interaction approach from live collision and priority.
@@ -167,6 +167,14 @@ function localHandoffName(map, event) {
     if (map === 27 && [27, 32].includes(event)) return 'Peak approach';
     if (map === 15 && event >= 46 && event <= 49) return 'Scene trigger';
     return undefined;
+}
+
+// Handoff tables certify where a route must stop; their internal scene names
+// are not reveal permission. Prefer the same public label as destination
+// selection, including its explicit discovery/encounter overrides.
+function handoffCaption(handoff, publicName, spoilers, activate = false) {
+    const name = publicName || (handoff && (spoilers ? handoff : 'Scene trigger'));
+    return activate && name === 'Scene trigger' ? undefined : name;
 }
 
 // Duplicate trigger tiles can retain their original page after another tile
@@ -492,6 +500,12 @@ function localDestination(root, event, page) {
         const name=transfer && numberedHouseName(transfer.parameters[1]);
         if(name)return {name,category:'exits',...(trigger===1 && event._priorityType===1 ? {eventAction:'bump'} : {})};
     }
+    if(map===76 && [61,62,63].includes(id) && (trigger===0||trigger===1) &&
+        root.$dataMap?.events?.[id]?.name==='ToGenericShop') {
+        const transfer=list.find(row=>row.code===201&&row.indent===0&&row.parameters[0]===0);
+        const name=transfer&&sunriseShopName(transfer.parameters[1]);
+        if(name)return {name,category:'exits',...(trigger===1&&event._priorityType===1?{eventAction:'bump'}:{})};
+    }
     const townExit = chillcrestExit(root, event, page);
     if (townExit) return townExit;
     if (map === 134 && id === 10 && trigger === 0 && (event._pageIndex === 0 || event._pageIndex === 1))
@@ -651,6 +665,6 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { optionalSceneAvoidance, sunriseSequenceExit, floorClearsOnUse, localDestination, localHandoffName, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
+module.exports = { optionalSceneAvoidance, sunriseSequenceExit, floorClearsOnUse, localDestination, localHandoffName, handoffCaption, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
     visibleChestBarrier, closedRuinsDoorReason, npcPassage,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

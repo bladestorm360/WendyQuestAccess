@@ -22,7 +22,7 @@ const LOCAL_NAMES = Object.freeze({
     139: 'Nuggedor house 1', 140: 'Burgenburg house 2', 141: 'Nuggedor house 3',
     142: 'Burgenburg house 1', 143: 'Nuggedor house 5', 144: 'Burgenburg house 3',
     145: 'Nuggedor house 7', 146: 'Sunrise Bay house 1', 147: 'Sunrise Bay house 2',
-    148: 'Sunrise Bay house 3', 149: 'Sunrise Bay shop 1', 150: 'Sunrise Bay shop 2',
+    148: 'Sunrise Bay house 3', 149: 'Sunrise Bay coffee mud baths', 150: "Helly's Surf Shop",
     151: 'Sunrise Bay shop 3', 152: 'Scrambled Shores house', 153: 'Bacon Beach house',
     154: 'Nuggedor house 2', 155: 'Nuggedor house 4', 156: 'Nuggedor house 6',
     157: "Baconator's house, first floor", 158: "Baconator's house, second floor",
@@ -39,6 +39,10 @@ function numberedHouseName(id) {
     const name=LOCAL_NAMES[id];
     return / house [1-9]\d*$/.test(name || '') ? name : '';
 }
+
+// The first two businesses identify their purpose in native dialogue. The
+// third does not establish a sale type, so keep its stable interior number.
+function sunriseShopName(id) { return id >= 149 && id <= 151 ? LOCAL_NAMES[id] : ''; }
 
 function mapPlace(root) {
     const id = root.$gameMap?._mapId;
@@ -143,4 +147,4 @@ function createMapBannerObserver(root, host, notifications, fieldReady) {
     };
 }
 
-module.exports = { createMapBannerObserver, mapPlace, numberedHouseName };
+module.exports = { createMapBannerObserver, mapPlace, numberedHouseName, sunriseShopName };

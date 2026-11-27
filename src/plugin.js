@@ -16,7 +16,7 @@ const { scriptedBattleAction } = require('./battle/presentation');
 const { createBattleSpeech } = require('./battle/speech');
 const { createSkillEffects } = require('./battle/skill-effects');
 const { attackSource, abilitySource, expectLethalDamage } = require('./battle/damage-popup');
-const { recordCollapse, recordCondition, recordResistance, recordMomentum } = require('./battle/outcomes');
+const { recordCollapse, recordFoldedEnemy, recordCondition, recordResistance, recordMomentum } = require('./battle/outcomes');
 const { createRadialResult } = require('./battle/radial-result');
 const { battleVitals, menuVitals } = require('./battle/party-vitals');
 const { createQuestTracker } = require('./menus/quest-tracker');
@@ -756,6 +756,11 @@ function boot(root, nodeRequire, nodeProcess) {
             const scene = outcomeScene();
             if (scene) recordCollapse(scene, sprite);
         } catch { /* Continue the native collapse. */ }
+    };
+
+    root.WendyQuestAccessFoldedEnemy = function(sprite) {
+        try { const scene=outcomeScene();if(scene)recordFoldedEnemy(scene,sprite,root.Graphics.frameCount); }
+        catch { /* Native death and reconstitution remain in charge. */ }
     };
 
     root.WendyQuestAccessResisted = function (effect, text) {

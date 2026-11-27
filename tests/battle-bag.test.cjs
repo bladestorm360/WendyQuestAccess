@@ -136,3 +136,26 @@ assert.equal(active.size, 0);
 assert.equal(observer.controlOwner(scene), null);
 console.log('Verified native battle Bag paint, quantity, empty and unavailable rows, cancellation and accepted item use.');
 console.log('Throttled Bag focus through synthetic render and formatted receipt', first.toFixed(2), 'ms.');
+
+{
+    const actual=JSON.parse(fs.readFileSync(path.join(installed,'package.nw/data/Items.json'),'utf8'));
+    const medium=actual[16],breakfast=actual[25];
+    assert.match(medium.description,/Medium Soda/);assert.match(breakfast.description,/Breakfast Baconator/);
+    bag._data=[medium,breakfast];bag.active=true;bag.isEnabled=()=>true;quantity=3;
+    bag.select(0);paintAll();scene.update();render();
+    bag.select(1);scene.update();render();assert(receipts.at(-1).includes('Breakfast Baconator'));
+    const page=observer.controlOwner(scene),before=receipts.length;
+    for(let i=0;i<3;i++){
+        bag._scrollBaseY=8*(i+1);paintAll();
+        assert.equal(observer.controlOwner(scene),null,'unpainted row revisions cannot own Details');
+        scene.update();render();assert.equal(observer.controlOwner(scene),page);
+    }
+    assert.equal(receipts.length,before,'native scrolling/redraw must not repeat battle Bag focus');
+    assert(observer.command(page,'details'));assert.equal(receipts.at(-1),breakfast.description.split(/\r?\n/).join('. '));
+    const settled=observations;for(let i=0;i<20;i++){scene.update();render();}
+    assert.equal(observations,settled,'new painted row identity is acknowledged without a frame poll');
+    quantity=4;bag.drawItem(1);scene.update();render();assert(receipts.at(-1).includes(', 4,'));
+    bag.select(0);scene.update();render();bag.select(1);scene.update();render();
+    assert(receipts.at(-1).includes('Breakfast Baconator'),'genuine return selection still speaks');
+    console.log('Original Medium Soda-to-Breakfast Baconator native selection, scroll redraw, retained source epoch, fresh Details and quantity/return changes pass.');
+}

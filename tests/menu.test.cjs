@@ -223,3 +223,33 @@ assert.equal(records.at(-1).kind, 'menuReview');
 assert.equal(records.length, countBeforeStableFrames);
 console.log(`Verified installed pause, Inventory category and item focus, review, and equipment comparison. ` +
     `400 stable fixture frames ${baseline.toFixed(2)} ms baseline, ${enabled.toFixed(2)} ms enabled.`);
+
+// A native scroll redraws the selected item and its help after focus first
+// settles. Paint revisions revoke Details until postrender, not the logical
+// focus. Use the owner's exact two item identities and native help writer.
+{
+    const medium=data('Items')[16];
+    const breakfast=data('Items')[25];
+    assert(medium&&breakfast);preferences.autodetail=false;preferences.indexing=false;
+    list._data=[medium,breakfast];list._index=0;
+    help._selectedItem=medium;help._text=medium.description;help.refresh();frame(inventory);
+    list._index=1;help._selectedItem=breakfast;help._text=breakfast.description;help.refresh();frame(inventory);
+    assert.equal(records.at(-1).name,breakfast.name);
+    const page=menu.controlOwner(inventory),count=records.length;
+    for(let i=0;i<3;i++){
+        list._wqaMenuRowPaint=(list._wqaMenuRowPaint||0)+1;help.refresh();
+        assert.equal(menu.controlOwner(inventory),null,'unpainted Details remain closed');
+        frame(inventory);assert.equal(menu.controlOwner(inventory),page);
+    }
+    assert.equal(records.length,count,'scroll repaint cannot repeat the selected item');
+    assert(menu.command(page,'details'));assert.equal(spoken(),breakfast.description.split('\n').join('. '));
+    root.$gameParty.numItems=()=>4;list._wqaMenuRowPaint++;frame(inventory);
+    assert.equal(records.at(-1).quantity,4,'a real native quantity change still speaks');
+    list._index=0;help._selectedItem=medium;help._text=medium.description;help.refresh();frame(inventory);
+    list._index=1;help._selectedItem=breakfast;help._text=breakfast.description;help.refresh();frame(inventory);
+    assert.equal(records.at(-1).name,breakfast.name,'returning to an item speaks again');
+    list._data=[breakfast,{...breakfast}];list._index=0;frame(inventory);
+    const before=records.length;list._index=1;help._selectedItem=list._data[1];help.refresh();frame(inventory);
+    assert.equal(records.length,before+1,'different sources with identical text still speak');
+    console.log('Native Medium Soda/Breakfast Baconator selection and repeated scroll/help repaint keep one focus; fresh Details, quantity changes, return selection and identical-name sources pass.');
+}

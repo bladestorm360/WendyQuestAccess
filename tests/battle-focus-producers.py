@@ -171,6 +171,8 @@ if sys.argv[2:] == ['log']:
     start = sprites.index('Sprite_Enemy.prototype.setupEffect = function(')
     methods.append(sprites[start:sprites.index('\n};', start) + 3])
     methods.append(sprite_method(battle, 'Sprite_Enemy', 'updateEffect'))
+    methods.append(sprite_method(untouched, 'Sprite_Enemy', 'updateEffect').replace("['updateEffect']", "['fixtureNativeEffect']", 1))
+    methods.append(sprite_method(battle, 'Sprite_Enemy', 'UpdateAnimationState'))
     methods.append(sprite_method(battle, 'Window_BattleLog', 'addText'))
     baseline_draw = sprite_method(untouched, 'Window_BattleActionLog', 'drawItem')
     methods.append(baseline_draw.replace("['drawItem']", "['fixtureNativeDraw']", 1))

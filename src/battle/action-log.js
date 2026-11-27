@@ -130,7 +130,7 @@ function createBattleLog(root, host, notifications, appendToFocus) {
             lines.push(caption);
             if (ticket) ticket.queued = true;
         }
-        lines.push(...readCollapses(scene));
+        lines.push(...readCollapses(scene,host.graphics));
         lines.push(...readConditions(root, host.graphics, scene), ...readResistance(scene, host.graphics));
         // The victory message owns Momentum so it can follow the rewards.
         if (!scene._wqaBattleWon) {

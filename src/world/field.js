@@ -5,7 +5,7 @@ const { fieldVitals, fieldVitalsVisible } = require('../battle/party-vitals');
 const { MODES } = require('./bookmark-records');
 const { travelMode, parkedVehicle, canLand } = require('./vehicle-navigation');
 const { worldBoundaryName, worldEntranceRevealed, FLOAT_FORT_ENTRANCE } = require('./world-destinations');
-const { localHandoffName, iceOpensPassage, chillcrestQuestExit, sunriseSequenceExit, concealedDestination,
+const { localHandoffName, handoffCaption, iceOpensPassage, chillcrestQuestExit, sunriseSequenceExit, concealedDestination,
     visibleChestBarrier, closedRuinsDoorReason, BREAKFAST_HANDOFFS, npcPassage, passiveFloorPage } = require('./local-destinations');
 const { transferOptions, pageMayTransfer } = require('./transfer-events.cjs');
 const { createAutowalk } = require('./autowalk');
@@ -409,13 +409,16 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
         job.entrance = edge;
         const handoff = result.boundaryEvent && result.boundaryEvent !== event &&
             localHandoffName(job.map, result.boundaryEvent);
+        const publicName = handoff && routeBoundary(root,result.boundaryEvent,preferences().spoilers === true,
+            undefined,job.mode).boundaryName;
         const bump = gate === 'pull' && !handoff || !!edge && edge.action && root.$gameMap._events[event]?._trigger === 1;
         if (blocked) job.enemyCurrent = () => currentEnemy(root, result);
         startBeaconApproach(job, result, event);
         return presentRoute(job, { kind: 'routeDirections', name: job.label, guide: text,
             legs: result.legs, facing: result.arrival.facing, more: result.more === true,
             exit: handoff || blocked ? undefined : exit, useExit: true, boundary: result.boundary,
-            boundaryName: handoff, manualHandoff: !!handoff, enemyBlocked: blocked,
+            boundaryName: handoffCaption(handoff,publicName,preferences().spoilers === true),
+            manualHandoff: !!handoff, enemyBlocked: blocked,
             bump, enter: edge?.action && !bump, reenter: result.reenter === true, takeExit: !!edge || bump });
     }
 
@@ -856,7 +859,8 @@ function createField(root, host, notifications, routeDiagnostics = () => {}) {
                 const activate = job.eventAction === 'step' && job.target === result.boundaryEvent ? result.boundary : undefined;
                 const record={ kind: 'routeDirections', name: job.label, legs: result.legs, boundary: result.boundary,
                     guide: job.guide, activate, exit, useExit,
-                    boundaryName: handoff || boundaryName || (!job.eventAction && worldBoundaryName(root, result.boundaryEvent, preferences().spoilers === true)),
+                    boundaryName: handoffCaption(handoff,boundaryName,preferences().spoilers === true,!!activate) ||
+                        (!activate && !job.eventAction && worldBoundaryName(root, result.boundaryEvent, preferences().spoilers === true)),
                     manualHandoff: !!handoff || !!boundaryName && (job.sunriseExit || job.action === 'puzzleGuide' || job.mode === 'ship' || timedCave(job.map)),
                     more: result.more === true };
                 follow(job,result,record);

@@ -133,3 +133,9 @@ Open **Items** and move left or right while the category row has focus. The mod 
 ## Read displayed gold
 
 Press **G** in the pause menu or shop. The existing hash-checked `Window_Gold.refresh` marker captures the amount and currency only after the native gold window paints. The read checks the current scene, attached window and exact bitmap. The scope includes purchase quantity while the balance is visible. The installed menu test checks redraw and window replacement, and the packaged NW.js test reads “17 Gold.” **H** reads Wendy’s visible status in the pause menu or on the field. [Native gold capture](../tools/registration.py) · [Menu observer](../src/menus/observer.js)
+
+## Scroll repaint and focus ownership
+
+November27: native Inventory help/row redraws and battle Bag row-object replacement can follow the first highlighted-item paint during scrolling. They formerly reopened focus for the same selected source. The observer now refreshes painted Details in the same context only when scene/window/screen/item/index and semantic focus state still agree. Real count/availability changes, new selections, panel changes, native overlay returns and explicitly requested review still announce. The Bag acknowledges its new row receipt to avoid a repeated observer call. No utterance-text deduplication is used; distinct sources with identical names remain audible.
+
+The actual Medium Soda and Breakfast Baconator records are Items16/25. Original help and Bag draw/select writers reproduce their scroll repaint. Tests verify one focus across repeated paints, closed unpainted Details, current details afterward, no stable-frame poll, quantity changes and return selections. The supplied standard NVDA log contains neither reported name; the owner answered the optional location query with a shop-label request. No exact-log or live-capture confirmation is claimed.

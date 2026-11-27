@@ -180,6 +180,22 @@ async function verifyBattleOutcomes() {
     return receipt;
 }
 
+async function verifyFoldedHook() {
+    const f=await enter(mapData(19),19,true),{c,scene,settings}=f;
+    scene._fadeDuration=scene._fadeOpacity=0;settings.hasText=()=>false;settings.isBusy=()=>false;
+    c.$gameMessage.isBusy=()=>false;c.Graphics.frameCount=0;c.Graphics.width=640;c.Graphics.height=480;
+    const field={},target={_enemyId:19,hp:0,originalName:()=> 'OrEggAmi'};
+    const sprite={parent:field,_enemy:target,worldVisible:true,worldAlpha:1,bitmap:{isReady:()=>true},
+        texture:{valid:true},worldTransform:{tx:100,ty:100},_frame:{x:448,y:640,width:224,height:128},
+        _frameAnimator:{_animationData:{fileName:'animated/OrEggAmi'},_currentAnimation:{name:'dead'}}};
+    scene._spriteset={_battleField:field,_enemySprites:[sprite]};
+    c.WendyQuestAccessFoldedEnemy(sprite);
+    assert.equal(scene._wqaEnemyCollapses?.length,1,'production entry must capture the native source');
+    assert.deepEqual(require('../src/battle/outcomes').readCollapses(scene,c.Graphics),['OrEggAmi collapses into a flat heap of egg.']);
+    scene._wqaSettingsActive=true;c.WendyQuestAccessFoldedEnemy(sprite);assert.equal(scene._wqaEnemyCollapses.length,0);
+    console.log('Production OrEggAmi callback uses the live root frame clock and respects closed settings admission.');
+}
+
 async function verifyLevelUp(level) {
     const f = await enter(mapData(19));
     const { c, scene, settings } = f;
@@ -244,6 +260,7 @@ async function verifyLevelUp(level) {
 
 (async () => {
     const receipt = await verifyBattleOutcomes();
+    await verifyFoldedHook();
     for (const level of [5,10,15]) await verifyLevelUp(level);
     console.log('Verified installed victory rewards, delayed Momentum, defeat, level-up and skill pages through the native message renderer.');
     console.log('Throttled settled battle result to synthetic render and formatted receipt', receipt.toFixed(2), 'ms.');

@@ -1021,7 +1021,7 @@ async function verifyBeachHandoffs(tilesets) {
     assert.match(key('k', 75), /^Elder Tater, .*route stops at a floor event/);
     assert.match(key('l', 76, true), /^Exits, Elder Tater's house, .*route stops at a floor event/);
     assert.match(key('j', 74, true), /^NPC, Elder Tater, .*route stops at a floor event/);
-    assert.equal(key('p', 80), '2 south, 2 east. Beach path one tile east. Move east to continue, then request directions again.');
+    assert.equal(key('p', 80), '2 south, 2 east. Scene trigger one tile east. Move east to continue, then request directions again.');
     assert.match(key('l', 76, true), /^Exits, Elder Tater's house/);
     assert.match(key('l', 76, true), /^Events, Scene trigger,/);
     assert.equal(key('p', 80), '1 south, 2 east. Move east to activate.');

@@ -4,6 +4,7 @@ const { drawnText, visibleSprite } = require('./presentation');
 const { enemyIconIndex, enemyState } = require('./enemy-state');
 const { enemyLabel, expectLethalDamage } = require('./damage-popup');
 const { portraitActor, visibleCondition, visibleMomentum } = require('./party-vitals');
+const { renderedSprite } = require('../runtime/rendered-sprite');
 
 const MAX_RESULTS = 8;
 // RPG Maker rotates the enemy icon every 40 frames. The observation window
@@ -22,13 +23,40 @@ function recordCollapse(scene, sprite) {
     if (!ticket || ticket.queued) scene._wqaDefeatDue = true;
 }
 
-function readCollapses(scene) {
+// OrEggAmi uses no ordinary collapse effect and can act/revive after zero HP.
+// Keep this source edge separate from final defeat. Only the native painted
+// dead pose qualifies the caption; later reconstitution text remains native.
+function recordFoldedEnemy(scene,sprite,frame) {
+    const target=sprite?._enemy;
+    if(target?._enemyId!==19||!(target.hp<=0))return;
+    const before=scene._wqaEnemyCollapses?.length||0;
+    recordCollapse(scene,sprite);
+    const entry=scene._wqaEnemyCollapses?.[before];
+    if(entry){Object.assign(entry,{folded:sprite,target,until:frame+90});scene._wqaDefeatDue=true;}
+}
+
+function foldedPose(scene,entry,graphics) {
+    const sprite=entry.folded,field=scene._spriteset?._battleField,animator=sprite._frameAnimator;
+    const sprites=scene._spriteset?._enemySprites,frame=sprite._frame,pose=sprite.worldTransform;
+    return Array.isArray(sprites)&&sprites.length<=MAX_RESULTS&&sprites.includes(sprite)&&
+        sprite._enemy===entry.target&&entry.target.hp<=0&&renderedSprite(sprite,field)&&
+        animator?._animationData?.fileName==='animated/OrEggAmi'&&animator._currentAnimation?.name==='dead'&&
+        frame?.x===448&&frame.y===640&&frame.width===224&&frame.height===128&&
+        pose&&pose.tx>=0&&pose.tx<graphics.width&&pose.ty>=0&&pose.ty<graphics.height;
+}
+
+function readCollapses(scene,graphics) {
     const lines = [];
     scene._wqaDefeatDue = false;
     if (!scene._wqaEnemyCollapses?.length) return lines;
-    scene._wqaEnemyCollapses = scene._wqaEnemyCollapses.filter(({ name, ticket }) => {
+    scene._wqaEnemyCollapses = scene._wqaEnemyCollapses.filter(entry => {
+        const {name,ticket,folded}=entry;
+        if(folded){
+            if(!graphics||graphics.frameCount>entry.until||entry.target.hp>0||folded._enemy!==entry.target)return false;
+            if(!foldedPose(scene,entry,graphics)){scene._wqaDefeatDue=true;return true;}
+        }
         if (ticket && !ticket.queued) return true;
-        lines.push(name + ' defeated.');
+        lines.push(name + (folded ? ' collapses into a flat heap of egg.' : ' defeated.'));
         return false;
     });
     return lines;
@@ -156,4 +184,4 @@ function readConditions(root, graphics, scene) {
     return lines;
 }
 
-module.exports = { readCollapses, recordCollapse, recordCondition, readConditions, recordResistance, readResistance, recordMomentum, readMomentum };
+module.exports = { readCollapses, recordCollapse, recordFoldedEnemy, recordCondition, readConditions, recordResistance, readResistance, recordMomentum, readMomentum };

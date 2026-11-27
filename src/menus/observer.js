@@ -214,8 +214,23 @@ function createMenuObserver(root, host, notifications, preferences) {
         const { scene, screen, window, lines } = page;
         const previous = current;
         const same = previous?.scene === scene && previous.window === window &&
-            previous.item === page.item && previous.index === page.index;
+            previous.screen === screen && previous.item === page.item && previous.index === page.index;
         if (same) page.position = Math.min(previous.position, Math.max(0, lines.length - 1));
+        // Scrolling repaints the selected row/help without accepting another
+        // selection. Renew its painted Details snapshots in the same logical
+        // context; never filter speech by its resulting text. Real selection,
+        // availability/count changes and overlay returns still announce.
+        const repaint = same && screen <= 3 && !previous.suspended && previous.focus &&
+            previous.helpVisible === page.helpVisible && previous.compareVisible === page.compareVisible &&
+            (!notifications.current || notifications.current(previous.epoch)) &&
+            ['name','enabled','equipped','quantity','position','total'].every(key => previous.focus[key] === focus[key]);
+        page.focus = focus;
+        if (repaint) {
+            Object.assign(previous, page, { epoch: previous.epoch });
+            if (screen === 3) window._wqaBattleBagPresented = page.bagRow;
+            if (screen === 1) announceSave(scene, previous);
+            return;
+        }
         if (previous) retire(previous.scene);
         current = page;
         page.vitals = screen <= 2 && !!scene._wqaMenuStatus && scene._wqaMenuStatus === scene._statusWindow;
@@ -354,7 +369,10 @@ function createMenuObserver(root, host, notifications, preferences) {
         if (!row) return retire(scene);
         // Close stale output immediately. Keep the old cursor until the next
         // painted selection settles so a refresh of the same row can clamp it.
-        if (current?.scene === scene) notifications.close(current.epoch);
+        const sameSelection = current?.scene === scene && !current.suspended && screen <= 3 &&
+            current.screen === screen && current.window === window &&
+            current.index === highlightedIndex(scene, screen, window) && current.item === (screen === 3 ? row.item : row);
+        if (current?.scene === scene && !sameSelection) notifications.close(current.epoch);
         const renderer = host.graphics.app?.renderer;
         if (typeof renderer?.once !== 'function') return;
         scene._wqaPresentation = true;

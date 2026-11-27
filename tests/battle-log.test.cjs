@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const { createBattleLog } = require('../src/battle/action-log');
 const { battleScenePresented } = require('../src/battle/presentation');
-const { recordCollapse, recordCondition, recordResistance, recordMomentum } = require('../src/battle/outcomes');
+const { recordCollapse, recordFoldedEnemy, recordCondition, recordResistance, recordMomentum } = require('../src/battle/outcomes');
 const { abilitySource } = require('../src/battle/damage-popup');
 const { formatSpeech } = require('../src/services/speech-text.cjs');
 
@@ -193,6 +193,61 @@ assert.match(observer.latest(scene).lines.at(-1), /Enemy defeated/);
 observer.leave(scene);
 
 const gameData = name => JSON.parse(fs.readFileSync(path.join(process.argv[2], 'package.nw/data', name), 'utf8'));
+// Original native effect/state writers with the real OrEggAmi frame catalog.
+// The small animator adapter publishes that catalog's first selected frame;
+// postrender/texture and life-cycle negatives remain independent checks.
+{
+    const game=process.argv[3]||process.argv[2];
+    const art=JSON.parse(fs.readFileSync(path.join(game,'package.nw/img/sv_enemies/OrEggAmi.json'),'utf8'));
+    assert.equal(art.fileName,'animated/OrEggAmi');
+    const dead=art.animations.find(a=>a.name==='dead');assert.deepEqual(dead.frames,[{x:2,y:5}]);
+    const definition=gameData('Enemies.json')[19];assert.equal(definition.name,'OrEggAmi');
+    assert(JSON.parse(definition.note.split('METADATA')[1]).postMortem);
+    assert(definition.traits.some(t=>t.code===63&&t.dataId===3));
+    c.ACTION_STATE={NONE:0,OVERRIDE:1};c.EnemyAnimationState={default:'_default',dead:'dead',die:'die',hurt:'hurt'};
+    c.Graphics.width=640;c.Graphics.height=540;
+    let alive=true,described=0;
+    Object.assign(enemy,{_enemyId:19,hp:1,originalName:()=>definition.name});
+    Object.assign(sprite,{_actionState:0,animationStateDefaultOverride:'',worldAlpha:1,visible:true,
+        texture:{valid:true},worldTransform:{tx:200,ty:200},_effectDuration:0,_effectType:null,_appeared:true});
+    sprite._frameAnimator={_animationData:art,HasAnimation:name=>art.animations.some(a=>a.name===name),
+        SetAnimation(name){this._currentAnimation=art.animations.find(a=>a.name===name);
+            const cell=this._currentAnimation.frames[0];sprite._frame={x:cell.x*art.frameWidth,y:cell.y*art.frameHeight,width:art.frameWidth,height:art.frameHeight};}};
+    c.WendyQuestAccessFoldedEnemy=s=>{described++;recordFoldedEnemy(scene,s,c.Graphics.frameCount);};
+    enemy.isAlive=()=>alive;effect='';sprite.updateEffect();sprite.UpdateAnimationState();
+    assert.equal(described,0);
+    alive=false;enemy.hp=0;sprite.updateEffect();
+    frame();assert(!lines.at(-1).includes('flat heap'),'unpainted default pose cannot speak');
+    sprite.UpdateAnimationState();const before=lines.length;scene.update();assert.equal(lines.length,before);
+    renderer.emit('postrender');assert.equal(lines.at(-1),'OrEggAmi collapses into a flat heap of egg.');
+    for(let i=0;i<12;i++){sprite.updateEffect();sprite.UpdateAnimationState();frame();}
+    assert.equal(described,1);assert.equal(lines.length,before+1);
+    alive=true;enemy.hp=10;sprite.updateEffect();sprite.UpdateAnimationState();frame();
+    alive=false;enemy.hp=0;sprite.updateEffect();sprite.UpdateAnimationState();frame();assert.equal(described,2);
+    assert.equal(lines.at(-1),'OrEggAmi collapses into a flat heap of egg.');
+    observer.leave(scene);
+    for(const mode of ['hidden','untextured','offscreen','revived','replaced','expired']){
+        enemy.hp=1;sprite.updateEffect();enemy.hp=0;sprite.updateEffect();sprite.UpdateAnimationState();
+        const before=lines.length;
+        if(mode==='hidden')sprite.worldVisible=false;
+        if(mode==='untextured')sprite.texture.valid=false;
+        if(mode==='offscreen')sprite.worldTransform.tx=-1;
+        if(mode==='revived')enemy.hp=1;
+        if(mode==='replaced')sprite._enemy={...enemy};
+        if(mode==='expired')c.Graphics.frameCount+=91;
+        frame();assert.equal(lines.length,before,mode);observer.leave(scene);
+        sprite.worldVisible=true;sprite.texture.valid=true;sprite.worldTransform.tx=200;sprite._enemy=enemy;
+    }
+    delete c.WendyQuestAccessFoldedEnemy;
+    const actors=Array.from({length:8},()=>Object.assign(new c.Sprite_Enemy(),{_appeared:true,_effectDuration:0,
+        _enemy:{_enemyId:19,hp:10,isAlive:()=>true,isHidden:()=>false,isEffectRequested:()=>false}}));
+    function effectFrames(method){const start=performance.now();let peak=0;
+        for(let i=0;i<240;i++){const frame=performance.now();for(const actor of actors)actor[method]();peak=Math.max(peak,performance.now()-frame);}
+        return {total:performance.now()-start,peak};}
+    effectFrames('fixtureNativeEffect');effectFrames('updateEffect');
+    console.log('Eight-enemy native effect episode,240 throttled frames: '+JSON.stringify({baseline:effectFrames('fixtureNativeEffect'),observed:effectFrames('updateEffect')}));
+    console.log('OrEggAmi native no-collapse death pose: painted heap, source-cycle replay after revival, no duplicate and six stale/visibility negatives pass.');
+}
 const baconator = gameData('Actors.json')[2];
 const companion = scene._spriteset._subActorSprite = { _actor: baconator, _battlerName: baconator.battlerName };
 companion._mainSprite = { parent: companion, worldVisible: true, worldAlpha: 1, bitmap: { isReady: () => true } };

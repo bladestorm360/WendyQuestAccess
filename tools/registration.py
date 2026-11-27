@@ -1142,10 +1142,15 @@ const wqaBagRow=wqaBagScene?._wqaBattleStarted&&wqaBagScene._itemWindow===this&&
                 b')&&globalThis.WendyQuestAccessBattleFocusReady?.(SceneManager._scene,this),',
         162205: b')',
         # Observe the accepted effect before an instant collapse can finish.
+        # Enemy19 has no collapse effect. Capture only its real alive-to-zero
+        # HP edge; the existing postrender outcome path proves its dead pose.
         183354: b'const wqaWasAppeared=this._appeared;',
         183378: b',wqaWasAppeared&&!this._appeared&&this._effectDuration>0&&'
                 b'(this._effectType==="collapse"||this._effectType==="bossCollapse"||'
-                b'this._effectType==="instantCollapse")&&globalThis.WendyQuestAccessEnemyCollapse?.(this)',
+                b'this._effectType==="instantCollapse")&&globalThis.WendyQuestAccessEnemyCollapse?.(this),'
+                b'this._enemy?._enemyId===19&&SceneManager._scene?._wqaBattleStarted&&'
+                b'(this._enemy.hp>0?this._wqaFoldedDead=false:this._wqaFoldedDead===false&&'
+                b'(this._wqaFoldedDead=true,globalThis.WendyQuestAccessFoldedEnemy?.(this)))',
         192463: BATTLE_TARGET_LEAVING + b';' + BATTLE_BAG_LEAVING + b';' + BATTLE_TIMING_LEAVING + b';' +
                 BATTLE_CUE_LEAVING + b';',
         193431: b'(this._wqaDialogueBusy=(this._wqaBattleSpritesBusy=',
