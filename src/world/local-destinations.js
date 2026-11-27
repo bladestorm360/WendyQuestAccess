@@ -236,6 +236,35 @@ function inactiveFloorScene(root, event, page) {
 }
 
 const floorCompletions=new WeakMap();
+const officeAmbushProofs=new WeakMap();
+function officeAmbushClears(map,entry,page) {
+    if(map!==103 || ![2,3,4,16,17,18,19].includes(entry?.id) || entry.name!=='BeefThiefEncounter' ||
+        page!==entry.pages[0] || page.trigger!==1 || page.priorityType!==0 ||
+        page.image?.tileId || page.image?.characterName || entry.pages.length!==2)return false;
+    if(!officeAmbushProofs.has(page)) {
+        const rows=page.list,next=entry.pages[1],q=next.conditions;
+        const allowed=new Set([0,101,117,121,128,134,201,204,205,222,230,231,235,241,242,249,250,281,301,357,401,505,657]);
+        const valid=rows.length===131 && rows.every(row=>row.indent===0 && allowed.has(row.code) &&
+            (row.code!==201 || row.parameters.join(',')==='0,103,7,13,8,2') &&
+            (row.code!==301 || row.parameters.join(',')==='0,39,false,false') &&
+            (row.code!==117 || [3,4,90].includes(row.parameters[0])) &&
+            (row.code!==121 || ['486,486,0','113,113,0'].includes(row.parameters.join(','))) &&
+            (row.code!==357 || row.parameters[0]==='FirebaseAnalytics' && row.parameters[1]==='LogEvent') &&
+            (row.code!==205 || row.parameters[1]?.repeat===false && row.parameters[1].list?.length<=8 &&
+                row.parameters[1].list.every(move=>[0,4,14,37,44].includes(move.code)))) &&
+            rows[6].code===201 && rows[88].code===301 && rows[89].code===121 &&
+            rows[89].parameters.join(',')==='113,113,0' &&
+            rows.filter(row=>row.code===201).length===1 && rows.filter(row=>row.code===301).length===1 &&
+            q.switch1Valid && q.switch1Id===113 &&
+            Object.keys(q).filter(key=>key.endsWith('Valid')&&q[key]).length===1 &&
+            next.priorityType===0 && next.list.length===2 && next.list[0].code===214 && next.list[1].code===0;
+        officeAmbushProofs.set(page,!!valid);
+    }
+    // These seven copies reposition within this room before their compulsory
+    // battle. Winning sets113 and erases every copy. They are a prerequisite,
+    // never a through-map entrance; the returned route still stops before it.
+    return officeAmbushProofs.get(page);
+}
 const FLOOR_COMPLETION_ROWS=new Set([0,108,408,101,401,205,505,213,250,230,121,123,214,241,242,223,224,225]);
 // Only linear same-map presentation and a verified native completion flag
 // qualify; extra bounded flag writes do not make an erase page permanent.
@@ -674,6 +703,6 @@ function localDestination(root, event, page) {
     return undefined;
 }
 
-module.exports = { optionalSceneAvoidance, sunriseSequenceExit, floorClearsOnUse, localDestination, localHandoffName, handoffCaption, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
+module.exports = { optionalSceneAvoidance, sunriseSequenceExit, officeAmbushClears, floorClearsOnUse, localDestination, localHandoffName, handoffCaption, iceOpensPassage, iceMeltChanges, inactiveFloorScene, passiveFloorPage, concealedDestination,
     visibleChestBarrier, closedRuinsDoorReason, npcPassage,
     chillcrestExit, chillcrestQuestExit, WEST_CHILLCREST, pendingOfficeExit, BREAKFAST_HANDOFFS, WENDYS_RESTAURANTS };

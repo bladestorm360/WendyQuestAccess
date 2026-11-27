@@ -7,7 +7,7 @@ const { numberDestinations } = require('./destination-names');
 const { surface, MAX_CELLS, MAX_EVENTS, CELL_BITS } = require('./geometry.cjs');
 const { contextualEvent } = require('./event-knowledge');
 const { destination, excludedDestination, pageHasInteraction, eventDescription, activeMovingEnemy } = require('./destinations');
-const { floorClearsOnUse, localDestination, iceOpensPassage, iceMeltChanges, inactiveFloorScene, concealedDestination,
+const { officeAmbushClears, floorClearsOnUse, localDestination, iceOpensPassage, iceMeltChanges, inactiveFloorScene, concealedDestination,
     chillcrestQuestExit, sunriseSequenceExit, WEST_CHILLCREST, pendingOfficeExit, npcPassage } = require('./local-destinations');
 const { worldDestination, worldEventDescription, discoveryEntrance, worldMapExit,
     worldEntranceRevealed } = require('./world-destinations');
@@ -141,17 +141,18 @@ function captureWorld(root, routing = true, label, scene, bookmarks = [], routes
             const meltable = mode === 'walk' && action && trigger === 0 && (rectangle || event._priorityType === 1) &&
                 iceOpensPassage(entry, page);
             const meltChanges = meltable && iceMeltChanges(entry, page);
+            const localAmbush=action && officeAmbushClears(id,entry,page);
             events.push({ id: eventId, x, y, normal: event._priorityType === 1, through: event._through === true,
                 tileFlag: tiles.has(event) ? (flags[event._tileId] | 0) : undefined, rectangle, trigger, action,
                 erased: event._erased === true,
                 meltable: !!meltable,
-                clearsOnUse: action && floorClearsOnUse(entry,page),
+                clearsOnUse: action && (localAmbush || floorClearsOnUse(entry,page)),
                 ...(meltChanges?.relocate || meltChanges?.clears ? { meltChanges } : {}),
                 movingEnemy: mode === 'walk' && activeMovingEnemy(root, event),
                 // Keep discovery identity before aircraft ownership; every native
                 // entrance is terminal for local transit, on every map.
                 discoveryFor: id === 113 ? discoveryEntrance(id, event) : undefined,
-                mapTransfer: action && [0, 1, 2].includes(trigger) && event._priorityType !== 1 &&
+                mapTransfer: action && !localAmbush && [0, 1, 2].includes(trigger) && event._priorityType !== 1 &&
                     (pageMayTransfer(page, root.$dataCommonEvents) ||
                         transferOptions(id, entry, page, root.$dataCommonEvents).length > 0) });
         }

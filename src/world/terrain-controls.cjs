@@ -25,20 +25,31 @@ function routeThroughControl(geometry, live, request, controls, cancelled, remot
         const approach = remote ? null : solveWorldRoute(current, { x: request.x, y: request.y, event: id,
             field: true, stopBeforeEvent: stepOn }, cancelled);
         if (approach?.status === 'cancelled') return approach;
+        // A certified one-use scene can precede an ordinary door button even
+        // when this room contains no meltable ice. Prove that remaining
+        // approach on copied collision, retaining every unrelated entrance
+        // and opaque event; only the original scene prefix may be returned.
+        let plannedApproach=approach;
+        if(!remote && !stepOn && approach?.status==='interrupted' &&
+            current.events.some(event=>event.id===approach.boundaryEvent&&event.clearsOnUse&&!event.mapTransfer)) {
+            plannedApproach=solveWorldRoute(current,{x:request.x,y:request.y,event:id,
+                field:false,terminalTransfers:true,removableOnly:true},cancelled);
+            if(plannedApproach.status==='cancelled')return plannedApproach;
+        }
         const detour = pull && live.pullStage === 2 && id === 4 && approach?.status !== 'ready';
         // An ordinary button can itself lie behind ice, and its bridge can
         // lead to another ice reveal. Prove the whole chain in the same
         // bounded detached search; return only its first native prerequisite.
         const combine = !remote && !pull && !gate && !stepOn && control.trigger === 0
             ? () => routeThroughIce(geometry, live, request, cancelled, [], { id, changes }) : null;
-        if (approach && !detour && (stepOn ? approach.status !== 'interrupted' || approach.boundaryEvent !== id
-            : approach.status !== 'ready')) {
+        if (plannedApproach && !detour && (stepOn ? plannedApproach.status !== 'interrupted' || plannedApproach.boundaryEvent !== id
+            : plannedApproach.status !== 'ready')) {
             const sequence = combine?.();
             if (sequence?.status === 'cancelled') return sequence;
             if (sequence && (!best || sequence.distance < best.distance)) best = sequence;
             continue;
         }
-        let origin = stepOn && !remote ? control : approach?.arrival || request;
+        let origin = stepOn && !remote ? control : plannedApproach?.arrival || request;
         if (pull && !detour) {
             let cell = indexOf(current, origin.x, origin.y);
             for (const heading of pull.pulled) {
@@ -114,7 +125,7 @@ function routeThroughControl(geometry, live, request, controls, cancelled, remot
             return request.refresh ? null : { status: 'terrainGate', gate, ...(afterIce && { afterIce }) };
         }
         if (!best || approach.distance < best.distance)
-            best = { ...approach, status: 'controlRoute', event: id, gate, step: stepOn };
+            best = { ...approach, status: approach.status==='interrupted'&&approach.boundaryEvent!==id?'interrupted':'controlRoute', event: id, gate, step: stepOn };
     }
     return best || null;
 }
