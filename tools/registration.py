@@ -558,6 +558,7 @@ def objects_notification(original):
                 b'this._mapId===103||this._mapId===106||this._mapId===107||this._mapId===108||'
                 b'this._mapId===110||this._mapId===134||this._mapId===197||this._mapId===97||'
                 b'this._mapId===191&&this._eventId===3&&this._index===45||'
+                b'this._mapId===14&&this._eventId===5&&this._index===37||'
                 b'this._mapId===15&&this._eventId===60||this._mapId===26||this._mapId===86||this._mapId===181||this._mapId===239||'
                 b'this._mapId===188||this._mapId===115||this._mapId===39||this._mapId===13))'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,character,undefined,'

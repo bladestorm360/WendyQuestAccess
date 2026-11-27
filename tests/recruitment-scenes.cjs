@@ -4,12 +4,44 @@ const {performance}=require('node:perf_hooks');
 const {JUMPS}=require('../src/dialogue/recruitment-visuals');
 module.exports=function(fixture,stock,commandContext){
  const original=fs.readFileSync(path.join(stock,'package.nw/js/rmmz_objects.js'),'utf8');
- const native=vm.createContext({Game_CharacterBase:function(){},$gameMap:{roundX:x=>x,roundY:y=>y}});
- for(const name of ['jump','updateJump','jumpHeight','setDirection','resetStopCount','straighten','hasWalkAnime','hasStepAnime','isDirectionFixed']){
+ const dx=(x,d)=>x+(d===6?1:d===4?-1:0),dy=(y,d)=>y+(d===2?1:d===8?-1:0);
+ const native=vm.createContext({Game_CharacterBase:function(){},$gameMap:{roundX:x=>x,roundY:y=>y,
+  xWithDirection:dx,yWithDirection:dy,roundXWithDirection:dx,roundYWithDirection:dy}});
+ for(const name of ['jump','updateJump','jumpHeight','setDirection','resetStopCount','straighten','hasWalkAnime','hasStepAnime','isDirectionFixed',
+  'moveStraight','updateMove','isMoving','distancePerFrame','realMoveSpeed','isDashing','setMovementSuccess','isMovementSucceeded','reverseDir']){
   const start=original.indexOf(`\nGame_CharacterBase.prototype.${name} = function(`),end=original.indexOf('\n};',start)+3;
   assert(start>=0,name);vm.runInContext(original.slice(start,end),native);
  }
  const proto=native.Game_CharacterBase.prototype;let cases=0,total=0,peak=0;
+ for(const mode of ['recorded','nvda','cold','unpainted','hidden','blocked','wrong-page','later','changed-route']) {
+  const f=fixture(14,5,1,mode!=='cold'),a=f.actor(35),actor=a.candidate,spoken=[];
+  const entry=f.root.$dataMap.events[35];Object.setPrototypeOf(actor,proto);
+  Object.assign(actor,{_characterName:'~Frygor',_x:entry.x,_y:entry.y,_realX:entry.x,_realY:entry.y,_moveSpeed:4,
+   _direction:2,_walkAnime:true,canPass:()=>true,refreshBushDepth(){},increaseSteps(){},forceMoveRoute(route){this._moveRoute=route;}});
+  a.sprite._characterName='~Frygor';a.sprite.worldTransform.tx=-60;f.spriteset._tilemap.worldVisible=true;
+  const origin=entry.x;f.nativeMap.refreshIfNeeded=()=>{};
+  Object.assign(f.interpreter,{_index:37,character:()=>actor,isOnCurrentMap:()=>true,setWaitMode(){}});
+  if(mode==='nvda'){f.host.speechPreferences=()=>({enabled:true,descriptionVoice:'nvda'});f.host.describeNarration=t=>spoken.push(t);}
+  const c=commandContext(f),row=f.interpreter._list[37];
+  assert(c.Game_Interpreter.prototype.command205.call(f.interpreter,row.parameters));f.interpreter._index=38;
+  assert(f.scene._wqaRecruitmentPending);
+  if(mode==='wrong-page')f.root.$dataMap={...f.root.$dataMap,events:[]};
+  if(mode==='later')f.interpreter._index=86;
+  if(mode==='hidden')a.sprite.worldVisible=false;
+  if(mode==='changed-route')actor._moveRoute={};
+  for(let tile=0;tile<4;tile++) {
+   if(mode!=='blocked')actor.moveStraight(4);
+   for(let frame=0;frame<16;frame++) {
+    actor.updateMove();a.sprite.worldTransform.tx=(origin-actor._realX)*32-60;
+    f.frame(mode!=='unpainted');
+    if(tile===0)assert.equal(f.played.length+spoken.length,0,'offscreen arrival stays silent');
+   }
+  }
+  if(mode==='blocked')a.sprite.worldTransform.tx=100;
+  f.frame(mode!=='unpainted');if(mode==='cold')f.frame();
+  assert.equal(f.played.length+spoken.length,['recorded','nvda','cold'].includes(mode)?1:0,'Frygor '+mode);
+  f.narration.cancel(f.scene);cases++;
+ }
  for(const nvda of [false,true])for(const cold of [false,true])for(const site of JUMPS){
   const [m,e,p,index,id,dx,dy,cue,x,y]=site,f=fixture(m,e,p,!cold),a=f.actor(id),spoken=[];
   const actor=a.candidate;Object.setPrototypeOf(actor,proto);

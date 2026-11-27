@@ -68,6 +68,7 @@ assert(!consumedFloorPage(c,e,page));
 const branch=(parameters,code=101)=>({trigger:1,list:[{code:111,indent:0,parameters},
  {code,indent:1,parameters:[]},{code:412,indent:0,parameters:[]},{code:0,indent:0,parameters:[]}]});
 assert(!consumedFloorPage(c,e,branch([12,'unknown()'])));
+assert(!consumedFloorPage(c,e,branch(undefined)),'unknown malformed condition stays active');
 assert(!consumedFloorPage(c,e,branch([0,510,1],117)));
 assert(!consumedFloorPage(c,e,{...branch([0,510,1],214),priorityType:1}),'solid erase still removes a blocker');
 assert(!consumedFloorPage(c,{...e,_trigger:0},page));

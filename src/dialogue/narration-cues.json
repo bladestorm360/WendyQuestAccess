@@ -4292,5 +4292,9 @@
   "companions-reappear": {
     "text": "Wendy's companions reappear, with Baconator among them.",
     "beats": []
+  },
+  "frygor-approaches": {
+    "text": "Frygor approaches Wendy.",
+    "beats": [[14, 5, 1, 37, 35]]
   }
 }

@@ -28,7 +28,7 @@ for (const id of clipIds) {
             waitFrames: Number.isInteger(cues[id].waitFrames) ? Math.min(240, Math.max(20,cues[id].waitFrames)) : undefined });
     }
 }
-//180 recordings: recruitment adds three clips and revises one anonymous arrival.
+//181 recordings, including the alternate-route Frygor arrival.
 const PACK_LIMIT = 2176 * 1024;
 const QUEUE_LIMIT = 8;
 const FRAME_LIMIT = 20;

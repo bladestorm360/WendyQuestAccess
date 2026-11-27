@@ -21,6 +21,7 @@ function structure(page) {
     const result=valid&&!stack.length?branches:null;structures.set(page,result);return result;
 }
 function predicate(root,event,p) {
+    if(!Array.isArray(p))return null;
     if(p[0]===0&&[0,1].includes(p[2])) {
         const value=root.$gameSwitches?.value?.(p[1]);
         return typeof value==='boolean'?value===(p[2]===0):null;
