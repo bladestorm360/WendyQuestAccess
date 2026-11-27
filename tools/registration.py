@@ -587,6 +587,7 @@ def objects_notification(original):
                 b'params[0]?.name==="WQ/Attack/SFX_RiseAndShine")'
                 b'globalThis.WendyQuestAccessNarrationAccepted?.(SceneManager._scene,this,$gamePlayer,undefined,-4);'
                 b'else if(this._mapId===134&&this._eventId===10&&this._index===12||'
+                b'this._mapId===105&&this._eventId===12&&this._index===116&&params[0]?.name==="WQ/SFX_FinalDoor"||'
                 b'this._mapId===107&&this._eventId===3&&this._index===81||'
                 b'this._mapId===190&&this._eventId===24&&this._index===33||'
                 b'this._mapId===83&&this._eventId===38&&this._index===32||'
@@ -804,6 +805,8 @@ def map_notification(original):
                 !this._wqaJailNarrationSeen?.has('chomps-door-open') ||
              $gameMap._mapId === 106 && wqaReveal?._eventId === 11 && wqaReveal._index >= 0 && wqaReveal._index <= 6 &&
                 !this._wqaJailNarrationSeen?.has('elder-tater-freed') ||
+             $gameMap._mapId === 105 && wqaReveal?._eventId === 12 && wqaReveal._index >= 118 && wqaReveal._index <= 128 &&
+                !this._wqaJailNarrationSeen?.has('assembly-door-opens') ||
              $gameMap._mapId === 103 && [2,3,4,16,17,18,19].includes(wqaReveal?._eventId) &&
                 (wqaReveal._index >= 8 && wqaReveal._index <= 16 && !this._wqaJailNarrationSeen?.has('office-lights-out') ||
                  wqaReveal._index >= 27 && wqaReveal._index <= 33 && !this._wqaJailNarrationSeen?.has('office-lights-on')));

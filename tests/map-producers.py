@@ -94,7 +94,7 @@ if sys.argv[2:] == ['cauldron-drain']:
     sys.exit()
 
 
-if sys.argv[2:] in (['atlas-commands'], ['office-pictures']):
+if sys.argv[2:] in (['atlas-commands'], ['office-pictures'], ['door-motion']):
     source = objects_notification((Path(sys.argv[1]) / OBJECTS_REL.relative_to('package.nw')).read_bytes()).decode('utf8')
     methods = []
     for owner, names in [('Game_Interpreter', ['command232', 'picturePoint']),
@@ -105,11 +105,20 @@ if sys.argv[2:] in (['atlas-commands'], ['office-pictures']):
         for name in names:
             start = source.index(f'{owner}.prototype.{name} = function(')
             methods.append(source[start:source.index('\n};', start) + 3])
-    if sys.argv[2:] == ['office-pictures']:
+    if sys.argv[2:] in (['office-pictures'], ['door-motion']):
         for owner, name in [('Game_Interpreter','command231'),('Game_Interpreter','command235'),
                             ('Game_Screen','showPicture'),('Game_Screen','erasePicture')]:
             start = source.index(f'{owner}.prototype.{name} = function(')
             methods.append(source[start:source.index('\n};', start) + 3])
+    if sys.argv[2:] == ['door-motion']:
+        for name in ['x','y']:
+            start = source.index(f'Game_Picture.prototype.{name} = function(')
+            methods.append(source[start:source.index('\n};', start) + 3])
+        text, _ = decode((PLUGINS / MAP_REL.name).read_text(encoding='utf8'))
+        for owner,name,tail in [('Game_Picture','getPositionSpace',"},Game_Picture['prototype']['move']"),
+                                ('Game_Picture','move',"},Sprite_Picture['prototype']['initialize']"),
+                                ('Sprite_Picture','updatePosition',"},Sprite_Picture['prototype']['updateAnimation']")]:
+            methods.append(between(text,f"{owner}['prototype']['{name}']=function(",tail)+'};')
     print(json.dumps(methods))
     sys.exit()
 

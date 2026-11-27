@@ -62,6 +62,18 @@ function captureFinale(root, scene, id, recovery = false) {
 
 function finaleVisible(root, host, scene, state) {
     const { id } = state;
+    if(id==='assembly-door-opens') {
+        const door=picture(root,host,scene,1,'pictures/FINALBOSSDOOR'),map=root.$gameMap;
+        // This world-space panel moves176→96 over180 native frames. Match
+        // both the actual tween and its painted, camera-adjusted sprite pose;
+        // sound or a later already-open picture cannot prove the movement.
+        const script=map._interpreter;
+        return map._mapId===105 && script?._eventId===12 && script._index>=117 && script._index<=128 &&
+            script._list===root.$dataMap?.events?.[12]?.pages?.[1]?.list &&
+            !!door && door.data._duration>0 && door.data._y<176 &&
+            typeof map.adjustY==='function' && door.sprite.y===Math.round(32*map.adjustY(door.data._y/32)) &&
+            door.sprite.y<Math.round(32*map.adjustY(176/32));
+    }
     if(['grunt-ambush','party-jailed','jail-breach','chomps-door-open','office-lights-out','office-lights-on','elder-tater-freed'].includes(id))return jailVisuals.visible(root,host,scene,state);
     if(id==='jail-impact')return renderedSprite(state.sprite,scene._spriteset._tilemap) &&
         (scene._spriteset.x!==state.screenX || scene._spriteset.y!==state.screenY);

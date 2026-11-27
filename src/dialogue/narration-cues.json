@@ -4313,5 +4313,9 @@
     "text": "The lights come back on, revealing a hooded figure ahead.",
     "beats": [[103,2,0,27,9,null,-6],[103,3,0,27,9,null,-6],[103,4,0,27,9,null,-6],
       [103,16,0,27,9,null,-6],[103,17,0,27,9,null,-6],[103,18,0,27,9,null,-6],[103,19,0,27,9,null,-6]]
+  },
+  "assembly-door-opens": {
+    "text": "The metal door slides up.",
+    "beats": [[105,12,1,116,-1,null,-6]]
   }
 }
