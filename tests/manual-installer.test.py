@@ -43,8 +43,9 @@ def main():
     finally:manifest.write_bytes(correct)
     kernel=ctypes.WinDLL('kernel32',use_last_error=True);kernel.CreateFileW.argtypes=[ctypes.c_wchar_p,ctypes.c_ulong,ctypes.c_ulong,ctypes.c_void_p,ctypes.c_ulong,ctypes.c_ulong,ctypes.c_void_p];kernel.CreateFileW.restype=ctypes.c_void_p;kernel.CloseHandle.argtypes=[ctypes.c_void_p]
     lease=kernel.CreateFileW(str(game/'WendyQuest.exe'),0x80000000,0,None,3,0,None);assert lease!=ctypes.c_void_p(-1).value
-    try:run('install',False);assert snapshot()==before
+    try:run('install',False)
     finally:kernel.CloseHandle(lease)
+    assert snapshot()==before
     # Test actual command-file quoting from another directory, including an
     # ampersand/Unicode game path. Only copied launcher bytes are locked above.
     done=subprocess.run(['cmd.exe','/d','/c',str(package/'Install.cmd'),str(game)],cwd=base,input='\n',text=True,encoding='utf8',env=env,capture_output=True,timeout=180)
