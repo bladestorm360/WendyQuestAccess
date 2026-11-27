@@ -13,7 +13,9 @@ module.exports = function verifyFinale(fixture, commandContext, stock) {
     let count = 0;
     for (const [id, cue] of Object.entries(cues)) {
         for (const [m, e, p, i, a, switched, visual] of cue.beats) {
-            if (visual !== -6 || id === 'wendy-arrival-ripple') continue;
+            // The cell release has a dedicated original-interpreter/page/
+            // preload handoff fixture; a synthetic switch reveal misses it.
+            if (visual !== -6 || id === 'wendy-arrival-ripple' || id === 'elder-tater-freed') continue;
             const f = fixture(m, e, p), source = f.actor(a);
             const actor = source.candidate;
             Object.assign(actor, { _realX: 2, _realY: 2, _direction: 2, forceMoveRoute(route) { this.route = route; } });

@@ -62,7 +62,7 @@ function captureFinale(root, scene, id, recovery = false) {
 
 function finaleVisible(root, host, scene, state) {
     const { id } = state;
-    if(['grunt-ambush','party-jailed','jail-breach','chomps-door-open','office-lights-out','office-lights-on'].includes(id))return jailVisuals.visible(root,host,scene,state);
+    if(['grunt-ambush','party-jailed','jail-breach','chomps-door-open','office-lights-out','office-lights-on','elder-tater-freed'].includes(id))return jailVisuals.visible(root,host,scene,state);
     if(id==='jail-impact')return renderedSprite(state.sprite,scene._spriteset._tilemap) &&
         (scene._spriteset.x!==state.screenX || scene._spriteset.y!==state.screenY);
     if(['sir-chicken-advances','chomps-walks-away'].includes(id))return renderedSprite(state.sprite,scene._spriteset._tilemap) &&

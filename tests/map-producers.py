@@ -71,6 +71,15 @@ if sys.argv[2:] == ['narration-ready']:
     print(json.dumps(source[start:end + len('globalThis.WendyQuestAccessNarrationPresent?.(this);')]))
     sys.exit()
 
+if sys.argv[2:] == ['elder-pages']:
+    source = (Path(sys.argv[1]) / OBJECTS_REL.relative_to('package.nw')).read_text(encoding='utf8')
+    methods = []
+    for name in ['findProperPageIndex', 'meetsConditions']:
+        start = source.index(f'Game_Event.prototype.{name} = function(')
+        methods.append(source[start:source.index('\n};', start) + 3])
+    print(json.dumps(methods))
+    sys.exit()
+
 if sys.argv[2:] == ['terrain-paint']:
     text, _ = decode(map_notification((PLUGINS / MAP_REL.name).read_bytes()).decode('utf8'))
     print(json.dumps([between(text, "Tilemap['prototype']['SetMapData']=function(", "},Tilemap['prototype']['updateTransform']") + '};']))

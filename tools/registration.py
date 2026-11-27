@@ -802,6 +802,8 @@ def map_notification(original):
         const wqaRevealReady = Graphics._wqaNarrationEnabled &&
             ($gameMap._mapId === 97 && wqaReveal?._eventId === 8 && wqaReveal._index >= 56 && wqaReveal._index <= 83 &&
                 !this._wqaJailNarrationSeen?.has('chomps-door-open') ||
+             $gameMap._mapId === 106 && wqaReveal?._eventId === 11 && wqaReveal._index >= 0 && wqaReveal._index <= 6 &&
+                !this._wqaJailNarrationSeen?.has('elder-tater-freed') ||
              $gameMap._mapId === 103 && [2,3,4,16,17,18,19].includes(wqaReveal?._eventId) &&
                 (wqaReveal._index >= 8 && wqaReveal._index <= 16 && !this._wqaJailNarrationSeen?.has('office-lights-out') ||
                  wqaReveal._index >= 27 && wqaReveal._index <= 33 && !this._wqaJailNarrationSeen?.has('office-lights-on')));

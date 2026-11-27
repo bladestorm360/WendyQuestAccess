@@ -29,14 +29,17 @@ for (const [id, { beats }] of Object.entries(cues)) {
         const key = [m, e, p, i].join('/');
         assert(!locators.has(key));
         locators.add(key);
-        assert.equal(row.code, visual === -6 ? switched ? 121 : [117, 205, 232, 250].find(code => code === row.code) : visual > 0 ? 213 : visual === -1 ? 224 : [-2, -3, -4].includes(visual) ? 250 : visual === -5 ? 117 : switched ? 121 : 205, key);
+        if(id==='elder-tater-freed'&&e===11){assert.equal(row.code,357);
+            assert.equal(row.parameters[0],'Ayatam_HighQualityQuestSystem');assert.equal(row.parameters[1],'completeQuest');
+            assert.equal(row.parameters[3].questId,'33');}
+        else assert.equal(row.code, visual === -6 ? switched ? 121 : [117, 205, 232, 250].find(code => code === row.code) : visual > 0 ? 213 : visual === -1 ? 224 : [-2, -3, -4].includes(visual) ? 250 : visual === -5 ? 117 : switched ? 121 : 205, key);
         if (visual > 0) {
             assert.equal(row.parameters[0] || e, actor, key);
             assert.equal(row.parameters[1], visual, key);
         }
     }
 }
-assert.equal(locators.size, 321);
+assert.equal(locators.size, 322);
 assert.match(cues['party-vanishes'].text, /gather into her.*party fits on the elevator/);
 function fixture(m, e, page, warm = true) {
     const data = m ? map(m) : null;
@@ -124,8 +127,9 @@ function commandContext(f) {
 }
 require('./departure-scenes.cjs')(fixture,stock,commandContext);
 require('./recruitment-scenes.cjs')(fixture,stock,commandContext);
+require('./elder-release.cjs')(fixture,commandContext,stock);
 
-for (const id of ['double-first-entrance', 'elder-tater-freed']) {
+for (const id of ['double-first-entrance']) {
     for (const [m, e, p, i, a, switched] of cues[id].beats) {
         const f = fixture(m, e, p), { candidate, sprite } = f.actor(a);
         Object.assign(candidate, { _realX: 3, _realY: 3, forceMoveRoute(route) { this._moveRoute = route; } });
@@ -144,7 +148,7 @@ for (const id of ['double-first-entrance', 'elder-tater-freed']) {
         f.narration.leave(f.scene); assert(f.played[0].paused);
     }
 }
-console.log('Verified all four first-Mech entrances and cell-opening branches through native commands and actual rendered movement/reveal.');
+console.log('Verified all four first-Mech entrances through native commands and actual rendered movement.');
 
 for(const visible of [false,true]) {
     const f=fixture(98,19,0),player=f.actor(-1),follower=f.actor(3);
@@ -511,7 +515,7 @@ for (let n = 0; n < 14; n++) {
     cold.renderer.emit('postrender');
 }
 assert.equal(cold.played[0]?.id, 'idle-question', 'the native idle timer starts the first description');
-console.log('Verified 183 clips, 321 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
+console.log('Verified 183 clips, 322 authored locators, shrine reactions/glows and underground camera reveal, native cold idle warmup, 15 idle cues, and uninterrupted named reaction order.');
 
 require('./finale-narration.cjs')(fixture, commandContext, stock);
 require('./screen-jolt.cjs')(fixture, commandContext, stock);
